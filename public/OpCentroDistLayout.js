@@ -7627,7 +7627,8 @@ function updateQrMenu() {
     const canFicha = !!(state.perms && state.perms.canLockQr);
     const canSensor = !!(state.perms && state.perms.canUseSensorQr);
     const canSafety = !!(state.perms && state.perms.canUseSafetyQr);
-    const show = !!((canLayout || canZone || canClean || canTemp || canSensor || canSafety || canFicha) && state.saved && !state.creating);
+    const canFault = !!(state.perms && state.perms.canUseFaultQr);
+    const show = !!((canLayout || canZone || canClean || canTemp || canSensor || canSafety || canFault || canFicha) && state.saved && !state.creating);
     $('layout-qrmenu').hidden = !show;
     $('layout-qr-regen').hidden = !(state.perms && state.perms.canRegenerateQr);
     // "Por: Layout | Zona | Limpieza | Temperaturas" solo sale si se puede usar de más de una forma; con una sola, el menú abre directo en esa.
@@ -7637,10 +7638,11 @@ function updateQrMenu() {
     $('layout-qr-by-temp').hidden = !canTemp;
     $('layout-qr-by-sensor').hidden = !canSensor;
     $('layout-qr-by-safety').hidden = !canSafety;
+    $('layout-qr-by-fault').hidden = !canFault;
     $('layout-qr-by-ficha').hidden = !canFicha;
-    $('layout-qr-by').hidden = [canLayout, canZone, canClean, canTemp, canSensor, canSafety, canFicha].filter(Boolean).length < 2;
-    const first = canLayout ? 'layout' : (canZone ? 'zone' : (canClean ? 'clean' : (canTemp ? 'temp' : (canSensor ? 'sensor' : (canSafety ? 'safety' : 'ficha')))));
-    if (!qrBy || (qrBy === 'layout' && !canLayout) || (qrBy === 'zone' && !canZone) || (qrBy === 'clean' && !canClean) || (qrBy === 'temp' && !canTemp) || (qrBy === 'sensor' && !canSensor) || (qrBy === 'safety' && !canSafety) || (qrBy === 'ficha' && !canFicha)) qrBy = first;
+    $('layout-qr-by').hidden = [canLayout, canZone, canClean, canTemp, canSensor, canSafety, canFault, canFicha].filter(Boolean).length < 2;
+    const first = canLayout ? 'layout' : (canZone ? 'zone' : (canClean ? 'clean' : (canTemp ? 'temp' : (canSensor ? 'sensor' : (canSafety ? 'safety' : (canFault ? 'fault' : 'ficha'))))));
+    if (!qrBy || (qrBy === 'layout' && !canLayout) || (qrBy === 'zone' && !canZone) || (qrBy === 'clean' && !canClean) || (qrBy === 'temp' && !canTemp) || (qrBy === 'sensor' && !canSensor) || (qrBy === 'safety' && !canSafety) || (qrBy === 'fault' && !canFault) || (qrBy === 'ficha' && !canFicha)) qrBy = first;
     renderQrBy();
     if (!show) closeQrPop();
 }
@@ -7654,7 +7656,7 @@ let qrZoneData = null; // lo último que respondió el servidor para la zona y l
 let qrZoneSeq = 0;
 const ZONE_CATEGORY_TYPES = [['inventario', 'colArticuloCategoriaInventario'], ['compra', 'colArticuloCategoriaCompra'], ['almacenamiento', 'colArticuloCategoriaAlmacenamiento'], ['rotacion', 'colArticuloCategoriaRotacion'], ['manejo', 'colArticuloCategoriaManejo'], ['riesgo', 'colArticuloCategoriaRiesgo'], ['vidautil', 'colArticuloCategoriaVidautil'], ['tipocodigo', 'colArticuloCategoriaTipoCodigo']];
 function renderQrBy() {
-    ['layout', 'zone', 'clean', 'temp', 'sensor', 'safety', 'ficha'].forEach((k) => {
+    ['layout', 'zone', 'clean', 'temp', 'sensor', 'safety', 'fault', 'ficha'].forEach((k) => {
         const on = qrBy === k;
         $(`layout-qr-by-${k}`).classList.toggle('active', on);
         $(`layout-qr-by-${k}`).setAttribute('aria-pressed', String(on));
@@ -7665,6 +7667,7 @@ function renderQrBy() {
     if (qrBy === 'temp') tempZoneOptions();
     if (qrBy === 'sensor') sensorZoneOptions();
     if (qrBy === 'safety') safetyZoneOptions();
+    if (qrBy === 'fault') faultZoneOptions();
     if (QR_LOCK_KINDS[qrBy]) renderQrLocks(qrBy);
 }
 // ---- QR de limpieza (uno por activo) ---------------------------------------------------------------------------------------------
@@ -7725,11 +7728,26 @@ function safetyZoneOptions() {
     $('layout-qr-safety-print').disabled = !n;
     $('layout-qr-safety-download').disabled = !n;
 }
+// ---- QR de fallas (uno por activo del Layout, 2026-11-17) ----------------------------------------------------------------------------------------------
+// Cada ACTIVO que está en el Layout (un espacio o un sensor ligado a su renglón de Alta Activos) tiene su QR de fallas (la dirección fija /f/<código del Layout>/<id del activo>: no cambia nunca). Se imprime una hoja con un QR por
+// activo de la zona elegida (o de todas) y se pega en el activo. Se arma con lo guardado (GET /api/business/layout/fault-qr). Quien lo escanea no necesita sesión: reporta qué falló y la falla entra a Mtto. Correctivo.
+function faultZoneOptions() {
+    const zones = ((state.saved && state.saved.zones) || []).filter((z) => z.active !== false);
+    const select = $('layout-qr-fault-zone');
+    const current = select.value;
+    select.innerHTML = `<option value="">${esc(t('main.layoutQrLimpiezaTodas'))}</option>${zones.map((z) => `<option value="${esc(z.id)}">${esc(z.name)}</option>`).join('')}`;
+    if (current && zones.some((z) => z.id === current)) select.value = current;
+    const placed = [...((state.saved && state.saved.spaces) || []).filter((s) => s.active !== false), ...((state.saved && state.saved.sensors) || [])].filter((e) => Number(e.assetRef) > 0 && (!select.value || e.zoneId === select.value));
+    const n = new Set(placed.map((e) => Number(e.assetRef))).size;
+    $('layout-qr-fault-fine').textContent = n ? t('main.layoutQrFallasCuantos', { n: fmt(n) }) : t('main.layoutQrFallasVacio');
+    $('layout-qr-fault-print').disabled = !n;
+    $('layout-qr-fault-download').disabled = !n;
+}
 // ---- Candados de los QR (lo que ve y puede hacer quien escanea sin sesión) ---------------------------------------------------------------------
 // En las pestañas Layout, Zona, Limpieza y Temperaturas del menú «QR y descarga», con el icono Candados de los QR del árbol. Hay una configuración por tipo de QR y por centro de costos y vale para todos los QR de ese tipo (los
 // ya impresos también: el QR no cambia, cambia lo que muestra). Cada cambio se guarda al momento; el servidor es el que los hace cumplir (GET /api/business/layout/qr-locks).
 // Las pestañas Layout y Zona muestran el MISMO juego (tipo «layout»): el QR del Layout, el de una Zona y el de una Categoría abren la misma página, y con candados distintos bastaría cambiar el final de la dirección para saltárselos.
-const QR_LOCK_KINDS = { layout: 'layout', zone: 'layout', clean: 'cleaning', temp: 'temperature', sensor: 'sensor', safety: 'safety', ficha: 'ficha' };
+const QR_LOCK_KINDS = { layout: 'layout', zone: 'layout', clean: 'cleaning', temp: 'temperature', sensor: 'sensor', safety: 'safety', fault: 'fault', ficha: 'ficha' };
 const qrLocksNow = {};
 // Los candados del QR del Layout, en dos grupos: [clave, texto, ayuda] y el título de cada grupo.
 const LAYOUT_LOCK_GROUPS = [
@@ -7741,6 +7759,8 @@ const FICHA_LOCK_GROUPS = [['main.layoutLockGrupoFicha', [['photos', 'main.layou
 const QR_LOCK_GROUPS = { layout: LAYOUT_LOCK_GROUPS, ficha: FICHA_LOCK_GROUPS };
 const QR_LOCK_NOTES = { layout: 'main.layoutLockNotaLayout', ficha: 'main.layoutLockNotaFicha' };
 function qrLockItems(kind) {
+    // El QR de fallas: poder reportar, ver las fallas abiertas del activo, ver el nombre de quien reportó y ver las fotos (sin tope de registros)
+    if (kind === 'fault') return [['register', 'main.layoutLockFallaRegistrar', ''], ['records', 'main.layoutLockFallaAbiertas', ''], ['names', 'main.layoutLockFallaNombres', ''], ['photos', 'main.layoutLockFallaFotos', '']];
     const items = [['records', 'main.layoutLockRegistros', 'main.layoutLockRegistrosSub'], ['photos', 'main.layoutLockFotos', ''], ['names', 'main.layoutLockNombres', '']];
     if (kind === 'temp') items.push(['range', 'main.layoutLockRango', 'main.layoutLockRangoSub']);
     if (kind === 'safety') items.push(['notes', 'main.layoutLockNotas', '']);
@@ -7769,8 +7789,8 @@ async function renderQrLocks(kind) {
     }
     const limit = `<label class="layout-lock-limit" data-help-key="layoutQrLocks"><span>${esc(t('main.layoutLockLimite'))}</span><select data-lock="limit">${data.limits.map((n) => `<option value="${n}"${lk.limit === n ? ' selected' : ''}>${esc(t('main.layoutLockUltimos', { n }))}</option>`).join('')}</select></label>`;
     const items = qrLockItems(kind).map(sw);
-    items.splice(kind === 'safety' ? 4 : 3, 0, limit); // después de ver los registros, las fotos, los nombres (y en Seguridad las notas)
-    box.innerHTML = `<h3 class="layout-lock-title">${esc(t('main.layoutLockTitulo'))}</h3>${items.join('')}<p class="layout-qr-fine">${esc(t(kind === 'clean' ? 'main.layoutLockNotaLimpieza' : (kind === 'sensor' ? 'main.layoutLockNotaSensor' : (kind === 'safety' ? 'main.layoutLockNotaSeguridad' : 'main.layoutLockNotaTemp'))))}</p>`;
+    if (kind !== 'fault') items.splice(kind === 'safety' ? 4 : 3, 0, limit); // después de ver los registros, las fotos, los nombres (y en Seguridad las notas)
+    box.innerHTML = `<h3 class="layout-lock-title">${esc(t('main.layoutLockTitulo'))}</h3>${items.join('')}<p class="layout-qr-fine">${esc(t(kind === 'clean' ? 'main.layoutLockNotaLimpieza' : (kind === 'fault' ? 'main.layoutLockNotaFalla' : (kind === 'sensor' ? 'main.layoutLockNotaSensor' : (kind === 'safety' ? 'main.layoutLockNotaSeguridad' : 'main.layoutLockNotaTemp')))))}</p>`;
 }
 async function saveQrLock(kind, key, value, control) {
     const next = { ...qrLocksNow[kind], [key]: value };
@@ -7806,6 +7826,7 @@ const ASSET_QR_KINDS = {
     clean: { path: '/api/business/layout/cleaning-qr', title: 'main.layoutQrLimpiezaTitulo', scan: 'main.layoutQrLimpiezaEscanea', empty: 'main.layoutQrLimpiezaVacio', icon: 'sparkle', color: '#2A9D8F', zone: 'layout-qr-clean-zone', name: 'menu.opCentroDistLimpieza', file: 'QR-Limpieza' },
     temp: { path: '/api/business/layout/temperature-qr', title: 'main.layoutQrTemperaturasTitulo', scan: 'main.layoutQrTemperaturasEscanea', empty: 'main.layoutQrTemperaturasVacio', icon: 'thermometer', color: '#2F8FD1', zone: 'layout-qr-temp-zone', name: 'menu.opCentroDistTemperaturas', file: 'QR-Temperaturas' },
     safety: { path: '/api/business/layout/safety-qr', title: 'main.layoutQrSeguridadTitulo', scan: 'main.layoutQrSeguridadEscanea', empty: 'main.layoutQrSeguridadVacio', icon: 'shield', color: '#C0392B', zone: 'layout-qr-safety-zone', name: 'menu.opCentroDistSeguridad', file: 'QR-Seguridad', category: 'main.layoutQrSeguridadCategoria', safety: true },
+    fault: { path: '/api/business/layout/fault-qr', title: 'main.layoutQrFallasTitulo', scan: 'main.layoutQrFallasEscanea', empty: 'main.layoutQrFallasVacio', icon: 'wrench', color: '#B5651D', zone: 'layout-qr-fault-zone', name: 'menu.opCentroDistMttoCorrectivo', file: 'QR-Fallas', category: 'main.layoutQrFallasCategoria', fault: true },
     sensor: { path: '/api/business/layout/sensor-qr', title: 'main.layoutQrSensoresTitulo', scan: 'main.layoutQrSensoresEscanea', empty: 'main.layoutQrSensoresVacio', icon: 'thermometer', color: '#2B8CA3', zone: 'layout-qr-sensor-zone', name: 'main.colLayoutSensores', file: 'QR-Sensores', category: 'main.layoutQrSensoresCategoria', sensor: true },
 };
 // Lo guardado que manda el servidor (los activos de la zona elegida con su QR, el color y el logo del cliente) y lo que hace falta para dibujar sus tarjetas.
@@ -7827,7 +7848,7 @@ function assetCardSvg(ctx, s, options) {
     const { k, data } = ctx;
     return window.LayoutSheet.buildCardSvg({
         companyName: data.companyName, siteName: data.siteName || '', logoDataUrl: data.logoDataUrl, logoRatio: ctx.logoRatio, theme: ctx.theme, zoneName: t(k.title),
-        categories: [{ name: s.code, desc: [k.safety ? typeLabel('safety', s.type) : (k.sensor ? typeLabel('sensor', s.type) : typeLabel('space', s.type)), k.safety ? s.name : '', s.zoneName].filter(Boolean).join(' · '), icon: k.icon, color: k.color, qrRows: s.qrRows }],
+        categories: [{ name: s.code, desc: [k.fault ? s.typeName : (k.safety ? typeLabel('safety', s.type) : (k.sensor ? typeLabel('sensor', s.type) : typeLabel('space', s.type))), k.safety ? s.name : '', s.zoneName].filter(Boolean).join(' · '), icon: k.icon, color: k.color, qrRows: s.qrRows }],
     }, { ...ctx.labels, cardFooter: s.locator }, options);
 }
 // Imprimir: cuatro tarjetas por hoja carta, cada una con su línea punteada para recortar.
@@ -8242,6 +8263,7 @@ $('layout-qr-clean-zone').addEventListener('change', cleanZoneOptions);
 $('layout-qr-temp-zone').addEventListener('change', tempZoneOptions);
 $('layout-qr-sensor-zone').addEventListener('change', sensorZoneOptions);
 $('layout-qr-safety-zone').addEventListener('change', safetyZoneOptions);
+$('layout-qr-fault-zone').addEventListener('change', faultZoneOptions);
 $('layout-qr-type').addEventListener('change', loadQrZone);
 document.addEventListener('click', (event) => { if (!event.target.closest('#layout-qrmenu')) closeQrPop(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeQrPop(); });
@@ -8348,6 +8370,8 @@ $('layout-qr-pop').addEventListener('click', async (event) => {
         else if (kind === 'sensor-print') await printAssetQrCards('sensor');
         else if (kind === 'safety-download') await openAssetQrDialog('safety');
         else if (kind === 'safety-print') await printAssetQrCards('safety');
+        else if (kind === 'fault-download') await openAssetQrDialog('fault');
+        else if (kind === 'fault-print') await printAssetQrCards('fault');
         else if (kind === 'regen') await regenerateQr();
     } catch (err) {
         console.error('Layout: acción de QR falló', err);

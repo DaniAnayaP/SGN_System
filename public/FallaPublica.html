@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>Reportar una falla</title>
+    <link rel="icon" href="/icons/icon-512.png">
+    <style>
+        :root{
+            --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --soft:#f1e4f5; --ok:#2e8b57; --warn:#c0392b; --shadow:0 10px 26px rgba(60,20,70,.14);
+            --p-high:#b3261e; --p-high-bg:#fbe3e1; --p-med:#8a5d00; --p-med-bg:#fdf0d2; --p-low:#0f6f62; --p-low-bg:#dff3ef; --s-open:#b3261e; --s-open-bg:#fbe3e1; --s-repair:#8a5d00; --s-repair-bg:#fdf0d2;
+        }
+        @media (prefers-color-scheme: dark){
+            :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --soft:#3a2745; --ok:#5cc58a; --warn:#ff8a7a; --shadow:0 10px 26px rgba(0,0,0,.5);
+                --p-high:#ff9d94; --p-high-bg:#4a2220; --p-med:#f2c46a; --p-med-bg:#40310f; --p-low:#7fdccd; --p-low-bg:#12403a; --s-open:#ff9d94; --s-open-bg:#4a2220; --s-repair:#f2c46a; --s-repair-bg:#40310f; }
+        }
+        *{ box-sizing:border-box; }
+        html,body{ margin:0; min-height:100%; }
+        body{ background:var(--bg); color:var(--ink); font:400 15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:14px 14px 36px; display:flex; justify-content:center; }
+        main{ width:100%; max-width:440px; display:flex; flex-direction:column; gap:12px; }
+        .card{ background:var(--surface); border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); padding:16px; display:flex; flex-direction:column; gap:12px; }
+        h1{ font-size:20px; margin:0; }
+        h2{ font-size:15px; margin:0; }
+        label{ display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+        input[type=text], textarea{ width:100%; font:500 16px system-ui,sans-serif; padding:11px 14px; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--ink); }
+        textarea{ min-height:96px; resize:vertical; font-weight:400; line-height:1.4; }
+        input:focus-visible, textarea:focus-visible, button:focus-visible, .addbtn:focus-within{ outline:2px solid var(--accent); outline-offset:2px; }
+        .btn{ font:600 16px system-ui,sans-serif; padding:14px 16px; border-radius:16px; border:0; background:var(--ink); color:var(--surface); cursor:pointer; width:100%; text-align:center; }
+        .btn.alt{ background:transparent; color:var(--accent); border:1.5px solid var(--accent); }
+        .btn.ok{ background:var(--ok); color:#fff; }
+        .btn[disabled]{ opacity:.55; cursor:default; }
+        .msg{ color:var(--muted); font-size:13px; border:1px dashed var(--line); border-radius:14px; padding:10px 12px; text-align:center; }
+        .err{ color:var(--warn); font-size:14px; border:1px solid var(--warn); border-radius:14px; padding:10px 12px; }
+        .muted{ color:var(--muted); font-size:13px; }
+        .req{ color:var(--warn); }
+        .steps{ display:flex; flex-direction:column; gap:14px; }
+        .group{ display:flex; flex-direction:column; gap:6px; }
+        .asset{ display:grid; grid-template-columns:44px 1fr; gap:12px; align-items:center; }
+        .asset i{ width:44px; height:44px; border-radius:12px; background:var(--soft); color:var(--accent); display:grid; place-items:center; font-style:normal; font-weight:800; font-size:18px; }
+        .asset b{ display:block; font-size:17px; }
+        .asset span{ display:block; font-size:13px; color:var(--muted); }
+        .chips{ display:flex; gap:8px; flex-wrap:wrap; }
+        .chipbtn{ font:600 15px system-ui,sans-serif; padding:10px 16px; border-radius:999px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink); cursor:pointer; }
+        .chipbtn[aria-pressed="true"]{ border-color:var(--accent); background:var(--soft); color:var(--accent); }
+        .chipbtn[data-v="yes"][aria-pressed="true"], .chipbtn[data-p="high"][aria-pressed="true"]{ background:var(--p-high-bg); border-color:var(--p-high); color:var(--p-high); }
+        .chipbtn[data-p="medium"][aria-pressed="true"]{ background:var(--p-med-bg); border-color:var(--p-med); color:var(--p-med); }
+        .chipbtn[data-p="low"][aria-pressed="true"]{ background:var(--p-low-bg); border-color:var(--p-low); color:var(--p-low); }
+        .count{ text-align:right; font-size:12px; color:var(--muted); margin-top:2px; }
+        .addbtn{ position:relative; display:block; font:600 15px system-ui,sans-serif; text-align:center; padding:13px 14px; border-radius:16px; border:1.5px dashed var(--accent); color:var(--accent); background:var(--soft); cursor:pointer; margin:0; }
+        .addbtn input{ position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; font-size:0; }
+        .shots{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+        .shot{ position:relative; aspect-ratio:1; border-radius:12px; overflow:hidden; border:1px solid var(--line); background:var(--soft); display:block; padding:0; }
+        .shot img{ width:100%; height:100%; object-fit:cover; display:block; }
+        .shot button{ position:absolute; top:4px; right:4px; width:26px; height:26px; border-radius:50%; border:0; background:rgba(20,10,25,.72); color:#fff; font-size:16px; line-height:1; cursor:pointer; padding:0; }
+        .working{ color:var(--muted); font-size:13px; text-align:center; }
+        .warnbox{ border-radius:16px; padding:12px 14px; background:var(--p-med-bg); color:var(--p-med); font-size:14px; display:grid; gap:2px; }
+        .warnbox b{ font-size:15px; }
+        .open{ border:1px solid var(--line); border-radius:16px; padding:12px; display:flex; flex-direction:column; gap:7px; }
+        .open .top{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+        .open .top b{ font-size:16px; font-variant-numeric:tabular-nums; }
+        .pill{ display:inline-block; font-weight:700; font-size:12px; padding:3px 11px; border-radius:999px; border:1px solid var(--line); white-space:nowrap; }
+        .pill[data-s="open"]{ background:var(--s-open-bg); color:var(--s-open); border-color:var(--s-open); }
+        .pill[data-s="repair"]{ background:var(--s-repair-bg); color:var(--s-repair); border-color:var(--s-repair); }
+        .pill[data-p="high"]{ background:var(--p-high-bg); color:var(--p-high); border-color:var(--p-high); }
+        .pill[data-p="medium"]{ background:var(--p-med-bg); color:var(--p-med); border-color:var(--p-med); }
+        .pill[data-p="low"]{ background:var(--p-low-bg); color:var(--p-low); border-color:var(--p-low); }
+        .done{ text-align:center; display:flex; flex-direction:column; gap:8px; align-items:center; }
+        .done .folio{ font:700 32px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.04em; color:var(--accent); }
+        .done .sum{ width:100%; text-align:left; border-top:1px solid var(--line); margin-top:4px; padding-top:10px; display:flex; flex-direction:column; gap:6px; font-size:14px; }
+        .done .sum span{ color:var(--muted); font-size:12px; display:block; }
+        .tick{ width:56px; height:56px; border-radius:50%; background:var(--ok); color:#fff; display:grid; place-items:center; font-size:30px; }
+        .viewer{ position:fixed; inset:0; background:rgba(10,5,14,.9); display:flex; flex-direction:column; z-index:20; }
+        .viewer .bar{ display:flex; justify-content:flex-end; padding:10px; } .viewer .bar button{ width:40px; height:40px; border-radius:50%; border:0; background:rgba(255,255,255,.15); color:#fff; font-size:24px; cursor:pointer; }
+        .viewer .stage{ flex:1; display:grid; place-items:center; padding:10px; min-height:0; } .viewer .stage img{ max-width:100%; max-height:100%; object-fit:contain; }
+        @media (prefers-reduced-motion: no-preference){ .card{ animation:rise .25s ease-out; } @keyframes rise{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } } }
+    </style>
+</head>
+<body>
+<main>
+    <div id="qr-brand"></div>
+    <div id="view"></div>
+</main>
+<script src="/QrBrandHeader.js"></script>
+<script>
+(function () {
+'use strict';
+const LANG = (navigator.language || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
+const TEXT = {
+    es: {
+        title: 'Reportar una falla', loading: 'Cargando…', notFound: 'Este QR ya no corresponde a ningún activo.',
+        yourName: 'Tu nombre', namePlaceholder: 'Quién reporta', what: '¿Qué falló?', whatPlaceholder: 'Cuenta qué le pasa al activo', oos: '¿Dejó de operar?', oosYes: 'Sí, dejó de operar', oosNo: 'No, sigue operando', priority: 'Prioridad', prio: { high: 'Alta', medium: 'Media', low: 'Baja' },
+        photos: 'Fotos (opcional, hasta {n})', add: 'Tomar foto o elegir de la galería', addMore: 'Agregar otra foto', full: 'Ya están las {n} fotos', working: 'Preparando fotos…', remove: 'Quitar', send: 'Enviar reporte', sending: 'Enviando…',
+        needName: 'Escribe tu nombre.', needWhat: 'Cuenta qué falló.', needOos: 'Dinos si el activo dejó de operar.',
+        errGeneric: 'No se pudo enviar. Revisa tu conexión e inténtalo de nuevo.', errPhoto: 'Una foto no se pudo leer. Quítala y vuelve a agregarla.', errLimit: 'Este activo ya recibió muchos reportes hoy. Avisa a mantenimiento directamente.', errBusy: 'Hubo muchos intentos seguidos. Espera un minuto e inténtalo de nuevo.',
+        openTitle: 'Este activo ya tiene {n} falla(s) abierta(s)', openHint: 'Antes de reportar, revisa que no sea la misma.', other: 'Es otra falla distinta', reportedOn: 'Reportada el {date}', by: 'Reportó: {name}', down1: 'Lleva 1 día fuera de servicio', downN: 'Lleva {n} días fuera de servicio', down0: 'Dejó de operar',
+        status: { open: 'Abierta', repair: 'En reparación' }, priorityLine: 'Prioridad {p}', seePhoto: 'Ver foto', close: 'Cerrar',
+        sentTitle: 'Falla reportada', folio: 'Tu folio es', sentWho: 'Reportó', sentAsset: 'Activo', sentWhat: 'Qué falló', sentPrio: 'Prioridad', sentOos: 'Dejó de operar', yes: 'Sí', no: 'No', notified: 'Mantenimiento ya fue avisado.', newReport: 'Reportar otra falla',
+        viewOnly: 'Este QR solo sirve para consultar.', noOpen: 'Este activo no tiene fallas abiertas.',
+    },
+    en: {
+        title: 'Report a fault', loading: 'Loading…', notFound: 'This QR no longer matches any asset.',
+        yourName: 'Your name', namePlaceholder: 'Who is reporting', what: 'What failed?', whatPlaceholder: 'Tell what is wrong with the asset', oos: 'Did it stop working?', oosYes: 'Yes, it stopped working', oosNo: 'No, it keeps working', priority: 'Priority', prio: { high: 'High', medium: 'Medium', low: 'Low' },
+        photos: 'Photos (optional, up to {n})', add: 'Take a photo or pick from the gallery', addMore: 'Add another photo', full: 'All {n} photos are in', working: 'Preparing photos…', remove: 'Remove', send: 'Send report', sending: 'Sending…',
+        needName: 'Type your name.', needWhat: 'Tell what failed.', needOos: 'Tell us whether the asset stopped working.',
+        errGeneric: 'It could not be sent. Check your connection and try again.', errPhoto: 'A photo could not be read. Remove it and add it again.', errLimit: 'This asset already received many reports today. Tell maintenance directly.', errBusy: 'There were too many attempts in a row. Wait a minute and try again.',
+        openTitle: 'This asset already has {n} open fault(s)', openHint: 'Before reporting, check it is not the same one.', other: 'It is a different fault', reportedOn: 'Reported on {date}', by: 'Reported by: {name}', down1: 'Out of service for 1 day', downN: 'Out of service for {n} days', down0: 'Stopped working',
+        status: { open: 'Open', repair: 'Under repair' }, priorityLine: '{p} priority', seePhoto: 'View photo', close: 'Close',
+        sentTitle: 'Fault reported', folio: 'Your number is', sentWho: 'Reported by', sentAsset: 'Asset', sentWhat: 'What failed', sentPrio: 'Priority', sentOos: 'Stopped working', yes: 'Yes', no: 'No', notified: 'Maintenance has been told.', newReport: 'Report another fault',
+        viewOnly: 'This QR is for viewing only.', noOpen: 'This asset has no open faults.',
+    },
+}[LANG];
+document.documentElement.lang = LANG;
+document.title = TEXT.title;
+
+// La dirección fija del QR: /f/<código del Layout del centro>/<id del activo>
+const parts = location.pathname.split('/').filter(Boolean);
+const TOKEN = parts[1] || '';
+const ASSET = parts[2] || '';
+const API = `/api/public/falla/${encodeURIComponent(TOKEN)}/${encodeURIComponent(ASSET)}`;
+const KEY_NAME = 'sgn_fault_name';
+const PHOTO_MAX_BYTES = 420 * 1024; // el servidor acepta hasta ~450 KB por foto
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fill = (text, vars) => Object.keys(vars).reduce((acc, k) => acc.split(`{${k}}`).join(vars[k]), text);
+const store = {
+    get(key) { try { return localStorage.getItem(key) || ''; } catch (e) { return ''; } },
+    set(key, value) { try { localStorage.setItem(key, value); } catch (e) { /* sin almacenamiento */ } },
+};
+
+let info = null;
+const form = { name: store.get(KEY_NAME), description: '', oos: '', priority: 'medium' }; // oos: '' | 'yes' | 'no'
+let photos = [];      // { id, photo, thumb }
+let preparing = 0;
+let busy = false;
+let sent = null;
+let showForm = false; // con una falla abierta, el formulario se abre con «Es otra falla distinta»
+let photoSeq = 0;
+
+// ---- fotos: se reducen en el teléfono (máx. 1280 px de lado, JPEG) para que suban rápido aunque la cámara sea de 12 megapíxeles ------------------
+function loadBitmap(file) {
+    if (window.createImageBitmap) return createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => loadImageElement(file));
+    return loadImageElement(file);
+}
+function loadImageElement(file) {
+    // la política de seguridad del servidor solo deja cargar imágenes propias y data: (no blob:): la foto se lee como data:
+    return new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error('image'));
+        fr.onload = () => { const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error('image')); img.src = fr.result; };
+        fr.readAsDataURL(file);
+    });
+}
+function thumbOf(canvas) {
+    const k = Math.min(1, 160 / Math.max(canvas.width, canvas.height));
+    const small = document.createElement('canvas');
+    small.width = Math.max(1, Math.round(canvas.width * k));
+    small.height = Math.max(1, Math.round(canvas.height * k));
+    small.getContext('2d').drawImage(canvas, 0, 0, small.width, small.height);
+    return small.toDataURL('image/jpeg', 0.6);
+}
+async function prepare(file) {
+    const bmp = await loadBitmap(file);
+    const w = bmp.width || bmp.naturalWidth;
+    const h = bmp.height || bmp.naturalHeight;
+    if (!w || !h) throw new Error('size');
+    let scale = Math.min(1, 1280 / Math.max(w, h));
+    for (let pass = 0; pass < 4; pass++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+        for (const q of [0.78, 0.68, 0.58, 0.48, 0.38]) {
+            const url = canvas.toDataURL('image/jpeg', q);
+            if (url.length * 0.75 < PHOTO_MAX_BYTES) { if (bmp.close) bmp.close(); return { photo: url, thumb: thumbOf(canvas) }; }
+        }
+        scale *= 0.75;
+    }
+    throw new Error('too big');
+}
+
+// ---- la página: se arma una sola vez y después solo se redibujan las partes que cambian (así no se pierde el cursor ni el teclado) -----------------
+function header() {
+    const a = info.asset;
+    const sub = [a.typeName, a.name && a.name !== a.typeName ? a.name : '', a.zoneName].filter(Boolean).join(' · ');
+    return `<div class="card"><div class="asset"><i aria-hidden="true">${esc((a.code || '?').slice(0, 1))}</i><div><b>${esc(a.code)}</b><span>${esc(sub)}</span>${info.costCenter ? `<span>${esc((info.costCenter.code ? `${info.costCenter.code} · ` : '') + info.costCenter.name)}</span>` : ''}</div></div></div>`;
+}
+const dateText = (iso) => { const [y, m, d] = String(iso || '').split('-').map(Number); return y ? new Date(y, m - 1, d).toLocaleDateString(LANG === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : ''; };
+function openFaultsHtml() {
+    const list = info.openFaults || [];
+    if (!list.length) return '';
+    const items = list.map((f) => {
+        const down = f.outOfService ? (f.downDays === null || f.downDays === undefined || f.downDays === 0 ? TEXT.down0 : (f.downDays === 1 ? TEXT.down1 : fill(TEXT.downN, { n: f.downDays }))) : '';
+        const shots = (f.photos || []).length ? `<div class="shots">${f.photos.map((n) => `<button type="button" class="shot" data-photo="${f.id}/${n}" aria-label="${esc(TEXT.seePhoto)}"><img alt="" src="${API}/photo/${f.id}/${n}"></button>`).join('')}</div>` : '';
+        return `<div class="open"><div class="top"><b>${esc(f.folio)}</b><span class="pill" data-s="${esc(f.status)}">${esc(TEXT.status[f.status] || f.status)}</span></div>
+            <div>${esc(f.description)}</div>
+            <div class="muted"><span class="pill" data-p="${esc(f.priority)}">${esc(fill(TEXT.priorityLine, { p: TEXT.prio[f.priority] || f.priority }))}</span> · ${esc(fill(TEXT.reportedOn, { date: dateText(f.reportedOn) }))}${down ? ` · ${esc(down)}` : ''}</div>
+            ${f.name ? `<div class="muted">${esc(fill(TEXT.by, { name: f.name }))}</div>` : ''}${shots}</div>`;
+    }).join('');
+    return `<div class="card"><div class="warnbox"><b>${esc(fill(TEXT.openTitle, { n: info.openCount || list.length }))}</b><span>${esc(TEXT.openHint)}</span></div>${items}</div>`;
+}
+function view() {
+    if (sent) { viewSent(); return; }
+    const locks = info.locks || {};
+    const open = openFaultsHtml();
+    if (!locks.register) { $('view').innerHTML = `${header()}${open}<div class="card"><div class="msg">${esc(TEXT.viewOnly)}</div></div>`; return; }
+    const hasOpen = (info.openFaults || []).length > 0;
+    if (hasOpen && !showForm) { $('view').innerHTML = `${header()}${open}<button type="button" class="btn alt" id="other">${esc(TEXT.other)}</button>`; return; }
+    $('view').innerHTML = `${header()}${hasOpen ? open : ''}<div class="card"><div class="steps">
+        <div class="group"><label for="name">${esc(TEXT.yourName)} <span class="req" aria-hidden="true">*</span></label><input type="text" id="name" maxlength="60" autocomplete="name" required placeholder="${esc(TEXT.namePlaceholder)}" value="${esc(form.name)}"></div>
+        <div class="group"><label for="what">${esc(TEXT.what)} <span class="req" aria-hidden="true">*</span></label><textarea id="what" maxlength="${esc(info.maxChars || 300)}" placeholder="${esc(TEXT.whatPlaceholder)}">${esc(form.description)}</textarea><div class="count" id="what-count"></div></div>
+        <div class="group"><h2>${esc(TEXT.oos)} <span class="req" aria-hidden="true">*</span></h2><div class="chips" id="oos" role="group" aria-label="${esc(TEXT.oos)}"></div></div>
+        <div class="group"><h2>${esc(TEXT.priority)}</h2><div class="chips" id="prio" role="group" aria-label="${esc(TEXT.priority)}"></div></div>
+        <div class="group"><h2>${esc(fill(TEXT.photos, { n: info.maxPhotos || 3 }))}</h2><div class="shots" id="shots"></div><div class="working" id="working" hidden>${esc(TEXT.working)}</div>
+            <label class="addbtn" id="addbtn"><span id="addlabel"></span><input type="file" id="file" accept="image/*" multiple></label></div>
+        <button type="button" class="btn ok" id="send"></button>
+        <div class="err" id="err" role="alert" hidden></div>
+    </div></div>`;
+    drawChips(); drawCount(); drawPhotos(); drawSend();
+}
+function drawChips() {
+    const oos = $('oos');
+    if (oos) oos.innerHTML = [['yes', TEXT.oosYes], ['no', TEXT.oosNo]].map(([v, label]) => `<button type="button" class="chipbtn" data-v="${v}" aria-pressed="${form.oos === v}">${esc(label)}</button>`).join('');
+    const prio = $('prio');
+    if (prio) prio.innerHTML = ['high', 'medium', 'low'].map((p) => `<button type="button" class="chipbtn" data-p="${p}" aria-pressed="${form.priority === p}">${esc(TEXT.prio[p])}</button>`).join('');
+}
+function drawCount() { const el = $('what-count'); if (el) el.textContent = `${form.description.length} / ${info.maxChars || 300}`; }
+function drawPhotos() {
+    const shots = $('shots');
+    if (!shots) return;
+    const max = info.maxPhotos || 3;
+    shots.innerHTML = photos.map((p) => `<div class="shot"><img alt="" src="${esc(p.thumb)}"><button type="button" data-rm="${p.id}" aria-label="${esc(TEXT.remove)}" title="${esc(TEXT.remove)}">×</button></div>`).join('');
+    $('working').hidden = !preparing;
+    const full = photos.length + preparing >= max;
+    $('addbtn').hidden = full;
+    $('addlabel').textContent = photos.length ? TEXT.addMore : TEXT.add;
+}
+function drawSend() {
+    const btn = $('send');
+    if (!btn) return;
+    btn.disabled = busy || preparing > 0;
+    btn.textContent = busy ? TEXT.sending : TEXT.send;
+}
+function fail(text) { const err = $('err'); if (!err) return; err.textContent = text; err.hidden = !text; }
+function openViewer(path) {
+    const scrim = document.createElement('div');
+    scrim.className = 'viewer';
+    scrim.innerHTML = `<div class="bar"><button type="button" aria-label="${esc(TEXT.close)}">×</button></div><div class="stage"><img alt="" src="${API}/photo/${esc(path)}"></div>`;
+    document.body.appendChild(scrim);
+    scrim.addEventListener('click', () => scrim.remove());
+}
+
+// ---- lo que se toca en la página ---------------------------------------------------------------------------------------------------------
+$('view').addEventListener('click', (event) => {
+    const t = event.target;
+    if (t.closest('#other')) { showForm = true; view(); return; }
+    const photo = t.closest('[data-photo]');
+    if (photo) { openViewer(photo.getAttribute('data-photo')); return; }
+    const oos = t.closest('[data-v]');
+    if (oos) { form.oos = oos.getAttribute('data-v'); drawChips(); fail(''); return; }
+    const prio = t.closest('[data-p]');
+    if (prio && prio.classList.contains('chipbtn')) { form.priority = prio.getAttribute('data-p'); drawChips(); return; }
+    const rm = t.closest('[data-rm]');
+    if (rm) { photos = photos.filter((p) => String(p.id) !== rm.getAttribute('data-rm')); drawPhotos(); return; }
+    if (t.closest('#send')) submit();
+});
+$('view').addEventListener('input', (event) => {
+    const t = event.target;
+    if (t.id === 'name') form.name = t.value;
+    else if (t.id === 'what') { form.description = t.value; drawCount(); }
+});
+$('view').addEventListener('change', async (event) => {
+    const t = event.target;
+    if (t.id !== 'file') return;
+    const max = info.maxPhotos || 3;
+    const files = Array.from(t.files || []).slice(0, Math.max(0, max - photos.length - preparing));
+    t.value = ''; // así se puede volver a elegir la misma foto
+    if (!files.length) return;
+    fail('');
+    preparing += files.length;
+    drawPhotos(); drawSend();
+    for (const file of files) {
+        try { photos.push({ id: ++photoSeq, ...(await prepare(file)) }); } catch (e) { fail(TEXT.errPhoto); }
+        preparing -= 1;
+        drawPhotos(); drawSend();
+    }
+});
+
+// ---- enviar ------------------------------------------------------------------------------------------------------------------------------
+function problem() {
+    if (!form.name.replace(/\s+/g, ' ').trim()) return { text: TEXT.needName, focus: 'name' };
+    if (!form.description.trim()) return { text: TEXT.needWhat, focus: 'what' };
+    if (!form.oos) return { text: TEXT.needOos, focus: null };
+    return null;
+}
+async function submit() {
+    if (busy || preparing) return;
+    const p = problem();
+    if (p) { fail(p.text); if (p.focus && $(p.focus)) $(p.focus).focus(); return; }
+    fail('');
+    busy = true; drawSend();
+    try {
+        const res = await fetch(`${API}/report`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: form.name.replace(/\s+/g, ' ').trim(), description: form.description.trim(), outOfService: form.oos === 'yes', priority: form.priority, photos: photos.map((x) => ({ photo: x.photo })) }) });
+        const body = await res.json().catch(() => ({}));
+        busy = false;
+        if (!res.ok) {
+            drawSend();
+            if (body.code === 'LOCKED') { info.locks.register = false; view(); return; }
+            const map = { NAME: TEXT.needName, DESC: TEXT.needWhat, OOS: TEXT.needOos, PHOTO: TEXT.errPhoto, LIMIT: TEXT.errLimit };
+            fail(map[body.code] || (res.status === 429 ? TEXT.errBusy : TEXT.errGeneric));
+            return;
+        }
+        store.set(KEY_NAME, form.name.replace(/\s+/g, ' ').trim());
+        sent = body;
+        photos = [];
+        view();
+    } catch (e) {
+        busy = false; drawSend();
+        fail(TEXT.errGeneric);
+    }
+}
+function resetForm() { form.description = ''; form.oos = ''; form.priority = 'medium'; photos = []; sent = null; showForm = true; }
+function viewSent() {
+    const rows = [[TEXT.sentWho, sent.name], [TEXT.sentAsset, `${sent.assetCode}${sent.zoneName ? ` · ${sent.zoneName}` : ''}`], [TEXT.sentWhat, sent.description], [TEXT.sentPrio, TEXT.prio[sent.priority] || sent.priority], [TEXT.sentOos, sent.outOfService ? TEXT.yes : TEXT.no]];
+    $('view').innerHTML = `<div class="card done"><div class="tick" aria-hidden="true">✓</div><h1>${esc(TEXT.sentTitle)}</h1><div class="muted">${esc(TEXT.folio)}</div><div class="folio">${esc(sent.folio)}</div>
+        <span class="pill" data-s="open">${esc(TEXT.status.open)}</span>
+        <div class="sum">${rows.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
+        <div class="muted">${esc(TEXT.notified)}</div>
+        <button type="button" class="btn" id="again">${esc(TEXT.newReport)}</button></div>`;
+    $('again').addEventListener('click', () => { resetForm(); view(); });
+}
+
+(async function init() {
+    $('view').innerHTML = `<div class="card"><div class="muted">${esc(TEXT.loading)}</div></div>`;
+    try {
+        const res = await fetch(API, { cache: 'no-store' });
+        if (!res.ok) throw new Error('not found');
+        info = await res.json();
+    } catch (err) { $('view').innerHTML = `<div class="card"><div class="err" role="alert">${esc(TEXT.notFound)}</div></div>`; return; }
+    // el mismo encabezado del Layout: logo (o iniciales), tipo de página, Sitio y empresa
+    window.QrBrandHeader.mount($('qr-brand'), { kind: TEXT.title, siteName: info.siteName, companyName: info.companyName, hasLogo: info.hasLogo, companyColor: info.companyColor, logoUrl: `/api/public/layout/${encodeURIComponent(TOKEN)}/logo` });
+    view();
+})();
+})();
+</script>
+</body>
+</html>

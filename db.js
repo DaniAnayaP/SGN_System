@@ -6382,6 +6382,8 @@ db.exec(`
         PRIMARY KEY (ref_kind, ref_id, alert_key)
     );
 `);
+// QR de fallas (2026-11-17): de dónde viene la falla — 'user' (se capturó en la pantalla), 'qr' (la reportó quien escaneó el QR del activo, sin sesión) o 'app'.
+if (!db.prepare('PRAGMA table_info(maintenance_faults)').all().some((c) => c.name === 'source')) db.exec("ALTER TABLE maintenance_faults ADD COLUMN source TEXT NOT NULL DEFAULT 'user'");
 const MAINTENANCE_PROGRAM_PATCHABLE_FIELDS = {
     task: { column: 'task', fieldKey: 'main.colMpTarea' },
     everyValue: { column: 'every_value', fieldKey: 'main.colMpCada' },
@@ -6471,16 +6473,20 @@ function listMaintenanceFaultsAnyScope(clientId) {
 function getMaintenanceFaultById(id, clientId, forTestAccount = false) {
     return db.prepare('SELECT * FROM maintenance_faults WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
-function createMaintenanceFault({ clientId, isTestData = false, assetId, costCenterId = 0, reportedOn, description, priority = 'medium', outOfService = false, reportedByLabel = '', reportedByUserId = null }) {
+function createMaintenanceFault({ clientId, isTestData = false, assetId, costCenterId = 0, reportedOn, description, priority = 'medium', outOfService = false, reportedByLabel = '', reportedByUserId = null, source = 'user' }) {
     const test = isTestData ? 1 : 0;
     return db.transaction(() => {
         const recordNumber = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM maintenance_faults WHERE client_id = ? AND is_test_data = ?').get(clientId, test).n;
         const info = db.prepare(`
-            INSERT INTO maintenance_faults (client_id, is_test_data, db_id, record_number, asset_id, cost_center_id, reported_on, description, priority, out_of_service, reported_by_label, reported_by_user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(clientId, test, generateBigDateId(), recordNumber, assetId, costCenterId || 0, reportedOn, description, MAINTENANCE_PRIORITIES.includes(priority) ? priority : 'medium', outOfService ? 1 : 0, String(reportedByLabel || '').slice(0, 120), reportedByUserId || null);
+            INSERT INTO maintenance_faults (client_id, is_test_data, db_id, record_number, asset_id, cost_center_id, reported_on, description, priority, out_of_service, reported_by_label, reported_by_user_id, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(clientId, test, generateBigDateId(), recordNumber, assetId, costCenterId || 0, reportedOn, description, MAINTENANCE_PRIORITIES.includes(priority) ? priority : 'medium', outOfService ? 1 : 0, String(reportedByLabel || '').slice(0, 120), reportedByUserId || null, source === 'qr' || source === 'app' ? source : 'user');
         return getMaintenanceFaultById(info.lastInsertRowid, clientId, isTestData);
     })();
+}
+// Cuántas fallas llegaron por el QR de ese activo en las últimas 24 horas (el tope contra reportes de más).
+function countRecentQrFaultsOfAsset(clientId, assetId) {
+    return db.prepare("SELECT COUNT(*) AS n FROM maintenance_faults WHERE client_id = ? AND asset_id = ? AND source = 'qr' AND created_at >= datetime('now', '-1 day')").get(clientId, assetId).n;
 }
 function updateMaintenanceFault(id, clientId, patch, forTestAccount = false) {
     const sets = [];
@@ -8972,11 +8978,14 @@ function seedUdmDistribucionScreenGrants() {
 }
 const LAYOUT_CODES_ICONS_SEED_KEY = 'seed-layout-codes-icons-v1';
 const LAYOUT_RELATE_ICON_SEED_KEY = 'seed-layout-relate-icon-contract-v1';
+const LAYOUT_QR_FALLAS_ICON_SEED_KEY = 'seed-layout-qr-fallas-icon-contract-v1';
 function seedLayoutCodesIconGrants() {
     const path = TABLE_GRANT_PATHS.layout;
     if (!path) return;
     seedLeavesForScreenHolders(LAYOUT_CODES_ICONS_SEED_KEY, path, ['iconLayoutCodigosLocalizador', 'iconLayoutPiezas'].map((leaf) => `${path.submenuPrefix}/${leaf}`), 'the Layout codes-in-locators and pieces icons');
     seedLeavesForScreenHolders(LAYOUT_RELATE_ICON_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutRelacionarCodigo`], 'the Layout relate-code icon (contract only)', { contractOnly: true });
+    // El QR de fallas (Layout > QR y descarga > Fallas, 2026-11-17): lo contratado lo tiene quien ya tiene la pantalla Layout; el administrador lo reparte a las personas.
+    seedLeavesForScreenHolders(LAYOUT_QR_FALLAS_ICON_SEED_KEY, path, [`${path.submenuPrefix}/iconLayoutQrFallas`], 'the Layout fault QR icon (contract only)', { contractOnly: true });
 }
 // El icono Techo (iconLayoutTecho) se da igual, una sola vez, a quien ya tiene la pantalla Layout.
 // Operaciones > QR's > Limpieza (2026-11-10): la pantalla nueva la reciben, una sola vez, quienes ya tienen el icono del QR de limpieza en el Layout (mismos niveles y reglas que los demás sembrados).
@@ -14904,7 +14913,7 @@ module.exports = {
     getAssetCalibrationFile, latestCalibrationMap, latestCalibrationOfAsset, countAssetCalibrationsByAsset, recordCalibrationAlert, clearCalibrationAlerts, publishCalibrationNotice,
     MAINTENANCE_UNITS, MAINTENANCE_PRIORITIES, MAINTENANCE_FAULT_STATUSES, MAINTENANCE_SOON_DAYS, MAINTENANCE_STALE_DAYS, MAINTENANCE_MAX_PHOTOS, MAINTENANCE_PROGRAM_PATCHABLE_FIELDS, MAINTENANCE_FAULT_PATCHABLE_FIELDS,
     listActiveUsersBrief, maintenancePersonLabel, listMaintenancePrograms, getMaintenanceProgramById, createMaintenanceProgram, updateMaintenanceProgram, listMaintenanceRunsOfProgram, createMaintenanceRun, getMaintenanceRunById,
-    latestMaintenanceRunMap, maintenanceRunCountMap, listMaintenanceFaults, listMaintenanceFaultsAnyScope, getMaintenanceFaultById, createMaintenanceFault, updateMaintenanceFault,
+    latestMaintenanceRunMap, maintenanceRunCountMap, listMaintenanceFaults, listMaintenanceFaultsAnyScope, getMaintenanceFaultById, createMaintenanceFault, countRecentQrFaultsOfAsset, updateMaintenanceFault,
     setMaintenancePhoto, getMaintenancePhoto, deleteMaintenancePhoto, maintenancePhotoMap, recordMaintenanceAlert, publishMaintenanceNotice,
     listFixedAssets,
     getFixedAssetById,

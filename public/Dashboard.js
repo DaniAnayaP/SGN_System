@@ -10550,6 +10550,7 @@ function renderMaintenanceNoticeRow(item) {
     let tagKey = 'main.noticeMaintProgramSoon';
     if (kind === 'program-due') tagKey = left !== null && left < 0 ? 'main.noticeMaintProgramOverdue' : 'main.noticeMaintProgramToday';
     else if (kind === 'fault-high') tagKey = 'main.noticeMaintFaultHigh';
+    else if (kind === 'fault-qr') tagKey = 'main.noticeMaintFaultQr';
     else if (kind === 'fault-stale') tagKey = 'main.noticeMaintFaultStale';
     tag.textContent = t(tagKey);
     const meta = document.createElement('div');
@@ -10562,6 +10563,7 @@ function renderMaintenanceNoticeRow(item) {
     let key = 'main.noticeMaintLineSoon';
     if (kind === 'program-due') key = left !== null && left < 0 ? 'main.noticeMaintLineOverdue' : 'main.noticeMaintLineToday';
     else if (kind === 'fault-high') key = 'main.noticeMaintLineFaultHigh';
+    else if (kind === 'fault-qr') key = 'main.noticeMaintLineFaultQr';
     else if (kind === 'fault-stale') key = 'main.noticeMaintLineFaultStale';
     desc.textContent = t(key, { asset: who, task: item.text || '—', date: dateText, n: left === null ? '' : Math.abs(left), folio: item.folio || '', by: item.reportedBy || '—' });
     const link = document.createElement('a');

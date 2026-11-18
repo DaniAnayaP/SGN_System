@@ -6,7 +6,7 @@
 // ---------------------------------------------------------------------------
 const TABLE_KEY = 'mtto-correctivo';
 const ACTIVE_PAGE = 'cat-operaciones-centro-dist-mtto-correctivo';
-const COLUMN_COUNT = 25;
+const COLUMN_COUNT = 26;
 const API = '/api/business/maintenance/faults';
 const MT = window.AssetMaintenance;
 
@@ -151,6 +151,7 @@ function buildRow(record) {
         priorityCell(record),
         statusCell(record),
         textCell('colMcReporto', record.reportedBy, 'mtReportedBy'),
+        textCell('colMcOrigen', t(record.source === 'qr' ? 'main.mcOrigenQr' : (record.source === 'app' ? 'main.mcOrigenApp' : 'main.mcOrigenUsuario')), 'mtSource'),
         textCell('colMcAtiende', record.assignedTo, 'mtAssigned'),
         down,
         textCell('colMcCosto', money(record.cost), 'mtCost'),

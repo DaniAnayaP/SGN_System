@@ -239,7 +239,7 @@ const {
     getAssetCalibrationFile, latestCalibrationMap, latestCalibrationOfAsset, countAssetCalibrationsByAsset, recordCalibrationAlert, clearCalibrationAlerts, publishCalibrationNotice, listColumnNotifyRecipientUserIds,
     MAINTENANCE_UNITS, MAINTENANCE_PRIORITIES, MAINTENANCE_FAULT_STATUSES, MAINTENANCE_SOON_DAYS, MAINTENANCE_STALE_DAYS, MAINTENANCE_MAX_PHOTOS, MAINTENANCE_PROGRAM_PATCHABLE_FIELDS, MAINTENANCE_FAULT_PATCHABLE_FIELDS,
     listActiveUsersBrief, maintenancePersonLabel, listMaintenancePrograms, getMaintenanceProgramById, createMaintenanceProgram, updateMaintenanceProgram, listMaintenanceRunsOfProgram, createMaintenanceRun, getMaintenanceRunById,
-    latestMaintenanceRunMap, maintenanceRunCountMap, listMaintenanceFaults, listMaintenanceFaultsAnyScope, getMaintenanceFaultById, createMaintenanceFault, updateMaintenanceFault,
+    latestMaintenanceRunMap, maintenanceRunCountMap, listMaintenanceFaults, listMaintenanceFaultsAnyScope, getMaintenanceFaultById, createMaintenanceFault, countRecentQrFaultsOfAsset, updateMaintenanceFault,
     setMaintenancePhoto, getMaintenancePhoto, deleteMaintenancePhoto, maintenancePhotoMap, recordMaintenanceAlert, publishMaintenanceNotice,
     countFixedAssetsByClass,
     getFixedAssetAnyScope,
@@ -7260,6 +7260,8 @@ function layoutPermissions(req) {
         canUseSensorQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrSensores'),
         // Imprimir los QR de seguridad (uno por elemento: extintor, hidrante, puerta de emergencia…) usa el icono QR de seguridad (hoja <pantalla>/iconLayoutQrSeguridad).
         canUseSafetyQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrSeguridad'),
+        // Imprimir los QR de fallas (uno por activo del Layout) usa el icono QR de fallas (hoja <pantalla>/iconLayoutQrFallas).
+        canUseFaultQr: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutQrFallas'),
         // Ver las piezas que caben en cada posición (el empaque que se acomoda, de Relación Código) en el croquis y el 3D, y apagarlas, usa el icono Piezas (hoja <pantalla>/iconLayoutPiezas).
         canTogglePieces: admin || hasTableIconGrant(grants, LAYOUT_TABLE_KEY, 'iconLayoutPiezas'),
         // Ver el techo en el 3D (la losa que se apoya sobre la altura de pared de cada esquina) usa el icono Techo (hoja <pantalla>/iconLayoutTecho).
@@ -8117,6 +8119,8 @@ const QR_LOCK_TYPES = {
     manual_order: { register: true, signin: false },
     // El QR de INCIDENTES (/inc/…): register = poder reportar con ese QR · signin = pedir inicio de sesión para reportar (el nombre sale de la cuenta en vez de escribirse). De fábrica abierto.
     incident: { register: true, signin: false },
+    // El QR de FALLAS de un activo (/f/…, Mtto. Correctivo): register = poder reportar una falla con ese QR · records = ver las fallas abiertas del activo · names = ver el nombre de quien reportó · photos = ver sus fotos. De fábrica todo abierto.
+    fault: { register: true, records: true, names: true, photos: true },
 };
 const QR_LOCK_LIMITS = [3, 10, 20];
 function qrLocksOf(type, clientId, costCenterId) {
@@ -13704,7 +13708,7 @@ function mapFault(row, ctx, todayIso, photoMap, pendingByRecord, companyName) {
     return {
         id: row.id, registroUnico: row.db_id, folio: maintFolioOf(row), reportedOn: row.reported_on, assetId: row.asset_id, ...maintAssetFields(ctx, row.asset_id),
         description: row.description, priority: row.priority, priorityLabel: MAINT_PRIORITY_LABELS[row.priority] || row.priority, status: row.status, statusLabel: MAINT_FAULT_STATUS_LABELS[row.status] || row.status,
-        outOfService: !!row.out_of_service, downDays, reportedBy: row.reported_by_label, assignedTo: row.assigned_to_label, cause: row.cause, actionDone: row.action_done, repairedBy: row.repaired_by,
+        outOfService: !!row.out_of_service, downDays, source: row.source || 'user', reportedBy: row.reported_by_label, assignedTo: row.assigned_to_label, cause: row.cause, actionDone: row.action_done, repairedBy: row.repaired_by,
         closedOn: row.closed_on, cost: row.cost, photos: photoMap.get(row.id) || [], costCenterId: row.cost_center_id, pendingFields: pendingByRecord?.get(row.id) || [],
         ...getSystemColumnsForRecord({ companyName, area: MAINT_AREA_LABEL, modulo: MAINT_MODULE_LABEL, pantalla: MC_SCREEN_LABEL, centroCostos: cc ? cc.name : '', createdAt: row.created_at }),
     };
@@ -13969,6 +13973,147 @@ app.post('/api/business/maintenance/faults/:id/close', requireAuth, requireCostC
     logMaintFields(req, MC_TABLE_KEY, existing, `${maintFolioOf(existing)} · ${asset ? fixedAssetCodeOf(asset) : existing.asset_id}`, [['main.colMcEstatus', MAINT_FAULT_STATUS_LABELS[existing.status], MAINT_FAULT_STATUS_LABELS.closed], ['main.colMcCausa', '', cause], ['main.colMcQueSeHizo', '', actionDone], ['main.colMcReparo', '', repairedBy], ['main.colMcCierre', '', body.closedOn], ['main.colMcCosto', '', cost > 0 ? String(cost) : '']]);
     const ctx = maintenanceContext(req);
     res.json({ fault: mapFault(row, ctx, calibrationToday(req), maintenancePhotoMap(clientId, 'fault'), null, getClientById(clientId)?.company_name) });
+});
+
+// ---- QR de fallas (2026-11-17) ------------------------------------------------------------------------------------------------------------------------
+// Cada ACTIVO que está en el Layout (un espacio o un sensor ligado a su renglón de Alta Activos) tiene su QR de fallas: la dirección fija /f/<código del Layout del centro>/<id del activo> (no cambia nunca). Quien lo escanea NO necesita
+// sesión: ve el activo ya identificado, escribe su nombre, qué falló, si dejó de operar y la prioridad (Media de entrada) y, si quiere, sube hasta 3 fotos. Eso crea una falla Abierta en Mtto. Correctivo (origen «QR», folio MC-xxxx) y avisa
+// en la campana a quien tiene «Notificar» en el Estatus de Correctivo (una persona de fuera no tiene jefe directo); una de prioridad Alta sale además como alerta (generateMaintenanceAlerts). Si el activo ya tiene una falla abierta se
+// muestra antes del formulario (candado records). Los candados (QR_LOCK_TYPES.fault) se hacen cumplir aquí, en el servidor. Tope: 20 reportes por activo cada 24 horas y 10 por minuto desde la misma dirección.
+const FAULT_QR_MAX_PER_DAY = 20;
+const FAULT_QR_DESC_MAX = 300;
+const publicFaultLimiter = rateLimit({ windowMs: 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } });
+// Los activos de un Layout con su lugar: los espacios (Huella > Espacio) y los sensores que vienen de un renglón de Alta Activos. assetId -> { zoneId, element }.
+function faultPlacedAssets(layout) {
+    const map = new Map();
+    ((layout && layout.spaces) || []).forEach((s) => { const id = Math.round(Number(s && s.assetRef)); if (s && s.active !== false && id > 0 && !map.has(id)) map.set(id, { zoneId: s.zoneId || '', element: s }); });
+    ((layout && layout.sensors) || []).forEach((s) => { const id = Math.round(Number(s && s.assetRef)); if (s && id > 0 && !map.has(id)) map.set(id, { zoneId: s.zoneId || '', element: s }); });
+    return map;
+}
+function faultTarget(token, assetIdRaw) {
+    if (!/^\d{1,9}$/.test(String(assetIdRaw || ''))) return null;
+    const assetId = Number(assetIdRaw);
+    const row = getLayoutByPublicToken(token);
+    if (!row) return null;
+    const placed = faultPlacedAssets(row.layout).get(assetId);
+    if (!placed) return null;
+    const asset = getFixedAssetAnyScope(assetId, row.clientId);
+    if (!asset || asset.status !== 'active') return null;
+    const zone = (row.layout.zones || []).find((z) => z.id === placed.zoneId) || null;
+    const type = asset.type_id ? listArticleCategoriesAnyScope(row.clientId, 'activos-fijos').find((c) => c.id === asset.type_id) : null;
+    const code = fixedAssetCodeOf(asset);
+    return { row, asset, zone, code, name: asset.custom_name || asset.purchase_name || '', typeName: type ? type.name : '', locator: [zone && zone.code, code].filter(Boolean).join('.'), isTest: !!asset.is_test_data };
+}
+// Una falla abierta tal como la ve quien escanea, con los candados: sin nombre (names) ni fotos (photos) cuando están cerrados.
+function publicFaultOf(f, locks, photoMap) {
+    const today = todayIsoUtc();
+    const down = f.out_of_service && /^\d{4}-\d{2}-\d{2}$/.test(f.reported_on) ? Math.max(0, isoDays(today) - isoDays(f.reported_on)) : null;
+    return { id: f.id, folio: maintFolioOf(f), description: f.description, priority: f.priority, status: f.status, reportedOn: f.reported_on, outOfService: !!f.out_of_service, downDays: down, name: locks.names ? f.reported_by_label : '', photos: locks.photos ? (photoMap.get(f.id) || []) : [] };
+}
+app.get('/f/:token/:assetId', publicLayoutLimiter, (req, res) => {
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' });
+    res.sendFile(path.join(PUBLIC_DIR, 'FallaPublica.html'));
+});
+app.get('/api/public/falla/:token/:assetId', publicLayoutLimiter, (req, res) => {
+    const target = faultTarget(req.params.token, req.params.assetId);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    const { row, asset, zone } = target;
+    const client = getClientById(row.clientId);
+    const center = row.costCenterId ? getCostCenterAnyLane(row.costCenterId, row.clientId) : null;
+    const locks = qrLocksOf('fault', row.clientId, row.costCenterId || 0);
+    const photoMap = locks.photos ? maintenancePhotoMap(row.clientId, 'fault') : new Map();
+    const openAll = locks.records ? listMaintenanceFaultsAnyScope(row.clientId).filter((f) => f.asset_id === asset.id && f.status !== 'closed') : [];
+    const open = openAll.slice(0, 5).map((f) => publicFaultOf(f, locks, photoMap));
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.json({
+        companyName: (client && client.company_name) || '', siteName: row.layout.siteName || '', ...publicBrand(row.clientId),
+        costCenter: center ? { id: center.id, name: center.name, code: center.code || '' } : null,
+        asset: { code: target.code, name: target.name, typeName: target.typeName, zoneName: zone ? zone.name : '', locator: target.locator },
+        locks, openFaults: open, openCount: openAll.length, maxPhotos: MAINTENANCE_MAX_PHOTOS, maxChars: FAULT_QR_DESC_MAX, now: new Date().toISOString(),
+    });
+});
+app.get('/api/public/falla/:token/:assetId/photo/:faultId/:n', publicLayoutLimiter, (req, res) => {
+    const target = faultTarget(req.params.token, req.params.assetId);
+    const faultId = Number(req.params.faultId);
+    const n = Number(req.params.n);
+    if (!target || !Number.isInteger(faultId) || !(n >= 1 && n <= MAINTENANCE_MAX_PHOTOS)) return res.status(404).end();
+    const locks = qrLocksOf('fault', target.row.clientId, target.row.costCenterId || 0);
+    if (!locks.records || !locks.photos) return res.status(404).end();
+    const fault = listMaintenanceFaultsAnyScope(target.row.clientId).find((f) => f.id === faultId);
+    if (!fault || fault.asset_id !== target.asset.id || fault.status === 'closed') return res.status(404).end();
+    const photo = getMaintenancePhoto(target.row.clientId, 'fault', faultId, n);
+    if (!photo) return res.status(404).end();
+    res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
+    res.send(photo.data);
+});
+app.post('/api/public/falla/:token/:assetId/report', publicFaultLimiter, (req, res) => {
+    const target = faultTarget(req.params.token, req.params.assetId);
+    if (!target) return res.status(404).json({ message: 'Not found.' });
+    const { row, asset, zone } = target;
+    const clientId = row.clientId;
+    const locks = qrLocksOf('fault', clientId, row.costCenterId || 0);
+    if (!locks.register) return res.status(403).json({ message: 'Este QR solo sirve para consultar.', code: 'LOCKED' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const name = maintCleanText(body.name, 60);
+    if (!name) return res.status(400).json({ message: 'Falta el nombre de quien reporta.', code: 'NAME' });
+    const description = maintCleanText(body.description, FAULT_QR_DESC_MAX);
+    if (!description) return res.status(400).json({ message: 'Escribe qué falló.', code: 'DESC' });
+    if (typeof body.outOfService !== 'boolean') return res.status(400).json({ message: 'Dinos si el activo dejó de operar.', code: 'OOS' });
+    const priority = body.priority === undefined || body.priority === '' ? 'medium' : body.priority;
+    if (!MAINTENANCE_PRIORITIES.includes(priority)) return res.status(400).json({ message: 'La prioridad es Alta, Media o Baja.', code: 'PRIORITY' });
+    const rawPhotos = Array.isArray(body.photos) ? body.photos : [];
+    if (rawPhotos.length > MAINTENANCE_MAX_PHOTOS) return res.status(400).json({ message: `Solo caben ${MAINTENANCE_MAX_PHOTOS} fotos.`, code: 'BATCH' });
+    const photos = [];
+    for (const item of rawPhotos) {
+        const photo = parseCleaningPhoto(item && item.photo);
+        if (!photo) return res.status(400).json({ message: 'Una de las fotos no es válida o pesa demasiado.', code: 'PHOTO' });
+        photos.push(photo);
+    }
+    if (countRecentQrFaultsOfAsset(clientId, asset.id) >= FAULT_QR_MAX_PER_DAY) return res.status(429).json({ message: 'Este activo ya recibió muchos reportes hoy. Avisa a mantenimiento directamente.', code: 'LIMIT' });
+    const fault = createMaintenanceFault({ clientId, isTestData: target.isTest, assetId: asset.id, costCenterId: asset.cost_center_id || row.costCenterId || 0, reportedOn: todayIsoUtc(), description, priority, outOfService: body.outOfService, reportedByLabel: name, reportedByUserId: null, source: 'qr' });
+    photos.forEach((p, i) => setMaintenancePhoto({ clientId, kind: 'fault', refId: fault.id, n: i + 1, mime: p.mime, data: p.data }));
+    const folio = maintFolioOf(fault);
+    const label = `${folio} · ${target.code}`;
+    const who = `${name} (QR)`;
+    logTableChange({ clientId, tableKey: MC_TABLE_KEY, recordId: fault.id, recordLabel: label, action: 'create', changedBy: who });
+    [['main.colMcActivo', target.code], ['main.colMcFalla', description], ['main.colMcPrioridad', MAINT_PRIORITY_LABELS[priority]], ['main.colMcEstatus', MAINT_FAULT_STATUS_LABELS.open], ['main.colMcFuera', fault.out_of_service ? 'Sí' : 'No']].forEach(([fieldKey, newValue]) => {
+        logTableChange({ clientId, tableKey: MC_TABLE_KEY, recordId: fault.id, recordLabel: label, action: 'update', fieldKey, oldValue: '', newValue, changedBy: who });
+    });
+    // Aviso en la campana: a quien tiene «Notificar» en el Estatus de Correctivo (la de prioridad Alta sale además como alerta roja en generateMaintenanceAlerts, con los mismos destinatarios)
+    if (priority !== 'high') {
+        publishMaintenanceNotice({ recipients: listColumnNotifyRecipientUserIds(clientId, MC_TABLE_KEY, 'colMcEstatus', 'change', []), payload: { alertKind: 'fault-qr', refId: fault.id, assetCode: target.code, serial: asset.serial_number || '', text: description, dueOn: fault.reported_on, folio, reportedBy: name } });
+    }
+    generateMaintenanceAlerts(clientId, true);
+    res.set('Cache-Control', 'no-store');
+    res.status(201).json({ id: fault.id, folio, status: 'open', priority, outOfService: !!fault.out_of_service, name, description, photos: photos.length, assetCode: target.code, zoneName: zone ? zone.name : '', createdAt: sqlUtcIso(fault.created_at), now: new Date().toISOString() });
+});
+// Hoja de QR de fallas (con usuario): un QR por activo del Layout (de una zona o de todas) con su dirección fija; se manda en «spaces» para que sirva el mismo armado de tarjetas de los demás QR del Layout.
+app.get('/api/business/layout/fault-qr', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!layoutPermissions(req).canUseFaultQr) return res.status(403).json({ message: 'No tienes permiso para usar los QR de fallas.' });
+    const row = layoutRowForRequest(req, res);
+    if (!row) return;
+    const token = ensureLayoutPublicToken(req.user.clientId, row.costCenterId || 0);
+    const base = `${req.protocol}://${req.get('host')}/f/${token}`;
+    const layout = row.layout;
+    const zoneId = String(req.query.zone || '');
+    const zones = (layout.zones || []).filter((z) => z.active !== false);
+    const types = listArticleCategoriesAnyScope(req.user.clientId, 'activos-fijos');
+    const list = [];
+    faultPlacedAssets(layout).forEach((placed, assetId) => {
+        if (zoneId && placed.zoneId !== zoneId) return;
+        const asset = getFixedAssetAnyScope(assetId, req.user.clientId);
+        if (!asset || asset.status !== 'active') return;
+        const zone = zones.find((z) => z.id === placed.zoneId);
+        const code = fixedAssetCodeOf(asset);
+        const type = asset.type_id ? types.find((c) => c.id === asset.type_id) : null;
+        const url = `${base}/${assetId}`;
+        list.push({ id: String(assetId), code, type: '', typeName: type ? type.name : '', zoneId: placed.zoneId, zoneName: zone ? zone.name : '', locator: [zone && zone.code, code].filter(Boolean).join('.'), url, qrRows: layoutQrRows(url) });
+    });
+    list.sort((a, b) => a.code.localeCompare(b.code, 'es', { numeric: true }));
+    const client = getClientById(req.user.clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({ companyName: (client && client.company_name) || '', siteName: layout.siteName || '', ...qrBranding(req.user.clientId), zones: zones.map((z) => ({ id: z.id, name: z.name })), spaces: list.slice(0, 600) });
 });
 
 // ---- Fotos (de una corrida o de una falla): hasta 3, ya reducidas por el navegador

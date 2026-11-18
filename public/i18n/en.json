@@ -3737,6 +3737,27 @@
     "layoutQrSensoresEscanea": "SCAN ME TO RECORD WHAT THE SENSOR SHOWS",
     "layoutQrSensoresCategoria": "Sensor",
     "layoutQrSensoresBtn": "Sensor QR (one per sensor)",
+    "layoutQrPorFallas": "Faults",
+    "layoutQrFallasBtn": "Fault QR (one per asset)",
+    "layoutQrFallasCuantos": "{n} QR codes will be printed (one per asset).",
+    "layoutQrFallasVacio": "There are no registered assets placed in that zone. They are placed in the Assets and Sensors steps of the Layout.",
+    "layoutQrFallasTitulo": "REPORT A FAULT",
+    "layoutQrFallasEscanea": "SCAN ME TO REPORT A FAULT OF THIS ASSET",
+    "layoutQrFallasCategoria": "Asset",
+    "layoutQrFallasImprimir": "Print the QR codes",
+    "layoutQrFallasImprimirSub": "Four per Letter page, ready to cut and stick on each asset",
+    "layoutQrFallasDescargarSub": "Choose the card size; the PDF has one per asset",
+    "layoutLockFallaRegistrar": "Be able to report a fault with this QR",
+    "layoutLockFallaAbiertas": "See the asset’s open faults",
+    "layoutLockFallaNombres": "See the name of who reported",
+    "layoutLockFallaFotos": "See the photos of the faults",
+    "layoutLockNotaFalla": "They apply to every fault QR of this cost center, also the ones already printed. Everything is open at first.",
+    "colMcOrigen": "Source",
+    "mcOrigenQr": "QR",
+    "mcOrigenApp": "App",
+    "mcOrigenUsuario": "User",
+    "noticeMaintFaultQr": "New fault by QR",
+    "noticeMaintLineFaultQr": "{asset}: “{task}” · number {folio}, reported by {by} scanning the QR",
     "layoutLockNotaSensor": "They apply to all the sensor QR codes of this Layout, including the ones already printed. Today everything is open; a lock is closed by turning it off.",
     "layoutQrPorSeguridad": "Safety",
     "layoutQrSeguridadImprimir": "Print the QR codes",
@@ -7827,6 +7848,14 @@
     "layoutQrSeguridad": {
       "what": "Prints the safety QR codes: one per Layout element (fire extinguishers, hydrants, emergency doors, first-aid kits… the ones you marked in the Safety step), for the zone you choose or all of them. Each QR is stuck next to its element and, when scanned, whoever checks types their name, marks it OK or Faulty, may leave a note and takes the photo at that moment (the system sets the time). The checks are seen in Operations > Safety: an OK check moves the element's next check forward by itself and a Faulty one marks it that way until another comes out OK. The QR never changes, even if you move the element.",
       "example": "you choose Zone 1 and the QR of E001 and I001 is printed; you stick them next to each one and whoever checks scans the extinguisher's, marks OK, writes \"gauge in the green\" and takes the photo."
+    },
+    "layoutQrFalla": {
+      "what": "One QR for each asset placed in the Layout, to stick on the asset. Whoever scans it, without signing in, reports what failed, whether it stopped working and the priority, and can upload up to 3 photos: the report reaches Corrective Maintenance as an Open fault with source «QR». The QR address never changes.",
+      "example": "You stick the F001 QR on the refrigerator; an operator scans it, types «the compressor will not start» and MC-0012 shows up in Corrective."
+    },
+    "mtSource": {
+      "what": "Where the fault came from: «User» (typed in this screen), «QR» (someone reported it by scanning the asset QR, with no session) or «App».",
+      "example": "MC-0012 · QR: reported by Luis Pérez from the refrigerator QR."
     },
     "layoutQrSensor": {
       "what": "Prints the sensor QR codes: one per sensor of the Layout (the ones you marked in the Sensors step), for the zone you choose or all of them. Each QR is stuck next to its sensor and, when scanned, whoever checks writes their name and what the sensor shows (temperature, humidity or both, depending on its type) and takes a photo of the reading at that moment (the system sets the time). The readings are saved in the same Temperatures database and feed the heat map. The QR never changes, even if you move the sensor.",

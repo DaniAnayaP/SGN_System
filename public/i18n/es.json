@@ -3736,6 +3736,27 @@
     "layoutQrSensoresEscanea": "ESCANÉAME PARA REGISTRAR LO QUE MARCA EL SENSOR",
     "layoutQrSensoresCategoria": "Sensor",
     "layoutQrSensoresBtn": "QR de sensores (uno por sensor)",
+    "layoutQrPorFallas": "Fallas",
+    "layoutQrFallasBtn": "QR de fallas (uno por activo)",
+    "layoutQrFallasCuantos": "Se imprimen {n} QR (uno por activo).",
+    "layoutQrFallasVacio": "No hay activos del registro colocados en esa zona. Se colocan en los pasos Activos y Sensores del Layout.",
+    "layoutQrFallasTitulo": "REPORTAR UNA FALLA",
+    "layoutQrFallasEscanea": "ESCANÉAME PARA REPORTAR UNA FALLA DE ESTE ACTIVO",
+    "layoutQrFallasCategoria": "Activo",
+    "layoutQrFallasImprimir": "Imprimir los QR",
+    "layoutQrFallasImprimirSub": "Cuatro por hoja carta, listos para recortar y pegar en cada activo",
+    "layoutQrFallasDescargarSub": "Elige el tamaño de la tarjeta; el PDF trae una por activo",
+    "layoutLockFallaRegistrar": "Poder reportar una falla con este QR",
+    "layoutLockFallaAbiertas": "Ver las fallas abiertas del activo",
+    "layoutLockFallaNombres": "Ver el nombre de quien reportó",
+    "layoutLockFallaFotos": "Ver las fotos de las fallas",
+    "layoutLockNotaFalla": "Valen para todos los QR de fallas de este centro de costos, también los ya impresos. Todo abierto al principio.",
+    "colMcOrigen": "Origen",
+    "mcOrigenQr": "QR",
+    "mcOrigenApp": "App",
+    "mcOrigenUsuario": "Usuario",
+    "noticeMaintFaultQr": "Nueva falla por QR",
+    "noticeMaintLineFaultQr": "{asset}: «{task}» · folio {folio}, la reportó {by} escaneando el QR",
     "layoutLockNotaSensor": "Valen para todos los QR de sensores de este Layout, también los ya impresos. Hoy todo está abierto; un candado se cierra al apagarlo.",
     "layoutQrPorSeguridad": "Seguridad",
     "layoutQrSeguridadImprimir": "Imprimir los QR",
@@ -7826,6 +7847,14 @@
     "layoutQrSeguridad": {
       "what": "Imprime los QR de seguridad: uno por elemento del Layout (extintores, hidrantes, puertas de emergencia, botiquines… los que marcaste en el paso Seguridad), de la zona que elijas o de todas. Cada QR se pega junto a su elemento y, al escanearlo, quien revisa escribe su nombre, marca si está Bien o Con falla, puede dejar una nota y toma la foto en ese momento (la hora la pone el sistema). Las revisiones se ven en Operaciones > Seguridad: una revisión Bien recorre sola la próxima revisión del elemento y una Con falla lo marca así hasta que otra salga bien. El QR no cambia nunca, aunque muevas el elemento.",
       "example": "eliges la Zona 1 y se imprime el QR de E001 y I001; los pegas junto a cada uno y quien revisa escanea el del extintor, marca Bien, anota «manómetro en verde» y toma la foto."
+    },
+    "layoutQrFalla": {
+      "what": "Un QR por cada activo que está en el Layout, para pegarlo en el activo. Quien lo escanea, sin entrar al sistema, reporta qué falló, si dejó de operar y la prioridad, y puede subir hasta 3 fotos: el reporte llega a Mantenimiento Correctivo como una falla Abierta con origen «QR». La dirección del QR no cambia nunca.",
+      "example": "Pegas el QR de F001 en el refrigerador; un operador lo escanea, escribe «el compresor no enciende» y en Correctivo aparece MC-0012."
+    },
+    "mtSource": {
+      "what": "De dónde vino la falla: «Usuario» (se capturó en esta pantalla), «QR» (la reportó alguien escaneando el QR del activo, sin sesión) o «App».",
+      "example": "MC-0012 · QR: la reportó Luis Pérez desde el QR del refrigerador."
     },
     "layoutQrSensor": {
       "what": "Imprime los QR de los sensores: uno por sensor del Layout (los que marcaste en el paso Sensores), de la zona que elijas o de todas. Cada QR se pega junto a su sensor y, al escanearlo, quien revisa escribe su nombre, lo que marca el sensor (temperatura, humedad o las dos, según su tipo) y toma la foto de la lectura en ese momento (la hora la pone el sistema). Las lecturas se guardan en la misma base de Temperaturas y alimentan el mapa de calor. El QR no cambia nunca, aunque muevas el sensor.",
