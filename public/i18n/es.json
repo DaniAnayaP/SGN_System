@@ -5026,6 +5026,9 @@
     "spFExtra": "Otras evidencias",
     "spFAdd": "Agregar",
     "spFRecord": "Grabar pantalla",
+    "spFErrText": "Escribirlo",
+    "spFErrImage": "Subir imagen",
+    "spFPickImage": "Elegir imagen",
     "spFRecording": "Grabando",
     "spFRecStop": "Detener",
     "spFPickVideo": "Elegir un video",
@@ -8218,6 +8221,10 @@
     "spEvidencias": {
       "what": "Lo que pide la categoría para que el siguiente nivel no tenga que volver a preguntarte: datos que se escriben, capturas, archivos y la grabación de pantalla. Si falta algo, el caso se envía igual y se pueden agregar después desde su visor.",
       "example": "«Error al guardar» pide la captura, la grabación, la hora y qué datos pusiste."
+    },
+    "spErrorOpciones": {
+      "what": "El error se puede mostrar de tres maneras: escribirlo, subir una imagen de lo que viste o grabar la pantalla mientras repites la acción que lo causó. La grabación es la más clara: quien te atiende ve exactamente qué hiciste y qué pasó.",
+      "example": "te sale «No se pudo guardar»: tocas Grabar pantalla, eliges la ventana del sistema, repites el guardado y tocas Detener."
     },
     "spGrabar": {
       "what": "Graba lo que haces en la pantalla (hasta 2 minutos, sin audio) mientras repites el error. Es una evidencia real, con la hora y el usuario, y no se puede editar. En el celular no está: sube un video.",

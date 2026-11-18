@@ -5027,6 +5027,9 @@
     "spFExtra": "Other evidence",
     "spFAdd": "Add",
     "spFRecord": "Record screen",
+    "spFErrText": "Write it",
+    "spFErrImage": "Upload image",
+    "spFPickImage": "Choose image",
     "spFRecording": "Recording",
     "spFRecStop": "Stop",
     "spFPickVideo": "Choose a video",
@@ -8219,6 +8222,10 @@
     "spEvidencias": {
       "what": "What the category asks for so the next level does not have to ask again: typed data, screenshots, files and the screen recording. If something is missing, the case is sent anyway and you can add it later from its viewer.",
       "example": "\"Error when saving\" asks for the screenshot, the recording, the time and what data you entered."
+    },
+    "spErrorOpciones": {
+      "what": "You can show the error in three ways: write it, upload an image of what you saw, or record the screen while you repeat the action that caused it. The recording is the clearest: whoever helps you sees exactly what you did and what happened.",
+      "example": "you get «Could not save»: you tap Record screen, pick the system window, repeat the save and tap Stop."
     },
     "spGrabar": {
       "what": "Records what you do on the screen (up to 2 minutes, no audio) while you repeat the error. It is real evidence, with the time and user, and cannot be edited. Not available on phones: upload a video.",

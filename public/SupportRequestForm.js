@@ -81,7 +81,7 @@ function renderForm() {
         <div class="sp-grid">
             <label class="sp-field sp-wide"><span>${esc(t('main.spFSummary'))} *</span><input type="text" id="sp-f-summary" maxlength="${formOptions.limits.summary}" value="${esc(form.summary)}"></label>
             ${screenPickerHtml()}
-            <label class="sp-field sp-wide"><span>${esc(t('main.spFError'))}</span><textarea id="sp-f-error" rows="2" maxlength="${formOptions.limits.text}">${esc(form.errorText)}</textarea></label>
+            ${errorBlockHtml()}
             <label class="sp-field sp-wide"><span>${esc(t('main.spFCategory'))} *</span><select id="sp-f-category"><option value="">${esc(t('main.spFChoose'))}</option>${formOptions.categories.map((c) => `<option value="${c.id}"${c.id === form.categoryId ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
         </div>
         <section class="sp-sec" data-help-key="spImpactos"><h4>${esc(t('main.spFImpact'))}</h4>${impactRows}</section>
@@ -115,6 +115,29 @@ function slotHtml(e) {
     return `<div class="sp-slot">${label}<div class="sp-slot-row"><label class="btn btn-secondary"><i class="bx bx-paperclip" aria-hidden="true"></i> ${esc(t('main.spFAttach'))}<input type="file"${accept} data-slot-file="${e.id}" hidden></label>${state}</div></div>`;
 }
 const fmtClock = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+// «Mensaje del error»: tres maneras de mostrarlo: escribirlo, subir una imagen o grabar la pantalla repitiendo la acción que dio el error (la imagen y el video llegan al caso como evidencias).
+const errFileState = (file, which) => `<span class="sp-ok"><i class="bx bx-check" aria-hidden="true"></i> ${esc(file.name)} <small class="sp-muted">${esc(fmtSize(file.blob.size))}</small></span> <button type="button" class="ms-icon-btn" data-err-clear="${which}" aria-label="${esc(t('main.msRemoveImpact'))}"><i class="bx bx-trash" aria-hidden="true"></i></button>`;
+function errorBlockHtml() {
+    const modes = [['text', t('main.spFErrText')], ['image', t('main.spFErrImage')], ['record', t('main.spFRecord')]];
+    const filled = (k) => (k === 'text' ? !!form.errorText.trim() : (k === 'image' ? !!form.errImage : !!form.errRec));
+    const chips = `<div class="sp-chips" role="radiogroup" data-chips="errmode">${modes.map(([value, label]) => `<button type="button" class="sp-chip${form.errMode === value ? ' on' : ''}" role="radio" aria-checked="${form.errMode === value}" data-chip-value="${value}">${esc(label)}${filled(value) ? ' ✓' : ''}</button>`).join('')}</div>`;
+    let panel;
+    if (form.errMode === 'image') {
+        const have = form.errImage;
+        panel = `<div class="sp-slot-row"><label class="btn btn-secondary"><i class="bx bx-image-add" aria-hidden="true"></i> ${esc(t('main.spFPickImage'))}<input type="file" id="sp-f-err-image" accept="image/*" hidden></label>${have ? errFileState(have, 'image') : ''}</div>${have ? `<img class="sp-preview" alt="" src="${URL.createObjectURL(have.blob)}">` : ''}`;
+    } else if (form.errMode === 'record') {
+        const rec = form.rec && form.rec.slot === 'error' ? form.rec : null;
+        const canRec = window.SupportRecorder && SupportRecorder.canRecord();
+        const have = form.errRec;
+        const recUi = rec
+            ? `<span class="sp-recbar"><span class="sp-recdot"></span><b>${esc(t('main.spFRecording'))} · ${esc(fmtClock(rec.seconds))} / ${esc(fmtClock(SupportRecorder.MAX_SECONDS))}</b><button type="button" class="btn" data-rec-stop="error">${esc(t('main.spFRecStop'))}</button></span>`
+            : `${canRec && !form.rec ? `<button type="button" class="btn" data-rec-start="error" data-help-key="spGrabar"><i class="bx bx-radio-circle-marked" aria-hidden="true"></i> ${esc(t('main.spFRecord'))}</button>` : ''}<label class="btn btn-secondary"><i class="bx bx-video" aria-hidden="true"></i> ${esc(t('main.spFPickVideo'))}<input type="file" id="sp-f-err-video" accept="video/*" hidden></label>`;
+        panel = `<div class="sp-slot-row">${recUi}${have ? errFileState(have, 'record') : ''}</div>${have ? `<video class="sp-preview" controls src="${URL.createObjectURL(have.blob)}"></video>` : ''}${!canRec ? `<small class="sp-muted">${esc(t('main.spRecUnsupported'))}</small>` : ''}`;
+    } else {
+        panel = `<textarea id="sp-f-error" rows="2" maxlength="${formOptions.limits.text}">${esc(form.errorText)}</textarea>`;
+    }
+    return `<div class="sp-field sp-wide" data-help-key="spErrorOpciones"><span>${esc(t('main.spFError'))}</span>${chips}${panel}</div>`;
+}
 // Pantalla y acción: de la lista del sistema (de ahí la Mesa de ayuda compara los accesos) o «otra / no sé» escrita con palabras.
 function screenPickerHtml() {
     const free = `<label class="sp-field"><span>${esc(t('main.spFScreen'))}</span><input type="text" id="sp-f-screen" maxlength="120" value="${esc(form.screen)}"></label><label class="sp-field"><span>${esc(t('main.spFAction'))}</span><input type="text" id="sp-f-action" maxlength="120" value="${esc(form.action)}"></label>`;
@@ -128,10 +151,11 @@ function screenPickerHtml() {
     return form.screenId === '__other' ? `${screenSel}<div></div>${free}` : `${screenSel}${actionSel}`;
 }
 function newForm(prefill) {
-    return { screenId: '', actionId: '', summary: (prefill && prefill.summary) || '', screen: (prefill && prefill.screen) || '', action: (prefill && prefill.action) || '', errorText: (prefill && prefill.errorText) || '', categoryId: null, impacts: new Map(), when: '', keep: null, answers: new Map(), slots: new Map(), extras: [], rec: null, sending: false };
+    return { screenId: '', actionId: '', summary: (prefill && prefill.summary) || '', screen: (prefill && prefill.screen) || '', action: (prefill && prefill.action) || '', errorText: (prefill && prefill.errorText) || '', categoryId: null, impacts: new Map(), when: '', keep: null, answers: new Map(), slots: new Map(), extras: [], rec: null, sending: false, errMode: 'text', errImage: null, errRec: null };
 }
 function closeForm() {
     if (form && form.rec) { try { form.rec.ctl.stop(); } catch (err) { /* ya terminó */ } }
+    hideRecordingFloat();
     if (formEl) formEl.hidden = true;
     form = null;
 }
@@ -147,7 +171,7 @@ async function openForm(prefill, options) {
         formEl.addEventListener('click', onFormClick);
         formEl.addEventListener('input', onFormInput);
         formEl.addEventListener('change', onFormChange);
-        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && form && !form.sending) closeForm(); });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && form && !form.sending && !form.rec) closeForm(); });
     }
     form = newForm(prefill);
     formEl.querySelector('#sp-form-title').textContent = t('main.spNewTitle');
@@ -172,6 +196,21 @@ async function onFormChange(event) {
     if (el.id === 'sp-f-category') {
         form.categoryId = el.value ? Number(el.value) : null;
         form.slots = new Map(); form.answers = new Map();
+        renderForm();
+        return;
+    }
+    if (el.id === 'sp-f-err-image' || el.id === 'sp-f-err-video') {
+        const picked = el.files && el.files[0];
+        const isImage = el.id === 'sp-f-err-image';
+        el.value = '';
+        if (!picked) return;
+        let blob = picked;
+        if (isImage) { try { blob = await Dashboard.compressImageToBlob(picked); } catch (err) { blob = picked; } }
+        const limit = formOptions.limits.bytes[isImage ? 'capture' : 'recording'];
+        if (blob.size > limit) { Dashboard.showToast(t('main.spTooBig', { name: picked.name, mb: Math.round(limit / 1048576) }), 'warning'); return; }
+        const name = blob === picked ? picked.name : picked.name.replace(/\.[^.]+$/, '') + (blob.type === 'image/png' ? '.png' : '.jpg');
+        if (!form) return;
+        if (isImage) form.errImage = { blob, name: `error-${name}` }; else form.errRec = { blob, name: `error-${name}` };
         renderForm();
         return;
     }
@@ -201,37 +240,60 @@ async function onFormClick(event) {
         const value = chip.dataset.chipValue;
         if (group === 'when') form.when = value;
         else if (group === 'keep') form.keep = value === 'yes';
+        else if (group === 'errmode') form.errMode = value;
         else if (group.startsWith('impact:')) form.impacts.set(group.slice(7), Number(value));
         renderForm();
         return;
     }
     const clear = event.target.closest('[data-slot-clear]');
     if (clear) { form.slots.delete(Number(clear.dataset.slotClear)); renderForm(); return; }
+    const errClear = event.target.closest('[data-err-clear]');
+    if (errClear) { if (errClear.dataset.errClear === 'image') form.errImage = null; else form.errRec = null; renderForm(); return; }
     const rm = event.target.closest('[data-extra-remove]');
     if (rm) { form.extras.splice(Number(rm.dataset.extraRemove), 1); renderForm(); return; }
     const recStart = event.target.closest('[data-rec-start]');
-    if (recStart) { startRecording(Number(recStart.dataset.recStart)); return; }
+    if (recStart) { startRecording(recStart.dataset.recStart === 'error' ? 'error' : Number(recStart.dataset.recStart)); return; }
     const recStop = event.target.closest('[data-rec-stop]');
     if (recStop) { stopRecording(); }
 }
 // La grabación de pantalla: pide elegir qué pantalla grabar, cuenta los segundos y al terminar deja el video listo en su evidencia.
 async function startRecording(slotId) {
     try {
-        const ctl = await SupportRecorder.start({ onTick: (seconds) => { if (form && form.rec) { form.rec.seconds = seconds; const label = formEl.querySelector('.sp-recbar b'); if (label) label.textContent = `${t('main.spFRecording')} · ${fmtClock(seconds)} / ${fmtClock(SupportRecorder.MAX_SECONDS)}`; } } });
+        const ctl = await SupportRecorder.start({ onTick: (seconds) => { if (form && form.rec) { form.rec.seconds = seconds; document.querySelectorAll('.sp-recbar b').forEach((label) => { label.textContent = `${t('main.spFRecording')} · ${fmtClock(seconds)} / ${fmtClock(SupportRecorder.MAX_SECONDS)}`; }); } } });
         form.rec = { slot: slotId, seconds: 0, ctl };
         ctl.done.then(({ blob }) => finishRecording(slotId, blob));
+        showRecordingFloat(); // el formulario se esconde para que la persona repita la acción en la pantalla; queda una barra con «Detener»
         renderForm();
     } catch (err) {
         Dashboard.showToast(t('main.spRecDenied'), 'warning');
     }
 }
 function stopRecording() { if (form && form.rec) form.rec.ctl.stop(); }
+// La barra flotante de «Grabando»: mientras se graba el formulario se esconde (si no, taparía la pantalla donde se repite la acción) y desde aquí se detiene.
+function showRecordingFloat() {
+    hideRecordingFloat();
+    if (formEl) formEl.hidden = true;
+    const bar = document.createElement('div');
+    bar.id = 'sp-rec-float';
+    bar.className = 'sp-recbar sp-rec-float';
+    bar.setAttribute('role', 'status');
+    bar.innerHTML = `<span class="sp-recdot"></span><b>${esc(t('main.spFRecording'))} · ${esc(fmtClock(0))} / ${esc(fmtClock(SupportRecorder.MAX_SECONDS))}</b><button type="button" class="btn">${esc(t('main.spFRecStop'))}</button>`;
+    bar.querySelector('button').addEventListener('click', stopRecording);
+    document.body.appendChild(bar);
+}
+function hideRecordingFloat() {
+    const bar = document.getElementById('sp-rec-float');
+    if (bar) bar.remove();
+}
 function finishRecording(slotId, blob) {
+    hideRecordingFloat();
     if (!form) return;
+    if (formEl) formEl.hidden = false;
     form.rec = null;
     const limit = formOptions.limits.bytes.recording;
     if (blob.size > limit) { Dashboard.showToast(t('main.spTooBig', { name: t('main.spFRecord'), mb: Math.round(limit / 1048576) }), 'warning'); renderForm(); return; }
-    form.slots.set(slotId, { blob, name: `grabacion-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.webm` });
+    const recName = `grabacion-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.webm`;
+    if (slotId === 'error') form.errRec = { blob, name: `error-${recName}` }; else form.slots.set(slotId, { blob, name: recName });
     renderForm();
 }
 // Crea el caso y después sube las evidencias una por una (si alguna falla, el caso ya existe y se puede agregar desde la pantalla del caso).
@@ -254,7 +316,7 @@ async function submitForm() {
         const body = await res.json().catch(() => ({}));
         if (!res.ok) { Dashboard.showToast(body.message || Dashboard.t('admin.saveError'), 'warning'); form.sending = false; renderForm(); return; }
         const created = body.case;
-        const queue = [...[...form.slots.entries()].map(([evidenceId, x]) => ({ ...x, evidenceId })), ...form.extras.map((x) => ({ ...x, evidenceId: null }))];
+        const queue = [...[...form.slots.entries()].map(([evidenceId, x]) => ({ ...x, evidenceId })), ...form.extras.map((x) => ({ ...x, evidenceId: null })), ...(form.errImage ? [{ ...form.errImage, evidenceId: null }] : []), ...(form.errRec ? [{ ...form.errRec, evidenceId: null }] : [])];
         const failed = [];
         for (const item of queue) {
             const result = await uploadOne(created.id, item);
