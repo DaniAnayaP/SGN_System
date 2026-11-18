@@ -4347,6 +4347,8 @@ function addMenuResizeGrip(menu, opts = {}) {
     };
     const grip = document.createElement('div');
     grip.className = 'menu-resize-grip';
+    // opts.fromLeft: la ventana está pegada al borde derecho (la campana) y solo puede crecer hacia la izquierda: la esquina de ampliar va abajo a la izquierda y jalarla a la izquierda la hace más ancha
+    if (opts.fromLeft) grip.classList.add('menu-resize-grip-left');
     grip.dataset.helpKey = 'menuResize';
     grip.title = t('main.menuResizeTitle');
     menu.classList.add('has-resize-grip');
@@ -4361,7 +4363,7 @@ function addMenuResizeGrip(menu, opts = {}) {
         const dh0 = state.dh;
         let moved = false;
         try { grip.setPointerCapture(event.pointerId); } catch (err) { /* sin captura: se sigue con lo que llegue */ }
-        const move = (ev) => { moved = true; state.dw = dw0 + (ev.clientX - x0); state.dh = dh0 + (ev.clientY - y0); apply(); };
+        const move = (ev) => { moved = true; state.dw = dw0 + (opts.fromLeft ? x0 - ev.clientX : ev.clientX - x0); state.dh = dh0 + (ev.clientY - y0); apply(); };
         const up = (ev) => {
             grip.removeEventListener('pointermove', move);
             grip.removeEventListener('pointerup', up);
@@ -11205,8 +11207,9 @@ function renderActiveNotificationTab() {
         el.textContent = String(el.dataset.tab === 'soporte' ? supportTabPending : (notificationsData[el.dataset.tab]?.length || 0));
     });
     if (!notificationsListEl) return;
-    notificationsListEl.innerHTML = '';
+    setSupportPanelMode(activeNotificationTab === 'soporte');
     if (activeNotificationTab === 'soporte') { renderSupportTab(); return; }
+    notificationsListEl.innerHTML = '';
     const items = notificationsData[activeNotificationTab] || [];
     if (!items.length) {
         const empty = document.createElement('div');
@@ -11236,7 +11239,6 @@ function renderActiveNotificationTab() {
 }
 
 // ---- la pestaña Soporte de la campana: mis solicitudes (lo que espera algo de mí primero), «Pedir soporte» y «Ver todo» --------------------------------------------------------
-const SUPPORT_TAB_ROWS = 6;
 async function loadSupportTab() {
     supportTabPending = 0;
     notificationsData.soporte = [];
@@ -11253,64 +11255,45 @@ async function loadSupportTab() {
         notificationsData.soporteMeta = { provider: !!out.provider, total: cases.length };
     } catch { /* la pestaña queda vacía */ }
 }
+// La pestaña Soporte es un panel propio dentro de la campana: arriba el interruptor de vista (lista = tabla, acción = tarjetas como de celular) y «Ver todo»; en medio una zona con scroll con TODAS mis solicitudes; y abajo,
+// sobre el borde de la ventana, el botón «Pedir soporte». La ventana se puede ampliar jalando su esquina de abajo a la derecha (como los filtros de las tablas). La vista elegida se recuerda en este navegador.
+const SUPPORT_VIEW_KEY = 'sgn_support_tab_view';
+const supportResize = { dw: 0, dh: 0 };
+const supportView = () => { try { return localStorage.getItem(SUPPORT_VIEW_KEY) === 'list' ? 'list' : 'cards'; } catch { return 'cards'; } };
+function setSupportPanelMode(on) {
+    const dropdown = notificationsListEl && notificationsListEl.closest('.notifications-dropdown');
+    if (!dropdown) return;
+    const panel = dropdown.querySelector('.ns-panel');
+    dropdown.classList.toggle('ns-active', on);
+    notificationsListEl.style.display = on ? 'none' : '';
+    const label = dropdown.querySelector('.notifications-active-label');
+    if (label) label.hidden = on;
+    if (panel) panel.hidden = !on;
+    dropdown.querySelectorAll(':scope > .menu-resize-grip').forEach((g) => g.remove());
+    if (on) addMenuResizeGrip(dropdown, { lists: ['.ns-scroll'], state: supportResize, fromLeft: true });
+    else { dropdown.style.width = ''; dropdown.style.maxHeight = ''; const sc = dropdown.querySelector('.ns-scroll'); if (sc) sc.style.maxHeight = ''; }
+}
+function supportCaseTags(c) {
+    return `<span class="sp-tag sp-status" data-k="${c.status}">${t(`main.spStatus_${c.status}`)}</span><span class="sp-tag sp-lv" data-k="${c.level}">${t(`main.sopLevel_${c.level}`)}</span>${c.rateCan ? `<span class="sp-tag per-pending">${t('main.soRateNow')}</span>` : ''}`;
+}
 function renderSupportTab() {
-    const box = notificationsListEl;
-    const head = document.createElement('div');
-    head.className = 'notifications-item notifications-support-actions';
-    const hint = document.createElement('div');
-    hint.className = 'notifications-item-desc';
-    hint.textContent = t((notificationsData.soporteMeta || {}).provider ? 'main.notificationsSupportHintProvider' : 'main.notificationsSupportHint');
-    const actions = document.createElement('div');
-    actions.className = 'notifications-item-meta';
-    actions.style.display = 'flex'; actions.style.gap = '0.5rem'; actions.style.flexWrap = 'wrap';
-    const ask = document.createElement('a');
-    ask.className = 'btn';
-    ask.href = 'Soporte.html?new=1';
-    ask.textContent = t('main.notificationsSupportAsk');
-    const all = document.createElement('a');
-    all.className = 'btn btn-secondary';
-    all.href = 'Soporte.html';
-    all.textContent = t('main.notificationsSupportAll');
-    actions.append(ask, all);
-    head.append(hint, actions);
-    box.appendChild(head);
-    const cases = (notificationsData.soporte || []).slice(0, SUPPORT_TAB_ROWS);
-    if (!cases.length) {
-        const empty = document.createElement('div');
-        empty.className = 'notifications-empty';
-        empty.textContent = t('main.notificationsSupportEmpty');
-        box.appendChild(empty);
-        return;
-    }
-    cases.forEach((c) => {
-        const row = document.createElement('a');
-        row.className = 'notifications-item';
-        row.style.display = 'block'; row.style.textDecoration = 'none'; row.style.color = 'inherit';
-        row.href = `OpTISoporteCaso.html?id=${encodeURIComponent(c.id)}&from=support`;
-        const tag = document.createElement('div');
-        tag.className = 'notifications-item-meta';
-        tag.style.fontWeight = '700';
-        tag.textContent = `${c.folio} · ${t(`main.spStatus_${c.status}`)} · ${t(`main.sopLevel_${c.level}`)}`;
-        const desc = document.createElement('div');
-        desc.className = 'notifications-item-desc';
-        desc.textContent = c.summary;
-        row.append(tag, desc);
-        if (c.rateCan) {
-            const rate = document.createElement('div');
-            rate.className = 'notifications-item-meta';
-            rate.textContent = t('main.soRateNow');
-            row.appendChild(rate);
-        }
-        box.appendChild(row);
-    });
-    const total = (notificationsData.soporteMeta || {}).total || 0;
-    if (total > SUPPORT_TAB_ROWS) {
-        const more = document.createElement('a');
-        more.className = 'notifications-item-meta';
-        more.href = 'Soporte.html';
-        more.style.display = 'block';
-        more.textContent = t('main.notificationsSupportMore', { n: total - SUPPORT_TAB_ROWS });
-        box.appendChild(more);
+    const dropdown = notificationsListEl.closest('.notifications-dropdown');
+    const panel = dropdown.querySelector('.ns-panel');
+    const view = supportView();
+    const meta = notificationsData.soporteMeta || {};
+    panel.querySelector('.ns-hint').textContent = t(meta.provider ? 'main.notificationsSupportHintProvider' : 'main.notificationsSupportHint');
+    panel.querySelectorAll('[data-ns-view]').forEach((b) => { const on = b.dataset.nsView === view; const label = t(b.dataset.nsView === 'list' ? 'main.nsViewList' : 'main.nsViewCards'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.title = label; b.setAttribute('aria-label', label); });
+    const ask = panel.querySelector('.ns-ask span'); if (ask) ask.textContent = t('main.notificationsSupportAsk');
+    const scroll = panel.querySelector('.ns-scroll');
+    scroll.classList.toggle('ns-phone', view === 'cards');
+    const cases = notificationsData.soporte || [];
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const href = (c) => `OpTISoporteCaso.html?id=${encodeURIComponent(c.id)}&from=support`;
+    if (!cases.length) { scroll.innerHTML = `<div class="notifications-empty">${esc(t('main.notificationsSupportEmpty'))}</div>`; return; }
+    if (view === 'list') {
+        scroll.innerHTML = `<table class="ns-table"><thead><tr><th>${esc(t('main.colSpFolio'))}</th><th>${esc(t('main.colSpResumen'))}</th><th>${esc(t('main.colSpEstatus'))}</th><th>${esc(t('main.colSpNivel'))}</th></tr></thead><tbody>${cases.map((c) => `<tr class="ns-row" data-href="${esc(href(c))}"><td><b>${esc(c.folio)}</b></td><td>${esc(c.summary)}${c.rateCan ? ` <span class="sp-tag per-pending">${esc(t('main.soRateNow'))}</span>` : ''}</td><td><span class="sp-tag sp-status" data-k="${esc(c.status)}">${esc(t(`main.spStatus_${c.status}`))}</span></td><td><span class="sp-tag sp-lv" data-k="${esc(c.level)}" title="${esc(t(`main.sopLevel_${c.level}`))}">${esc(String(c.level).toUpperCase())}</span></td></tr>`).join('')}</tbody></table>`;
+    } else {
+        scroll.innerHTML = cases.map((c) => `<a class="ns-card" href="${esc(href(c))}"><div class="ns-card-top"><b>${esc(c.folio)}</b><time>${esc(new Date(c.createdAt).toLocaleDateString(currentLang === 'en' ? 'en-US' : 'es-MX', { day: '2-digit', month: 'short' }))}</time></div><div class="ns-card-summary">${esc(c.summary)}</div><div class="ns-card-tags">${supportCaseTags(c).replace(/>([^<]+)</g, (m, tx) => `>${esc(tx)}<`)}</div></a>`).join('');
     }
 }
 
@@ -11359,6 +11342,17 @@ document.querySelectorAll('.top-bar-actions-list').forEach((container) => {
         </div>
         <div class="notifications-active-label"></div>
         <div class="notifications-list" data-role="list"></div>
+        <div class="ns-panel" hidden>
+            <div class="ns-bar">
+                <p class="ns-hint"></p>
+                <div class="ns-views" role="group" data-i18n-aria="main.nsViewTitle">
+                    <button type="button" data-ns-view="list" data-i18n-aria="main.nsViewList"><i class="bx bx-table" aria-hidden="true"></i></button>
+                    <button type="button" data-ns-view="cards" data-i18n-aria="main.nsViewCards"><i class="bx bx-mobile-alt" aria-hidden="true"></i></button>
+                </div>
+            </div>
+            <div class="ns-scroll"></div>
+            <a class="btn ns-ask" href="Soporte.html?new=1"><i class="bx bx-plus" aria-hidden="true"></i> <span data-i18n="main.notificationsSupportAsk"></span></a>
+        </div>
     `;
     wrapper.appendChild(dropdown);
     notificationsListEl = dropdown.querySelector('[data-role="list"]');
@@ -11367,6 +11361,13 @@ document.querySelectorAll('.top-bar-actions-list').forEach((container) => {
             activeNotificationTab = tabBtn.dataset.tab;
             renderActiveNotificationTab();
         });
+    });
+    // Soporte: el interruptor de vista (lista / acción) y tocar un renglón de la tabla
+    dropdown.querySelector('.ns-panel').addEventListener('click', (event) => {
+        const v = event.target.closest('[data-ns-view]');
+        if (v) { try { localStorage.setItem(SUPPORT_VIEW_KEY, v.dataset.nsView); } catch { /* sin guardar la vista */ } renderSupportTab(); return; }
+        const row = event.target.closest('tr.ns-row');
+        if (row && row.dataset.href) location.href = row.dataset.href;
     });
     btn.addEventListener('click', (event) => {
         event.stopPropagation();

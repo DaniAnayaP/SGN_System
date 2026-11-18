@@ -5961,7 +5961,10 @@
     "notificationsSupportEmpty": "You have not asked for support yet.",
     "notificationsSupportMore": "+{n} more in Support",
     "soProvider": "Your company has no IT contracted: your request goes straight to the GEIPSA support team.",
-    "noticeSupportSaasReopenedLine": "Case {folio} «{summary}» from {client} was reopened: {said}"
+    "noticeSupportSaasReopenedLine": "Case {folio} «{summary}» from {client} was reopened: {said}",
+    "nsViewTitle": "How to view my requests",
+    "nsViewList": "View as list (table)",
+    "nsViewCards": "View as action (cards)"
   },
   "home": {
     "title": "SGN",

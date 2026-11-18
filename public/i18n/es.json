@@ -5960,7 +5960,10 @@
     "notificationsSupportEmpty": "Todavía no has pedido soporte.",
     "notificationsSupportMore": "+{n} más en Soporte",
     "soProvider": "Tu empresa no tiene TI contratado: tu solicitud llega directo al equipo de soporte de GEIPSA.",
-    "noticeSupportSaasReopenedLine": "El caso {folio} «{summary}» de {client} se reabrió: {said}"
+    "noticeSupportSaasReopenedLine": "El caso {folio} «{summary}» de {client} se reabrió: {said}",
+    "nsViewTitle": "Cómo ver mis solicitudes",
+    "nsViewList": "Ver como lista (tabla)",
+    "nsViewCards": "Ver como acción (tarjetas)"
   },
   "home": {
     "title": "SGN",
