@@ -65,6 +65,7 @@ const {
     getClientModuleKeys,
     listCostCenters,
     countCostCenters,
+    countSites,
     getCostCenterById,
     getCostCenterAnyLane,
     createCostCenter,
@@ -1380,6 +1381,7 @@ app.get('/api/admin/clients', requireAuth, requireAdmin, (req, res) => {
         return {
             ...client,
             costCentersUsed: countCostCenters(client.id),
+            sitesUsed: countSites(client.id),
             planAccessPermissionsCost,
             planCostCentersLimit,
             planCostPerCostCenter,

@@ -4238,6 +4238,11 @@ function countCostCenters(clientId, forTestAccount = false) {
     return db.prepare('SELECT COUNT(*) AS n FROM cost_centers WHERE client_id = ? AND is_test_data = ?').get(clientId, forTestAccount ? 1 : 0).n;
 }
 
+// Cuántos SITIOS tiene habilitados un cliente: códigos de sitio distintos entre sus centros de costos activos. La cadena es Sitio > Centro de costos (un sitio puede tener varios centros), así que se cuentan los sitios, no los centros. Es lo que se ve en «Sitios» de Nuestros Clientes.
+function countSites(clientId, forTestAccount = false) {
+    return db.prepare("SELECT COUNT(DISTINCT site_code) AS n FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND status = 'active' AND site_code <> ''").get(clientId, forTestAccount ? 1 : 0).n;
+}
+
 function getCostCenterById(id, clientId, forTestAccount = false) {
     return db.prepare('SELECT * FROM cost_centers WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
@@ -16176,6 +16181,7 @@ module.exports = {
     getClientModuleKeys,
     listCostCenters,
     countCostCenters,
+    countSites,
     getCostCenterById,
     getCostCenterAnyLane,
     createCostCenter,

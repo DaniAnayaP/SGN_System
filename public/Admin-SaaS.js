@@ -548,7 +548,7 @@ function renderClients() {
             textCell(formatMoney(client.contractedCostComputed)),
             textCell(formatMoney(client.initial_payment)),
             textCell(formatMoney(client.monthly_payment)),
-            textCell(`${client.costCentersUsed ?? 0} / ${client.cost_centers_limit ?? 0}`),
+            textCell(`${client.sitesUsed ?? 0} / ${client.cost_centers_limit ?? 0}`),
             tdCostCentersContracted,
             tdAnexoChanges,
             textCell(client.contract_registered_date),
