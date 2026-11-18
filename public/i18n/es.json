@@ -4997,9 +4997,6 @@
     "spAnswer": "Respuesta",
     "spFSummary": "¿Qué pasó? (una frase)",
     "spFScreen": "Pantalla donde pasó",
-    "spScreensHave": "Pantallas que ya tienes",
-    "spScreensMissing": "Pantallas que todavía no tienes",
-    "spScreenNoAccessTag": "sin acceso",
     "spFAction": "Qué estabas haciendo",
     "spFError": "Mensaje del error (si lo hay)",
     "spFCategory": "Categoría",
@@ -6621,6 +6618,10 @@
     "sitePicker": {
       "what": "Elige los sitios donde vas a trabajar. Se habilita cuando ya elegiste el Área, y al elegir sitios, el selector de Centros de Costo solo te deja los de esos sitios.",
       "example": "tu empresa tiene los sitios de Monterrey y de Guadalajara: eliges solo Monterrey y en Centros de Costo ves únicamente los de Monterrey."
+    },
+    "supportScreenSelect": {
+      "what": "La lista trae todas las pantallas del sistema, en el mismo orden que el árbol de accesos. El punto de color dice si tú ya la tienes: verde, sí la tienes; rojo, todavía no la tienes. Si quieres entrar a una que aún no tienes, elígela igual para que sepamos cuál es.",
+      "example": "quieres usar Calibraciones y no la tienes: la eliges (sale con punto rojo) y escribes qué necesitabas hacer."
     },
     "uiScale": {
       "what": "Hace el texto y las tablas más grandes o más chicas en toda la aplicación, solo mientras dure tu sesión.",

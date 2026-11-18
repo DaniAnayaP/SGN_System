@@ -9665,6 +9665,7 @@ const HELP_CONTENT_KEYS = {
     'messages-btn': 'messages',
     'chatbot-btn': 'chatbot',
     'site-picker-btn': 'sitePicker',
+    'sp-f-screen-sel': 'supportScreenSelect',
     'notifications-btn': 'notifications',
     'bookmarks-btn': 'bookmarks',
     'ui-scale-btn': 'uiScale',

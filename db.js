@@ -14760,6 +14760,11 @@ function supportScreenCatalog() {
             }
         }
     }
+    // En el orden del árbol de accesos: departamento, área (el orden de «areas» de menu.json), apartado (Catálogos, Operaciones, Admin, Gestión...) y, dentro de cada uno, el orden en que están sus pantallas (el sort es estable).
+    const deptRank = (s) => { const i = HR_DEPARTMENT_KEYS.indexOf(s.sectionId); return i < 0 ? 999 : i; };
+    const areaRank = (s) => { const i = ((menuData.areas || {})[s.sectionId] || []).findIndex((a) => a.id === s.itemId); return i < 0 ? 999 : i; };
+    const categoryRank = (s) => { const i = (menuData.areaCategories || []).findIndex((c) => c.id === s.categoryId); return i < 0 ? 999 : i; };
+    out.sort((a, b) => deptRank(a) - deptRank(b) || areaRank(a) - areaRank(b) || categoryRank(a) - categoryRank(b));
     supportScreensCache = out;
     return out;
 }

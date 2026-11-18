@@ -54,7 +54,7 @@ async function loadFormOptions() {
             const base = list.map((s) => `${t(s.labelKey)}${s.categoryLabelKey ? ` · ${t(s.categoryLabelKey)}` : ''}`);
             const count = new Map();
             base.forEach((b) => count.set(b, (count.get(b) || 0) + 1));
-            formOptions.screens = list.map((s, i) => ({ ...s, label: count.get(base[i]) > 1 ? `${base[i]} (${String(s.nodeId).replace(/^cat-[a-z]+-/, '')})` : base[i] })).sort((a, b) => a.label.localeCompare(b.label, locale()));
+            formOptions.screens = list.map((s, i) => ({ ...s, label: count.get(base[i]) > 1 ? `${base[i]} (${String(s.nodeId).replace(/^cat-[a-z]+-/, '')})` : base[i] }));
         }
     } catch (err) { /* sin lista: se escribe con palabras */ }
 }
@@ -120,13 +120,9 @@ function screenPickerHtml() {
     const free = `<label class="sp-field"><span>${esc(t('main.spFScreen'))}</span><input type="text" id="sp-f-screen" maxlength="120" value="${esc(form.screen)}"></label><label class="sp-field"><span>${esc(t('main.spFAction'))}</span><input type="text" id="sp-f-action" maxlength="120" value="${esc(form.action)}"></label>`;
     if (!formOptions.screens.length) return free;
     const picked = formOptions.screens.find((s) => s.id === form.screenId);
-    const screenOption = (s) => `<option value="${esc(s.id)}"${s.id === form.screenId ? ' selected' : ''}>${esc(s.has === false ? `${s.label} · ${t('main.spScreenNoAccessTag')}` : s.label)}</option>`;
-    const haveScreens = formOptions.screens.filter((s) => s.has !== false);
-    const missingScreens = formOptions.screens.filter((s) => s.has === false);
-    // con las dos clases a la vista, cada una va en su grupo (la etiqueta del grupo dice cuáles tiene la persona y cuáles no); si todas son de una sola clase, la lista va simple
-    const screenOptions = haveScreens.length && missingScreens.length
-        ? `<optgroup label="${esc(t('main.spScreensHave'))}">${haveScreens.map(screenOption).join('')}</optgroup><optgroup label="${esc(t('main.spScreensMissing'))}">${missingScreens.map(screenOption).join('')}</optgroup>`
-        : formOptions.screens.map(screenOption).join('');
+    // un punto de color antes de cada pantalla (se ve también en la casilla ya elegida): verde = la tiene, rojo = todavía no la tiene
+    const screenOption = (s) => `<option value="${esc(s.id)}"${s.id === form.screenId ? ' selected' : ''}>${s.has === undefined ? '' : (s.has ? '🟢 ' : '🔴 ')}${esc(s.label)}</option>`;
+    const screenOptions = formOptions.screens.map(screenOption).join('');
     const screenSel = `<label class="sp-field"><span>${esc(t('main.spFScreen'))}</span><select id="sp-f-screen-sel"><option value="">${esc(t('main.spFChoose'))}</option>${screenOptions}<option value="__other"${form.screenId === '__other' ? ' selected' : ''}>${esc(t('main.spFOtherScreen'))}</option></select></label>`;
     const actionSel = picked ? `<label class="sp-field"><span>${esc(t('main.spFAction'))}</span><select id="sp-f-action-sel"><option value="">${esc(t('main.spFChoose'))}</option>${[...picked.actions].sort((a, b) => ['button', 'column', 'icon'].indexOf(a.kind) - ['button', 'column', 'icon'].indexOf(b.kind)).map((a) => `<option value="${esc(a.id)}"${a.id === form.actionId ? ' selected' : ''}>${esc(t(`main.supActKind_${a.kind}`))}: ${esc(t(a.labelKey))}</option>`).join('')}</select></label>` : '<div></div>';
     return form.screenId === '__other' ? `${screenSel}<div></div>${free}` : `${screenSel}${actionSel}`;

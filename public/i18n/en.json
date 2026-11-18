@@ -4998,9 +4998,6 @@
     "spAnswer": "Answer",
     "spFSummary": "What happened? (one sentence)",
     "spFScreen": "Screen where it happened",
-    "spScreensHave": "Screens you already have",
-    "spScreensMissing": "Screens you do not have yet",
-    "spScreenNoAccessTag": "no access",
     "spFAction": "What were you doing",
     "spFError": "Error message (if any)",
     "spFCategory": "Category",
@@ -6622,6 +6619,10 @@
     "sitePicker": {
       "what": "Choose the sites where you will work. It turns on once you have picked the Area, and when you pick sites the Cost Centers picker only lets you choose the ones from those sites.",
       "example": "your company has the Monterrey and Guadalajara sites: you pick only Monterrey and Cost Centers shows just the Monterrey ones."
+    },
+    "supportScreenSelect": {
+      "what": "The list has every screen in the system, in the same order as the access tree. The colored dot tells you whether you already have it: green, you have it; red, you do not have it yet. If you want to get into one you do not have yet, pick it anyway so we know which one it is.",
+      "example": "you want to use Calibrations and you do not have it: you pick it (it shows a red dot) and write what you needed to do."
     },
     "uiScale": {
       "what": "Makes the text and tables bigger or smaller across the whole application, only for as long as your session lasts.",
