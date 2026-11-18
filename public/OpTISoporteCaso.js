@@ -56,6 +56,7 @@ function eventText(m) {
     if (m.eventKey === 'classified') return d.type === 'c' ? t('main.spEv_classified_c', { author }) : t(d.created ? 'main.spEv_classified_p_new' : 'main.spEv_classified_p_existing', { author, general: d.general }) + (d.others ? t('main.spEv_classified_more', { n: d.others }) : '');
     if (m.eventKey === 'general_linked') return t('main.spEv_general_linked', { author, general: d.general });
     if (m.eventKey === 'resolved') return t('main.spEv_resolved', { author });
+    if (m.eventKey === 'rated') return t('main.spEv_rated', { author, stars: starsText(d.stars) });
     if (m.eventKey === 'general_resolved') return t('main.spEv_general_resolved', { general: d.general });
     if (m.eventKey === 'closed') return d.noresp ? t('main.spEv_closed_noresp', { author, n: d.attempts || 0 }) : t('main.spEv_closed_ok', { author }) + (d.cause ? t('main.spEv_closed_cause', { cause: d.cause }) : '');
     if (m.eventKey === 'reopened') return d.byTeam ? t('main.spEv_reopened_team', { to: t(`main.sopLevel_${d.to}`), said: d.said || '' }) : t('main.spEv_reopened_user', { author, said: d.said || '' });
@@ -109,6 +110,7 @@ function renderHeader() {
         <div><dt>${esc(t('main.colSpCategoria'))}</dt><dd>${esc(c.category || '—')}</dd></div><div data-help-key="spPrimeraResp"><dt>${esc(t('main.scFirstResponse'))}</dt><dd>${first}</dd></div>
         <div><dt>${esc(t('main.spFWhen'))}</dt><dd>${esc(t(`main.spWhen_${c.whenAffects}`))}</dd></div><div><dt>${esc(t('main.spFKeep'))}</dt><dd>${esc(c.keepWorking ? t('main.spYes') : t('main.spNo'))}</dd></div>
         <div class="sp-wide"><dt>${esc(t('main.spFImpact'))}</dt><dd>${impacts}</dd></div>
+        ${c.userStars ? `<div><dt>${esc(t('main.rtMetaStars'))}</dt><dd class="sc-stars-text">${esc(starsText(c.userStars))}</dd></div>` : ''}
         ${c.errorText ? `<div class="sp-wide"><dt>${esc(t('main.spFError'))}</dt><dd class="sp-pre">${esc(c.errorText)}</dd></div>` : ''}
         ${answers.map(([id, text]) => `<div class="sp-wide"><dt>${esc(t('main.spAnswer'))}</dt><dd class="sp-pre">${esc(text)}</dd></div>`).join('')}</dl>`;
 }
@@ -180,6 +182,7 @@ async function refresh(first) {
             await reloadMoves();
             await reloadClass();
             await reloadClosing();
+            await reloadRatings();
         }
         if (!first && state.peopleCan) await reloadPeople();
         if (first || got) { renderThread(first); renderFlow(); }
@@ -1012,6 +1015,86 @@ document.addEventListener('input', (event) => {
     else if (el.matches('[data-cf-anote]')) f.attempt.note = el.value;
 });
 
+// ---- calificaciones --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// El usuario califica la atención cuando el caso termina. Entre niveles: quien recibe un caso califica cómo le llegó (1 clic; obligatoria antes de empezar si el Mapa de soporte lo pide) y quien lo pasó hacia arriba puede
+// calificar (opcional) al nivel que lo recibió. Las calificaciones entre niveles son internas: solo las ve quien tenga la columna del árbol. Lo escrito no se edita ni se borra.
+const rateState = { data: null, forms: {} };
+const starsText = (n) => '★'.repeat(Math.max(0, Math.min(5, Number(n) || 0))) + '☆'.repeat(5 - Math.max(0, Math.min(5, Number(n) || 0)));
+async function loadRatings() {
+    const res = await fetch(`${API}/${caseId}/ratings`, { credentials: 'include' });
+    if (!res.ok) { rateState.data = null; return false; }
+    rateState.data = await res.json();
+    return true;
+}
+async function reloadRatings() {
+    await loadRatings();
+    renderRatings();
+}
+function rateFormHtml(key, kind, d) {
+    const f = rateState.forms[key] || (rateState.forms[key] = { stars: 0, tags: new Set(), comment: '', sending: false });
+    const tg = d.tags[kind];
+    const stars = [1, 2, 3, 4, 5].map((n) => `<button type="button" class="sc-star${f.stars >= n ? ' on' : ''}" data-rt-star="${esc(key)}" data-n="${n}" aria-label="${n}" aria-pressed="${f.stars === n}">★</button>`).join('');
+    const chips = [...tg.good, ...tg.bad].map((k) => `<button type="button" class="sp-chip${f.tags.has(k) ? ' on' : ''}" data-rt-tag="${esc(key)}" data-tag="${esc(k)}">${esc(t(`main.rtTag_${kind}_${k}`))}</button>`).join('');
+    return `<div class="sc-rate"><div class="sc-stars" role="group" aria-label="${esc(t('main.rtStarsLabel'))}">${stars}</div><div class="sp-chips">${chips}</div>
+        <label class="sp-field"><textarea data-rt-comment="${esc(key)}" rows="2" maxlength="${d.maxComment}" placeholder="${esc(t('main.rtComment'))}">${esc(f.comment)}</textarea></label>
+        <div class="admin-form-actions"><button type="button" class="btn" data-rt-send="${esc(key)}"${f.sending ? ' disabled' : ''}>${esc(f.sending ? t('main.spFSending') : t('main.rtSend'))}</button></div></div>`;
+}
+function ratingLineHtml(r, kind) {
+    return `<div class="sc-rate-line"><span class="sc-stars-text" aria-label="${r.stars}/5">${esc(starsText(r.stars))}</span> ${r.tags.map((k) => `<span class="sp-tag">${esc(t(`main.rtTag_${kind}_${k}`))}</span>`).join(' ')}${r.comment ? `<div class="sp-pre">${esc(r.comment)}</div>` : ''}</div>`;
+}
+function renderRatings() {
+    const box = $('sc-rate-card'); const d = rateState.data;
+    if (!d) { box.hidden = true; return; }
+    const parts = [];
+    if (d.userCanRate) parts.push(`<div class="sc-rate-block"><h4>${esc(t('main.rtUserTitle'))}</h4><p class="sp-muted">${esc(t('main.rtUserHint'))}</p>${rateFormHtml('user:0', 'user', d)}</div>`);
+    else if (d.user) parts.push(`<div class="sc-rate-block"><h4>${esc(t('main.rtUserDone'))}</h4>${ratingLineHtml(d.user, 'user')}<span class="sp-muted">${esc(d.user.by)} · ${esc(fmtTime(d.user.createdAt))}</span></div>`);
+    if (d.pending) {
+        const p = d.pending;
+        parts.push(`<div class="sc-rate-block sc-rate-pending"><h4>${esc(t('main.rtPendingTitle'))}</h4><p class="sp-muted">${esc(t('main.rtPendingWho', { by: p.by || '—', from: t(`main.sopLevel_${p.from}`), to: t(`main.sopLevel_${p.to}`), when: fmtTime(p.at) }))}</p>${rateFormHtml(`receive:${p.id}`, 'receive', d)}</div>`);
+    }
+    d.deliver.forEach((m) => parts.push(`<div class="sc-rate-block"><h4>${esc(t('main.rtDeliverTitle', { level: t(`main.sopLevel_${m.to}`) }))}</h4><p class="sp-muted">${esc(t('main.rtOptional'))}</p>${rateFormHtml(`deliver:${m.id}`, 'deliver', d)}</div>`));
+    if (d.canSeeAll && d.all.length) {
+        const rows = d.all.map((r) => `<tr><td>${esc(t(`main.rtKind_${r.kind}`))}</td><td>${lvBadge(r.raterLevel)} ${esc(r.by || '—')}</td><td>${lvBadge(r.targetLevel)} ${esc(r.targetName || '')}</td><td class="sc-stars-text">${esc(starsText(r.stars))}</td><td>${esc(r.tags.map((k) => t(`main.rtTag_${r.kind}_${k}`)).join(', '))}${r.comment ? `<br><span class="sp-muted">${esc(r.comment)}</span>` : ''}</td><td>${esc(fmtTime(r.createdAt))}</td></tr>`).join('');
+        parts.push(`<div class="sc-rate-block"><h4>${esc(t('main.rtHistTitle'))}</h4><div class="sc-sg-table"><table class="ms-table"><thead><tr><th>${esc(t('main.rtColKind'))}</th><th>${esc(t('main.rtColWho'))}</th><th>${esc(t('main.rtColTarget'))}</th><th>${esc(t('main.rtColStars'))}</th><th>${esc(t('main.rtColNote'))}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>`);
+    }
+    if (!parts.length) { box.hidden = true; return; }
+    box.hidden = false;
+    box.innerHTML = `<div class="sc-card-head"><h3>${esc(t('main.rtTitle'))}</h3></div>${parts.join('')}`;
+}
+async function submitRating(key) {
+    const f = rateState.forms[key]; if (!f || f.sending) return;
+    const [kind, moveId] = key.split(':');
+    if (!f.stars) { Dashboard.showToast(t('main.rtStarsErr'), 'warning'); return; }
+    f.sending = true; renderRatings();
+    try {
+        const res = await fetch(`${API}/${caseId}/ratings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ kind, moveId: Number(moveId) || undefined, stars: f.stars, tags: [...f.tags], comment: f.comment }) });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); f.sending = false; await reloadRatings(); return; }
+        delete rateState.forms[key];
+        Dashboard.showToast(t(kind === 'user' ? 'main.rtThanks' : 'main.rtSaved'), 'success');
+        await loadCase(); renderHeader();
+        await reloadRatings();
+        await refresh(false);
+        renderThread(true);
+    } catch (err) {
+        console.error('Caso de soporte: failed to rate', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        f.sending = false; renderRatings();
+    }
+}
+document.addEventListener('click', (event) => {
+    const st = event.target.closest('[data-rt-star]');
+    if (st) { const f = rateState.forms[st.dataset.rtStar]; if (f && !f.sending) { f.stars = Number(st.dataset.n); renderRatings(); } return; }
+    const tg = event.target.closest('[data-rt-tag]');
+    if (tg) { const f = rateState.forms[tg.dataset.rtTag]; if (f && !f.sending) { const k = tg.dataset.tag; if (f.tags.has(k)) f.tags.delete(k); else f.tags.add(k); renderRatings(); } return; }
+    const send = event.target.closest('[data-rt-send]');
+    if (send) submitRating(send.dataset.rtSend);
+});
+document.addEventListener('input', (event) => {
+    const c = event.target.closest && event.target.closest('[data-rt-comment]');
+    if (c && rateState.forms[c.dataset.rtComment]) rateState.forms[c.dataset.rtComment].comment = c.value;
+});
+
 // ---- eventos ----------------------------------------------------------------------------------------------------------------------------
 document.addEventListener('click', (event) => {
     const tab = event.target.closest('[data-tab]');
@@ -1059,6 +1142,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
         if (state.classCan) { if (await loadClass()) renderClass(); }
         if (state.closingCan) await loadClosing();
         renderClosing();
+        await reloadRatings();
         if (state.chat.canSee) { await loadMessages(true); renderTabs(); renderThread(true); renderFlow(); renderComposer(); } else { $('sc-chat-card').hidden = true; $('sc-flow-card').hidden = true; }
         state.timer = setInterval(() => { if (!document.hidden) refresh(false); }, POLL_MS);
     } catch (err) {

@@ -138,6 +138,7 @@ function buildRow(r) {
         tagCell('colSpPrioridad', 'sp-tag sp-pri', String(r.priority), t(`main.msPri_${r.priority}`)),
         tagCell('colSpNivel', 'sp-tag sp-lv', r.level, t(`main.sopLevel_${r.level}`)),
         tagCell('colSpEstatus', 'sp-tag sp-status', r.status, t(`main.spStatus_${r.status}`)),
+        cell('colSpCalificacion', r.userStars ? '★'.repeat(r.userStars) + '☆'.repeat(5 - r.userStars) : '—'),
         dueCell(r), filesCell(r),
     );
     tr.appendChild(actionsCell(r));

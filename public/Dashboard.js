@@ -10623,7 +10623,7 @@ function renderSupportNoticeRow(item) {
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
     const v = item.variant || '';
     const isPerson = v.startsWith('person-');
-    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated', 'general-linked': 'main.noticeSupportGeneralLinked', 'general-notify': 'main.noticeSupportGeneralNotify', 'case-resolved': 'main.noticeSupportResolved', 'case-closed': 'main.noticeSupportClosed', 'case-reopened': 'main.noticeSupportReopened', 'general-resolved': 'main.noticeSupportGeneralResolved' }[v] || (v === 'case-arrived' ? 'main.noticeSupportArrived' : (item.auto ? (item.reason === 'auto_escalated' ? 'main.noticeSupportEscalatedAuto' : 'main.noticeSupportUrgent') : 'main.noticeSupportNotify'));
+    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated', 'general-linked': 'main.noticeSupportGeneralLinked', 'general-notify': 'main.noticeSupportGeneralNotify', 'case-resolved': 'main.noticeSupportResolved', 'case-closed': 'main.noticeSupportClosed', 'case-reopened': 'main.noticeSupportReopened', 'general-resolved': 'main.noticeSupportGeneralResolved', 'rate-reminder': 'main.noticeSupportRateReminder' }[v] || (v === 'case-arrived' ? 'main.noticeSupportArrived' : (item.auto ? (item.reason === 'auto_escalated' ? 'main.noticeSupportEscalatedAuto' : 'main.noticeSupportUrgent') : 'main.noticeSupportNotify'));
     const tag = document.createElement('div');
     tag.className = 'notifications-item-meta';
     tag.style.fontWeight = '700';
@@ -10645,8 +10645,10 @@ function renderSupportNoticeRow(item) {
         desc.textContent = `${text}${item.message ? ` — ${item.message}` : ''}`;
     } else if (v === 'case-resolved') {
         desc.textContent = t(item.generalFolio ? 'main.noticeSupportResolvedGeneralLine' : 'main.noticeSupportResolvedLine', { ...base, generalFolio: item.generalFolio || '' });
+    } else if (v === 'rate-reminder') {
+        desc.textContent = t('main.noticeSupportRateReminderLine', base);
     } else if (v === 'case-closed') {
-        desc.textContent = t(item.noresp ? 'main.noticeSupportClosedNoReplyLine' : 'main.noticeSupportClosedLine', { ...base, until: item.until ? formatNotificationDate(item.until) : '' });
+        desc.textContent = t(item.noresp ? 'main.noticeSupportClosedNoReplyLine' : (item.askRating ? 'main.noticeSupportClosedRateLine' : 'main.noticeSupportClosedLine'), { ...base, until: item.until ? formatNotificationDate(item.until) : '' });
     } else if (v === 'case-reopened') {
         desc.textContent = t('main.noticeSupportReopenedLine', { ...base, to: t(`main.sopLevel_${item.to}`), said: item.said || '' });
     } else if (v === 'general-resolved') {
@@ -10701,7 +10703,7 @@ function renderSupportNoticeRow(item) {
             actions.append(hint);
         } else if (item.pStatus) showDone(item.pStatus);
         row.append(actions);
-    } else if (['access-request', 'case-arrived', 'general-linked', 'case-resolved', 'case-closed', 'case-reopened'].includes(v) && item.caseId) {
+    } else if (['access-request', 'case-arrived', 'general-linked', 'case-resolved', 'case-closed', 'case-reopened', 'rate-reminder'].includes(v) && item.caseId) {
         const link = document.createElement('a');
         link.href = `OpTISoporteCaso.html?id=${encodeURIComponent(item.caseId)}`;
         link.className = 'notifications-item-meta';

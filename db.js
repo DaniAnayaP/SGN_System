@@ -14658,7 +14658,7 @@ db.exec(`
 // first_response_at: cuándo respondió por primera vez alguien del equipo (la de un mensaje, no la de una nota). level de una evidencia: el nivel de quien la subió (n0 = el usuario).
 if (!db.prepare('PRAGMA table_info(support_cases)').all().some((c) => c.name === 'first_response_at')) db.exec('ALTER TABLE support_cases ADD COLUMN first_response_at TEXT');
 if (!db.prepare('PRAGMA table_info(support_case_files)').all().some((c) => c.name === 'level')) db.exec("ALTER TABLE support_case_files ADD COLUMN level TEXT NOT NULL DEFAULT ''");
-const SUPPORT_CASE_SELECT = 'SELECT c.*, (SELECT COUNT(*) FROM support_case_files f WHERE f.case_id = c.id) AS file_count, (SELECT g.record_number FROM support_generals g WHERE g.id = c.general_id) AS general_number FROM support_cases c';
+const SUPPORT_CASE_SELECT = 'SELECT c.*, (SELECT COUNT(*) FROM support_case_files f WHERE f.case_id = c.id) AS file_count, (SELECT g.record_number FROM support_generals g WHERE g.id = c.general_id) AS general_number, (SELECT r.stars FROM support_case_ratings r WHERE r.case_id = c.id AND r.kind = \'user\' ORDER BY r.id DESC LIMIT 1) AS user_stars FROM support_cases c';
 // Un caso por su id, sin importar de quién es (para lo que corre solo, como pasar un aviso al jefe).
 function getSupportCaseById(id) {
     return db.prepare(`${SUPPORT_CASE_SELECT} WHERE c.id = ?`).get(id) || null;
@@ -15027,7 +15027,7 @@ function closeSupportCase({ caseId, status, by, causeId, causeName, did }) {
     db.prepare("UPDATE support_cases SET status = ?, closed_at = datetime('now'), closed_by = ?, cause_id = ?, cause_name = ?, close_did = ? WHERE id = ?").run(status, by || '', causeId || null, causeName || '', did || '', caseId);
 }
 function reopenSupportCase(caseId) {
-    db.prepare("UPDATE support_cases SET status = 'open', confirm_at = NULL, closed_at = NULL, reopened_count = reopened_count + 1 WHERE id = ?").run(caseId);
+    db.prepare("UPDATE support_cases SET status = 'open', confirm_at = NULL, closed_at = NULL, rating_reminded = 0, reopened_count = reopened_count + 1 WHERE id = ?").run(caseId);
 }
 function resolveSupportGeneral(id, { by, did }) {
     db.prepare("UPDATE support_generals SET status = 'resolved', resolved_at = datetime('now'), resolved_by = ?, resolved_did = ? WHERE id = ?").run(by || '', did || '', id);
@@ -15044,6 +15044,56 @@ function closeSupportGeneralIfDone(generalId) {
     if (left > 0) return false;
     db.prepare("UPDATE support_generals SET status = 'closed' WHERE id = ?").run(generalId);
     return true;
+}
+// ---- Calificaciones: del usuario a la atención y entre niveles ------------------------------------------------------------------------------------------------------------------------------
+// Tres calificaciones (1 a 5 estrellas, etiquetas y un comentario opcional): 'receive' = al recibir un caso, quien lo recibe califica cómo le llegó (al nivel anterior; obligatoria si el Mapa de soporte lo pide); 'deliver' =
+// quien pasó el caso hacia arriba califica al nivel que lo recibió (opcional, cuando el caso salió de ese nivel o ya se resolvió); 'user' = el usuario califica la atención cuando el caso termina (una por cierre).
+// ref_id = el traspaso calificado (receive, deliver) o el cierre (user): solo hay una de cada tipo por cada uno. Lo escrito no se edita ni se borra. Las calificaciones entre niveles son internas: el usuario no las ve.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS support_case_ratings (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        case_id         INTEGER NOT NULL REFERENCES support_cases(id) ON DELETE CASCADE,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        kind            TEXT NOT NULL,
+        ref_id          INTEGER NOT NULL DEFAULT 0,
+        rater_user_id   INTEGER,
+        rater_name      TEXT NOT NULL DEFAULT '',
+        rater_level     TEXT NOT NULL DEFAULT '',
+        target_level    TEXT NOT NULL DEFAULT '',
+        target_name     TEXT NOT NULL DEFAULT '',
+        stars           INTEGER NOT NULL,
+        tags            TEXT NOT NULL DEFAULT '[]',
+        comment         TEXT NOT NULL DEFAULT '',
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (case_id, kind, ref_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_case_ratings_case ON support_case_ratings (case_id, id);
+`);
+// rating_reminded = ya se le recordó al usuario que califique la atención de este cierre (se reinicia al reabrir).
+if (!db.prepare('PRAGMA table_info(support_cases)').all().some((c) => c.name === 'rating_reminded')) db.exec('ALTER TABLE support_cases ADD COLUMN rating_reminded INTEGER NOT NULL DEFAULT 0');
+function addSupportRating(r) {
+    const id = db.prepare('INSERT INTO support_case_ratings (case_id, client_id, kind, ref_id, rater_user_id, rater_name, rater_level, target_level, target_name, stars, tags, comment) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(r.caseId, r.clientId, r.kind, r.refId || 0, r.raterUserId || null, r.raterName || '', r.raterLevel || '', r.targetLevel || '', r.targetName || '', r.stars, JSON.stringify(r.tags || []), r.comment || '').lastInsertRowid;
+    return db.prepare('SELECT * FROM support_case_ratings WHERE id = ?').get(id);
+}
+function getSupportRating(caseId, kind, refId) {
+    return db.prepare('SELECT * FROM support_case_ratings WHERE case_id = ? AND kind = ? AND ref_id = ?').get(caseId, kind, refId || 0) || null;
+}
+function listSupportRatings(caseId) {
+    return db.prepare('SELECT * FROM support_case_ratings WHERE case_id = ? ORDER BY id ASC').all(caseId);
+}
+// El último cierre «conforme» del caso: a ese cierre pertenece la calificación del usuario.
+function lastSupportClosedClosureId(caseId) {
+    const r = db.prepare("SELECT MAX(id) AS id FROM support_case_closures WHERE case_id = ? AND kind = 'closed'").get(caseId);
+    return r && r.id ? r.id : 0;
+}
+// Los casos terminados a los que todavía no se les pidió de nuevo la calificación (para el recordatorio).
+function listSupportRatingReminderCandidates() {
+    return db.prepare(`SELECT c.* FROM support_cases c WHERE c.status = 'done' AND c.rating_reminded = 0 AND c.closed_at IS NOT NULL AND c.reporter_user_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM support_case_ratings r WHERE r.case_id = c.id AND r.kind = 'user' AND r.ref_id = (SELECT MAX(z.id) FROM support_case_closures z WHERE z.case_id = c.id AND z.kind = 'closed')) ORDER BY c.id ASC LIMIT 200`).all();
+}
+function markSupportRatingReminded(caseId) {
+    db.prepare('UPDATE support_cases SET rating_reminded = 1 WHERE id = ?').run(caseId);
 }
 // ---- Quién reportó y su equipo: avisos e invitaciones del caso ----------------------------------------------------------------------------------------------------------------------------
 // Una fila por persona y caso. kind: 'notify' (se le AVISA: una nota en la campana, sin entrar al chat; debe tocar «Enterado») o 'invite' (se le INVITA al chat: ve la conversación y escribe, nunca las notas internas;
@@ -15420,6 +15470,7 @@ seedSoporteEvidenceKindsOnce();
 module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    addSupportRating, getSupportRating, listSupportRatings, lastSupportClosedClosureId, listSupportRatingReminderCandidates, markSupportRatingReminded,
     addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,

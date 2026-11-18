@@ -3691,6 +3691,11 @@
               "permissionOnly": true
             },
             {
+              "id": "colSpCalificacion",
+              "labelKey": "main.colSpCalificacion",
+              "permissionOnly": true
+            },
+            {
               "id": "colSpResponder",
               "labelKey": "main.colSpResponder",
               "permissionOnly": true
@@ -3723,6 +3728,11 @@
             {
               "id": "colSpClasificacion",
               "labelKey": "main.colSpClasificacion",
+              "permissionOnly": true
+            },
+            {
+              "id": "colSpCalificaciones",
+              "labelKey": "main.colSpCalificaciones",
               "permissionOnly": true
             },
             {
@@ -3768,6 +3778,11 @@
                 {
                   "id": "colSpCerrar",
                   "labelKey": "main.colSpCerrar",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSpCalificar",
+                  "labelKey": "main.colSpCalificar",
                   "permissionOnly": true
                 }
               ]

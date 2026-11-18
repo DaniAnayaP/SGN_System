@@ -582,6 +582,7 @@ const {
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    addSupportRating, getSupportRating, listSupportRatings, lastSupportClosedClosureId, listSupportRatingReminderCandidates, markSupportRatingReminded,
     addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
@@ -10141,7 +10142,7 @@ function supportCaseRowOf(r, client, withFiles) {
         impacts: parseJsonOr(r.impacts, []), answers: parseJsonOr(r.answers, {}), reporter: r.reporter_name, reporterUserId: r.reporter_user_id,
         createdAt: sqlUtcIso(r.created_at), dueAt: sqlUtcIso(r.first_response_due_at), firstResponseAt: sqlUtcIso(r.first_response_at), fileCount: r.file_count || 0, withFiles: !!withFiles,
         general: r.general_id ? { id: r.general_id, folio: supportGeneralFolio(r.general_number || 0) } : null, classifiedAt: sqlUtcIso(r.classified_at), classifiedBy: r.classified_by || '',
-        confirmAt: sqlUtcIso(r.confirm_at), closedAt: sqlUtcIso(r.closed_at), closedBy: r.closed_by || '', closeDid: r.close_did || '', reopenedCount: r.reopened_count || 0,
+        confirmAt: sqlUtcIso(r.confirm_at), closedAt: sqlUtcIso(r.closed_at), closedBy: r.closed_by || '', closeDid: r.close_did || '', reopenedCount: r.reopened_count || 0, userStars: r.user_stars || null,
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: SUPPORT_CASE_SCREEN_LABEL, centroCostos: '', createdAt: r.created_at }),
     };
 }
@@ -10358,6 +10359,7 @@ app.post('/api/business/support-cases/:id/messages', requireAuth, (req, res) => 
         if (rec.status === 'noresp' && !note && supportCanReopen(req, rec)) { supportReopenFlow(req, rec, { said: text || '…', toLevel: 'n1', byTeam: false }); rec = getSupportCase(id, req.user.clientId, req.user.isTestAccount); }
         else return bad('Este caso ya está cerrado.', 'CLOSED');
     }
+    if (!note && !supportIsReporter(req, rec) && ['n1', 'n2', 'n3', 'n4'].includes(supportAuthorLevel(req, rec)) && supportRateFirst(req, res, rec)) return;
     ensureSupportThread(rec);
     const level = supportAuthorLevel(req, rec);
     const created = addSupportCaseMessage({ caseId: id, clientId: req.user.clientId, kind: note ? 'note' : 'message', level, authorUserId: req.user.sub, authorName: changedByLabel(req), body: text, fileId });
@@ -10671,6 +10673,7 @@ app.post('/api/business/support-cases/:id/moves', requireAuth, (req, res) => {
     if (['done', 'noresp'].includes(rec.status)) return bad('Este caso ya está cerrado.', 'CLOSED');
     if (!supportCanMove(req, direction)) return res.status(403).json({ message: `No tienes permiso para ${direction === 'up' ? 'subir' : 'devolver'} casos.` });
     if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'Este caso lo mueve quien lo atiende en su nivel actual.', code: 'LEVEL' });
+    if (supportRateFirst(req, res, rec)) return;
     const map = supportMapPayload(getSupportMapRow(req.user.clientId), req).map;
     const options = direction === 'up' ? SupportRules.upLevels(rec.level, map) : SupportRules.downLevels(rec.level, map);
     if (!options.length) return bad(direction === 'up' ? 'Este caso ya está en el último nivel.' : 'Este caso ya está en el primer nivel.', direction === 'up' ? 'TOP' : 'BOTTOM');
@@ -10715,6 +10718,7 @@ app.post('/api/business/support-cases/:id/status', requireAuth, (req, res) => {
     if (supportIsReporter(req, rec) && !req.user.isClientAdmin) return res.status(403).json({ message: 'El estatus lo cambia el equipo de soporte.' });
     if (!supportCan(req, 'colSpCambiarEstatus')) return res.status(403).json({ message: 'No tienes permiso para cambiar el estatus.' });
     if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'El estatus lo cambia quien atiende el caso en su nivel actual.', code: 'LEVEL' });
+    if (supportRateFirst(req, res, rec)) return;
     if (!['open', ...SUPPORT_STATUS_TARGETS].includes(rec.status)) return bad('Este caso ya no está en curso.', 'CLOSED');
     const status = String((req.body && req.body.status) || '');
     if (!SUPPORT_STATUS_TARGETS.includes(status)) return bad('Elige el estatus.', 'STATUS');
@@ -10790,6 +10794,7 @@ app.post('/api/business/support-cases/:id/classify', requireAuth, (req, res) => 
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const bad = (message, code) => res.status(400).json({ message, code });
     if (!supportCanOperateClass(req, rec)) return res.status(403).json({ message: 'Solo la Mesa de ayuda (o quien atiende el caso) lo clasifica.', code: 'FORBIDDEN' });
+    if (supportRateFirst(req, res, rec)) return;
     if (rec.general_id) return bad('Este caso ya es Preventivo y está ligado a un Soporte general.', 'ALREADY');
     if (!['c', 'p'].includes(body.type)) return bad('Elige si es Correctivo o Preventivo.', 'TYPE');
     const by = changedByLabel(req);
@@ -10943,6 +10948,7 @@ app.post('/api/business/support-cases/:id/resolve', requireAuth, (req, res) => {
     if (supportIsReporter(req, rec) && !req.user.isClientAdmin) return res.status(403).json({ message: 'Quien reportó no marca resuelto el caso.' });
     if (!supportCan(req, 'colSpResolver')) return res.status(403).json({ message: 'No tienes permiso para marcar casos como resueltos.' });
     if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'Este caso lo marca resuelto quien lo atiende en su nivel actual.', code: 'LEVEL' });
+    if (supportRateFirst(req, res, rec)) return;
     if (!SUPPORT_WORKING_STATUSES.includes(rec.status)) return bad(rec.status === 'confirm' ? 'Este caso ya está por confirmar con el usuario.' : 'Este caso ya está cerrado.', rec.status === 'confirm' ? 'CONFIRM' : 'CLOSED');
     const did = supportCleanText(body.did);
     if (did.length < SUPPORT_CLOSE_TEXT_MIN) return bad('Cuenta qué hiciste para resolverlo (obligatorio).', 'DID');
@@ -10965,6 +10971,7 @@ app.post('/api/business/support-cases/:id/attempts', requireAuth, (req, res) => 
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const bad = (message, code) => res.status(400).json({ message, code });
     if (!supportCanClose(req, rec)) return res.status(403).json({ message: 'Solo la Mesa de ayuda registra los intentos de contacto de un caso por confirmar.', code: 'FORBIDDEN' });
+    if (supportRateFirst(req, res, rec)) return;
     const channel = String(body.channel || '');
     if (!SUPPORT_ATTEMPT_CHANNELS.includes(channel)) return bad('Elige cómo lo contactaste.', 'CHANNEL');
     const note = supportCleanText(body.note, 500);
@@ -10987,6 +10994,7 @@ app.post('/api/business/support-cases/:id/close', requireAuth, (req, res) => {
         if (supportCan(req, 'colSpCerrar') && !supportIsReporter(req, rec) && rec.status !== 'confirm') return bad(SUPPORT_CLOSED_STATUSES.includes(rec.status) ? 'Este caso ya está cerrado.' : 'Primero hay que marcarlo resuelto: el cierre es con el caso por confirmar con el usuario.', SUPPORT_CLOSED_STATUSES.includes(rec.status) ? 'CLOSED' : 'STATE');
         return res.status(403).json({ message: 'Solo la Mesa de ayuda cierra el caso con el usuario.', code: 'FORBIDDEN' });
     }
+    if (supportRateFirst(req, res, rec)) return;
     const conformity = String(body.conformity || '');
     if (!['ok', 'none', 'noresp'].includes(conformity)) return bad('Elige si el usuario quedó conforme.', 'CONFORMITY');
     const by = changedByLabel(req);
@@ -11021,7 +11029,7 @@ app.post('/api/business/support-cases/:id/close', requireAuth, (req, res) => {
     addSupportEvent(rec, 'closed', { by, noresp: status === 'noresp', cause: causeName, attempts: status === 'noresp' ? listSupportAttempts(rec.id, rec.confirm_at).length : 0 }, { level: 'n1', authorName: by, authorUserId: req.user.sub });
     supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel('confirm'), supportStatusLabel(status));
     if (rec.general_id) closeSupportGeneralIfDone(rec.general_id);
-    if (rec.reporter_user_id && rec.reporter_user_id !== req.user.sub) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-closed', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, noresp: status === 'noresp', until: new Date(Date.now() + SUPPORT_REOPEN_DAYS * 86400000).toISOString(), by } });
+    if (rec.reporter_user_id && rec.reporter_user_id !== req.user.sub) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-closed', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, noresp: status === 'noresp', until: new Date(Date.now() + SUPPORT_REOPEN_DAYS * 86400000).toISOString(), askRating: status === 'done' && getSupportMapRow(req.user.clientId).ask_user_rating === 1, by } });
     res.json({ status });
 });
 // El usuario reabre su caso cerrado (hasta 7 días después): dice qué sigue fallando y el caso vuelve a la Mesa de ayuda.
@@ -11049,6 +11057,7 @@ app.post('/api/business/support-cases/:id/general-resolve', requireAuth, (req, r
     if (!supportCan(req, 'colSpResolver')) return res.status(403).json({ message: 'No tienes permiso para marcar como resuelto.' });
     if (!supportCanActOnLevel(req, { level: g.level })) return res.status(403).json({ message: 'El Soporte general lo resuelve quien lo atiende (en su nivel).', code: 'LEVEL' });
     if (g.status !== 'open') return bad('Este Soporte general ya se resolvió.', 'STATE');
+    if (supportRateFirst(req, res, rec)) return;
     const did = supportCleanText(body.did);
     if (did.length < SUPPORT_CLOSE_TEXT_MIN) return bad('Cuenta qué se hizo para resolverlo (obligatorio).', 'DID');
     const fileIds = supportFileIdsOf(body);
@@ -11069,6 +11078,139 @@ app.post('/api/business/support-cases/:id/general-resolve', requireAuth, (req, r
     });
     supportNoticeToLevel(req, 'n1', { variant: 'general-resolved', generalId: g.id, generalFolio: folio, generalTitle: g.title, count: cases.length, by });
     res.status(201).json({ general: supportGeneralOf(getSupportGeneralById(g.id), listSupportGeneralCases(g.id), { withCases: true }), cases: cases.length });
+});
+// ---- calificaciones ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// 1) Al recibir un caso (cuando llega de otro nivel) quien lo atiende califica cómo le llegó, de 1 a 5 estrellas y con etiquetas (era de mi nivel, notas claras, traía evidencias, faltó información, no era de mi nivel):
+//    1 clic y es OBLIGATORIA antes de empezar si el Mapa de soporte lo pide («Calificar al recibir un caso») y la persona tiene el botón «Calificar traspasos»; sin calificar no cambia estatus, no escribe al usuario ni resuelve,
+//    mueve o cierra el caso. Los regresos «ya se resolvió» y las reaperturas no se califican.
+// 2) Quien pasó el caso hacia arriba puede calificar (opcional) al nivel que lo recibió cuando el caso ya salió de ese nivel o quedó resuelto.
+// 3) El usuario califica la atención cuando el caso termina (una vez por cierre; el Mapa de soporte decide si se le pide y cuántas horas después se le recuerda).
+// Las calificaciones entre niveles son internas (solo las ve quien tenga la columna «Calificaciones entre niveles»); la del usuario la ve todo el equipo y el propio usuario. Lo escrito no se edita ni se borra.
+const SUPPORT_RATING_TAGS = {
+    receive: { good: ['level_ok', 'notes_clear', 'had_evidence'], bad: ['missing_info', 'wrong_level'] },
+    deliver: { good: ['fast', 'clear_reason', 'solved'], bad: ['slow', 'unclear'] },
+    user: { good: ['fast_clear', 'informed', 'explained'], bad: ['slow', 'confusing'] },
+};
+const SUPPORT_RATING_COMMENT_MAX = 500;
+const SUPPORT_RATING_EXEMPT_REASONS = ['solved', 'reopened'];
+const supportCanRate = (req, rec) => !supportIsReporter(req, rec) && supportCan(req, 'colSpCalificar');
+// El último traspaso que trajo el caso al nivel donde está (los regresos «ya se resolvió» y las reaperturas no cuentan).
+function supportIncomingMove(rec) {
+    const moves = listSupportMoves(rec.id);
+    const last = moves[moves.length - 1];
+    return last && last.to_level === rec.level && !SUPPORT_RATING_EXEMPT_REASONS.includes(last.reason) ? last : null;
+}
+// Lo que esta persona debe calificar antes de empezar (null = nada): hay un traspaso sin calificar, el Mapa lo pide y ella tiene el botón.
+function supportPendingReceive(req, rec) {
+    if (!supportCanRate(req, rec) || SUPPORT_CLOSED_STATUSES.includes(rec.status)) return null;
+    if (getSupportMapRow(req.user.clientId).rate_on_receive !== 1) return null;
+    const incoming = supportIncomingMove(rec);
+    // un traspaso que hizo la misma persona no lo califica ella (el administrador que sube un caso y sigue trabajándolo)
+    return incoming && incoming.by_user_id !== req.user.sub && !getSupportRating(rec.id, 'receive', incoming.id) ? incoming : null;
+}
+// Responde (y regresa true) si falta calificar cómo llegó el caso: la acción no se hace hasta calificar.
+function supportRateFirst(req, res, rec) {
+    if (!supportPendingReceive(req, rec) || !supportCanActOnLevel(req, rec)) return false;
+    res.status(400).json({ message: 'Antes de empezar, califica cómo te llegó el caso (1 clic).', code: 'RATE_FIRST' });
+    return true;
+}
+// Los traspasos hacia arriba de esta persona que ya puede calificar (el caso salió de ese nivel o quedó resuelto) y todavía no calificó.
+function supportDeliverOptions(req, rec) {
+    if (!supportCanRate(req, rec)) return [];
+    const left = (m) => rec.level !== m.to_level || ['confirm', 'done', 'noresp'].includes(rec.status);
+    return listSupportMoves(rec.id).filter((m) => m.direction === 'up' && m.reason !== 'reopened' && m.by_user_id === req.user.sub && left(m) && !getSupportRating(rec.id, 'deliver', m.id));
+}
+function supportUserRatingState(req, rec) {
+    const refId = lastSupportClosedClosureId(rec.id);
+    const ask = getSupportMapRow(req.user.clientId).ask_user_rating === 1;
+    const done = !!refId && !!getSupportRating(rec.id, 'user', refId);
+    return { refId, ask, canRate: supportIsReporter(req, rec) && rec.status === 'done' && ask && !!refId && !done };
+}
+const supportRatingMoveOf = (m) => ({ id: m.id, direction: m.direction, from: m.from_level, to: m.to_level, reason: m.reason, by: m.by_name, at: sqlUtcIso(m.created_at) });
+const supportRatingOf = (r) => ({ id: r.id, kind: r.kind, moveId: r.kind === 'user' ? null : r.ref_id, stars: r.stars, tags: parseJsonOr(r.tags, []), comment: r.comment, by: r.rater_name, raterLevel: r.rater_level, targetLevel: r.target_level, targetName: r.target_name, createdAt: sqlUtcIso(r.created_at) });
+// Recordatorio de la calificación: a quien reportó un caso terminado que no calificó la atención, pasadas las horas del Mapa de soporte (0 = sin recordatorio). Una sola vez por cierre.
+function processSupportRatingReminders() {
+    const now = Date.now();
+    for (const c of listSupportRatingReminderCandidates()) {
+        const row = getSupportMapRow(c.client_id);
+        const hours = Number(row.rating_reminder_hours) || 0;
+        if (row.ask_user_rating !== 1 || hours <= 0) { markSupportRatingReminded(c.id); continue; }
+        if (new Date(sqlUtcIso(c.closed_at)).getTime() + hours * 3600000 > now) continue;
+        markSupportRatingReminded(c.id);
+        publishSupportNotice({ recipients: [c.reporter_user_id], actorUserId: null, actorLabel: 'Sistema', payload: { variant: 'rate-reminder', caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary } });
+    }
+}
+app.get('/api/business/support-cases/:id/ratings', requireAuth, (req, res) => {
+    const rec = supportClosingGate(req, res);
+    if (!rec) return;
+    try { processSupportRatingReminders(); } catch (err) { console.error('support rating reminders failed', err); }
+    const reporter = supportIsReporter(req, rec) && !req.user.isClientAdmin;
+    const all = listSupportRatings(rec.id);
+    const users = all.filter((r) => r.kind === 'user');
+    const latest = users.length ? users[users.length - 1] : null;
+    const st = supportUserRatingState(req, rec);
+    const pending = reporter || !supportCanActOnLevel(req, rec) ? null : supportPendingReceive(req, rec);
+    const seeAll = !reporter && supportHasCol(req, 'colSpCalificaciones');
+    const receivers = new Map(all.filter((r) => r.kind === 'receive').map((r) => [r.ref_id, r.rater_name]));
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        tags: SUPPORT_RATING_TAGS, maxComment: SUPPORT_RATING_COMMENT_MAX, canRate: !reporter && supportCanRate(req, rec),
+        user: latest ? supportRatingOf(latest) : null, userCanRate: st.canRate,
+        pending: pending ? supportRatingMoveOf(pending) : null,
+        deliver: reporter ? [] : supportDeliverOptions(req, rec).map(supportRatingMoveOf),
+        canSeeAll: seeAll,
+        all: seeAll ? all.filter((r) => r.kind !== 'user').map((r) => ({ ...supportRatingOf(r), targetName: r.target_name || (r.kind === 'deliver' ? (receivers.get(r.ref_id) || '') : '') })) : [],
+    });
+});
+app.post('/api/business/support-cases/:id/ratings', requireAuth, (req, res) => {
+    const rec = supportClosingGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    const kind = String(body.kind || '');
+    if (!['receive', 'deliver', 'user'].includes(kind)) return bad('Elige qué calificas.', 'KIND');
+    const by = changedByLabel(req);
+    let refId = 0; let raterLevel = ''; let targetLevel = ''; let targetName = '';
+    // quién puede dar cada calificación
+    if (kind === 'user') {
+        if (!supportIsReporter(req, rec)) return res.status(403).json({ message: 'La atención la califica quien reportó el caso.', code: 'FORBIDDEN' });
+        if (rec.status !== 'done') return bad('Se califica cuando el caso termina.', 'STATE');
+        const st = supportUserRatingState(req, rec);
+        if (!st.ask) return bad('La empresa no pide calificar la atención.', 'OFF');
+        if (!st.refId || getSupportRating(rec.id, 'user', st.refId)) return bad('Ya calificaste la atención de este caso.', 'DONE');
+        refId = st.refId; raterLevel = 'n0'; targetLevel = 'n1';
+    } else {
+        if (supportIsReporter(req, rec) && !req.user.isClientAdmin) return res.status(403).json({ message: 'Las calificaciones entre niveles son del equipo.', code: 'FORBIDDEN' });
+        if (!supportCan(req, 'colSpCalificar')) return res.status(403).json({ message: 'No tienes permiso para calificar traspasos.', code: 'FORBIDDEN' });
+        const moveId = Number(body.moveId);
+        if (kind === 'receive') {
+            if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'Lo califica quien atiende el caso en su nivel actual.', code: 'LEVEL' });
+            const incoming = supportIncomingMove(rec);
+            if (!incoming || incoming.id !== moveId) return bad('Ese traspaso no es el que llegó a tu nivel.', 'MOVE');
+            if (incoming.by_user_id === req.user.sub) return bad('Un traspaso que hiciste tú no lo calificas.', 'SELF');
+            if (getSupportRating(rec.id, 'receive', incoming.id)) return bad('Este traspaso ya se calificó.', 'DONE');
+            refId = incoming.id; raterLevel = rec.level; targetLevel = incoming.from_level; targetName = incoming.by_name || '';
+        } else {
+            const mine = supportDeliverOptions(req, rec).find((m) => m.id === moveId);
+            if (!mine) {
+                const own = listSupportMoves(rec.id).find((m) => m.id === moveId);
+                if (!own || own.by_user_id !== req.user.sub) return res.status(403).json({ message: 'Solo quien pasó el caso califica a quien lo recibió.', code: 'FORBIDDEN' });
+                return bad(getSupportRating(rec.id, 'deliver', own.id) ? 'Este traspaso ya se calificó.' : 'Todavía no se puede calificar: el caso sigue en ese nivel.', getSupportRating(rec.id, 'deliver', own.id) ? 'DONE' : 'EARLY');
+            }
+            const receiver = getSupportRating(rec.id, 'receive', mine.id);
+            refId = mine.id; raterLevel = mine.from_level; targetLevel = mine.to_level; targetName = receiver ? receiver.rater_name : '';
+        }
+    }
+    const stars = Number(body.stars);
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5) return bad('Elige de 1 a 5 estrellas.', 'STARS');
+    const allowed = [...SUPPORT_RATING_TAGS[kind].good, ...SUPPORT_RATING_TAGS[kind].bad];
+    const tags = Array.isArray(body.tags) ? [...new Set(body.tags.map(String))] : [];
+    if (tags.some((tg) => !allowed.includes(tg))) return bad('Una de las etiquetas no es válida.', 'TAGS');
+    const comment = supportCleanText(body.comment, SUPPORT_RATING_COMMENT_MAX);
+    ensureSupportThread(rec);
+    const row = addSupportRating({ caseId: rec.id, clientId: req.user.clientId, kind, refId, raterUserId: req.user.sub, raterName: by, raterLevel, targetLevel, targetName, stars, tags, comment });
+    if (kind === 'user') addSupportEvent(rec, 'rated', { stars }, { level: 'n0', authorName: by, authorUserId: req.user.sub });
+    res.status(201).json({ rating: supportRatingOf(row) });
 });
 // Subir UNA evidencia (el archivo tal cual, sin envolverlo): X-File-Name = su nombre (codificado) y X-Evidence-Id = a cuál de las que pide la categoría corresponde (opcional: sin él es una evidencia extra).
 app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ type: () => true, limit: '13mb' }), (req, res) => {
@@ -17209,4 +17351,4 @@ app.post('/api/business/notifications/avisos/mark-seen', requireAuth, (req, res)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`SGN app listening on port ${PORT}`));
 // Los avisos e invitaciones de Soporte que nadie contestó a tiempo pasan al jefe de esa persona (cada minuto; también al abrir un caso o la campana).
-setInterval(() => { try { processSupportEscalations(); } catch (err) { console.error('support escalations failed', err); } }, 60 * 1000).unref();
+setInterval(() => { try { processSupportEscalations(); } catch (err) { console.error('support escalations failed', err); } try { processSupportRatingReminders(); } catch (err) { console.error('support rating reminders failed', err); } }, 60 * 1000).unref();
