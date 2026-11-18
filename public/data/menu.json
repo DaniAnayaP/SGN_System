@@ -3696,6 +3696,16 @@
               "permissionOnly": true
             },
             {
+              "id": "colSpChat",
+              "labelKey": "main.colSpChat",
+              "permissionOnly": true
+            },
+            {
+              "id": "colSpNotas",
+              "labelKey": "main.colSpNotas",
+              "permissionOnly": true
+            },
+            {
               "id": "class-botones",
               "labelKey": "menu.classBotones",
               "isClassification": true,
@@ -3703,6 +3713,11 @@
                 {
                   "id": "colSpCreateAuth",
                   "labelKey": "main.colSpCreateAuth",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSpChatSend",
+                  "labelKey": "main.colSpChatSend",
                   "permissionOnly": true
                 }
               ]

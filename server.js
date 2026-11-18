@@ -580,6 +580,7 @@ const {
     SUPPORT_MATERIAL_CATEGORIES,
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
+    listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -10133,11 +10134,48 @@ function supportCaseRowOf(r, client, withFiles) {
         id: r.id, folio: supportFolio(r.record_number), type: r.case_type, summary: r.summary, screen: r.screen_label, action: r.action_label, errorText: r.error_text,
         categoryId: r.category_id, category: r.category_name, priority: r.priority, level: r.level, status: r.status, whenAffects: r.when_affects, keepWorking: r.keep_working === 1,
         impacts: parseJsonOr(r.impacts, []), answers: parseJsonOr(r.answers, {}), reporter: r.reporter_name, reporterUserId: r.reporter_user_id,
-        createdAt: sqlUtcIso(r.created_at), dueAt: sqlUtcIso(r.first_response_due_at), fileCount: r.file_count || 0, withFiles: !!withFiles,
+        createdAt: sqlUtcIso(r.created_at), dueAt: sqlUtcIso(r.first_response_due_at), firstResponseAt: sqlUtcIso(r.first_response_at), fileCount: r.file_count || 0, withFiles: !!withFiles,
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: SUPPORT_CASE_SCREEN_LABEL, centroCostos: '', createdAt: r.created_at }),
     };
 }
-const supportFileOf = (f) => ({ id: f.id, evidenceId: f.evidence_id, kind: f.kind, name: f.name, mime: f.mime, size: f.size, by: f.uploaded_by, createdAt: sqlUtcIso(f.created_at) });
+const supportFileOf = (f) => ({ id: f.id, evidenceId: f.evidence_id, kind: f.kind, name: f.name, mime: f.mime, size: f.size, level: f.level || '', by: f.uploaded_by, createdAt: sqlUtcIso(f.created_at) });
+
+// ---- el chat del caso (mensajes, notas internas y renglones del sistema) -----------------------------------------------------------------------------------------------------------------
+// Lo ve quien abrió el caso (sin las notas internas) y el equipo con la columna Chat; las notas internas solo con la columna Notas internas; escribir mensajes pide el botón «Escribir en el chat» y escribir notas pide
+// Ver y operar en Notas internas. Quien abrió el caso siempre puede escribir en el suyo. Lo escrito no se edita ni se borra.
+const SUPPORT_MESSAGE_MAX = 2000;
+const supportIsReporter = (req, rec) => rec.reporter_user_id === req.user.sub;
+const supportColGrants = (req) => (req.user.isClientAdmin ? [] : getUserEffectiveGrants(req.user.sub));
+const supportHasCol = (req, colKey) => !!req.user.isClientAdmin || hasColumnGrant(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, colKey);
+const supportCanSeeChat = (req, rec) => supportIsReporter(req, rec) || supportHasCol(req, 'colSpChat');
+const supportCanSeeNotes = (req) => supportHasCol(req, 'colSpNotas');
+const supportCanWriteNotes = (req) => !!req.user.isClientAdmin || (hasColumnGrant(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, 'colSpNotas') && getColumnGrantLevel(supportColGrants(req), SUPPORT_CASE_TABLE_KEY, 'colSpNotas') !== 'solo-ver');
+const supportCanSend = (req, rec) => supportIsReporter(req, rec) || supportCan(req, 'colSpChatSend');
+// El nivel desde el que escribe alguien: el usuario es el nivel 0; el equipo escribe desde el nivel del caso si está en la lista de ese nivel (Mapa de soporte), si no, desde el más bajo en el que esté.
+function supportAuthorLevel(req, rec) {
+    if (supportIsReporter(req, rec)) return 'n0';
+    const row = getSupportMapRow(req.user.clientId);
+    const mine = ['n1', 'n2', 'n3'].filter((l) => parseClassificationIds(row[`${l}_users`]).includes(req.user.sub));
+    if (mine.includes(rec.level)) return rec.level;
+    return mine[0] || (['n1', 'n2', 'n3', 'n4'].includes(rec.level) ? rec.level : 'n1');
+}
+// Un renglón del sistema en el chat (data = lo que el texto necesita; el texto sale de main.spEv_<key>).
+function addSupportEvent(rec, key, data, { level = 'n0', authorName = '', authorUserId = null, fileId = null, createdAt = null } = {}) {
+    return addSupportCaseMessage({ caseId: rec.id, clientId: rec.client_id, kind: 'event', level, authorUserId, authorName, eventKey: key, eventData: data, fileId, createdAt });
+}
+// Un caso nuevo arranca su chat con las palabras de quien lo abrió y el aviso de que llegó al nivel donde entró. Un caso anterior al chat se completa solo la primera vez que se pide.
+function ensureSupportThread(rec) {
+    if (listSupportCaseMessages(rec.id).length) return;
+    addSupportCaseMessage({ caseId: rec.id, clientId: rec.client_id, kind: 'message', level: 'n0', authorUserId: rec.reporter_user_id, authorName: rec.reporter_name, body: rec.summary, createdAt: rec.created_at });
+    addSupportEvent(rec, 'created', { level: rec.level, priority: rec.priority }, { level: rec.level, authorName: rec.reporter_name, authorUserId: rec.reporter_user_id, createdAt: rec.created_at });
+}
+function supportMessageOf(m, rec, canFiles, filesById) {
+    const file = m.file_id ? filesById.get(m.file_id) : null;
+    return {
+        id: m.id, kind: m.kind, level: m.level, authorId: m.author_user_id, author: m.author_name, body: m.body, eventKey: m.event_key, eventData: parseJsonOr(m.event_data, {}),
+        createdAt: sqlUtcIso(m.created_at), file: file && canFiles ? supportFileOf(file) : null, fileLocked: !!(file && !canFiles),
+    };
+}
 // Lo que el formulario de «Nueva solicitud» necesita: las categorías activas con lo que piden, los impactos del Mapa de soporte y los topes.
 function supportFormOptions(req) {
     const { clientId, isTestAccount } = req.user;
@@ -10204,6 +10242,7 @@ app.post('/api/business/support-cases', requireAuth, (req, res) => {
         reporterUserId: req.user.sub, reporterName: changedByLabel(req), dueAt: minutes ? sqlUtcFromMs(Date.now() + minutes * 60000) : null,
     });
     const folio = supportFolio(created.record_number);
+    ensureSupportThread(created);
     try { logTableChange({ clientId, tableKey: SUPPORT_CASE_TABLE_KEY, recordId: created.id, recordLabel: `Caso ${folio}`, action: 'create', changedBy: changedByLabel(req) }); } catch (err) { console.error('support case log failed', err); }
     notifyButtonAction(req, SUPPORT_CASE_TABLE_KEY, 'create', folio);
     res.status(201).json({ case: supportCaseRowOf(created, getClientById(clientId), true), maxFiles: SUPPORT_FILES_PER_CASE });
@@ -10217,7 +10256,54 @@ app.get('/api/business/support-cases/:id', requireAuth, (req, res) => {
     const mine = rec.reporter_user_id === req.user.sub;
     const withFiles = mine || supportCanSeeFiles(req);
     res.set('Cache-Control', 'no-store');
-    res.json({ case: supportCaseRowOf(rec, getClientById(req.user.clientId), withFiles), files: withFiles ? listSupportCaseFiles(id).map(supportFileOf) : [], canAddFiles: mine || supportCan(req, 'colSpCreateAuth'), maxFiles: SUPPORT_FILES_PER_CASE });
+    res.json({
+        case: supportCaseRowOf(rec, getClientById(req.user.clientId), withFiles), files: withFiles ? listSupportCaseFiles(id).map(supportFileOf) : [], canAddFiles: mine || supportCan(req, 'colSpCreateAuth') || supportCan(req, 'colSpChatSend'), maxFiles: SUPPORT_FILES_PER_CASE,
+        chat: { canSee: supportCanSeeChat(req, rec), canSend: supportCanSend(req, rec), canSeeNotes: supportCanSeeNotes(req), canWriteNotes: supportCanWriteNotes(req), max: SUPPORT_MESSAGE_MAX, meId: req.user.sub, isReporter: mine },
+    });
+});
+// El chat del caso. ?after=<id> trae solo lo posterior (la pantalla lo pide cada rato). Las notas internas solo salen con la columna Notas internas; los archivos de los mensajes, solo con la columna Evidencias o para quien abrió el caso.
+app.get('/api/business/support-cases/:id/messages', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese caso no existe.' });
+    if (!supportCanSeeChat(req, rec)) return res.status(403).json({ message: 'No tienes permiso para ver el chat de este caso.' });
+    ensureSupportThread(rec);
+    const after = Number(req.query.after) || 0;
+    const canFiles = supportIsReporter(req, rec) || supportCanSeeFiles(req);
+    const filesById = new Map(listSupportCaseFiles(id).map((f) => [f.id, f]));
+    res.set('Cache-Control', 'no-store');
+    res.json({ messages: listSupportCaseMessages(id, { afterId: after, includeNotes: supportCanSeeNotes(req) }).map((m) => supportMessageOf(m, rec, canFiles, filesById)) });
+});
+// Escribir en el chat: un mensaje (lo ve el usuario) o una nota interna (solo el equipo). Puede llevar una evidencia ya subida a este caso (fileId). La primera respuesta del equipo queda marcada una sola vez.
+app.post('/api/business/support-cases/:id/messages', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese caso no existe.' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code, status = 400) => res.status(status).json({ message, code });
+    const note = body.note === true;
+    if (note ? !(supportCanWriteNotes(req) && !supportIsReporter(req, rec)) : !supportCanSend(req, rec)) return bad(note ? 'No tienes permiso para escribir notas internas.' : 'No tienes permiso para escribir en este chat.', 'FORBIDDEN', 403);
+    const text = String(body.body === null || body.body === undefined ? '' : body.body).replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, SUPPORT_MESSAGE_MAX);
+    let fileId = null;
+    if (body.fileId !== undefined && body.fileId !== null) {
+        fileId = Number(body.fileId);
+        if (!Number.isInteger(fileId) || !getSupportCaseFile(id, fileId)) return bad('Esa evidencia no es de este caso.', 'FILE');
+    }
+    if (!text && !fileId) return bad('Escribe un mensaje.', 'EMPTY');
+    ensureSupportThread(rec);
+    const level = supportAuthorLevel(req, rec);
+    const created = addSupportCaseMessage({ caseId: id, clientId: req.user.clientId, kind: note ? 'note' : 'message', level, authorUserId: req.user.sub, authorName: changedByLabel(req), body: text, fileId });
+    // la primera respuesta del equipo (un mensaje al usuario; una nota o lo que escribe quien abrió el caso no cuenta)
+    if (!note && !supportIsReporter(req, rec) && setSupportFirstResponse(id, sqlUtcFromMs(Date.now()))) {
+        const minutes = Math.max(0, Math.round((Date.now() - new Date(sqlUtcIso(rec.created_at)).getTime()) / 60000));
+        const due = rec.first_response_due_at ? new Date(sqlUtcIso(rec.first_response_due_at)).getTime() : null;
+        addSupportEvent(rec, 'first_response', { minutes, onTime: due === null ? null : Date.now() <= due }, { level, authorName: changedByLabel(req), authorUserId: req.user.sub });
+    }
+    const canFiles = supportIsReporter(req, rec) || supportCanSeeFiles(req);
+    const filesById = new Map(listSupportCaseFiles(id).map((f) => [f.id, f]));
+    res.status(201).json({ message: supportMessageOf(created, rec, canFiles, filesById) });
 });
 // Subir UNA evidencia (el archivo tal cual, sin envolverlo): X-File-Name = su nombre (codificado) y X-Evidence-Id = a cuál de las que pide la categoría corresponde (opcional: sin él es una evidencia extra).
 app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ type: () => true, limit: '13mb' }), (req, res) => {
@@ -10225,7 +10311,7 @@ app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ typ
     const id = Number(req.params.id);
     const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
     if (!rec) return res.status(404).json({ message: 'Ese caso no existe.' });
-    if (!(rec.reporter_user_id === req.user.sub || supportCan(req, 'colSpCreateAuth'))) return res.status(403).json({ message: 'No puedes agregar evidencias a este caso.' });
+    if (!(rec.reporter_user_id === req.user.sub || supportCan(req, 'colSpCreateAuth') || supportCan(req, 'colSpChatSend'))) return res.status(403).json({ message: 'No puedes agregar evidencias a este caso.' });
     const buf = req.body;
     if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ message: 'No llegó ningún archivo.', code: 'EMPTY' });
     if (countSupportCaseFiles(id) >= SUPPORT_FILES_PER_CASE) return res.status(400).json({ message: `Un caso lleva hasta ${SUPPORT_FILES_PER_CASE} evidencias.`, code: 'MAXFILES' });
@@ -10243,9 +10329,14 @@ app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ typ
         if (!slot || slot.kind === 'data') return res.status(400).json({ message: 'Esa evidencia no es de este caso.', code: 'EVIDENCE' });
         if ((slot.kind === 'capture' && kindInfo.kind !== 'capture') || (slot.kind === 'recording' && kindInfo.kind !== 'recording')) return res.status(400).json({ message: `Esa evidencia pide ${slot.kind === 'capture' ? 'una imagen' : 'una grabación de pantalla'}.`, code: 'EVIDENCE' });
     }
-    const fileId = addSupportCaseFile({ caseId: id, clientId: req.user.clientId, evidenceId, kind: kindInfo.kind, name, mime: kindInfo.mime, data: buf, uploadedBy: changedByLabel(req) });
+    const level = supportAuthorLevel(req, rec);
+    const fileId = addSupportCaseFile({ caseId: id, clientId: req.user.clientId, evidenceId, kind: kindInfo.kind, name, mime: kindInfo.mime, data: buf, level, uploadedBy: changedByLabel(req) });
+    // en el chat sale como «agregó una evidencia» (con la evidencia a la vista de quien puede verla)
+    // (?chat=1: el archivo viaja dentro de un mensaje del chat, que lo muestra; no hace falta el renglón aparte)
+    ensureSupportThread(rec);
+    if (req.query.chat !== '1') addSupportEvent(rec, 'file', { name, kind: kindInfo.kind }, { level, authorName: changedByLabel(req), authorUserId: req.user.sub, fileId });
     try { logTableChange({ clientId: req.user.clientId, tableKey: SUPPORT_CASE_TABLE_KEY, recordId: rec.id, recordLabel: `Caso ${supportFolio(rec.record_number)}`, action: 'update', fieldKey: 'main.colSpEvidencias', oldValue: '', newValue: name, changedBy: changedByLabel(req) }); } catch (err) { console.error('support file log failed', err); }
-    res.status(201).json({ file: supportFileOf({ id: fileId, evidence_id: evidenceId, kind: kindInfo.kind, name, mime: kindInfo.mime, size: buf.length, uploaded_by: changedByLabel(req), created_at: sqlUtcFromMs(Date.now()) }), fileCount: countSupportCaseFiles(id) });
+    res.status(201).json({ file: supportFileOf({ id: fileId, evidence_id: evidenceId, kind: kindInfo.kind, name, mime: kindInfo.mime, size: buf.length, level, uploaded_by: changedByLabel(req), created_at: sqlUtcFromMs(Date.now()) }), fileCount: countSupportCaseFiles(id) });
 });
 app.get('/api/business/support-cases/:id/files/:fileId', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).end();

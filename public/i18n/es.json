@@ -4592,6 +4592,37 @@
     "spErrWhen": "Falta decir cuándo te afecta.",
     "spErrKeep": "Falta decir si puedes seguir trabajando mientras.",
     "spErrRecording": "Detén la grabación antes de enviar.",
+    "colSpChat": "Chat",
+    "colSpNotas": "Notas internas",
+    "colSpChatSend": "Escribir en el chat",
+    "scChatTitle": "Chat del caso · de principio a fin",
+    "scTabAll": "Todo",
+    "scTabFiles": "Solo evidencias",
+    "scTabNotes": "Notas internas",
+    "scFlowTitle": "Cómo se fue dando",
+    "scFilesTitle": "Evidencias",
+    "scNoMessages": "Todavía no hay nada aquí.",
+    "scWrite": "Escribe un mensaje…",
+    "scWriteNote": "Escribe una nota interna (solo la ve el equipo)…",
+    "scNoteToggle": "Nota interna (solo el equipo)",
+    "scNoteTag": "Nota interna",
+    "scSend": "Enviar",
+    "scSending": "Enviando…",
+    "scAttach": "Adjuntar",
+    "scRemove": "Quitar",
+    "scErrEmpty": "Escribe un mensaje o adjunta un archivo.",
+    "scLocked": "Evidencia (sin permiso para verla)",
+    "scFirstResponse": "Primera respuesta",
+    "scOnTime": "a tiempo",
+    "scLate": "fuera del plazo",
+    "scPendingDue": "Pendiente · vence {when}",
+    "scPendingNoLimit": "Pendiente · sin plazo",
+    "scNotFound": "No se encontró este caso.",
+    "spEv_created": "Llegó a {level}",
+    "spEv_first_response": "{author} dio la primera respuesta en {min}",
+    "spEv_ontime": " · a tiempo",
+    "spEv_late": " · fuera del plazo",
+    "spEv_file": "{author} agregó una evidencia: {name}",
     "colIncFolio": "Folio",
     "colIncFechaHora": "Fecha y hora",
     "colIncQuien": "Quién reporta",
@@ -7354,6 +7385,26 @@
     "sopEvTipo": {
       "what": "Lo que se le pide a quien abre un caso con esta evidencia: una captura de pantalla, la grabación de pantalla, un archivo o un dato que escribe. La solicitud muestra el campo que le toca a cada tipo.",
       "example": "«Captura del error» es de tipo Captura de pantalla; «Hora aproximada» es un Dato escrito."
+    },
+    "spChat": {
+      "what": "Toda la conversación del caso, de principio a fin: lo que escribe quien lo abrió y cada nivel que lo atiende (cada mensaje lleva el nivel de quien lo escribe). Se actualiza solo. Lo escrito no se edita ni se borra. Quien lo abrió siempre puede escribir en el suyo; el equipo, con el botón «Escribir en el chat».",
+      "example": "Marta (N1) le pide a Luis (N0) una captura y él la manda en el mismo chat."
+    },
+    "spNotas": {
+      "what": "Una nota interna es para el equipo: la ven los niveles que tienen la columna Notas internas y NUNCA el usuario. Sirven para pasarse datos entre niveles sin confundir a quien reportó.",
+      "example": "Iván deja una nota: «Parece el mismo error del caso SP-0031, revisen la fecha de cierre»."
+    },
+    "spFlow": {
+      "what": "Los pasos del caso, uno tras otro, con su hora y el nivel donde pasó cada uno (llegó al nivel, primera respuesta, evidencias que se agregaron). Al tocar un paso te lleva a esa parte del chat.",
+      "example": "tocas «Primera respuesta de Marta» y el chat se va a ese mensaje."
+    },
+    "spFilesCase": {
+      "what": "Las capturas, grabaciones de pantalla y archivos del caso, ordenados por el nivel de quien los subió. Solo se ven con la columna Evidencias en el árbol o si abriste tú el caso.",
+      "example": "N0 trae la grabación que hizo Luis; N1 agregó el Excel que pidió."
+    },
+    "spPrimeraResp": {
+      "what": "Cuánto tardó el equipo en dar la primera respuesta al usuario (un mensaje, no una nota) y si fue dentro del plazo. Mientras no responden, sale la hora límite; si ya pasó, queda marcado Vencido.",
+      "example": "plazo de 1 hora: Marta respondió a los 12 minutos, a tiempo."
     },
     "spNueva": {
       "what": "Abre una solicitud de soporte nueva: cuentas qué pasó, qué implica y adjuntas evidencias; el sistema calcula la prioridad y la manda al nivel que le toca.",

@@ -4593,6 +4593,37 @@
     "spErrWhen": "Say when it affects you.",
     "spErrKeep": "Say whether you can keep working meanwhile.",
     "spErrRecording": "Stop the recording before sending.",
+    "colSpChat": "Chat",
+    "colSpNotas": "Internal notes",
+    "colSpChatSend": "Write in the chat",
+    "scChatTitle": "Case chat · from start to finish",
+    "scTabAll": "All",
+    "scTabFiles": "Evidence only",
+    "scTabNotes": "Internal notes",
+    "scFlowTitle": "How it went",
+    "scFilesTitle": "Evidence",
+    "scNoMessages": "Nothing here yet.",
+    "scWrite": "Write a message…",
+    "scWriteNote": "Write an internal note (only the team sees it)…",
+    "scNoteToggle": "Internal note (team only)",
+    "scNoteTag": "Internal note",
+    "scSend": "Send",
+    "scSending": "Sending…",
+    "scAttach": "Attach",
+    "scRemove": "Remove",
+    "scErrEmpty": "Write a message or attach a file.",
+    "scLocked": "Evidence (no permission to see it)",
+    "scFirstResponse": "First response",
+    "scOnTime": "on time",
+    "scLate": "past the deadline",
+    "scPendingDue": "Pending · due {when}",
+    "scPendingNoLimit": "Pending · no deadline",
+    "scNotFound": "This case was not found.",
+    "spEv_created": "Arrived at {level}",
+    "spEv_first_response": "{author} gave the first response in {min}",
+    "spEv_ontime": " · on time",
+    "spEv_late": " · past the deadline",
+    "spEv_file": "{author} added evidence: {name}",
     "colIncFolio": "Folio",
     "colIncFechaHora": "Date and time",
     "colIncQuien": "Reported by",
@@ -7355,6 +7386,26 @@
     "sopEvTipo": {
       "what": "What is asked from whoever opens a case with this evidence: a screenshot, the screen recording, a file or a piece of data they type. The request shows the field that fits each type.",
       "example": "\"Error screenshot\" is a Screenshot type; \"Approximate time\" is Written data."
+    },
+    "spChat": {
+      "what": "The whole conversation of the case, from start to finish: what whoever opened it writes and every level that serves it (each message carries the level of whoever wrote it). It updates by itself. What is written cannot be edited or deleted. Whoever opened the case can always write in theirs; the team needs the \"Write in the chat\" button.",
+      "example": "Marta (N1) asks Luis (N0) for a screenshot and he sends it in the same chat."
+    },
+    "spNotas": {
+      "what": "An internal note is for the team: levels with the Internal notes column see it and the user NEVER does. Useful to pass data between levels without confusing whoever reported.",
+      "example": "Iván leaves a note: \"Looks like the same error as case SP-0031, check the closing date\"."
+    },
+    "spFlow": {
+      "what": "The steps of the case, one after another, with their time and the level where each happened (arrived at the level, first response, evidence added). Tapping a step takes you to that part of the chat.",
+      "example": "you tap \"First response by Marta\" and the chat jumps to that message."
+    },
+    "spFilesCase": {
+      "what": "The screenshots, screen recordings and files of the case, ordered by the level of whoever uploaded them. Only visible with the Evidence column in the tree or if you opened the case.",
+      "example": "N0 brings the recording Luis made; N1 added the Excel it asked for."
+    },
+    "spPrimeraResp": {
+      "what": "How long the team took to give the user the first response (a message, not a note) and whether it was within the deadline. While nobody answers, the deadline shows; once it has passed, it is flagged Overdue.",
+      "example": "1-hour deadline: Marta answered after 12 minutes, on time."
     },
     "spNueva": {
       "what": "Opens a new support request: you tell what happened, what it implies and attach evidence; the system calculates the priority and sends it to the right level.",

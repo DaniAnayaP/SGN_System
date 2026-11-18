@@ -14637,7 +14637,27 @@ db.exec(`
         created_at   TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_support_case_files_case ON support_case_files (case_id);
+    -- El chat de un caso, de principio a fin: mensajes del usuario y de cada nivel (kind 'message'), notas internas que solo ve el equipo (kind 'note') y renglones del sistema (kind 'event': el caso se abrió, llegó
+    -- una evidencia, la primera respuesta...). level = el nivel de quien escribe en ese momento (n0 = el usuario). Lo escrito no se edita ni se borra.
+    CREATE TABLE IF NOT EXISTS support_case_messages (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        case_id         INTEGER NOT NULL REFERENCES support_cases(id) ON DELETE CASCADE,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        kind            TEXT NOT NULL DEFAULT 'message',
+        level           TEXT NOT NULL DEFAULT 'n0',
+        author_user_id  INTEGER,
+        author_name     TEXT NOT NULL DEFAULT '',
+        body            TEXT NOT NULL DEFAULT '',
+        event_key       TEXT NOT NULL DEFAULT '',
+        event_data      TEXT NOT NULL DEFAULT '{}',
+        file_id         INTEGER,
+        created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_case_messages_case ON support_case_messages (case_id, id);
 `);
+// first_response_at: cuándo respondió por primera vez alguien del equipo (la de un mensaje, no la de una nota). level de una evidencia: el nivel de quien la subió (n0 = el usuario).
+if (!db.prepare('PRAGMA table_info(support_cases)').all().some((c) => c.name === 'first_response_at')) db.exec('ALTER TABLE support_cases ADD COLUMN first_response_at TEXT');
+if (!db.prepare('PRAGMA table_info(support_case_files)').all().some((c) => c.name === 'level')) db.exec("ALTER TABLE support_case_files ADD COLUMN level TEXT NOT NULL DEFAULT ''");
 const SUPPORT_CASE_SELECT = 'SELECT c.*, (SELECT COUNT(*) FROM support_case_files f WHERE f.case_id = c.id) AS file_count FROM support_cases c';
 function getSupportCase(id, clientId, isTestAccount) {
     return db.prepare(`${SUPPORT_CASE_SELECT} WHERE c.id = ? AND c.client_id = ? AND c.is_test_data = ?`).get(id, clientId, isTestAccount ? 1 : 0) || null;
@@ -14660,17 +14680,33 @@ function createSupportCase(c) {
     })();
 }
 function listSupportCaseFiles(caseId) {
-    return db.prepare('SELECT id, evidence_id, kind, name, mime, size, uploaded_by, created_at FROM support_case_files WHERE case_id = ? ORDER BY id ASC').all(caseId);
+    return db.prepare('SELECT id, evidence_id, kind, name, mime, size, level, uploaded_by, created_at FROM support_case_files WHERE case_id = ? ORDER BY id ASC').all(caseId);
+}
+// El chat: includeNotes = false deja fuera las notas internas (lo que ve el usuario y quien no tiene la columna Notas internas). afterId = solo lo posterior (para ir pidiendo lo nuevo).
+function listSupportCaseMessages(caseId, { afterId = 0, includeNotes = true } = {}) {
+    return db.prepare(`SELECT id, kind, level, author_user_id, author_name, body, event_key, event_data, file_id, created_at FROM support_case_messages WHERE case_id = ? AND id > ? ${includeNotes ? '' : "AND kind != 'note'"} ORDER BY id ASC`).all(caseId, afterId);
+}
+function addSupportCaseMessage(m) {
+    const id = db.prepare('INSERT INTO support_case_messages (case_id, client_id, kind, level, author_user_id, author_name, body, event_key, event_data, file_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime(\'now\')))')
+        .run(m.caseId, m.clientId, m.kind || 'message', m.level || 'n0', m.authorUserId || null, m.authorName || '', m.body || '', m.eventKey || '', JSON.stringify(m.eventData || {}), m.fileId || null, m.createdAt || null).lastInsertRowid;
+    return db.prepare('SELECT id, kind, level, author_user_id, author_name, body, event_key, event_data, file_id, created_at FROM support_case_messages WHERE id = ?').get(id);
+}
+function countSupportCaseEvents(caseId) {
+    return db.prepare("SELECT COUNT(*) AS n FROM support_case_messages WHERE case_id = ? AND kind = 'event'").get(caseId).n;
+}
+// La primera respuesta del equipo: se guarda una sola vez (la primera). Regresa true si esta fue la primera.
+function setSupportFirstResponse(caseId, atSql) {
+    return db.prepare('UPDATE support_cases SET first_response_at = ? WHERE id = ? AND first_response_at IS NULL').run(atSql, caseId).changes > 0;
 }
 function countSupportCaseFiles(caseId) {
     return db.prepare('SELECT COUNT(*) AS n FROM support_case_files WHERE case_id = ?').get(caseId).n;
 }
 function addSupportCaseFile(f) {
-    return db.prepare('INSERT INTO support_case_files (case_id, client_id, evidence_id, kind, name, mime, size, data, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(f.caseId, f.clientId, f.evidenceId || null, f.kind, f.name, f.mime, f.data.length, f.data, f.uploadedBy || '').lastInsertRowid;
+    return db.prepare('INSERT INTO support_case_files (case_id, client_id, evidence_id, kind, name, mime, size, data, level, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(f.caseId, f.clientId, f.evidenceId || null, f.kind, f.name, f.mime, f.data.length, f.data, f.level || '', f.uploadedBy || '').lastInsertRowid;
 }
 function getSupportCaseFile(caseId, fileId) {
-    return db.prepare('SELECT id, evidence_id, kind, name, mime, size, data FROM support_case_files WHERE case_id = ? AND id = ?').get(caseId, fileId) || null;
+    return db.prepare('SELECT id, evidence_id, kind, name, mime, size, level, uploaded_by, created_at, data FROM support_case_files WHERE case_id = ? AND id = ?').get(caseId, fileId) || null;
 }
 // Las personas de la empresa que se pueden poner a atender un nivel: usuarios activos (una cuenta de prueba solo ve las de prueba, como en el resto de las pantallas).
 function listSupportMapUsers(clientId, isTestAccount) {
@@ -14916,6 +14952,7 @@ seedSoporteEvidenceKindsOnce();
 module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
+    listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
     listTemperatureActivity, hasTemperatureActivityBefore,
     getUserExclusions, setUserExclusions, applyUserExclusions,
     isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,

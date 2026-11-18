@@ -2,8 +2,8 @@
 // TI > Operaciones TI > Operaciones > Casos de soporte: la lista de las solicitudes de soporte de la empresa (un renglón por caso, con su folio SP-0001) y el botón «Nueva solicitud».
 // La solicitud pide: qué pasó, la categoría, qué implica (cada impacto del Mapa de soporte con su nivel: Ninguno, Bajo, Medio o Alto), cuándo afecta y si puede seguir trabajando; de ahí sale la PRIORIDAD (se ve en vivo, con las
 // reglas de SupportRules.js, y el servidor la vuelve a calcular), el nivel donde entra y el plazo de la primera respuesta. Además pide las evidencias de su categoría: datos que se escriben, capturas, archivos y la
-// GRABACIÓN DE PANTALLA con un botón (SupportRecorder.js). Primero se crea el caso y luego se suben las evidencias una por una. Las evidencias no se editan ni se borran: se ven en el visor de cada renglón (solo con la
-// columna Evidencias en el árbol, o quien abrió el caso). Trae las columnas de Control Interno. Las filas salen del servidor (GET /api/business/support-cases).
+// GRABACIÓN DE PANTALLA con un botón (SupportRecorder.js). Primero se crea el caso y luego se suben las evidencias una por una. Las evidencias no se editan ni se borran: se ven en la pantalla de cada caso (OpTISoporteCaso.js, que también trae el chat y el
+// recorrido; las evidencias solo con la columna Evidencias en el árbol, o quien abrió el caso). Trae las columnas de Control Interno. Las filas salen del servidor (GET /api/business/support-cases).
 // ---------------------------------------------------------------------------
 
 // Envuelto en una función: Dashboard.js ya declara globales como t, y chocarían con los de esta pantalla.
@@ -25,7 +25,6 @@ const t = (key, params) => {
 const esc = (s) => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const lang = () => (Dashboard.getLanguage ? Dashboard.getLanguage() : (localStorage.getItem('lang') || 'es'));
 const locale = () => (lang() === 'en' ? 'en-US' : 'es-MX');
-const fmtDate = (iso) => new Date(iso).toLocaleString(locale(), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const fmtSize = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 function friendlyMinutes(m) {
     const n = Number(m);
@@ -80,6 +79,12 @@ function dueCell(r) {
     const td = document.createElement('td');
     td.dataset.col = 'colSpResponder';
     td.setAttribute('data-help-key', 'spResponder');
+    if (r.firstResponseAt) {
+        td.textContent = `✓ ${new Date(r.firstResponseAt).toLocaleString(locale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
+        td.className = 'sp-ok-text';
+        td.title = `${t('main.scFirstResponse')} · UTC ${r.firstResponseAt.replace('T', ' ').replace('Z', '')}`;
+        return td;
+    }
     if (!r.dueAt) { td.textContent = t('main.msNoLimit'); td.className = 'sp-muted'; return td; }
     td.textContent = new Date(r.dueAt).toLocaleString(locale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
     td.title = `UTC ${r.dueAt.replace('T', ' ').replace('Z', '')}`;
@@ -195,69 +200,8 @@ function applyFilters() {
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyFilters);
 
-// ---- visor de un caso: lo que se contó y sus evidencias ------------------------------------------------------------------------------------------
-let viewerEl = null;
-let viewerCaseId = null;
-function closeViewer() { if (viewerEl) viewerEl.hidden = true; viewerCaseId = null; }
-function fileBlockHtml(caseId, f) {
-    const url = `${API}/${caseId}/files/${f.id}`;
-    const head = `<div class="sp-file-name"><b>${esc(f.name)}</b><span class="sp-muted">${esc(fmtSize(f.size))} · ${esc(f.by || '')} · ${esc(fmtDate(f.createdAt))}</span></div>`;
-    if (f.kind === 'capture') return `<div class="sp-file">${head}<a href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="${esc(f.name)}" loading="lazy"></a></div>`;
-    if (f.kind === 'recording') return `<div class="sp-file">${head}<video src="${url}" controls preload="metadata"></video></div>`;
-    return `<div class="sp-file">${head}<a class="btn btn-secondary" href="${url}" download><i class="bx bx-download" aria-hidden="true"></i> ${esc(t('main.spDownload'))}</a></div>`;
-}
-async function openViewer(caseId) {
-    if (!viewerEl) {
-        viewerEl = document.createElement('div');
-        viewerEl.className = 'modal-overlay';
-        viewerEl.hidden = true;
-        viewerEl.innerHTML = '<div class="modal-panel sp-viewer" role="dialog" aria-modal="true" aria-labelledby="sp-viewer-title"><h3 id="sp-viewer-title"></h3><div id="sp-viewer-body"></div><div class="admin-form-actions"><button type="button" class="btn btn-secondary" id="sp-viewer-close"></button></div></div>';
-        document.body.appendChild(viewerEl);
-        viewerEl.addEventListener('click', (event) => { if (event.target === viewerEl || event.target.closest('#sp-viewer-close')) closeViewer(); });
-        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && viewerCaseId !== null) closeViewer(); });
-    }
-    viewerCaseId = caseId;
-    viewerEl.querySelector('#sp-viewer-close').textContent = t('main.incFotoCerrar');
-    viewerEl.querySelector('#sp-viewer-title').textContent = '…';
-    viewerEl.querySelector('#sp-viewer-body').innerHTML = '';
-    viewerEl.hidden = false;
-    try {
-        const res = await fetch(`${API}/${caseId}`, { credentials: 'include' });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body.message || 'load failed');
-        if (viewerCaseId !== caseId) return;
-        const c = body.case;
-        viewerEl.querySelector('#sp-viewer-title').textContent = `${c.folio} · ${c.summary}`;
-        const answers = Object.entries(c.answers || {});
-        const evidenceName = (id) => ((formOptions && formOptions.categories.flatMap((k) => k.evidences).find((e) => String(e.id) === String(id))) || {}).name || '';
-        const impacts = (c.impacts || []).filter((i) => i.level > 0).map((i) => `${esc(i.name)}: ${esc(t(`main.spLevel_${i.level}`))}`).join(' · ') || esc(t('main.spLevel_0'));
-        const meta = `<dl class="sp-meta"><div><dt>${esc(t('main.colSpReporto'))}</dt><dd>${esc(c.reporter || '—')}</dd></div><div><dt>${esc(t('main.colSpFechaHora'))}</dt><dd>${esc(fmtDate(c.createdAt))}</dd></div>
-            <div><dt>${esc(t('main.colSpCategoria'))}</dt><dd>${esc(c.category || '—')}</dd></div><div><dt>${esc(t('main.colSpPrioridad'))}</dt><dd><span class="sp-tag sp-pri" data-k="${c.priority}">${esc(t(`main.msPri_${c.priority}`))}</span></dd></div>
-            <div><dt>${esc(t('main.colSpNivel'))}</dt><dd>${esc(t(`main.sopLevel_${c.level}`))}</dd></div><div><dt>${esc(t('main.colSpPantalla'))}</dt><dd>${esc(c.screen || '—')}</dd></div>
-            <div><dt>${esc(t('main.spFAction'))}</dt><dd>${esc(c.action || '—')}</dd></div><div><dt>${esc(t('main.spFWhen'))}</dt><dd>${esc(t(`main.spWhen_${c.whenAffects}`))}</dd></div>
-            <div><dt>${esc(t('main.spFKeep'))}</dt><dd>${esc(c.keepWorking ? t('main.spYes') : t('main.spNo'))}</dd></div><div class="sp-wide"><dt>${esc(t('main.spFImpact'))}</dt><dd>${impacts}</dd></div>
-            ${c.errorText ? `<div class="sp-wide"><dt>${esc(t('main.spFError'))}</dt><dd class="sp-pre">${esc(c.errorText)}</dd></div>` : ''}
-            ${answers.map(([id, text]) => `<div class="sp-wide"><dt>${esc(evidenceName(id) || t('main.spAnswer'))}</dt><dd class="sp-pre">${esc(text)}</dd></div>`).join('')}</dl>`;
-        const filesHtml = !c.withFiles ? `<p class="sp-muted">${esc(t('main.spFilesLocked'))}</p>` : (body.files.length ? `<div class="sp-files">${body.files.map((f) => fileBlockHtml(caseId, f)).join('')}</div>` : `<p class="sp-muted">${esc(t('main.spNoFiles'))}</p>`);
-        const add = body.canAddFiles && body.files.length < body.maxFiles ? `<div class="sp-add"><label class="btn btn-secondary"><i class="bx bx-paperclip" aria-hidden="true"></i> ${esc(t('main.spAddFile'))}<input type="file" id="sp-add-file" hidden></label></div>` : '';
-        viewerEl.querySelector('#sp-viewer-body').innerHTML = `${meta}<h4>${esc(t('main.colSpEvidencias'))}</h4>${filesHtml}${add}`;
-        const input = viewerEl.querySelector('#sp-add-file');
-        if (input) input.addEventListener('change', async () => {
-            const file = input.files && input.files[0];
-            input.value = '';
-            if (!file) return;
-            const result = await uploadOne(caseId, { blob: file, name: file.name, evidenceId: null });
-            if (!result.ok) { Dashboard.showToast(t('main.spFileFailed', { name: file.name, why: result.message }), 'warning'); return; }
-            Dashboard.showToast(t('main.spFileAdded'), 'success');
-            await openViewer(caseId);
-            refreshTable();
-        });
-    } catch (err) {
-        console.error('Casos de soporte: failed to open case', err);
-        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
-        closeViewer();
-    }
-}
+// ---- un caso: lo abre su propia pantalla (chat, recorrido y evidencias) ------------------------------------------------------------------------------
+const openViewer = (caseId) => { location.href = `OpTISoporteCaso.html?id=${caseId}`; };
 // Sube UNA evidencia (el archivo tal cual). Regresa { ok, message }.
 async function uploadOne(caseId, { blob, name, evidenceId }) {
     try {
@@ -442,7 +386,7 @@ function finishRecording(slotId, blob) {
     form.slots.set(slotId, { blob, name: `grabacion-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.webm` });
     renderForm();
 }
-// Crea el caso y después sube las evidencias una por una (si alguna falla, el caso ya existe y se puede agregar desde su visor).
+// Crea el caso y después sube las evidencias una por una (si alguna falla, el caso ya existe y se puede agregar desde la pantalla del caso).
 async function submitForm() {
     if (!form || form.sending) return;
     const cat = categoryOf();
