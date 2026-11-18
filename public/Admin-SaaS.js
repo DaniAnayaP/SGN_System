@@ -1285,6 +1285,8 @@ permisosAdicionalesSaveBtn.addEventListener('click', async () => {
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
         // lo que el plan ya incluía no se guardó como adicional: se dice cuántos y cuáles
         if (saved.omittedByPlan && saved.omittedByPlan.length) Dashboard.showToast(Dashboard.t('admin.additionalsOmittedByPlan', { count: saved.omittedByPlan.length, list: saved.omittedByPlan.slice(0, 5).join(', ') }), 'info');
+        // el mínimo indispensable de lo que se vendió como adicional entró solo, también como adicional (Relación de Accesos)
+        Dashboard.showMinimumAutoEnabledNotice(saved);
     } catch {
         showAdicionalesSaveError(Dashboard.t('admin.saveError'));
     } finally {

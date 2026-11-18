@@ -550,6 +550,7 @@ const {
     listAccessRelations,
     validateAccessRelations,
     setAccessRelations,
+    expandAccessMinimums,
     logClientChange,
     logPlanChange,
     listSaasAdmins,
@@ -1884,11 +1885,14 @@ app.put('/api/admin/clients/:id/permission-grants', requireAuth, requireAdmin, (
             return res.status(400).json({ code: 'service-not-enabled', status, sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null, message: `Este acceso no está habilitado para servicio (Estatus: ${status}) y no se puede asignar al cliente hasta que el Árbol Maestro lo habilite.` });
         }
     }
+    // el mínimo indispensable de lo que se vendió como adicional también entra (como adicional), salvo lo que el plan ya incluye (pieza 5b)
+    const expanded = autoEnableMinimums(grants, { isCovered: (g) => isTupleGranted(planGrants, g.sectionId, g.itemId, g.submenuId) });
+    grants = expanded.grants;
     const saved = setClientPermissionGrants(req.params.id, grants, changedByLabel(req));
     if (syncClientModulesFromPermissionGrants(req.params.id)) {
         applyEffectiveEntitlements(req.params.id);
     }
-    res.json({ grants: saved, additionalPermissionsPayment: computeClientAdditionalPermissionsCost(req.params.id), omittedByPlan: coveredByPlan.map((g) => [g.sectionId, g.itemId, g.submenuId].filter(Boolean).join(" › ")) });
+    res.json({ grants: saved, additionalPermissionsPayment: computeClientAdditionalPermissionsCost(req.params.id), omittedByPlan: coveredByPlan.map((g) => [g.sectionId, g.itemId, g.submenuId].filter(Boolean).join(" › ")), autoEnabled: expanded.autoEnabled, blocked: expanded.blocked });
 });
 
 // Per-node "Cambios" for the tree above -- see client_permission_change_log's
@@ -2314,7 +2318,9 @@ app.put('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => 
             }
         }
     }
-    const saved = setPlanGrants(req.params.id, grants);
+    // el mínimo indispensable de lo que se habilitó entra solo (pieza 5b)
+    const expanded = autoEnableMinimums(grants);
+    const saved = setPlanGrants(req.params.id, expanded.grants);
     // The old manual module checklist on "Editar plan" is gone — a
     // department/button now turns on for real the moment ANY permission
     // under it is granted here, so a plan never ends up feature-complete in
@@ -2324,7 +2330,7 @@ app.put('/api/admin/plans/:id/grants', requireAuth, requireAdmin, (req, res) => 
         planId: req.params.id, action: 'update', fieldKey: 'admin.activeTree',
         oldValue: '', newValue: `${saved.length}`, changedBy: changedByLabel(req),
     });
-    res.json({ grants: saved });
+    res.json({ grants: saved, autoEnabled: expanded.autoEnabled, blocked: expanded.blocked });
 });
 
 // --- Cost cascade: Árbol Maestro -> Giro -> Plan ---------------------------
@@ -2825,7 +2831,9 @@ app.put('/api/admin/business-sectors/:id/grants', requireAuth, requireAdmin, (re
     const { grants } = req.body || {};
     const error = validateGrants(grants);
     if (error) return res.status(400).json({ message: error });
-    res.json({ grants: setSectorGrants(req.params.id, grants) });
+    // el mínimo indispensable de lo que se habilitó entra solo (pieza 5b)
+    const expanded = autoEnableMinimums(grants);
+    res.json({ grants: setSectorGrants(req.params.id, expanded.grants), autoEnabled: expanded.autoEnabled, blocked: expanded.blocked });
 });
 
 // Departamento/Área display order (see master_permission_order/
@@ -3469,6 +3477,36 @@ app.get('/api/admin/limits-audit', requireAuth, requireAdmin, (req, res) => {
 // Relación de Accesos (SaaS, pieza 5 de Códigos desde TI): por cada acceso del árbol, su mínimo indispensable (se habilitará solo y bloqueado desde el Giro) y los accesos que toca (solo recomendados). Ver access_relations en db.js.
 // Ver: el acceso «Ver la relación» (saas-access-relations, controles::a0); guardar: «Guardar relaciones» (controles::a1). Por defecto solo admin_saas.
 const ACCESS_REL_SCREEN = 'saas-access-relations';
+// Pieza 5b: al guardar un Giro, un Plan o los adicionales de un cliente, el mínimo indispensable de cada acceso habilitado se habilita solo (ver expandAccessMinimums en db.js). Lo que no está habilitado para servicio en el Árbol Maestro no se agrega:
+// se avisa en «blocked». Cada nombre sale como «Departamento › Área › Apartado» recortado a los 3 últimos pasos, en español, para el aviso de la pantalla.
+const ES_LABELS = require('./public/i18n/es.json');
+const DEPARTMENT_LABEL_KEYS = {
+    main: 'menu.mainSection', finance: 'menu.finance', accounting: 'menu.accounting', 'human-resources': 'menu.humanResources', marketing: 'menu.marketing', commercial: 'menu.commercial', purchasing: 'menu.purchasing',
+    'supply-chain': 'menu.supplyChain', 'management-control': 'menu.managementControl', 'general-management': 'menu.generalManagement', 'steering-committee': 'menu.steeringCommittee', certifications: 'menu.certifications', 'information-technology': 'menu.informationTechnology',
+};
+function esLabel(labelKey, params) {
+    let value = String(labelKey || '').split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), ES_LABELS);
+    if (typeof value !== 'string') return '';
+    Object.entries(params || {}).forEach(([k, v]) => { value = value.split(`{${k}}`).join(String(v)); });
+    return value;
+}
+function accessLabelEs(key) {
+    const index = buildAccessCatalog().index;
+    const chain = [];
+    for (let k = key; k; k = (index.get(k) || {}).p) {
+        const n = index.get(k);
+        if (!n) break;
+        chain.unshift(n.ty === 'department' ? esLabel(DEPARTMENT_LABEL_KEYS[k.split('::')[0]]) : esLabel(n.l, n.lp) || k.split('::').pop().split('/').pop());
+    }
+    return chain.slice(-3).join(' › ');
+}
+function autoEnableMinimums(grants, options = {}) {
+    const overrides = buildMasterStatusOverrideMap(getMasterPermissionStatuses().filter((r) => r.status !== 'habilitado'));
+    const canAdd = (g) => resolveMasterNodeStatus(g.sectionId, g.itemId, String(g.submenuId || '').replace(/#app$/, '') || null, overrides) === 'habilitado';
+    const out = expandAccessMinimums(grants, { canAdd, isCovered: options.isCovered });
+    const name = (list) => list.slice(0, 30).map((p) => ({ access: accessLabelEs(p.access), related: accessLabelEs(p.related), count: p.count || 0 }));
+    return { grants: out.grants, autoEnabled: name(out.autoEnabled), blocked: name(out.blocked) };
+}
 const accessRelCan = (req, key) => hasSaasGrant(getSaasUserGrants(req.user.sub), ACCESS_REL_SCREEN, key, req.user.isSaasSuperAdmin);
 app.get('/api/admin/access-relations', requireAuth, requireAdmin, (req, res) => {
     if (!accessRelCan(req, 'controles::a0')) return res.status(403).json({ message: 'No tienes acceso a la Relación de Accesos.' });

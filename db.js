@@ -13319,10 +13319,110 @@ function buildAccessCatalog() {
             });
         });
     });
-    accessCatalogCache = { nodes, keys: new Set(nodes.map((n) => n.k)) };
+    accessCatalogCache = { nodes, keys: new Set(nodes.map((n) => n.k)), index: new Map(nodes.map((n) => [n.k, n])) };
     return accessCatalogCache;
 }
 
+// ---------------------------------------------------------------------------
+// Pieza 5b: el MÍNIMO INDISPENSABLE de cada acceso habilitado se habilita solo (Relación de Accesos). Al guardar un Giro, un Plan o los adicionales de un cliente, por cada acceso que quedó habilitado se agrega su mínimo, y el mínimo de ese
+// mínimo, y así hasta cerrar la cadena. Lo que el acceso «toca» NO entra (solo se recomienda). Va por plataforma: lo habilitado en Web trae su mínimo en Web y lo habilitado en App (sufijo #app) en App. Lo agregado es lo mismo que marcarlo a mano:
+//   · departamento / área: su tupla; apartado: sus pantallas; pantalla: su tupla (vale para todo lo de adentro); grupo: sus columnas y botones;
+//   · columna o botón: sus niveles «solo-ver» y «ver-y-operar» (como se siembra todo botón nuevo); icono: su tupla.
+// grants = [{ sectionId, itemId, submenuId }]. opciones: canAdd(tupla) → false si no se puede agregar (por ejemplo no está habilitado para servicio en el Árbol Maestro: sale en «blocked» y no se agrega); isCovered(tupla) → true si ya lo cubre otro nivel
+// (los adicionales de un cliente no repiten lo que ya trae su plan). Regresa { grants (lo que llegó + lo agregado), added: [tuplas], autoEnabled: [{ access, related, count }], blocked: [{ access, related }] }.
+// ---------------------------------------------------------------------------
+const ACCESS_APP_SUFFIX = '#app';
+let accessChildrenCache = null;
+function accessChildrenOf(key) {
+    if (!accessChildrenCache) {
+        accessChildrenCache = new Map();
+        buildAccessCatalog().nodes.forEach((n) => { if (!accessChildrenCache.has(n.p)) accessChildrenCache.set(n.p, []); accessChildrenCache.get(n.p).push(n); });
+    }
+    return accessChildrenCache.get(key) || [];
+}
+function parseAccessKey(key) {
+    const [sectionId, itemId, submenuId] = String(key).split('::');
+    return { sectionId, itemId: itemId || null, submenuId: submenuId || null };
+}
+// ¿Esta lista de permisos (de una sola plataforma) deja habilitado ese acceso? Lo cubre un permiso de su departamento, de su área o de su pantalla (o de lo que lo contiene); a una columna, botón o icono también lo habilita uno de sus niveles.
+function grantsEnableAccess(grants, node, platform) {
+    const t = parseAccessKey(node.k);
+    const leafLike = node.ty === 'column' || node.ty === 'button' || node.ty === 'icon';
+    return grants.some((g) => {
+        const isApp = typeof g.submenuId === 'string' && g.submenuId.endsWith(ACCESS_APP_SUFFIX);
+        if (isApp !== (platform === ACCESS_APP_SUFFIX)) return false;
+        const sub = isApp ? (g.submenuId.slice(0, -ACCESS_APP_SUFFIX.length) || null) : (g.submenuId || null);
+        if (g.sectionId !== t.sectionId) return false;
+        if (!g.itemId) return true;
+        if (g.itemId !== t.itemId) return false;
+        if (!sub) return true;
+        if (!t.submenuId) return false;
+        if (sub === t.submenuId || t.submenuId.startsWith(`${sub}/`)) return true;
+        return leafLike && sub.startsWith(`${t.submenuId}/`);
+    });
+}
+// Las tuplas que habilitan ese acceso en una plataforma ('' = Web, '#app' = App). Lo de departamento y área no tiene versión App.
+function accessMinimumTuples(key, platform) {
+    const catalog = buildAccessCatalog();
+    const node = catalog.index.get(key);
+    if (!node) return [];
+    const t = parseAccessKey(key);
+    const sfx = platform;
+    const withSuffix = (sub) => (sub ? `${sub}${sfx}` : null);
+    if (node.ty === 'department' || node.ty === 'area') return sfx ? [] : [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: null }];
+    if (node.ty === 'apartado' || node.ty === 'group') return accessChildrenOf(key).flatMap((c) => accessMinimumTuples(c.k, platform));
+    if (node.ty === 'column' || node.ty === 'button') return ['solo-ver', 'ver-y-operar'].map((level) => ({ sectionId: t.sectionId, itemId: t.itemId, submenuId: `${t.submenuId}/${level}${sfx}` }));
+    // pantalla (y los botones o pantallas de General, que no llevan ruta): su tupla; en App con su sufijo (sin ruta no hay dónde ponerlo)
+    if (!t.submenuId) return sfx ? [] : [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: null }];
+    return [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: withSuffix(t.submenuId) }];
+}
+// ¿Algo de la lista ya cubre esa tupla (la misma, o un permiso de su pantalla, su área o su departamento, en la misma plataforma)? Así no se agrega lo que ya está.
+function grantsCoverTuple(grants, tuple) {
+    const split = (sub) => { const app = typeof sub === 'string' && sub.endsWith(ACCESS_APP_SUFFIX); return { app, sub: app ? (sub.slice(0, -ACCESS_APP_SUFFIX.length) || null) : (sub || null) }; };
+    const t = split(tuple.submenuId);
+    return grants.some((g) => {
+        const s = split(g.submenuId);
+        if (s.app !== t.app || g.sectionId !== tuple.sectionId) return false;
+        if (!g.itemId) return true;
+        if (g.itemId !== tuple.itemId) return false;
+        if (!s.sub) return true;
+        if (!t.sub) return false;
+        return s.sub === t.sub || t.sub.startsWith(`${s.sub}/`);
+    });
+}
+function expandAccessMinimums(grants, options = {}) {
+    const all = (grants || []).map((g) => ({ sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null }));
+    const empty = { grants: all, added: [], autoEnabled: [], blocked: [] };
+    const relations = db.prepare("SELECT access_key AS access, related_key AS related FROM access_relations WHERE kind = 'minimum'").all();
+    if (!relations.length) return empty;
+    const catalog = buildAccessCatalog();
+    const added = [];
+    const pairs = new Map(); // access|related -> { access, related, count }
+    const blocked = new Map();
+    for (let round = 0; round < 12; round += 1) {
+        let changed = false;
+        for (const rel of relations) {
+            const accessNode = catalog.index.get(rel.access);
+            if (!accessNode || !catalog.index.has(rel.related)) continue;
+            for (const platform of ['', ACCESS_APP_SUFFIX]) {
+                if (!grantsEnableAccess(all, accessNode, platform)) continue;
+                for (const tuple of accessMinimumTuples(rel.related, platform)) {
+                    if (grantsCoverTuple(all, tuple)) continue;
+                    if (options.isCovered && options.isCovered(tuple)) continue;
+                    const pairKey = `${rel.access}|${rel.related}`;
+                    if (options.canAdd && !options.canAdd(tuple)) { blocked.set(pairKey, { access: rel.access, related: rel.related }); continue; }
+                    all.push(tuple);
+                    added.push(tuple);
+                    if (!pairs.has(pairKey)) pairs.set(pairKey, { access: rel.access, related: rel.related, count: 0 });
+                    pairs.get(pairKey).count += 1;
+                    changed = true;
+                }
+            }
+        }
+        if (!changed) break;
+    }
+    return { grants: all, added, autoEnabled: [...pairs.values()], blocked: [...blocked.values()] };
+}
 // Las relaciones guardadas: [{ access, related, kind, updatedBy, updatedAt }].
 function listAccessRelations() {
     return db.prepare('SELECT access_key AS access, related_key AS related, kind, updated_by AS updatedBy, updated_at AS updatedAt FROM access_relations ORDER BY access_key, kind, related_key').all();
@@ -17195,6 +17295,7 @@ module.exports = {
     listAccessRelations,
     validateAccessRelations,
     setAccessRelations,
+    expandAccessMinimums,
     logClientChange,
     logPlanChange,
     listSaasAdmins,

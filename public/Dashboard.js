@@ -14171,6 +14171,18 @@ function openTableHistory(tableId) {
 // Cargador del historial de las tablas de SaaS que guardan sus cambios en
 // saas_table_changes (Nuestras Apps, Nuestros Respaldos, Material de Apoyo): con
 // recordId, el de esa fila; sin él, el de toda la tabla.
+// Pieza 5b (Relación de Accesos): al guardar un Giro, un Plan o los adicionales de un cliente, el servidor habilita solo el mínimo indispensable de cada acceso habilitado (autoEnabled) y avisa cuáles no pudo agregar porque no están habilitados
+// para servicio en el Árbol Maestro (blocked). Cada uno trae { access, related, count } con nombres ya en español. Devuelve true si había algo que avisar (la pantalla puede volver a leer el árbol).
+function showMinimumAutoEnabledNotice(body) {
+    const related = (list) => [...new Set((list || []).map((p) => p.related).filter(Boolean))];
+    const brief = (names) => `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` +${names.length - 3}` : ''}`;
+    const enabled = related(body && body.autoEnabled);
+    const blocked = related(body && body.blocked);
+    if (enabled.length) showToast(t('admin.minAutoEnabled', { count: enabled.length, list: brief(enabled) }), 'info');
+    if (blocked.length) showToast(t('admin.minAutoBlocked', { count: blocked.length, list: brief(blocked) }), 'warning');
+    return enabled.length > 0;
+}
+
 function saasTableChangesLoader(tableKey, recordId) {
     return async () => {
         const query = recordId != null ? `?recordId=${encodeURIComponent(recordId)}` : '';
@@ -14313,6 +14325,7 @@ window.Dashboard = {
     registerSaasTableHistory,
     saasHistoryRow,
     saasTableChangesLoader,
+    showMinimumAutoEnabledNotice,
     // Hora base (UTC) y hora local: ver la regla en formatNotificationDate.
     parseUtcStamp,
     formatLocalStamp,

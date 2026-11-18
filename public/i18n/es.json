@@ -1228,6 +1228,8 @@
     "systemResetGroup_saasTeam": "Equipo SaaS y sus permisos",
     "systemResetGroup_catalogs": "Catálogos y APPs",
     "systemResetGroup_system": "Sistema",
+    "minAutoEnabled": "Mínimos indispensables que se habilitaron solos ({count}): {list}.",
+    "minAutoBlocked": "Mínimos que no se pudieron habilitar porque no están habilitados para servicio en el Árbol Maestro ({count}): {list}.",
     "relAccSubtitle": "Por cada acceso (una pantalla, una columna, un botón o un icono) se marca cuál es el mínimo indispensable para operarlo y qué otros accesos llega a tocar. Lo mínimo se habilitará solo y bloqueado desde el Giro; lo que toca solo se recomienda. Lo que no se marca es opcional, para personalizar.",
     "relAccChoose": "¿Qué acceso vas a configurar?",
     "relAccSearchPlaceholder": "Buscar un acceso…",

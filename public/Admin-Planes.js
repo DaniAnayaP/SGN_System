@@ -637,8 +637,12 @@ treeSaveBtn.addEventListener('click', async () => {
             showTreeError(treeError, body.message || Dashboard.t('admin.saveError'));
             return;
         }
+        const saved = await res.json().catch(() => ({}));
         await loadPlans();
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+        // El mínimo indispensable de lo que se habilitó entró solo (Relación de Accesos): se avisa y el árbol se vuelve a leer para verlo marcado.
+        const savedPlan = plans.find((p) => p.id === selectedPlanId);
+        if (Dashboard.showMinimumAutoEnabledNotice(saved) && savedPlan) await selectPlanForTree(savedPlan);
     } catch {
         showTreeError(treeError, Dashboard.t('admin.saveError'));
     } finally {

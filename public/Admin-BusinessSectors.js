@@ -465,9 +465,11 @@ const sectorTreeCloseBtn = document.getElementById('sector-tree-close');
 
 let sectorTree = null;
 let selectedSectorId = null;
+let selectedSector = null;
 
 async function openSectorTreeModal(sector) {
     selectedSectorId = sector.id;
+    selectedSector = sector;
     sectorTreeModalTitle.textContent = `${Dashboard.t('admin.giroAccesosGlobalesTitle')} — ${sector.name}`;
     sectorTreeError.hidden = true;
     sectorTreeContainer.innerHTML = '';
@@ -518,7 +520,10 @@ sectorTreeSaveBtn.addEventListener('click', async () => {
             body: JSON.stringify({ grants: sectorTree.getGrants() }),
         });
         if (!res.ok) throw new Error('save failed');
+        const saved = await res.json().catch(() => ({}));
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
+        // El mínimo indispensable de lo que se habilitó entró solo (Relación de Accesos): se avisa y el árbol se vuelve a leer para verlo marcado.
+        if (Dashboard.showMinimumAutoEnabledNotice(saved) && selectedSector) await openSectorTreeModal(selectedSector);
         // The color-dot summary counts what THIS tree just changed -- refresh
         // the list so it reflects the save without needing a full reload.
         await loadSectors();
