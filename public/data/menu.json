@@ -4109,6 +4109,44 @@
           ]
         }
       ],
+      "cat-reportes": [
+        {
+          "id": "cat-reportes-ti-kpi-soporte",
+          "labelKey": "menu.repTiKpiSoporte",
+          "abbrKeys": [
+            "menu.repTiKpiSoporteAbbr1"
+          ],
+          "icon": "bx-bar-chart-alt-2",
+          "href": "RepTISoporteKpi.html",
+          "submenu": [
+            {
+              "id": "colKpIndicadores",
+              "labelKey": "main.colKpIndicadores",
+              "permissionOnly": true
+            },
+            {
+              "id": "colKpSinTomar",
+              "labelKey": "main.colKpSinTomar",
+              "permissionOnly": true
+            },
+            {
+              "id": "colKpCierres",
+              "labelKey": "main.colKpCierres",
+              "permissionOnly": true
+            },
+            {
+              "id": "colKpPrioridad",
+              "labelKey": "main.colKpPrioridad",
+              "permissionOnly": true
+            },
+            {
+              "id": "colKpDesglose",
+              "labelKey": "main.colKpDesglose",
+              "permissionOnly": true
+            }
+          ]
+        }
+      ],
       "cat-admin": [
         {
           "id": "cat-admin-ti-mapa-soporte",

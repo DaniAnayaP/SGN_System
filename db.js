@@ -3765,6 +3765,7 @@ const TABLE_GRANT_PATHS = {
     // Operaciones > Casos de soporte: sus columnas, su botón «Nueva solicitud» (colSpCreateAuth) y los iconos de la tabla.
     'casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
+    'kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     // Admin > Mapa de soporte: sus cuatro grupos de ajustes (colMsPrioridades, colMsImpactos, colMsNiveles, colMsReglas) y el icono del historial.
     'mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
     'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
@@ -15167,6 +15168,28 @@ function listUrgentUntakenSupportCases(nowSql) {
 function markSupportUrgentAlerted(caseId) {
     db.prepare("UPDATE support_cases SET urgent_alerted_at = datetime('now') WHERE id = ?").run(caseId);
 }
+// ---- KPI de Soporte: lo que se lee de todos los casos de la empresa para sacar los indicadores ---------------------------------------------------------------------------------------------------
+function listSupportMovesForClient(clientId) {
+    return db.prepare('SELECT m.* FROM support_case_moves m WHERE m.client_id = ? ORDER BY m.id ASC').all(clientId);
+}
+function listSupportClosuresForClient(clientId) {
+    return db.prepare('SELECT z.* FROM support_case_closures z WHERE z.client_id = ? ORDER BY z.id ASC').all(clientId);
+}
+function listSupportRatingsForClient(clientId) {
+    return db.prepare('SELECT r.* FROM support_case_ratings r WHERE r.client_id = ? ORDER BY r.id ASC').all(clientId);
+}
+function listSupportInterruptsForClient(clientId) {
+    return db.prepare('SELECT i.* FROM support_interrupts i WHERE i.client_id = ? ORDER BY i.id ASC').all(clientId);
+}
+// El departamento de cada persona (Mi Recurso Humano) y los nombres de las cuentas, para agrupar los casos.
+function listSupportWorkerDepartments(clientId) {
+    return db.prepare("SELECT user_id AS userId, department FROM hr_workers WHERE client_id = ? AND user_id IS NOT NULL").all(clientId);
+}
+function listSupportUserNamesByIds(ids) {
+    const list = [...new Set((ids || []).filter((n) => Number.isInteger(n)))];
+    if (!list.length) return [];
+    return db.prepare(`SELECT id, name FROM users WHERE id IN (${list.map(() => '?').join(',')})`).all(...list);
+}
 // ---- Quién reportó y su equipo: avisos e invitaciones del caso ----------------------------------------------------------------------------------------------------------------------------
 // Una fila por persona y caso. kind: 'notify' (se le AVISA: una nota en la campana, sin entrar al chat; debe tocar «Enterado») o 'invite' (se le INVITA al chat: ve la conversación y escribe, nunca las notas internas;
 // debe aceptar). status: pending, confirmed (Enterado), accepted, declined o expired (no respondió en el plazo del Mapa de soporte). Si no responde (o rechaza), el aviso pasa al jefe de esa persona con la nota de qué
@@ -15542,6 +15565,7 @@ seedSoporteEvidenceKindsOnce();
 module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,
     assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted,
     addSupportRating, getSupportRating, listSupportRatings, lastSupportClosedClosureId, listSupportRatingReminderCandidates, markSupportRatingReminded,
     addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,

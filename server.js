@@ -582,6 +582,7 @@ const {
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,
     assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted,
     addSupportRating, getSupportRating, listSupportRatings, lastSupportClosedClosureId, listSupportRatingReminderCandidates, markSupportRatingReminded,
     addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
@@ -11410,6 +11411,121 @@ app.post('/api/business/support-cases/:id/defer', requireAuth, (req, res) => {
         publishSupportNotice({ recipients: [...who.admins, who.boss].filter((id) => id && id !== req.user.sub), actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'interrupt-overridden', caseId: urgent.id, folio: supportFolio(urgent.record_number), summary: urgent.summary, workingFolio: supportFolio(rec.record_number), minutes, wait, by } });
     }
     res.status(201).json({ recommended, dueAt: sqlUtcIso(it.due_at), waitMin: wait });
+});
+// ---- KPI de Soporte (Reportes › KPI de Soporte) -----------------------------------------------------------------------------------------------------------------------------------------------------
+// Todo sale del recorrido de cada caso, sin capturar nada aparte: casos, traspasos, cierres, calificaciones y las decisiones cuando llega un Urgente. Cada sección se ve con su hoja del árbol (colKpIndicadores, colKpSinTomar, colKpCierres,
+// colKpPrioridad, colKpDesglose). Periodo: este mes, el mes pasado, el trimestre (los últimos 3 meses) o todo; y filtro por tipo (todos, Correctivo, Preventivo). Los casos del periodo son los que se abrieron en él.
+const SUPPORT_KPI_COLS = { indicators: 'colKpIndicadores', untaken: 'colKpSinTomar', closers: 'colKpCierres', priority: 'colKpPrioridad', drill: 'colKpDesglose' };
+const SUPPORT_KPI_TABLE_KEY = 'kpi-soporte';
+const supportKpiSections = (req) => Object.fromEntries(Object.entries(SUPPORT_KPI_COLS).map(([k, col]) => [k, !!req.user.isClientAdmin || hasColumnGrant(supportColGrants(req), SUPPORT_KPI_TABLE_KEY, col)]));
+function supportKpiRange(period) {
+    const now = new Date();
+    const first = (y, m) => new Date(Date.UTC(y, m, 1)).getTime();
+    const y = now.getUTCFullYear(); const m = now.getUTCMonth();
+    if (period === 'prev') return { from: first(y, m - 1), to: first(y, m) };
+    if (period === 'quarter') return { from: first(y, m - 2), to: null };
+    if (period === 'all') return { from: null, to: null };
+    return { from: first(y, m), to: null };
+}
+function supportKpiCompute(req, { period, type }) {
+    const { clientId, isTestAccount } = req.user;
+    const range = supportKpiRange(period);
+    const nowMs = Date.now();
+    const ts = (sql) => new Date(sqlUtcIso(sql)).getTime();
+    const diffMin = (a, b) => Math.max(0, Math.round((ts(b) - ts(a)) / 60000));
+    const avg = (a) => (a.length ? Math.round(a.reduce((s, x) => s + x, 0) / a.length) : null);
+    const avg1 = (a) => (a.length ? Math.round((a.reduce((s, x) => s + x, 0) / a.length) * 10) / 10 : null);
+    const pct = (n, d) => (d ? Math.round((n / d) * 100) : null);
+    const group = (rows, keyOf) => { const m = new Map(); rows.forEach((r) => { const k = keyOf(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }); return m; };
+    let all = listSupportCases(clientId, isTestAccount, { limit: 20000 });
+    if (type === 'c' || type === 'p') all = all.filter((c) => c.case_type === type);
+    const cs = all.filter((c) => (!range.from || ts(c.created_at) >= range.from) && (!range.to || ts(c.created_at) < range.to));
+    const ids = new Set(cs.map((c) => c.id));
+    const movesBy = group(listSupportMovesForClient(clientId), (m) => m.case_id);
+    const closures = listSupportClosuresForClient(clientId).filter((z) => ids.has(z.case_id));
+    const closuresBy = group(closures, (z) => z.case_id);
+    const ratings = listSupportRatingsForClient(clientId).filter((r) => ids.has(r.case_id));
+    const interrupts = listSupportInterruptsForClient(clientId).filter((i) => ids.has(i.urgent_case_id));
+    const moves = (c) => movesBy.get(c.id) || [];
+    const done = cs.filter((c) => c.status === 'done');
+    const judged = (list) => list.filter((c) => c.first_response_due_at && (c.first_response_at || ts(c.first_response_due_at) < nowMs));
+    const onTime = (list) => list.filter((c) => c.first_response_at && ts(c.first_response_at) <= ts(c.first_response_due_at));
+    const resolutionOf = (list) => list.filter((c) => c.closed_at).map((c) => Math.max(0, diffMin(c.created_at, c.closed_at) - Math.round((c.paused_ms || 0) / 60000)));
+    const firstOf = (list) => list.filter((c) => c.first_response_at).map((c) => diffMin(c.created_at, c.first_response_at));
+    // ---- indicadores
+    const firstLevel = done.filter((c) => !moves(c).some((m) => m.direction === 'up' && m.reason !== 'reopened'));
+    const userRatings = ratings.filter((r) => r.kind === 'user');
+    const xferRatings = ratings.filter((r) => r.kind === 'receive' || r.kind === 'deliver');
+    const returned = cs.filter((c) => moves(c).some((m) => m.direction === 'down' && m.reason !== 'solved'));
+    const j = judged(cs); const jOn = onTime(j);
+    const urgentJ = judged(cs.filter((c) => c.priority === 1)); const urgentOn = onTime(urgentJ);
+    const urgentIds = new Set(cs.filter((c) => c.priority === 1).map((c) => c.id));
+    const pausesForUrgent = interrupts.filter((i) => i.decision === 'pause' && urgentIds.has(i.urgent_case_id)).length;
+    const untakenNow = all.filter((c) => c.status === 'open' && !c.assignee_user_id);
+    const untakenLate = untakenNow.filter((c) => c.first_response_due_at && !c.first_response_at && ts(c.first_response_due_at) < nowMs);
+    const closedClosures = closures.filter((z) => z.kind === 'closed');
+    const decisions = closures.filter((z) => ['closed', 'not_conform', 'noresp'].includes(z.kind));
+    const withEvidence = done.filter((c) => { const z = [...(closuresBy.get(c.id) || [])].reverse().find((k) => k.kind === 'closed'); return z && parseJsonOr(z.file_ids, []).length > 0; });
+    const indicators = {
+        opened: cs.length, inProgress: all.filter((c) => ['open', 'review', 'working', 'testing', 'paused', 'confirm'].includes(c.status)).length, closed: done.length + cs.filter((c) => c.status === 'noresp').length,
+        firstLevel: { n: firstLevel.length, of: done.length, pct: pct(firstLevel.length, done.length) },
+        firstResponseMin: avg(firstOf(cs)), resolutionMin: avg(resolutionOf(done)),
+        userRating: { avg: avg1(userRatings.map((r) => r.stars)), n: userRatings.length, of: done.length },
+        transferRating: { avg: avg1(xferRatings.map((r) => r.stars)), n: xferRatings.length },
+        returned: { n: returned.length, pct: pct(returned.length, cs.length) },
+        onTime: { n: jOn.length, of: j.length, pct: pct(jOn.length, j.length) },
+        urgentOnTime: { n: urgentOn.length, of: urgentJ.length, pct: pct(urgentOn.length, urgentJ.length), pauses: pausesForUrgent },
+        untaken: { n: untakenNow.length, late: untakenLate.length },
+        evidenceClosed: { n: withEvidence.length, of: done.length, pct: pct(withEvidence.length, done.length) },
+        conform: { n: closedClosures.length, of: decisions.length, pct: pct(closedClosures.length, decisions.length), notConform: decisions.filter((z) => z.kind === 'not_conform').length, noReply: decisions.filter((z) => z.kind === 'noresp').length },
+        n0: null,
+    };
+    // ---- casos que no se están tomando (ahora): desde cuándo, cómo va su primera respuesta y si el sistema ya avisó
+    const arrivedAt = (c) => { const m = [...(movesBy.get(c.id) || [])].pop(); return m ? m.created_at : c.created_at; };
+    const untakenRows = untakenNow.sort((a, b) => a.priority - b.priority || ts(a.created_at) - ts(b.created_at)).slice(0, 100).map((c) => {
+        const since = arrivedAt(c);
+        return { id: c.id, folio: supportFolio(c.record_number), priority: c.priority, level: c.level, summary: c.summary, since: sqlUtcIso(since), waitingMin: Math.max(0, Math.round((nowMs - ts(since)) / 60000)), dueAt: sqlUtcIso(c.first_response_due_at), overdueMin: c.first_response_due_at && ts(c.first_response_due_at) < nowMs ? Math.round((nowMs - ts(c.first_response_due_at)) / 60000) : 0, alerted: !!c.urgent_alerted_at };
+    });
+    const untaken = { rows: untakenRows, byLevel: { n1: 0, n2: 0, n3: 0, n4: 0, ...Object.fromEntries([...group(untakenNow, (c) => c.level)].map(([k, v]) => [k, v.length])) }, avgWaitMin: avg(untakenRows.map((r) => r.waitingMin)) };
+    // ---- cierres confiables: por quien cerró
+    const closerRows = [...group(decisions, (z) => z.by_name || '—')].map(([name, list]) => {
+        const closes = list.filter((z) => z.kind === 'closed' || z.kind === 'noresp');
+        const reopened = closes.filter((z) => closures.some((k) => k.case_id === z.case_id && k.kind === 'reopened' && k.id > z.id)).length;
+        return { name, closes: closes.length, ok: list.filter((z) => z.kind === 'closed').length, noReply: list.filter((z) => z.kind === 'noresp').length, notConform: list.filter((z) => z.kind === 'not_conform').length, reopened };
+    }).sort((a, b) => b.closes - a.closes || a.name.localeCompare(b.name));
+    // ---- por prioridad e impactos
+    const priorityRows = [1, 2, 3, 4].map((p) => {
+        const list = cs.filter((c) => c.priority === p); const jj = judged(list);
+        return { priority: p, cases: list.length, pct: pct(list.length, cs.length), firstResponseMin: avg(firstOf(list)), resolutionMin: avg(resolutionOf(list.filter((c) => c.status === 'done'))), onTimePct: pct(onTime(jj).length, jj.length), pauses: list.reduce((s, c) => s + (c.pause_count || 0), 0) };
+    });
+    const impactCount = new Map();
+    cs.forEach((c) => parseJsonOr(c.impacts, []).filter((i) => i.level >= 2).forEach((i) => impactCount.set(i.name, (impactCount.get(i.name) || 0) + 1)));
+    const impacts = [...impactCount].map(([name, n]) => ({ name, n, pct: pct(n, cs.length) })).sort((a, b) => b.n - a.n);
+    const pausedCases = cs.filter((c) => (c.pause_count || 0) > 0);
+    const priority = { rows: priorityRows, impacts, pausedCases: pausedCases.length, avgPausedMin: avg(pausedCases.map((c) => Math.round((c.paused_ms || 0) / 60000))) };
+    // ---- desglose: departamento de quien reporta (o su jefe directo, o el departamento del sistema) → pantalla → categoría → causa
+    const deptOf = new Map(listSupportWorkerDepartments(clientId).map((w) => [w.userId, String(w.department || '').trim()]));
+    const bossCache = new Map();
+    const bossOf = (userId) => { if (!userId) return 0; if (!bossCache.has(userId)) bossCache.set(userId, resolveDirectSupervisorUserId(userId) || 0); return bossCache.get(userId); };
+    const bossNames = new Map(listSupportUserNamesByIds([...new Set(cs.map((c) => bossOf(c.reporter_user_id)).filter(Boolean))]).map((u) => [u.id, u.name]));
+    const drillCases = cs.slice(0, 5000).map((c) => {
+        const screen = c.screen_node ? findSupportScreen(c.screen_node) : null;
+        const closed = ['done', 'noresp'].includes(c.status);
+        return { id: c.id, folio: supportFolio(c.record_number), dept: deptOf.get(c.reporter_user_id) || '', boss: bossNames.get(bossOf(c.reporter_user_id)) || '', sysDept: screen ? screen.sectionId : '', screen: c.screen_label || '', category: c.category_name || '', cause: c.cause_name || '', closed };
+    });
+    return { period, type, range: { from: range.from ? new Date(range.from).toISOString() : null, to: range.to ? new Date(range.to).toISOString() : null }, indicators, untaken, closers: closerRows, priority, drill: { cases: drillCases } };
+}
+app.get('/api/business/support-kpi', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const sections = supportKpiSections(req);
+    if (!Object.values(sections).some(Boolean)) return res.status(403).json({ message: 'No tienes permiso para el KPI de Soporte.' });
+    const period = ['month', 'prev', 'quarter', 'all'].includes(req.query.period) ? req.query.period : 'month';
+    const type = ['c', 'p'].includes(req.query.type) ? req.query.type : 'all';
+    const out = supportKpiCompute(req, { period, type });
+    const result = { period: out.period, type: out.type, range: out.range, sections };
+    Object.keys(SUPPORT_KPI_COLS).forEach((k) => { if (sections[k]) result[k] = out[k]; });
+    res.set('Cache-Control', 'no-store');
+    res.json(result);
 });
 // Subir UNA evidencia (el archivo tal cual, sin envolverlo): X-File-Name = su nombre (codificado) y X-Evidence-Id = a cuál de las que pide la categoría corresponde (opcional: sin él es una evidencia extra).
 app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ type: () => true, limit: '13mb' }), (req, res) => {
