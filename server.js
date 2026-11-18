@@ -66,6 +66,7 @@ const {
     listCostCenters,
     countCostCenters,
     countSites,
+    findSiteInOtherPlace,
     getCostCenterById,
     getCostCenterAnyLane,
     createCostCenter,
@@ -4834,6 +4835,9 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
     }
     const { countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible } = req.body;
     const siteCode = normalizeShortCode(req.body.siteCode, SHORT_CODE_LENGTH.site);
+    if (findSiteInOtherPlace(req.user.clientId, req.user.isTestAccount, siteCode, stateId, localityId)) {
+        return res.status(409).json({ message: 'That site is already in another state or locality.' });
+    }
     try {
         const costCenter = createCostCenter({
             clientId: req.user.clientId, countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible, siteCode,
@@ -4848,7 +4852,7 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
         res.status(201).json({ costCenter: mapCostCenter(costCenter, client.company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-            return res.status(409).json({ message: /site_code/.test(err.message) ? 'That site code is already used by another cost center.' : 'A cost center with that code already exists.' });
+            return res.status(409).json({ message: 'A cost center with that code already exists.' });
         }
         throw err;
     }
@@ -4861,6 +4865,9 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
     if (error) return res.status(400).json({ message: error });
     const { countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible } = req.body;
     const siteCode = normalizeShortCode(req.body.siteCode, SHORT_CODE_LENGTH.site);
+    if (findSiteInOtherPlace(req.user.clientId, req.user.isTestAccount, siteCode, stateId, localityId, existing.id)) {
+        return res.status(409).json({ message: 'That site is already in another state or locality.' });
+    }
     try {
         const costCenter = updateCostCenter(req.params.id, req.user.clientId, {
             countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible, siteCode,
@@ -4879,7 +4886,7 @@ app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (re
         res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-            return res.status(409).json({ message: /site_code/.test(err.message) ? 'That site code is already used by another cost center.' : 'A cost center with that code already exists.' });
+            return res.status(409).json({ message: 'A cost center with that code already exists.' });
         }
         throw err;
     }

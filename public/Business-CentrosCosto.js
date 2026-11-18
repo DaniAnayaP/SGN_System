@@ -513,6 +513,20 @@ LEVEL_ORDER.forEach((levelKey, idx) => {
 sucursalField.addEventListener('input', updateCodePreview);
 bindShortCodeInput(siteCodeField, 5);
 
+// Un sitio puede tener varios centros de costos: la lista de sugerencias trae los sitios que el cliente ya tiene (código · sucursal) para elegir uno en vez de escribirlo; un código nuevo crea un sitio nuevo.
+function fillSiteList() {
+    const list = document.getElementById('cc-site-list');
+    if (!list) return;
+    const seen = new Map();
+    costCenters.forEach((c) => { if (c.siteCode && !seen.has(c.siteCode)) seen.set(c.siteCode, c.sucursal || ''); });
+    list.replaceChildren(...[...seen].sort(([a], [b]) => a.localeCompare(b)).map(([code, sucursal]) => {
+        const option = document.createElement('option');
+        option.value = code;
+        option.label = sucursal ? `${code} · ${sucursal}` : code;
+        return option;
+    }));
+}
+
 function resetCascadeAddRows() {
     LEVEL_ORDER.forEach((key) => {
         const level = cascadeLevels[key];
@@ -528,6 +542,7 @@ async function openNewModal() {
     companyDisplay.textContent = clientBranding?.companyName || '—';
     sucursalField.value = '';
     siteCodeField.value = '';
+    fillSiteList();
     nameField.value = '';
     responsibleField.value = '';
     descriptionField.value = '';
@@ -549,6 +564,7 @@ async function openEditModal(cc) {
     companyDisplay.textContent = clientBranding?.companyName || '—';
     sucursalField.value = cc.sucursal || '';
     siteCodeField.value = cc.siteCode || '';
+    fillSiteList();
     nameField.value = cc.name;
     responsibleField.value = cc.responsible || '';
     descriptionField.value = cc.description || '';
@@ -638,7 +654,7 @@ async function saveCcModal() {
             const body = await res.json().catch(() => ({}));
             modalError.textContent = body.message === 'Cost center limit reached for this client.'
                 ? Dashboard.t('business.ccLimitReached', { count: costCenters.length, limit })
-                : (body.message === 'That site code is already used by another cost center.' ? Dashboard.t('business.ccSiteCodeUsed') : (body.message || Dashboard.t('admin.saveError')));
+                : (body.message === 'That site is already in another state or locality.' ? Dashboard.t('business.ccSiteOtherPlace') : (body.message || Dashboard.t('admin.saveError')));
             modalError.hidden = false;
             return;
         }

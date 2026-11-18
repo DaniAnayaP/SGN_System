@@ -1412,7 +1412,7 @@
     "ccGeoCodeInvalid3": "El código son 3 letras.",
     "ccGeoCodeInvalid4": "El código son 4 letras.",
     "ccSiteCodeInvalid": "El código del sitio son 5 letras.",
-    "ccSiteCodeUsed": "Ese código de sitio ya lo usa otro centro de costos.",
+    "ccSiteOtherPlace": "Ese sitio ya existe en otro Estado o en otra Localidad. Los centros de costos de un mismo sitio deben estar en el mismo Estado y la misma Localidad.",
     "ccNeedGeoCodes": "El Estado y la Localidad elegidos necesitan su código corto. Escríbelo y guárdalo debajo de cada uno.",
     "ccNickname": "Apodo",
     "ccCodePreview": "Código generado",
@@ -8716,8 +8716,8 @@
       "example": "con Categoría Inventario la lista dice Medicamentos, Material de curación y Soluciones."
     },
     "ccSiteCode": {
-      "what": "El código corto de este sitio, de 5 letras, que lo escribes tú. Es la última pieza de la locación del localizador de cada producto y no se puede repetir en tus centros de costos.",
-      "example": "para el CEDIS de Chihuahua escribes CDCHI, y el localizador del producto empieza con CHIST.CHIH.CEN.CDCHI."
+      "what": "El código corto del sitio (el lugar físico), de 5 letras, que lo escribes tú. Es la última pieza de la locación del localizador de cada producto. Un sitio puede tener varios centros de costos: para meter otro centro en un sitio que ya tienes, elige su código de la lista; un código nuevo crea un sitio nuevo. Todos los centros de un mismo sitio van en el mismo Estado y la misma Localidad.",
+      "example": "para el CEDIS de Chihuahua escribes CDCHI, y el localizador del producto empieza con CHIST.CHIH.CEN.CDCHI. Si el CEDIS tiene Almacén y Compras como centros de costos, a los dos les pones CDCHI."
     },
     "ccGeoCode": {
       "what": "El código corto del Estado (4 letras) o de la Localidad (3 letras). Mientras ningún centro de costos use ese Estado o esa Localidad puedes corregir su nombre y su código (elígelo en la lista y cambia lo que haga falta); cuando ya lo usa uno queda fijo, porque el catálogo es de todos los clientes y los localizadores lo llevan escrito.",

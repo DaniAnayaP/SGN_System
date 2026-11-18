@@ -1413,7 +1413,7 @@
     "ccGeoCodeInvalid3": "The code is 3 letters.",
     "ccGeoCodeInvalid4": "The code is 4 letters.",
     "ccSiteCodeInvalid": "The site code is 5 letters.",
-    "ccSiteCodeUsed": "That site code is already used by another cost center.",
+    "ccSiteOtherPlace": "That site already exists in another State or Locality. The cost centers of one site must be in the same State and the same Locality.",
     "ccNeedGeoCodes": "The chosen State and Locality need their short code. Type it and save it below each one.",
     "ccNickname": "Nickname",
     "ccCodePreview": "Generated code",
@@ -8717,8 +8717,8 @@
       "example": "with Inventory Category the list says Medications, Wound care and Solutions."
     },
     "ccSiteCode": {
-      "what": "This site's short code, 5 letters, typed by you. It is the last piece of the location part of each product's locator and it cannot repeat across your cost centers.",
-      "example": "for the Chihuahua DC you type CDCHI, and the product locator starts with CHIST.CHIH.CEN.CDCHI."
+      "what": "The short code of the site (the physical place), 5 letters, typed by you. It is the last piece of the location part of each product's locator. A site can have several cost centers: to add another center to a site you already have, pick its code from the list; a new code creates a new site. Every center of one site goes in the same State and the same Locality.",
+      "example": "for the Chihuahua DC you type CDCHI, and the product locator starts with CHIST.CHIH.CEN.CDCHI. If the DC has Warehouse and Purchasing as cost centers, you give both CDCHI."
     },
     "ccGeoCode": {
       "what": "The short code of the State (4 letters) or the Locality (3 letters). While no cost center uses that State or Locality you can fix its name and code (pick it from the list and change what is needed); once one uses it, it is fixed, because the catalog is shared by every client and locators carry it.",

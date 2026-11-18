@@ -995,7 +995,9 @@ if (!db.prepare('PRAGMA table_info(geo_localities)').all().some((c) => c.name ==
 if (!costCenterColumns.some((c) => c.name === 'site_code')) db.exec("ALTER TABLE cost_centers ADD COLUMN site_code TEXT NOT NULL DEFAULT ''");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_geo_states_code ON geo_states(country_id, code) WHERE code <> ''");
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_geo_localities_code ON geo_localities(state_id, code) WHERE code <> ''");
-db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_cost_centers_site_code ON cost_centers(client_id, is_test_data, site_code) WHERE site_code <> ''");
+// El código del sitio YA NO es único por centro: la cadena es Sitio > Centro de costos y un sitio puede tener varios centros. Se quita el candado que hubo hasta aquí (índice único) y queda un índice normal solo para buscar.
+db.exec('DROP INDEX IF EXISTS idx_cost_centers_site_code');
+db.exec("CREATE INDEX IF NOT EXISTS idx_cost_centers_site_lookup ON cost_centers(client_id, is_test_data, site_code) WHERE site_code <> ''");
 
 // Seed data for the geo catalog — a real, well-known list of países (not a
 // live internet fetch: no outbound access from this server has been set up,
@@ -4241,6 +4243,13 @@ function countCostCenters(clientId, forTestAccount = false) {
 // Cuántos SITIOS tiene habilitados un cliente: códigos de sitio distintos entre sus centros de costos activos. La cadena es Sitio > Centro de costos (un sitio puede tener varios centros), así que se cuentan los sitios, no los centros. Es lo que se ve en «Sitios» de Nuestros Clientes.
 function countSites(clientId, forTestAccount = false) {
     return db.prepare("SELECT COUNT(DISTINCT site_code) AS n FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND status = 'active' AND site_code <> ''").get(clientId, forTestAccount ? 1 : 0).n;
+}
+
+// Un sitio es UN lugar físico: si otro centro del cliente ya usa ese código de sitio, el centro nuevo (o el que se edita) debe estar en el mismo Estado y la misma Localidad, porque el localizador se arma con Estado + Localidad + sitio. Devuelve ese otro centro si choca, o null. excludeId deja fuera al propio centro al editar.
+function findSiteInOtherPlace(clientId, forTestAccount, siteCode, stateId, localityId, excludeId = 0) {
+    if (!siteCode) return null;
+    return db.prepare('SELECT id, code, state_id, locality_id FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND site_code = ? AND id != ? AND (state_id != ? OR locality_id != ?) LIMIT 1')
+        .get(clientId, forTestAccount ? 1 : 0, siteCode, excludeId || 0, Number(stateId), Number(localityId)) || null;
 }
 
 function getCostCenterById(id, clientId, forTestAccount = false) {
@@ -16182,6 +16191,7 @@ module.exports = {
     listCostCenters,
     countCostCenters,
     countSites,
+    findSiteInOtherPlace,
     getCostCenterById,
     getCostCenterAnyLane,
     createCostCenter,
