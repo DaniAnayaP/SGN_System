@@ -10985,7 +10985,7 @@ function getCascadedColumnGroups(tableKey, viewer) {
 // Interno no van aquí: su hoja es "ci-<data-col>". Una columna de la tabla que el catálogo no lista (el
 // Status de Equipo SaaS) no tiene hoja y por eso no puede llevar color.
 const SAAS_TABLE_COLUMN_LEAVES = {
-    'equipo-saas': { screenItemId: 'saas-team', apartadoId: 'tabla', columns: ['username', 'name', 'email', 'createdAt'] },
+    'equipo-saas': { screenItemId: 'saas-team', apartadoId: 'tabla', columns: ['username', 'name', 'email', 'createdAt', 'supportSectors', 'supportDepartments'] },
     'nuestros-clientes': {
         screenItemId: 'saas-clients', apartadoId: 'tabla',
         columns: ['bigDateNumber', 'accountNumber', 'rfc', 'razonSocial', 'companyNickname', 'companyAbbreviation', 'logo',
@@ -12305,6 +12305,8 @@ const SAAS_USER_FIELD_LEAF_KEYS = {
     'business.username': { leafKey: 'saas-team::tabla::c0', defaultClassificationId: 'saas-class-por-definir' },
     'business.saasUserName': { leafKey: 'saas-team::tabla::c1', defaultClassificationId: 'saas-class-por-definir' },
     'business.saasUserGrants': { leafKey: 'saas-team::tabla::ta0', defaultClassificationId: 'saas-class-acciones' },
+    'business.saasSupportSectors': { leafKey: 'saas-team::tabla::c4', defaultClassificationId: 'saas-class-por-definir' },
+    'business.saasSupportDepartments': { leafKey: 'saas-team::tabla::c5', defaultClassificationId: 'saas-class-por-definir' },
 };
 // Effective (override-or-default) classification + color for an arbitrary
 // list of SaaS catalog leaf keys -- same override-wins-over-structural-
@@ -14882,6 +14884,58 @@ function mapSupportLastMovesIntoN4() {
     const rows = db.prepare("SELECT m.* FROM support_case_moves m WHERE m.to_level = 'n4' AND m.id = (SELECT MAX(id) FROM support_case_moves WHERE case_id = m.case_id AND to_level = 'n4')").all();
     return new Map(rows.map((r) => [r.case_id, r]));
 }
+// ---- Quién del equipo SaaS atiende qué: «Giros que atiende» y «Departamentos que atiende» (Equipo SaaS) --------------------------------------------------------------------------------
+// Cada cuenta del equipo SaaS dice de qué giros y de qué departamentos recibe casos del Nivel 4. Cada lista tiene tres estados: NULL = todavía no se elige (una persona nueva sin elegir no recibe nada), '[]' = TODOS y una lista
+// de ids = solo esos. El departamento de un caso sale de su pantalla (la primera parte de screen_node) y su giro, del plan del cliente. Un caso sin pantalla o de un cliente sin giro le toca a cualquiera que ya eligió.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS saas_support_scope (
+        user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        sectors     TEXT,
+        departments TEXT,
+        updated_by  TEXT NOT NULL DEFAULT '',
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+`);
+const parseScopeList = (text) => { if (text === null || text === undefined) return null; try { const v = JSON.parse(text); return Array.isArray(v) ? v : null; } catch { return null; } };
+const SUPPORT_SCOPE_DEPARTMENTS = menuData.sections.map((sec) => sec.id).filter((id) => id !== 'main');
+function getSaasSupportScope(userId) {
+    const r = db.prepare('SELECT sectors, departments FROM saas_support_scope WHERE user_id = ?').get(userId);
+    return { sectors: r ? parseScopeList(r.sectors) : null, departments: r ? parseScopeList(r.departments) : null };
+}
+function listSaasSupportScopes() {
+    return new Map(db.prepare('SELECT user_id, sectors, departments FROM saas_support_scope').all().map((r) => [r.user_id, { sectors: parseScopeList(r.sectors), departments: parseScopeList(r.departments) }]));
+}
+function listActiveBusinessSectorsBrief() {
+    return db.prepare("SELECT id, name FROM business_sectors WHERE status = 'active' ORDER BY name COLLATE NOCASE").all();
+}
+// Guarda lo que atiende una cuenta (cada lista: undefined = no se toca, null = sin elegir, [] = todos, [ids] = esos) y deja en el historial de Equipo SaaS lo que cambió.
+function setSaasSupportScope(userId, { sectors, departments }, changedBy) {
+    const user = getSaasUserById(userId);
+    if (!user) return null;
+    const before = getSaasSupportScope(userId);
+    const next = { sectors: sectors === undefined ? before.sectors : sectors, departments: departments === undefined ? before.departments : departments };
+    const json = (v) => (v === null ? null : JSON.stringify(v));
+    db.prepare(`INSERT INTO saas_support_scope (user_id, sectors, departments, updated_by, updated_at) VALUES (?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(user_id) DO UPDATE SET sectors = excluded.sectors, departments = excluded.departments, updated_by = excluded.updated_by, updated_at = excluded.updated_at`).run(userId, json(next.sectors), json(next.departments), changedBy || '');
+    const sectorNames = new Map(db.prepare('SELECT id, name FROM business_sectors').all().map((r) => [r.id, r.name]));
+    const text = (list, nameOf) => (list === null ? 'Sin elegir' : (list.length ? list.map(nameOf).join(', ') : 'Todos'));
+    const sameList = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    if (!sameList(before.sectors, next.sectors)) logSaasUserChange({ userId, recordLabel: user.username, action: 'update', fieldKey: 'business.saasSupportSectors', oldValue: text(before.sectors, (id) => sectorNames.get(id) || id), newValue: text(next.sectors, (id) => sectorNames.get(id) || id), changedBy });
+    if (!sameList(before.departments, next.departments)) logSaasUserChange({ userId, recordLabel: user.username, action: 'update', fieldKey: 'business.saasSupportDepartments', oldValue: text(before.departments, (id) => id), newValue: text(next.departments, (id) => id), changedBy });
+    return next;
+}
+// Las cuentas activas del equipo SaaS que pueden tomar casos de Soporte (tienen el botón «Tomar casos») y las del administrador principal (Coordinación).
+function listSaasSupportTakerIds() {
+    return db.prepare("SELECT DISTINCT u.id FROM users u JOIN saas_user_grants g ON g.user_id = u.id WHERE u.role = 'admin' AND u.client_id IS NULL AND u.active != 0 AND g.item_id = 'saas-support' AND g.sub_item_id = 'tabla::a0'").all().map((r) => r.id);
+}
+function listSaasSuperAdminIds() {
+    return db.prepare("SELECT id FROM users WHERE role = 'admin' AND client_id IS NULL AND active != 0 AND is_saas_super_admin = 1").all().map((r) => r.id);
+}
+function listSaasSupportAccountNames(ids) {
+    const list = [...new Set((ids || []).filter((n) => Number.isInteger(n)))];
+    if (!list.length) return [];
+    return db.prepare(`SELECT id, name FROM users WHERE id IN (${list.map(() => '?').join(',')}) AND role = 'admin' AND client_id IS NULL AND active != 0 ORDER BY name COLLATE NOCASE`).all(...list);
+}
 // Las evidencias que ya se usaron en algún traspaso de este caso (no se vuelven a usar).
 function usedSupportMoveFileIds(caseId) {
     const used = new Set();
@@ -15642,7 +15696,7 @@ seedSoporteEvidenceKindsOnce();
 
 module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
-    listSupportMoves, addSupportMove, usedSupportMoveFileIds, listSupportCasesForSaas, getSupportCaseForSaas, mapSupportLastMovesIntoN4,
+    listSupportMoves, addSupportMove, usedSupportMoveFileIds, listSupportCasesForSaas, getSupportCaseForSaas, mapSupportLastMovesIntoN4, getSaasSupportScope, listSaasSupportScopes, listActiveBusinessSectorsBrief, setSaasSupportScope, listSaasSupportTakerIds, listSaasSuperAdminIds, listSaasSupportAccountNames, SUPPORT_SCOPE_DEPARTMENTS,
     listSupportHelpArticles, getSupportHelpArticle, createSupportHelpArticle, updateSupportHelpArticle, addSupportHelpUse, listSupportHelpUsesForClient,
     listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,
     assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted,

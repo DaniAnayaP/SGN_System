@@ -9178,3 +9178,9 @@ video.sc-att.big{ max-width: 100%; max-height: 360px; }
 .ss-tab.on .ss-count{ background: rgba(255, 255, 255, 0.28); }
 .ss-open{ color: #3b6fd6; font-weight: 600; text-decoration: none; white-space: nowrap; } .ss-open:hover{ text-decoration: underline; }
 .ss-case .sc-back{ display: inline-flex; align-items: center; gap: 0.3rem; margin-bottom: 0.6rem; }
+/* Equipo SaaS › lo que atiende cada cuenta en el Soporte (Nivel 4): la ventana de giros y departamentos. */
+.ss-scope-panel{ width: min(460px, 94vw); max-height: 90vh; overflow: auto; display: grid; gap: 0.75rem; }
+.ss-scope-panel #scope-body{ display: grid; gap: 1rem; }
+.ss-radios{ display: grid; gap: 0.3rem; margin-top: 0.3rem; }
+.ss-radio, .ss-check{ display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; cursor: pointer; }
+.ss-checks{ display: grid; gap: 0.3rem; max-height: 12rem; overflow: auto; padding: 0.5rem 0.7rem; margin-top: 0.4rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-bg); }

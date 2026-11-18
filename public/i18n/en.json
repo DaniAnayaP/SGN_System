@@ -1268,7 +1268,23 @@
     "saasSpRepPosition": "Position",
     "saasSpRepDept": "Department",
     "saasSpRepBoss": "Direct manager",
-    "saasSpNoChat": "Your account does not have the «Chat and path» access: you cannot see this case's chat."
+    "saasSpNoChat": "Your account does not have the «Chat and path» access: you cannot see this case's chat.",
+    "saasScopeSectors": "Sectors they handle",
+    "saasScopeDepartments": "Departments they handle",
+    "saasScopeUnset": "Not chosen",
+    "saasScopeAll": "All",
+    "saasScopeEdit": "Choose the sectors and departments they handle",
+    "saasScopeTitle": "What {name} handles",
+    "saasScopeHint": "Defines which business sectors and departments this account receives Support (Level 4) cases from. «Not chosen»: receives nothing. «All»: receives any case. The sector comes from the client's plan and the department from the screen where it failed.",
+    "saasScopeModeUnset": "Not chosen (receives no cases)",
+    "saasScopeModeAll": "All",
+    "saasScopeModeSome": "Only the ones I mark",
+    "saasScopePickSome": "Mark at least one, or choose «All».",
+    "saasScopeSaved": "Done: what this account handles was saved.",
+    "saasSpScopeNone": "Your sectors and departments have not been chosen yet: you receive no new cases in «Unassigned». Ask for it in SaaS Team.",
+    "saasSpOutOfScope": "This case belongs to a sector or department you do not handle: you can view it, but not take it. Coordination can assign it to you.",
+    "saasSpAssignPick": "Assign to…",
+    "saasSpAssigned": "Case assigned to {name}."
   },
   "business": {
     "usersTitle": "Users",
@@ -1441,7 +1457,9 @@
     "addHrStatus": "Add HR status",
     "hrStatusNoneYet": "No HR statuses yet. Add the first one above.",
     "hrStatusNameExists": "An HR status with that name already exists.",
-    "hrStatusDeleteConfirm": "Delete this HR status?"
+    "hrStatusDeleteConfirm": "Delete this HR status?",
+    "saasSupportSectors": "Sectors they handle",
+    "saasSupportDepartments": "Departments they handle"
   },
   "main": {
     "welcome": "Welcome",
@@ -5923,7 +5941,13 @@
     "notificationAttemptedOpenScreen": "attempted to open the screen",
     "noticeAccessDenied": "Access attempt without permission",
     "notificationAttemptedChangePrefix": "attempted a change on",
-    "notificationAttemptedChangeSuffix": "but doesn't have access."
+    "notificationAttemptedChangeSuffix": "but doesn't have access.",
+    "spEv_assigned": "{author} assigned the case to {to}",
+    "noticeSupportSaasArrived": "Support · a case reached Level 4",
+    "noticeSupportSaasArrivedLine": "Case {folio} «{summary}» from {client} reached Level 4 as «{priority}». {by} passed it from {from}. Reason: {reason}.",
+    "noticeSupportSaasArrivedDirectLine": "Case {folio} «{summary}» from {client} reached Level 4 as «{priority}». It came in directly: the company has no IT contracted.",
+    "noticeSupportSaasAssigned": "Support · a case was assigned to you",
+    "noticeSupportSaasAssignedLine": "{by} assigned you case {folio} «{summary}» from {client} (reported by {target}). Open it in Customer Service › Support."
   },
   "home": {
     "title": "SGN",
@@ -9342,6 +9366,18 @@
     "saasSpDown": {
       "what": "Sends the case back to the company's previous level with the reason, what you did, notes for that level and evidence. The destination level receives it as a new case for it.",
       "example": "You send it back to Level 3 with reason «Missing information» and ask for the file that was uploaded when it failed."
+    },
+    "saasScopeCol": {
+      "what": "Which business sectors and departments this account receives cases from in Support (Level 4). «Not chosen» means it receives nothing yet; «All» means it receives any case.",
+      "example": "Ana handles the «Health» sector and all departments: she only receives cases from Health clients."
+    },
+    "saasScopeBtn": {
+      "what": "Opens a window to choose the sectors and departments this account handles. Nobody changes their own: whoever coordinates does it.",
+      "example": "You choose Sectors: Health and Retail; Departments: All."
+    },
+    "saasSpAssign": {
+      "what": "Coordination (the main administrator) assigns the case to a person who handles that sector and department. The case is put under their name and they get a bell notice.",
+      "example": "You assign SP-0031 to Ana Torres, who handles the Health sector."
     }
   }
 }

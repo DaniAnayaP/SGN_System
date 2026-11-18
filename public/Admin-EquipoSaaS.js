@@ -47,6 +47,8 @@ let pendingVisibleStatuses = ['habilitado'];
 
 let saasUsers = [];
 let selectedUserId = null;
+// Lo que atiende cada cuenta en el Soporte (Nivel 4): NULL = sin elegir (no recibe nada), [] = todos, lista = solo esos.
+let supportScope = { byUser: new Map(), sectors: [], departments: [], canEdit: false };
 
 // The real access tree (replaces the old flat SAAS_PERMISSION_CATALOG,
 // 2026-10-02): walks window.SAAS_ADMIN_CATALOG (SaasAdminCatalog.js), the
@@ -249,7 +251,20 @@ function renderSaasUsers() {
         historyBtn.addEventListener('click', () => openSaasUserChanges(user.id));
         tdActions.appendChild(historyBtn);
 
-        tr.append(tdUsername, tdName, tdEmail, tdCreatedAt, tdStatus, tdActions);
+        // Giros y departamentos que atiende en el Soporte (Nivel 4): con el botón «Elegir giros y departamentos que atiende» del árbol.
+        if (supportScope.canEdit) {
+            const scopeBtn = document.createElement('button');
+            scopeBtn.type = 'button';
+            scopeBtn.className = 'admin-icon-btn';
+            scopeBtn.setAttribute('aria-label', Dashboard.t('admin.saasScopeEdit'));
+            scopeBtn.title = Dashboard.t('admin.saasScopeEdit');
+            scopeBtn.setAttribute('data-help-key', 'saasScopeBtn');
+            scopeBtn.innerHTML = '<i class="bx bx-target-lock" aria-hidden="true"></i>';
+            scopeBtn.addEventListener('click', () => openScopeModal(user));
+            tdActions.appendChild(scopeBtn);
+        }
+
+        tr.append(tdUsername, tdName, tdEmail, tdCreatedAt, tdStatus, scopeCell(user, 'sectors'), scopeCell(user, 'departments'), tdActions);
         tableBody.appendChild(tr);
     });
     applySaasTeamFilters();
@@ -367,10 +382,114 @@ async function loadSaasUsers() {
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         saasUsers = data.users || [];
+        await loadSupportScope();
         renderSaasUsers();
     } catch {
         Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
     }
+}
+
+// --- Giros y departamentos que atiende cada cuenta (Soporte, Nivel 4) ---------------------------------------------------------------------------
+// Cada cuenta del equipo dice de qué giros y de qué departamentos recibe casos del Nivel 4: «Sin elegir» (una persona nueva no recibe nada), «Todos» o solo los que marque. El departamento de un caso sale de su pantalla y su
+// giro, del plan del cliente. Quien tiene el botón «Elegir giros y departamentos que atiende» (árbol de accesos) lo cambia; nadie cambia el suyo propio (lo hace quien coordina). Rutas /api/admin/saas-support-scope.
+const SCOPE_DEPARTMENT_LABELS = {
+    finance: 'menu.finance', accounting: 'menu.accounting', 'human-resources': 'menu.humanResources', marketing: 'menu.marketing', commercial: 'menu.commercial', purchasing: 'menu.purchasing', 'supply-chain': 'menu.supplyChain',
+    'management-control': 'menu.managementControl', 'general-management': 'menu.generalManagement', 'steering-committee': 'menu.steeringCommittee', certifications: 'menu.certifications', 'information-technology': 'menu.informationTechnology',
+};
+const scopeDeptLabel = (id) => (SCOPE_DEPARTMENT_LABELS[id] ? Dashboard.t(SCOPE_DEPARTMENT_LABELS[id]) : id);
+async function loadSupportScope() {
+    try {
+        const res = await fetch('/api/admin/saas-support-scope', { credentials: 'include' });
+        if (!res.ok) throw new Error('scope load failed');
+        const data = await res.json();
+        supportScope = { byUser: new Map((data.scopes || []).map((r) => [r.userId, r])), sectors: data.sectors || [], departments: data.departments || [], canEdit: !!data.canEdit };
+    } catch (err) {
+        supportScope = { byUser: new Map(), sectors: [], departments: [], canEdit: false };
+    }
+}
+function scopeText(list, nameOf) {
+    if (list === null || list === undefined) return Dashboard.t('admin.saasScopeUnset');
+    if (!list.length) return Dashboard.t('admin.saasScopeAll');
+    const names = list.map(nameOf);
+    return names.length > 3 ? `${names.slice(0, 3).join(', ')} +${names.length - 3}` : names.join(', ');
+}
+function scopeCell(user, kind) {
+    const td = document.createElement('td');
+    td.dataset.col = kind === 'sectors' ? 'supportSectors' : 'supportDepartments';
+    const row = supportScope.byUser.get(user.id);
+    const list = row ? row[kind] : null;
+    const sectorName = (id) => (supportScope.sectors.find((s) => s.id === id) || {}).name || String(id);
+    const text = scopeText(list, kind === 'sectors' ? sectorName : scopeDeptLabel);
+    td.textContent = text;
+    td.title = list && list.length ? list.map(kind === 'sectors' ? sectorName : scopeDeptLabel).join(', ') : '';
+    if (list === null || list === undefined) td.classList.add('sp-muted');
+    return td;
+}
+let scopeEl = null;
+const scopeState = { user: null, sectors: { mode: 'unset', ids: new Set() }, departments: { mode: 'unset', ids: new Set() }, saving: false };
+function scopeBlock(key, title, options) {
+    const f = scopeState[key];
+    const modes = [['unset', 'admin.saasScopeModeUnset'], ['all', 'admin.saasScopeModeAll'], ['some', 'admin.saasScopeModeSome']];
+    const radios = modes.map(([m, label]) => `<label class="ss-radio"><input type="radio" name="scope-${key}" value="${m}"${f.mode === m ? ' checked' : ''}> <span>${Dashboard.t(label)}</span></label>`).join('');
+    const boxes = f.mode === 'some' ? `<div class="ss-checks">${options.map((o) => `<label class="ss-check"><input type="checkbox" data-scope-key="${key}" value="${o.id}"${f.ids.has(o.id) ? ' checked' : ''}> <span>${o.label.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))}</span></label>`).join('')}</div>` : '';
+    return `<div class="sp-field"><span><b>${title}</b></span><div class="ss-radios" role="radiogroup">${radios}</div>${boxes}</div>`;
+}
+function renderScopeModal() {
+    const sectorOptions = supportScope.sectors.map((s) => ({ id: s.id, label: s.name }));
+    const deptOptions = supportScope.departments.map((d) => ({ id: d, label: scopeDeptLabel(d) }));
+    scopeEl.querySelector('#scope-title').textContent = Dashboard.t('admin.saasScopeTitle', { name: scopeState.user.name });
+    scopeEl.querySelector('#scope-body').innerHTML = `${scopeBlock('sectors', Dashboard.t('admin.saasScopeSectors'), sectorOptions)}${scopeBlock('departments', Dashboard.t('admin.saasScopeDepartments'), deptOptions)}`;
+    scopeEl.querySelector('#scope-save').disabled = scopeState.saving;
+}
+function closeScopeModal() { if (scopeEl) scopeEl.hidden = true; }
+function openScopeModal(user) {
+    if (!scopeEl) {
+        scopeEl = document.createElement('div');
+        scopeEl.className = 'modal-overlay';
+        scopeEl.hidden = true;
+        scopeEl.innerHTML = '<div class="modal-panel ss-scope-panel" role="dialog" aria-modal="true" aria-labelledby="scope-title"><h3 id="scope-title"></h3><p class="admin-hint" id="scope-hint"></p><div id="scope-body"></div><div class="admin-form-actions"><button type="button" class="btn" id="scope-save"></button><button type="button" class="btn btn-secondary" id="scope-cancel"></button></div></div>';
+        document.body.appendChild(scopeEl);
+        scopeEl.addEventListener('change', (event) => {
+            const el = event.target;
+            if (el.matches('input[type="radio"]')) { scopeState[el.name.replace('scope-', '')].mode = el.value; renderScopeModal(); return; }
+            if (el.matches('input[data-scope-key]')) {
+                const f = scopeState[el.dataset.scopeKey];
+                const id = el.dataset.scopeKey === 'sectors' ? Number(el.value) : el.value;
+                if (el.checked) f.ids.add(id); else f.ids.delete(id);
+            }
+        });
+        scopeEl.addEventListener('click', async (event) => {
+            if (event.target === scopeEl || event.target.closest('#scope-cancel')) { closeScopeModal(); return; }
+            if (!event.target.closest('#scope-save') || scopeState.saving) return;
+            const toValue = (f) => (f.mode === 'unset' ? null : (f.mode === 'all' ? [] : [...f.ids]));
+            if (scopeState.sectors.mode === 'some' && !scopeState.sectors.ids.size) { Dashboard.showToast(Dashboard.t('admin.saasScopePickSome'), 'warning'); return; }
+            if (scopeState.departments.mode === 'some' && !scopeState.departments.ids.size) { Dashboard.showToast(Dashboard.t('admin.saasScopePickSome'), 'warning'); return; }
+            scopeState.saving = true; renderScopeModal();
+            try {
+                const res = await fetch(`/api/admin/saas-users/${scopeState.user.id}/support-scope`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ sectors: toValue(scopeState.sectors), departments: toValue(scopeState.departments) }) });
+                const out = await res.json().catch(() => ({}));
+                scopeState.saving = false;
+                if (!res.ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); renderScopeModal(); return; }
+                closeScopeModal();
+                Dashboard.showToast(Dashboard.t('admin.saasScopeSaved'), 'success');
+                await loadSaasUsers();
+            } catch (err) {
+                scopeState.saving = false; renderScopeModal();
+                Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+            }
+        });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && scopeEl && !scopeEl.hidden && !scopeState.saving) closeScopeModal(); });
+    }
+    const row = supportScope.byUser.get(user.id);
+    const from = (list) => (list === null || list === undefined ? { mode: 'unset', ids: new Set() } : (list.length ? { mode: 'some', ids: new Set(list) } : { mode: 'all', ids: new Set() }));
+    scopeState.user = user; scopeState.saving = false;
+    scopeState.sectors = from(row ? row.sectors : null);
+    scopeState.departments = from(row ? row.departments : null);
+    scopeEl.querySelector('#scope-hint').textContent = Dashboard.t('admin.saasScopeHint');
+    scopeEl.querySelector('#scope-save').textContent = Dashboard.t('admin.save');
+    scopeEl.querySelector('#scope-cancel').textContent = Dashboard.t('main.spFCancel');
+    renderScopeModal();
+    scopeEl.hidden = false;
 }
 
 // --- "+ Nuevo Admin SaaS" -----------------------------------------------

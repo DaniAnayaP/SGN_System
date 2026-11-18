@@ -75,6 +75,7 @@ function eventText(m) {
         case 'general_linked': return t('main.spEv_general_linked', { author, general: d.general });
         case 'resolved': return t('main.spEv_resolved', { author });
         case 'taken': return t('main.spEv_taken', { author });
+        case 'assigned': return t('main.spEv_assigned', { author, to: d.to || '' });
         case 'paused': return t(d.urgent ? 'main.spEv_paused' : 'main.spEv_paused_plain', { author });
         case 'resumed': return t('main.spEv_resumed', { author });
         case 'int_urgent_alert': return t('main.spEv_int_urgent_alert');
@@ -109,7 +110,8 @@ function renderHeader() {
     const d = state.d; const c = d.case;
     const impacts = (c.impacts || []).filter((i) => i.level > 0).map((i) => `${esc(i.name)}: ${esc(t(`main.spLevel_${i.level}`))}`).join(' · ') || esc(t('main.spLevel_0'));
     const statusPick = d.can.status ? `<select id="ss-status-pick" class="sc-status-pick" data-help-key="spEstatus" aria-label="${esc(t('main.stChange'))}"><option value="">${esc(t('main.stChange'))}</option>${d.statusTargets.filter((s) => s !== c.status).map((s) => `<option value="${s}">${esc(t(`main.spStatus_${s}`))}</option>`).join('')}</select>` : '';
-    const btns = `${d.can.take ? `<button type="button" class="btn btn-secondary sc-mini" data-ss-act="take" data-help-key="saasSpTake">${esc(t('main.cpTake'))}</button>` : ''}${d.can.resolve ? `<button type="button" class="btn sc-mini" data-ss-act="resolve" data-help-key="saasSpResolve">${esc(t('main.rsTitle'))}</button>` : ''}${d.can.down ? `<button type="button" class="btn btn-secondary sc-mini" data-ss-act="down" data-help-key="saasSpDown">↓ ${esc(t('main.mvDown'))}</button>` : ''}`;
+    const assignPick = d.can.assign && d.assignable.length ? `<select id="ss-assign-pick" class="sc-status-pick" data-help-key="saasSpAssign" aria-label="${esc(t('admin.saasSpAssignPick'))}"><option value="">${esc(t('admin.saasSpAssignPick'))}</option>${d.assignable.filter((u) => u.id !== c.assigneeId).map((u) => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}</select>` : '';
+    const btns = `${assignPick}${d.can.take ? `<button type="button" class="btn btn-secondary sc-mini" data-ss-act="take" data-help-key="saasSpTake">${esc(t('main.cpTake'))}</button>` : ''}${d.can.resolve ? `<button type="button" class="btn sc-mini" data-ss-act="resolve" data-help-key="saasSpResolve">${esc(t('main.rsTitle'))}</button>` : ''}${d.can.down ? `<button type="button" class="btn btn-secondary sc-mini" data-ss-act="down" data-help-key="saasSpDown">↓ ${esc(t('main.mvDown'))}</button>` : ''}`;
     const from = c.from ? t('admin.saasSpFromLine', { level: t(`main.sopLevel_${c.from.level}`), by: c.from.by || '—', when: fmtTime(c.from.at) }) : t('admin.saasSpDirect');
     $('sc-head').innerHTML = `<div><h2>${esc(c.folio)} · ${esc(c.summary)}</h2><span class="sp-muted">${esc([c.screen, c.action].filter(Boolean).join(' · '))}</span></div>
         <div class="sc-tags"><span class="sp-tag sp-type" data-k="${esc(c.type)}">${esc(t(`main.spType_${c.type}`))}</span><span class="sp-tag sp-pri" data-k="${c.priority}">${esc(t(`main.msPri_${c.priority}`))}</span>
@@ -119,6 +121,7 @@ function renderHeader() {
         <div><dt>${esc(t('main.colSpCategoria'))}</dt><dd>${esc(c.category || '—')}</dd></div><div><dt>${esc(t('main.cpAssignee'))}</dt><dd>${esc(c.assigneeName || '—')}</dd></div>
         <div><dt>${esc(t('main.spFWhen'))}</dt><dd>${esc(t(`main.spWhen_${c.whenAffects}`))}</dd></div><div class="sp-wide"><dt>${esc(t('main.spFImpact'))}</dt><dd>${impacts}</dd></div>
         ${c.errorText ? `<div class="sp-wide"><dt>${esc(t('main.spFError'))}</dt><dd class="sp-pre">${esc(c.errorText)}</dd></div>` : ''}
+        ${!d.inScope && c.atN4 && !c.assigneeId ? `<div class="sp-wide"><dd class="sp-muted">${esc(t('admin.saasSpOutOfScope'))}</dd></div>` : ''}
         ${c.understood ? `<div class="sp-wide"><dt>${esc(t('main.supStep3'))}</dt><dd class="sp-pre">${esc(c.understood)}</dd></div>` : ''}</dl>`;
 }
 // Quien reportó, lo que la empresa le comparte al proveedor.
@@ -435,6 +438,14 @@ document.addEventListener('change', async (event) => {
     if (event.target.id === 'ss-status-pick') {
         const status = event.target.value;
         if (status) await simpleAction('status', { status }, 'main.stDone');
+        return;
+    }
+    if (event.target.id === 'ss-assign-pick') {
+        const userId = Number(event.target.value);
+        if (userId) {
+            const name = (state.d.assignable.find((u) => u.id === userId) || {}).name || '';
+            if (await simpleAction('assign', { userId }, null)) Dashboard.showToast(t('admin.saasSpAssigned', { name }), 'success');
+        }
         return;
     }
     if (event.target.id === 'sc-note') { renderComposer(); return; }

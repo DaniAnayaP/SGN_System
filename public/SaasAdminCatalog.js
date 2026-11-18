@@ -154,7 +154,8 @@ window.SAAS_ADMIN_CATALOG = [
                     // backfilling the Status column or the 3 newer row
                     // icons added later this session -- separate, narrower
                     // catalog-accuracy cleanup, not part of this fix).
-                    tablaApartado('tabla', ['Username', 'Nombre', 'Email', 'Fecha de creación'], ['+ Nuevo Admin SaaS'], ['Acceso de esta cuenta']),
+                    // Lo nuevo va al final (las hojas guardadas dependen de la posición): c4 y c5 son las columnas del Soporte (Nivel 4) y a1 el botón que las cambia (server.js: PUT /api/admin/saas-users/:id/support-scope).
+                    tablaApartado('tabla', ['Username', 'Nombre', 'Email', 'Fecha de creación', 'Giros que atiende', 'Departamentos que atiende'], ['+ Nuevo Admin SaaS', 'Elegir giros y departamentos que atiende'], ['Acceso de esta cuenta']),
                     // Modal: Acceso de la cuenta -- un árbol propio (ver
                     // SAAS_PERMISSION_CATALOG en Admin-EquipoSaaS.js), una
                     // pantalla por Apartado en vez de una sola fila con el

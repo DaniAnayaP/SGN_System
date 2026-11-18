@@ -57,6 +57,7 @@ function eventText(m) {
     if (m.eventKey === 'general_linked') return t('main.spEv_general_linked', { author, general: d.general });
     if (m.eventKey === 'resolved') return t('main.spEv_resolved', { author });
     if (m.eventKey === 'taken') return t('main.spEv_taken', { author });
+    if (m.eventKey === 'assigned') return t('main.spEv_assigned', { author, to: d.to || '' });
     if (m.eventKey === 'paused') return t(d.urgent ? 'main.spEv_paused' : 'main.spEv_paused_plain', { author });
     if (m.eventKey === 'resumed') return t('main.spEv_resumed', { author });
     if (m.eventKey === 'int_urgent_alert') return t('main.spEv_int_urgent_alert');

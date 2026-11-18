@@ -581,7 +581,7 @@ const {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
-    listSupportMoves, addSupportMove, usedSupportMoveFileIds, listSupportCasesForSaas, getSupportCaseForSaas, mapSupportLastMovesIntoN4,
+    listSupportMoves, addSupportMove, usedSupportMoveFileIds, listSupportCasesForSaas, getSupportCaseForSaas, mapSupportLastMovesIntoN4, getSaasSupportScope, listSaasSupportScopes, listActiveBusinessSectorsBrief, setSaasSupportScope, listSaasSupportTakerIds, listSaasSuperAdminIds, listSaasSupportAccountNames, SUPPORT_SCOPE_DEPARTMENTS,
     listSupportHelpArticles, getSupportHelpArticle, createSupportHelpArticle, updateSupportHelpArticle, addSupportHelpUse, listSupportHelpUsesForClient,
     listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,
     assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted,
@@ -10917,6 +10917,7 @@ function supportApplyMove(req, rec, m, { quiet = false } = {}) {
     const move = addSupportMove({ caseId: rec.id, clientId: req.user.clientId, direction: m.direction, fromLevel: rec.level, toLevel: m.toLevel, reason: m.reason, did: m.did, notes: m.notes || '', fileIds: m.fileIds || [], missingAck: !!m.missingAck, status: m.status, byUserId: req.user.sub, byName: by });
     addSupportEvent(rec, 'moved', { direction: m.direction, from: rec.level, to: m.toLevel, reason: m.reason, did: m.did, notes: m.notes || '', fileIds: m.fileIds || [], by }, { level: m.toLevel, authorName: by, authorUserId: req.user.sub });
     if (quiet) return move;
+    if (m.toLevel === 'n4') { try { publishSaasCaseArrived(rec.id, { by, fromLevel: rec.level, reason: m.reason, direction: m.direction, actorUserId: req.user.sub }); } catch (err) { console.error('saas case arrived notice failed', err); } }
     // le llega a las personas del nivel al que pasó (si el Mapa de soporte las tiene) y, si sube al 3 o al 4, al jefe directo de quien reportó
     supportNoticeToLevel(req, m.toLevel, { variant: 'case-arrived', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, targetName: rec.reporter_name, from: rec.level, to: m.toLevel, direction: m.direction, reason: m.reason, by });
     const map = supportMapPayload(getSupportMapRow(req.user.clientId), req).map;
@@ -11268,6 +11269,10 @@ function supportAlertUrgentUntaken(c, { reason, byUserId = null }) {
     const recipients = [...rec.admins, rec.boss, ...levelUsers].filter((id) => id && id !== byUserId);
     publishSupportNotice({ recipients, actorUserId: null, actorLabel: 'Sistema', payload: { variant: 'urgent-untaken', caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary, targetName: c.reporter_name, level: c.level, priority: c.priority, since: sqlUtcIso(c.created_at), reason } });
     addSupportEvent(c, 'int_urgent_alert', { reason }, { level: c.level, authorName: 'Sistema' });
+    if (c.level === 'n4') {
+        const full = getSupportCaseForSaas(c.id);
+        if (full) publishSupportNotice({ recipients: saasSupportRecipients(full, { coordination: true }), actorUserId: null, actorLabel: 'Sistema', payload: { variant: 'urgent-untaken', saas: true, caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary, client: full.client_name, targetName: c.reporter_name, level: 'n4', priority: c.priority, since: sqlUtcIso(c.created_at), reason } });
+    }
 }
 function processSupportUrgent() {
     const nowSql = sqlUtcFromMs(Date.now());
@@ -11689,6 +11694,36 @@ const SAAS_SUPPORT_ITEM = 'saas-support';
 const SAAS_SUPPORT_LEAVES = { evidence: 'tabla::c9', chat: 'tabla::c10', take: 'tabla::a0', write: 'tabla::a1', notes: 'tabla::a2', status: 'tabla::a3', resolve: 'tabla::a4', down: 'tabla::a5', rate: 'tabla::a6', upload: 'tabla::a7' };
 const saasSupportCan = (req, key) => !!req.user.isSaasSuperAdmin || hasSaasGrant(getSaasUserGrants(req.user.sub), SAAS_SUPPORT_ITEM, SAAS_SUPPORT_LEAVES[key]);
 const saasSupportHasScreen = (req) => !!req.user.isSaasSuperAdmin || getSaasUserGrants(req.user.sub).some((g) => g.itemId === SAAS_SUPPORT_ITEM);
+// Quién recibe qué: cada cuenta eligió en Equipo SaaS sus «Giros que atiende» y «Departamentos que atiende» (NULL = sin elegir → no recibe nada; [] = todos; lista = solo esos). El giro del caso sale del plan de su
+// cliente y su departamento, de su pantalla. Un caso sin giro o sin pantalla le toca a cualquiera que ya eligió. El administrador principal (Coordinación) ve y atiende todo.
+const saasScopeDept = (rec) => String(rec.screen_node || '').split('/')[0];
+function saasScopeMatches(scope, rec) {
+    if (!scope || scope.sectors === null || scope.departments === null) return false;
+    const dept = saasScopeDept(rec);
+    return (scope.sectors.length === 0 || !rec.sector_id || scope.sectors.includes(rec.sector_id)) && (scope.departments.length === 0 || !dept || scope.departments.includes(dept));
+}
+const saasSupportInScope = (req, rec) => !!req.user.isSaasSuperAdmin || saasScopeMatches(getSaasSupportScope(req.user.sub), rec);
+// A quién se le avisa de un caso del Nivel 4: las cuentas que pueden tomar casos y atienden ese giro y departamento (y, con coordination, el administrador principal).
+function saasSupportRecipients(rec, { coordination = false, exclude = null } = {}) {
+    const scopes = listSaasSupportScopes();
+    const ids = new Set(listSaasSupportTakerIds().filter((id) => saasScopeMatches(scopes.get(id), rec)));
+    if (coordination) listSaasSuperAdminIds().forEach((id) => ids.add(id));
+    if (exclude !== null) ids.delete(exclude);
+    return [...ids];
+}
+// Las cuentas a las que la Coordinación puede asignar este caso: las que pueden tomarlo y lo atienden, más las del administrador principal.
+function saasSupportAssignable(rec) {
+    const scopes = listSaasSupportScopes();
+    const ids = new Set(listSaasSupportTakerIds().filter((id) => saasScopeMatches(scopes.get(id), rec)));
+    listSaasSuperAdminIds().forEach((id) => ids.add(id));
+    return listSaasSupportAccountNames([...ids]);
+}
+// Aviso de campana a quien atiende ese giro y departamento: llegó un caso al Nivel 4 (lo subió el Nivel 3 de la empresa o entró directo). Un caso de una cuenta de prueba no cuenta.
+function publishSaasCaseArrived(caseId, { by = '', fromLevel = '', reason = '', direction = 'up', actorUserId = null } = {}) {
+    const rec = getSupportCaseForSaas(caseId);
+    if (!rec) return [];
+    return publishSupportNotice({ recipients: saasSupportRecipients(rec, { exclude: actorUserId }), actorUserId, actorLabel: by || 'Sistema', payload: { variant: 'saas-arrived', saas: true, caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, client: rec.client_name, sector: rec.sector_name, targetName: rec.reporter_name, from: fromLevel, reason, direction, by, priority: rec.priority } });
+}
 // El mismo usuario de SaaS, pero «dentro» de la empresa del caso: así sirven las funciones de Soporte que ya existen (traspasos, avisos, bitácora) sin que sepan de SaaS.
 const saasSupportReq = (req, rec) => ({ user: { ...req.user, clientId: rec.client_id, isTestAccount: false, isClientAdmin: false } });
 function saasSupportGate(req, res) {
@@ -11719,7 +11754,7 @@ function saasSupportCanOf(req, rec) {
     const downTo = SupportRules.downLevels('n4', { n2Enabled: row.n2_enabled === 1, n3Enabled: row.n3_enabled === 1 });
     const pending = saasSupportPendingReceive(req, rec);
     return {
-        take: working && saasSupportCan(req, 'take') && !rec.assignee_user_id,
+        take: working && saasSupportCan(req, 'take') && !rec.assignee_user_id && saasSupportInScope(req, rec),
         write: live && saasSupportCan(req, 'write'), notes: live && saasSupportCan(req, 'notes'), upload: live && saasSupportCan(req, 'upload'),
         status: working && saasSupportCan(req, 'status'), resolve: working && saasSupportCan(req, 'resolve'), down: live && rec.status !== 'paused' && saasSupportCan(req, 'down') && downTo.length > 0, downTo,
         rate: !!pending, pending,
@@ -11744,11 +11779,13 @@ app.get('/api/admin/support-cases', requireAuth, requireAdmin, (req, res) => {
     const me = req.user.sub;
     const last = mapSupportLastMovesIntoN4();
     const LIMIT = 3000;
-    const rows = listSupportCasesForSaas({ limit: LIMIT }).map((r) => saasSupportRowOf(r, last.get(r.id) || null, me));
-    const free = (c) => c.atN4 && !c.assigneeId;
+    const scope = getSaasSupportScope(me);
+    const superAdmin = !!req.user.isSaasSuperAdmin;
+    const rows = listSupportCasesForSaas({ limit: LIMIT }).map((r) => ({ ...saasSupportRowOf(r, last.get(r.id) || null, me), inScope: superAdmin || saasScopeMatches(scope, r) }));
+    const free = (c) => c.atN4 && !c.assigneeId && c.inScope;
     const mine = (c) => c.atN4 && c.mine;
     res.set('Cache-Control', 'no-store');
-    res.json({ cases: rows, counts: { mine: rows.filter(mine).length, free: rows.filter(free).length, all: rows.length }, truncated: rows.length >= LIMIT, me, canEvidence: saasSupportCan(req, 'evidence'), canChat: saasSupportCan(req, 'chat'), canTake: saasSupportCan(req, 'take') });
+    res.json({ cases: rows, counts: { mine: rows.filter(mine).length, free: rows.filter(free).length, all: rows.length }, truncated: rows.length >= LIMIT, me, canEvidence: saasSupportCan(req, 'evidence'), canChat: saasSupportCan(req, 'chat'), canTake: saasSupportCan(req, 'take'), scope: { configured: superAdmin || (scope.sectors !== null && scope.departments !== null), superAdmin } });
 });
 app.get('/api/admin/support-cases/:id', requireAuth, requireAdmin, (req, res) => {
     const rec = saasSupportGate(req, res);
@@ -11765,7 +11802,8 @@ app.get('/api/admin/support-cases/:id', requireAuth, requireAdmin, (req, res) =>
         reporter: saasSupportReporterCard(rec),
         files: canEvidence ? listSupportCaseFiles(rec.id).map(supportFileOf) : [], canEvidence, canChat,
         chat: { canSee: canChat, canSend: can.write, canWriteNotes: can.notes, canSeeNotes: saasSupportCan(req, 'notes'), max: SUPPORT_MESSAGE_MAX, meId: me },
-        can: { take: can.take, status: can.status, resolve: can.resolve, down: can.down, upload: can.upload, rate: can.rate },
+        can: { take: can.take, status: can.status, resolve: can.resolve, down: can.down, upload: can.upload, rate: can.rate, assign: !!req.user.isSaasSuperAdmin && saasSupportAtN4(rec) && SUPPORT_WORKING_STATUSES.includes(rec.status) }, inScope: saasSupportInScope(req, rec),
+        assignable: req.user.isSaasSuperAdmin && saasSupportAtN4(rec) ? saasSupportAssignable(rec).map((u) => ({ id: u.id, name: u.name })) : [],
         downTo: can.downTo, pending: can.pending ? supportRatingMoveOf(can.pending) : null, ratingTags: SUPPORT_RATING_TAGS.receive, maxComment: SUPPORT_RATING_COMMENT_MAX,
         moves: moves.map(supportMoveOf), segments: canChat ? supportSegments(rec, moves) : [], reasons: SUPPORT_MOVE_REASONS.down, minText: SUPPORT_MOVE_TEXT_MIN, maxText: SUPPORT_MOVE_TEXT_MAX, statusTargets: SUPPORT_STATUS_TARGETS,
         limits: { files: SUPPORT_FILES_PER_CASE, bytes: SUPPORT_FILE_LIMITS },
@@ -11830,6 +11868,7 @@ app.post('/api/admin/support-cases/:id/take', requireAuth, requireAdmin, (req, r
     if (!rec) return;
     const bad = (message, code) => res.status(400).json({ message, code });
     if (!saasSupportCan(req, 'take')) return res.status(403).json({ message: 'No tienes permiso para tomar casos.' });
+    if (!saasSupportInScope(req, rec)) return res.status(403).json({ message: 'Este caso es de un giro o departamento que no atiendes. Pídele a Coordinación que te lo asigne.', code: 'SCOPE' });
     if (rec.level !== 'n4' || !SUPPORT_WORKING_STATUSES.includes(rec.status)) return bad(rec.status === 'paused' ? 'Este caso está en pausa.' : 'Este caso ya no se puede tomar.', 'STATE');
     if (rec.assignee_user_id === req.user.sub) return bad('Este caso ya es tuyo.', 'MINE');
     if (rec.assignee_user_id) return bad(`Este caso ya lo tomó ${rec.assignee_name || 'otra persona'}.`, 'TAKEN');
@@ -11963,6 +12002,58 @@ app.get('/api/admin/support-cases/:id/files/:fileId', requireAuth, requireAdmin,
     const inline = file.kind === 'capture' || file.kind === 'recording';
     res.set({ 'Content-Type': file.mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}` });
     res.send(file.data);
+});
+
+// Coordinación (el administrador principal) le asigna el caso a una persona que lo atiende: el caso queda a su nombre y le llega el aviso. Quien reasigna no cambia el estatus.
+app.post('/api/admin/support-cases/:id/assign', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasSupportGate(req, res);
+    if (!rec) return;
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (!req.user.isSaasSuperAdmin) return res.status(403).json({ message: 'Solo Coordinación (el administrador principal) asigna casos.' });
+    if (rec.level !== 'n4' || !SUPPORT_WORKING_STATUSES.includes(rec.status)) return bad(rec.status === 'paused' ? 'Este caso está en pausa.' : 'Este caso ya no está en el Nivel 4.', 'STATE');
+    const target = Number(req.body && req.body.userId);
+    const person = saasSupportAssignable(rec).find((u) => u.id === target);
+    if (!person) return bad('Esa persona no atiende este giro y departamento (o no puede tomar casos).', 'TARGET');
+    if (rec.assignee_user_id === target) return bad('Este caso ya lo atiende esa persona.', 'SAME');
+    ensureSupportThread(rec);
+    const by = req.user.name;
+    assignSupportCase(rec.id, target, person.name);
+    addSupportEvent(rec, 'assigned', { by, to: person.name, from: rec.assignee_name || '' }, { level: 'n4', authorName: by, authorUserId: req.user.sub });
+    supportLogCaseChange(saasSupportReq(req, rec), rec, 'main.colSpAtiende', rec.assignee_name || '', person.name);
+    if (target !== req.user.sub) publishSupportNotice({ recipients: [target], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'saas-assigned', saas: true, caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, client: rec.client_name, targetName: rec.reporter_name, by, priority: rec.priority } });
+    res.status(201).json({ assignee: person.name });
+});
+// Equipo SaaS › «Giros que atiende» y «Departamentos que atiende»: lo que eligió cada cuenta (NULL = sin elegir, [] = todos) y las opciones. Quien tiene el botón «Elegir giros y departamentos que atiende» lo cambia.
+app.get('/api/admin/saas-support-scope', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-team'])) return;
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        scopes: [...listSaasSupportScopes()].map(([userId, sc]) => ({ userId, sectors: sc.sectors, departments: sc.departments })),
+        sectors: listActiveBusinessSectorsBrief(), departments: SUPPORT_SCOPE_DEPARTMENTS,
+        canEdit: !!req.user.isSaasSuperAdmin || hasSaasGrant(getSaasUserGrants(req.user.sub), 'saas-team', 'tabla::a1'),
+    });
+});
+app.put('/api/admin/saas-users/:id/support-scope', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasLeaf(req, res, 'saas-team', ['tabla::a1'], 'No tienes permiso para elegir lo que atiende una cuenta.')) return;
+    const targetId = Number(req.params.id);
+    const user = Number.isInteger(targetId) ? getSaasUserById(targetId) : null;
+    if (!user) return res.status(404).json({ message: 'Esa cuenta no existe.' });
+    if (targetId === req.user.sub && !req.user.isSaasSuperAdmin) return res.status(403).json({ message: 'No puedes cambiar lo que atiendes tú mismo: lo hace quien coordina.' });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message) => res.status(400).json({ message });
+    const sectorIds = new Set(listActiveBusinessSectorsBrief().map((r) => r.id));
+    const out = {};
+    if (body.sectors !== undefined) {
+        if (body.sectors !== null && (!Array.isArray(body.sectors) || body.sectors.some((n) => !Number.isInteger(n) || !sectorIds.has(n)))) return bad('Uno de los giros no existe.');
+        out.sectors = body.sectors === null ? null : [...new Set(body.sectors)];
+    }
+    if (body.departments !== undefined) {
+        if (body.departments !== null && (!Array.isArray(body.departments) || body.departments.some((d) => !SUPPORT_SCOPE_DEPARTMENTS.includes(d)))) return bad('Uno de los departamentos no existe.');
+        out.departments = body.departments === null ? null : [...new Set(body.departments)];
+    }
+    if (out.sectors === undefined && out.departments === undefined) return bad('No hay nada que guardar.');
+    const scope = setSaasSupportScope(targetId, out, changedByLabel(req));
+    res.json({ scope });
 });
 
 // --- Mapa de calor (Admin) --------------------------------------------------------------------------------------------------------------------------

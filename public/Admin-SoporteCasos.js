@@ -23,7 +23,7 @@ const t = (key, params) => {
 const lang = () => (Dashboard.getLanguage ? Dashboard.getLanguage() : (localStorage.getItem('lang') || 'es'));
 const locale = () => (lang() === 'en' ? 'en-US' : 'es-MX');
 const fmtTime = (iso) => new Date(iso).toLocaleString(locale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-const state = { cases: [], counts: { mine: 0, free: 0, all: 0 }, me: null, tab: 'mine', canTake: false, canEvidence: false, canChat: false };
+const state = { cases: [], counts: { mine: 0, free: 0, all: 0 }, me: null, tab: 'mine', canTake: false, canEvidence: false, canChat: false, scope: null };
 
 (async function init() {
     try {
@@ -52,6 +52,9 @@ async function load() {
     if (!res.ok) { errEl.textContent = body.message || Dashboard.t('admin.saveError'); errEl.hidden = false; return; }
     errEl.hidden = true;
     state.cases = body.cases; state.counts = body.counts; state.me = body.me; state.canEvidence = !!body.canEvidence; state.canChat = !!body.canChat; state.canTake = !!body.canTake;
+    // sin elegir giros y departamentos (Equipo SaaS) no llegan casos nuevos a «Sin asignar»
+    state.scope = body.scope || null;
+    document.getElementById('ss-scope-note').hidden = !state.scope || state.scope.configured;
     renderTabs();
     renderRows();
 }
@@ -63,7 +66,7 @@ function renderTabs() {
     });
     ['mine', 'free', 'all'].forEach((k) => { document.getElementById(`ss-count-${k}`).textContent = String(state.counts[k] || 0); });
 }
-const visible = () => state.cases.filter((c) => (state.tab === 'mine' ? c.atN4 && c.mine : (state.tab === 'free' ? c.atN4 && !c.assigneeId : true)));
+const visible = () => state.cases.filter((c) => (state.tab === 'mine' ? c.atN4 && c.mine : (state.tab === 'free' ? c.atN4 && !c.assigneeId && c.inScope : true)));
 
 function cell(col, value, extraClass) {
     const td = document.createElement('td');
@@ -99,7 +102,7 @@ function assigneeCell(c) {
     const td = document.createElement('td');
     td.dataset.col = 'assignee';
     if (c.assigneeName) { td.textContent = c.assigneeName; return td; }
-    if (c.atN4 && state.canTake && ['open', 'review', 'working', 'testing'].includes(c.status)) {
+    if (c.atN4 && c.inScope && state.canTake && ['open', 'review', 'working', 'testing'].includes(c.status)) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'btn btn-secondary sc-mini';

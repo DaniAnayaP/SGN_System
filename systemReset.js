@@ -131,6 +131,7 @@ const TABLES = {
     plan_permission_costs: { action: KEEP, group: 'plans' },
     // Equipo SaaS y lo suyo
     saas_user_grants: { action: KEEP, group: 'saasTeam' },
+    saas_support_scope: { action: KEEP, group: 'saasTeam' }, // Equipo SaaS: giros y departamentos que atiende cada cuenta en el Soporte (Nivel 4)
     saas_personal_order: { action: KEEP, group: 'saasTeam' },
     saas_saved_layouts: { action: KEEP, group: 'saasTeam' },
     saas_saved_searches: { action: KEEP, group: 'saasTeam' },
