@@ -5461,23 +5461,36 @@ function createSkuItem({ clientId, isTestData = false, recordNumber: wanted = 0 
 }
 
 // ---- Habilitación de códigos (TI › Operaciones TI › Habilitación de Códigos) -----------------------------------------------------------------------------------------
-// Dónde vale cada código: un renglón por (código, departamento, área, sitio). site_code '' = TODOS los sitios de esa área (también los que se creen después); si no, el código de sitio (cost_centers.site_code). Sitio y centro
-// de costos son 1 a 1 hoy (el código de sitio es único por centro), así que el sitio nombra también a su centro. Los que ya existían quedan habilitados en C. Distribución con todos sus sitios (siembra de una sola vez).
+// Dónde vale cada código: un renglón por (código, departamento, área, sitio, centro de costos). La cadena es Departamento > Área > Sitio > Centro de costos: site_code '' = TODOS los sitios de esa área (también los que se creen después);
+// un sitio (cost_centers.site_code) con cost_center_id 0 = TODOS los centros de ese sitio (también los que se creen después); un sitio con cost_center_id N = solo ese centro. Un renglón más amplio absorbe a los más angostos de su misma área.
+// Los que ya existían quedan habilitados en C. Distribución con todos sus sitios (siembra de una sola vez).
 const SKU_ENABLEMENT_DEFAULT = { department: 'supply-chain', area: 'sc-area-distribution-center' };
-db.exec(`
-    CREATE TABLE IF NOT EXISTS sku_enablements (
-        id           INTEGER PRIMARY KEY AUTOINCREMENT,
-        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-        is_test_data INTEGER NOT NULL DEFAULT 0,
-        sku_item_id  INTEGER NOT NULL REFERENCES sku_items(id) ON DELETE CASCADE,
-        department   TEXT NOT NULL,
-        area         TEXT NOT NULL,
-        site_code    TEXT NOT NULL DEFAULT '',
-        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
-        UNIQUE (sku_item_id, department, area, site_code)
-    );
-    CREATE INDEX IF NOT EXISTS idx_sku_enablements_scope ON sku_enablements (client_id, is_test_data, department, area);
-`);
+const skuEnablementsDdl = (clause) => `
+    CREATE TABLE ${clause} sku_enablements (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id      INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data   INTEGER NOT NULL DEFAULT 0,
+        sku_item_id    INTEGER NOT NULL REFERENCES sku_items(id) ON DELETE CASCADE,
+        department     TEXT NOT NULL,
+        area           TEXT NOT NULL,
+        site_code      TEXT NOT NULL DEFAULT '',
+        cost_center_id INTEGER NOT NULL DEFAULT 0,
+        created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (sku_item_id, department, area, site_code, cost_center_id)
+    )`;
+db.exec(skuEnablementsDdl('IF NOT EXISTS'));
+// La tabla de la primera versión (sin centro de costos) se reconstruye con la columna nueva: lo que ya estaba queda en cost_center_id 0 = «todos los centros de ese sitio», que es lo que significaba.
+if (!db.prepare('PRAGMA table_info(sku_enablements)').all().some((c) => c.name === 'cost_center_id')) {
+    db.transaction(() => {
+        db.exec('ALTER TABLE sku_enablements RENAME TO sku_enablements_old');
+        db.exec(skuEnablementsDdl(''));
+        db.exec(`INSERT INTO sku_enablements (id, client_id, is_test_data, sku_item_id, department, area, site_code, cost_center_id, created_at)
+                 SELECT id, client_id, is_test_data, sku_item_id, department, area, site_code, 0, created_at FROM sku_enablements_old`);
+        db.exec('DROP TABLE sku_enablements_old');
+    })();
+    console.log('[db] Habilitación de códigos: la tabla ahora lleva también el centro de costos (one-time).');
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_sku_enablements_scope ON sku_enablements (client_id, is_test_data, department, area)');
 {
     const SEED_KEY = 'seed-sku-enablements-v1';
     if (!db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(SEED_KEY)) {
@@ -5489,20 +5502,22 @@ db.exec(`
         if (seeded) console.log(`[db] Habilitación de códigos: ${seeded} código(s) habilitados en C. Distribución con todos sus sitios (one-time).`);
     }
 }
-const enablementKey = (r) => `${r.department}/${r.area}/${r.siteCode || ''}`;
-// Lo guardado de un código, o de todos: [{ department, area, siteCode }] (siteCode '' = todos los sitios del área).
+const enablementKey = (r) => `${r.department}/${r.area}/${r.siteCode || ''}/${Number(r.costCenterId) || 0}`;
+// Lo guardado de un código, o de todos: [{ department, area, siteCode, costCenterId }] (siteCode '' = todos los sitios del área; costCenterId 0 = todos los centros de ese sitio).
 function listSkuEnablements(clientId, isTest, skuItemId = null) {
     const rows = skuItemId
-        ? db.prepare('SELECT sku_item_id AS skuItemId, department, area, site_code AS siteCode FROM sku_enablements WHERE client_id = ? AND is_test_data = ? AND sku_item_id = ? ORDER BY department, area, site_code').all(clientId, isTest ? 1 : 0, skuItemId)
-        : db.prepare('SELECT sku_item_id AS skuItemId, department, area, site_code AS siteCode FROM sku_enablements WHERE client_id = ? AND is_test_data = ? ORDER BY department, area, site_code').all(clientId, isTest ? 1 : 0);
+        ? db.prepare('SELECT sku_item_id AS skuItemId, department, area, site_code AS siteCode, cost_center_id AS costCenterId FROM sku_enablements WHERE client_id = ? AND is_test_data = ? AND sku_item_id = ? ORDER BY department, area, site_code, cost_center_id').all(clientId, isTest ? 1 : 0, skuItemId)
+        : db.prepare('SELECT sku_item_id AS skuItemId, department, area, site_code AS siteCode, cost_center_id AS costCenterId FROM sku_enablements WHERE client_id = ? AND is_test_data = ? ORDER BY department, area, site_code, cost_center_id').all(clientId, isTest ? 1 : 0);
     return rows;
 }
-// Sin repetidos, y un área habilitada en todos sus sitios ('') sustituye a los sitios sueltos de esa misma área.
+// Sin repetidos, y lo más amplio absorbe a lo más angosto dentro de la misma área: «todos los sitios» ('') sustituye a los sitios y centros sueltos, y «todos los centros de un sitio» (centro 0) sustituye a los centros sueltos de ese sitio.
 function normalizeEnablementRows(rows) {
     const clean = [];
     const seen = new Set();
     (rows || []).forEach((r) => {
-        const row = { department: String(r.department || ''), area: String(r.area || ''), siteCode: String(r.siteCode || '') };
+        const siteCode = String(r.siteCode || '');
+        const centerId = Math.trunc(Number(r.costCenterId));
+        const row = { department: String(r.department || ''), area: String(r.area || ''), siteCode, costCenterId: siteCode && centerId > 0 ? centerId : 0 };
         if (!row.department || !row.area) return;
         const key = enablementKey(row);
         if (seen.has(key)) return;
@@ -5510,7 +5525,9 @@ function normalizeEnablementRows(rows) {
         clean.push(row);
     });
     const wholeAreas = new Set(clean.filter((r) => r.siteCode === '').map((r) => `${r.department}/${r.area}`));
-    return clean.filter((r) => r.siteCode === '' || !wholeAreas.has(`${r.department}/${r.area}`));
+    const wholeSites = new Set(clean.filter((r) => r.siteCode !== '' && r.costCenterId === 0).map((r) => `${r.department}/${r.area}/${r.siteCode}`));
+    return clean.filter((r) => r.siteCode === ''
+        || (!wholeAreas.has(`${r.department}/${r.area}`) && (r.costCenterId === 0 || !wholeSites.has(`${r.department}/${r.area}/${r.siteCode}`))));
 }
 // Deja las habilitaciones de UN código exactamente como llegan (renglones nuevos y quitados). Regresa { added, removed } con las llaves de lo que cambió, para el historial.
 function setSkuEnablements(clientId, isTest, skuItemId, rows) {
@@ -5521,18 +5538,21 @@ function setSkuEnablements(clientId, isTest, skuItemId, rows) {
     const removed = before.filter((r) => !nextKeys.has(enablementKey(r)));
     const added = next.filter((r) => !beforeKeys.has(enablementKey(r)));
     const apply = db.transaction(() => {
-        removed.forEach((r) => db.prepare('DELETE FROM sku_enablements WHERE sku_item_id = ? AND department = ? AND area = ? AND site_code = ?').run(skuItemId, r.department, r.area, r.siteCode));
-        added.forEach((r) => db.prepare('INSERT OR IGNORE INTO sku_enablements (client_id, is_test_data, sku_item_id, department, area, site_code) VALUES (?, ?, ?, ?, ?, ?)').run(clientId, isTest ? 1 : 0, skuItemId, r.department, r.area, r.siteCode));
+        removed.forEach((r) => db.prepare('DELETE FROM sku_enablements WHERE sku_item_id = ? AND department = ? AND area = ? AND site_code = ? AND cost_center_id = ?').run(skuItemId, r.department, r.area, r.siteCode, r.costCenterId || 0));
+        added.forEach((r) => db.prepare('INSERT OR IGNORE INTO sku_enablements (client_id, is_test_data, sku_item_id, department, area, site_code, cost_center_id) VALUES (?, ?, ?, ?, ?, ?, ?)').run(clientId, isTest ? 1 : 0, skuItemId, r.department, r.area, r.siteCode, r.costCenterId || 0));
     });
     apply();
     return { added, removed };
 }
 // Agrega o quita las mismas habilitaciones a varios códigos (la lista filtrada de la pantalla). mode 'add' | 'remove'. Quitar un sitio de un área que estaba en «todos los sitios» deja el área con los demás sitios (allSiteCodes).
 // Regresa [{ skuItemId, added, removed }] solo de los códigos que sí cambiaron.
-function bulkSkuEnablements(clientId, isTest, skuItemIds, mode, rows, allSiteCodes = []) {
+// catalog = { siteCodes: [los sitios del cliente], centersBySite: { SITIO: [ids de sus centros] } }: al quitar un sitio o un centro de algo que estaba en «todos», lo demás se queda escrito uno por uno.
+function bulkSkuEnablements(clientId, isTest, skuItemIds, mode, rows, catalog = {}) {
     const wanted = normalizeEnablementRows(rows);
+    const siteCodes = catalog.siteCodes || [];
+    const centersBySite = catalog.centersBySite || {};
     const bySku = new Map();
-    listSkuEnablements(clientId, isTest).forEach((r) => { if (!bySku.has(r.skuItemId)) bySku.set(r.skuItemId, []); bySku.get(r.skuItemId).push({ department: r.department, area: r.area, siteCode: r.siteCode }); });
+    listSkuEnablements(clientId, isTest).forEach((r) => { if (!bySku.has(r.skuItemId)) bySku.set(r.skuItemId, []); bySku.get(r.skuItemId).push({ department: r.department, area: r.area, siteCode: r.siteCode, costCenterId: r.costCenterId }); });
     const changes = [];
     skuItemIds.forEach((skuItemId) => {
         const current = bySku.get(skuItemId) || [];
@@ -5541,14 +5561,23 @@ function bulkSkuEnablements(clientId, isTest, skuItemIds, mode, rows, allSiteCod
             next = next.concat(wanted);
         } else {
             wanted.forEach((w) => {
-                if (w.siteCode === '') { next = next.filter((r) => !(r.department === w.department && r.area === w.area)); return; }
-                const wholeArea = next.some((r) => r.department === w.department && r.area === w.area && r.siteCode === '');
-                if (wholeArea) {
-                    next = next.filter((r) => !(r.department === w.department && r.area === w.area));
-                    allSiteCodes.filter((code) => code !== w.siteCode).forEach((code) => next.push({ department: w.department, area: w.area, siteCode: code }));
+                const inArea = (r) => r.department === w.department && r.area === w.area;
+                const others = next.filter((r) => !inArea(r));
+                let group = next.filter(inArea);
+                if (w.siteCode === '') { next = others; return; } // quitar «todos los sitios» del área = quitar toda el área
+                // lo que estaba en «todos los sitios» se vuelve un renglón por sitio (todos sus centros) para poder quitar solo uno
+                if (group.some((r) => r.siteCode === '')) group = siteCodes.map((code) => ({ department: w.department, area: w.area, siteCode: code, costCenterId: 0 }));
+                if (w.costCenterId === 0) {
+                    group = group.filter((r) => r.siteCode !== w.siteCode); // el sitio completo, con todos sus centros
                 } else {
-                    next = next.filter((r) => !(r.department === w.department && r.area === w.area && r.siteCode === w.siteCode));
+                    // lo que estaba en «todos los centros del sitio» se vuelve un renglón por centro para poder quitar solo uno
+                    if (group.some((r) => r.siteCode === w.siteCode && r.costCenterId === 0)) {
+                        group = group.filter((r) => !(r.siteCode === w.siteCode && r.costCenterId === 0))
+                            .concat((centersBySite[w.siteCode] || []).map((id) => ({ department: w.department, area: w.area, siteCode: w.siteCode, costCenterId: id })));
+                    }
+                    group = group.filter((r) => !(r.siteCode === w.siteCode && r.costCenterId === w.costCenterId));
                 }
+                next = others.concat(group);
             });
         }
         const normalized = normalizeEnablementRows(next);
@@ -5559,11 +5588,27 @@ function bulkSkuEnablements(clientId, isTest, skuItemIds, mode, rows, allSiteCod
     });
     return changes;
 }
-// Los códigos habilitados para un área (y, si se dan, para alguno de esos sitios): Set de ids. siteCodes null = sin filtrar por sitio. Un renglón del área con site_code '' vale para cualquier sitio.
-function listSkuIdsEnabledFor(clientId, isTest, { department, area, siteCodes = null }) {
-    const rows = db.prepare("SELECT sku_item_id AS id, site_code AS siteCode FROM sku_enablements WHERE client_id = ? AND is_test_data = ? AND department = ? AND area = ?").all(clientId, isTest ? 1 : 0, department, area);
+// Los códigos habilitados para un área: Set de ids. Sin filtro (null) entra cualquier código habilitado en esa área, donde sea. Con costCenterIds (los centros elegidos arriba en la barra) vale lo habilitado en «todos los sitios», en «todos los
+// centros» de un sitio de esos centros, o en alguno de esos centros en particular; la cadena es Sitio > Centro, así que un centro trae su sitio consigo. Con siteCodes (sin centros) vale lo habilitado en alguno de esos sitios.
+function listSkuIdsEnabledFor(clientId, isTest, { department, area, siteCodes = null, costCenterIds = null }) {
+    const rows = db.prepare("SELECT sku_item_id AS id, site_code AS siteCode, cost_center_id AS costCenterId FROM sku_enablements WHERE client_id = ? AND is_test_data = ? AND department = ? AND area = ?").all(clientId, isTest ? 1 : 0, department, area);
+    let sitesOfCenters = null;
+    let centers = null;
+    if (Array.isArray(costCenterIds)) {
+        centers = new Set(costCenterIds.map(Number));
+        const siteOf = db.prepare('SELECT site_code AS siteCode FROM cost_centers WHERE id = ? AND client_id = ?');
+        sitesOfCenters = new Set();
+        centers.forEach((id) => { const s = (siteOf.get(id, clientId) || {}).siteCode; if (s) sitesOfCenters.add(s); });
+    }
     const ids = new Set();
-    rows.forEach((r) => { if (!siteCodes || r.siteCode === '' || siteCodes.includes(r.siteCode)) ids.add(r.id); });
+    rows.forEach((r) => {
+        if (r.siteCode === '') { ids.add(r.id); return; }
+        if (centers) {
+            if (r.costCenterId === 0 ? sitesOfCenters.has(r.siteCode) : centers.has(r.costCenterId)) ids.add(r.id);
+        } else if (!siteCodes || siteCodes.includes(r.siteCode)) {
+            ids.add(r.id);
+        }
+    });
     return ids;
 }
 

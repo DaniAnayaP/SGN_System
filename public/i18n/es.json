@@ -4756,6 +4756,9 @@
     "habClose": "Cerrar",
     "habNone": "Sin habilitar todavía",
     "habSitesCount": "{n} de {total} sitios",
+    "habCenter1": "1 centro",
+    "habCentersN": "{n} centros",
+    "habWholeSite": "Todo el sitio",
     "habSavedOk": "Habilitación guardada.",
     "habBulkDone": "Se actualizaron {changed} de {total} códigos.",
     "habBulkNoChange": "Ningún código cambió: ya estaban así.",
@@ -6664,16 +6667,16 @@
       "example": "quieres usar Calibraciones y no la tienes: la eliges (sale con punto rojo) y escribes qué necesitabas hacer."
     },
     "habHabilitado": {
-      "what": "Dónde vale cada código: en qué departamento, área y sitio se puede usar. Cada sitio ve solo lo que se le habilitó; TI ve todo. Un área «en todos los sitios» incluye también los sitios que se creen después.",
-      "example": "un código habilitado en C. Distribución (todos los sitios) y en Punto Venta (PV Norte y PV Sur) solo se ve en esos lugares."
+      "what": "Dónde vale cada código: en qué departamento, área, sitio y centro de costos se puede usar. Cada sitio ve solo lo que se le habilitó; TI ve todo. Un área «en todos los sitios» incluye también los sitios que se creen después, y un sitio completo incluye también los centros de costos que se creen después.",
+      "example": "un código habilitado en C. Distribución (todos los sitios) y en Punto Venta (PV Norte y PV Sur) solo se ve en esos lugares; si PV Norte tiene los centros Caja y Bodega, puedes habilitarlo solo en Caja."
     },
     "habMasivo": {
       "what": "Aplica la misma habilitación a todos los códigos que se ven en la lista (los que cumplen el filtro). Sirve para habilitar muchos códigos de una vez.",
       "example": "filtras «guantes» y los habilitas en los 5 puntos de venta con un solo paso."
     },
     "habMatriz": {
-      "what": "Marca el área y los sitios donde el código debe valer. «Todos los sitios» vale también para los sitios nuevos del área.",
-      "example": "marcas C. Distribución en todos sus sitios y Punto Venta solo en PV Norte."
+      "what": "Marca el área y los lugares donde el código debe valer. «Todos» vale también para los sitios nuevos del área. Un sitio con varios centros de costos tiene su casilla «Todo el sitio» (vale también para sus centros nuevos) y una casilla por cada centro, para habilitar solo algunos.",
+      "example": "marcas C. Distribución en todos sus sitios y Punto Venta solo en el centro Caja de PV Norte."
     },
     "permBulk": {
       "what": "En un nivel que tiene una parte activa y otra no (el «−»), el botón ✓✓ habilita todo lo que está dentro y el botón ✕ quita todo lo que se vendió como adicional (lo que da el plan no se quita). Hay que guardar para que el cambio quede.",

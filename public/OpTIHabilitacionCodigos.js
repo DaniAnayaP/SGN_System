@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
-// TI › Operaciones TI › Operaciones › Habilitación de Códigos: TI ve TODOS los códigos de Alta Artículos y decide DÓNDE vale cada uno: en qué departamento, área y sitio (el sitio es también el centro de costos que lo lleva).
-// Cada renglón trae sus habilitaciones en forma de resumen («C. Distribución · todos los sitios», «Punto Venta · 5 de 7 sitios»); al tocar el renglón (o su botón) se abre una ventana con la matriz Área × Sitio. Arriba de la tabla, «Habilitar lo
+// TI › Operaciones TI › Operaciones › Habilitación de Códigos: TI ve TODOS los códigos de Alta Artículos y decide DÓNDE vale cada uno: en qué departamento, área, sitio y centro de costos (Sitio > Centro de costos: un sitio puede tener varios centros).
+// Cada renglón trae sus habilitaciones en forma de resumen («C. Distribución · todos los sitios», «Punto Venta · 5 de 7 sitios + 1 centro»); al tocar el renglón (o su botón) se abre una ventana con la matriz Área × (Sitio y sus centros). Arriba de la tabla, «Habilitar lo
 // que se ve…» aplica la misma habilitación (o la quita) a todos los códigos de la lista filtrada, para habilitar muchos de una vez. Cada sitio verá solo lo habilitado; aquí se ve todo. Todo cambio queda en el historial del código.
 // Los renglones salen del servidor (GET /api/business/sku-enablements) y se dibujan por tandas (con miles de códigos no se congela la pantalla).
 // ---------------------------------------------------------------------------
@@ -23,8 +23,8 @@ const t = (key, params) => {
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const $ = (id) => document.getElementById(id);
 
-let codes = []; // [{ id, sku, upc, description, status, enabled: [{ department, area, siteCode }], ...columnas de Control Interno }]
-let options = { areas: [], sites: [] }; // las áreas reales de los departamentos contratados y los sitios del cliente
+let codes = []; // [{ id, sku, upc, description, status, enabled: [{ department, area, siteCode, costCenterId }], ...columnas de Control Interno }]
+let options = { areas: [], sites: [] }; // las áreas reales de los departamentos contratados y los sitios del cliente, cada uno con sus centros: [{ code, sucursal, centers: [{ id, code, name }] }]
 let canEdit = false;
 
 (async function init() {
@@ -46,16 +46,27 @@ function deptLabel(key) {
 }
 const areaOf = (department, area) => options.areas.find((a) => a.department === department && a.area === area);
 const areaLabel = (department, area) => { const a = areaOf(department, area); return a && a.labelKey ? Dashboard.t(a.labelKey) : area; };
-const siteLabel = (site) => (site.centerName ? t('main.habSiteCenter', { center: site.centerName, code: site.code }) : site.code);
+// El nombre del sitio es su sucursal, igual que en el selector de la barra de arriba.
+const siteLabel = (site) => (site.sucursal ? `${site.code} - ${site.sucursal}` : site.code);
+const siteByCode = (code) => options.sites.find((s) => s.code === code);
+const siteOfCenter = (id) => options.sites.find((s) => s.centers.some((c) => c.id === id));
+// Una habilitación de un centro en un sitio que solo tiene ese centro es lo mismo que el sitio completo: así se muestra y se guarda.
+function normalizeTarget(r) {
+    if (r.siteCode === '') return { all: true };
+    const site = siteByCode(r.siteCode);
+    if (r.costCenterId > 0 && site && site.centers.length > 1) return { center: r.costCenterId };
+    return { site: r.siteCode };
+}
 
-// Lo habilitado de un código, agrupado por área: [{ department, area, all, sites: Set }] en el orden de las áreas del cliente.
+// Lo habilitado de un código, agrupado por área: [{ department, area, all, sites: Set (sitios completos), centers: Set (centros sueltos) }] en el orden de las áreas del cliente.
 function groupEnabled(list) {
     const by = new Map();
     (list || []).forEach((r) => {
         const key = `${r.department}/${r.area}`;
-        if (!by.has(key)) by.set(key, { department: r.department, area: r.area, all: false, sites: new Set() });
+        if (!by.has(key)) by.set(key, { department: r.department, area: r.area, all: false, sites: new Set(), centers: new Set() });
         const g = by.get(key);
-        if (r.siteCode === '') g.all = true; else g.sites.add(r.siteCode);
+        const target = normalizeTarget(r);
+        if (target.all) g.all = true; else if (target.center) g.centers.add(target.center); else g.sites.add(target.site);
     });
     const order = options.areas.map((a) => `${a.department}/${a.area}`);
     return [...by.values()].sort((a, b) => {
@@ -64,8 +75,13 @@ function groupEnabled(list) {
     });
 }
 function chipText(g) {
-    const place = g.all ? t('main.habAllSites') : t('main.habSitesCount', { n: g.sites.size, total: options.sites.length });
-    return `${areaLabel(g.department, g.area)} · ${place}`;
+    const parts = [];
+    if (g.all) parts.push(t('main.habAllSites'));
+    else {
+        if (g.sites.size) parts.push(t('main.habSitesCount', { n: g.sites.size, total: options.sites.length }));
+        if (g.centers.size) parts.push(t(g.centers.size === 1 ? 'main.habCenter1' : 'main.habCentersN', { n: g.centers.size }));
+    }
+    return `${areaLabel(g.department, g.area)} · ${parts.join(' + ')}`;
 }
 
 // ---- tabla --------------------------------------------------------------------------------------------------------------------------------
@@ -265,19 +281,21 @@ document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyFilters);
 if (window.Dashboard && Dashboard.registerPartialTable) Dashboard.registerPartialTable(TABLE_KEY, { isComplete: () => codeDrawn >= codeView.length, loadAll: drawAllCodeRows });
 
-// ---- la ventana: la matriz Área × Sitio ------------------------------------------------------------------------------------------------------------------
+// ---- la ventana: la matriz Área × (Sitio y sus centros) ------------------------------------------------------------------------------------------------------------------
 // Un código (mode 'one'): sus habilitaciones tal cual están, para dejarlas como queden. Varios (mode 'bulk', la lista filtrada): se elige «Habilitar en lo marcado» o «Quitar de lo marcado» y se marcan los lugares.
-// Por cada área: «Todos los sitios» (vale también para los que se creen después) o sitios sueltos. Al quitar «Todos» quedan marcados todos los sitios de hoy, para ir quitando los que no.
+// Por cada área: «Todos los sitios» (vale también para los que se creen después), un sitio completo (todos sus centros, también los nuevos) o centros sueltos de un sitio que tiene varios. Al quitar «Todos» quedan marcados todos los
+// sitios de hoy, y al quitar un sitio completo quedan marcados sus centros de hoy, para ir quitando los que no.
 let modalEl = null;
-let modal = null; // { mode, code?, ids?, grid: Map('departamento/área' -> { all, sites: Set }), action: 'add' | 'remove' }
+let modal = null; // { mode, code?, ids?, grid: Map('departamento/área' -> { all, sites: Set, centers: Set }), action: 'add' | 'remove' }
 const gridKey = (a) => `${a.department}/${a.area}`;
 function buildGrid(list) {
     const grid = new Map();
-    options.areas.forEach((a) => grid.set(gridKey(a), { all: false, sites: new Set() }));
+    options.areas.forEach((a) => grid.set(gridKey(a), { all: false, sites: new Set(), centers: new Set() }));
     (list || []).forEach((r) => {
         const g = grid.get(`${r.department}/${r.area}`);
         if (!g) return;
-        if (r.siteCode === '') g.all = true; else g.sites.add(r.siteCode);
+        const target = normalizeTarget(r);
+        if (target.all) g.all = true; else if (target.center) g.centers.add(target.center); else g.sites.add(target.site);
     });
     return grid;
 }
@@ -286,26 +304,55 @@ function gridRows() {
     options.areas.forEach((a) => {
         const g = modal.grid.get(gridKey(a));
         if (!g) return;
-        if (g.all) rows.push({ department: a.department, area: a.area, siteCode: '' });
-        else g.sites.forEach((code) => rows.push({ department: a.department, area: a.area, siteCode: code }));
+        if (g.all) { rows.push({ department: a.department, area: a.area, siteCode: '', costCenterId: 0 }); return; }
+        g.sites.forEach((code) => rows.push({ department: a.department, area: a.area, siteCode: code, costCenterId: 0 }));
+        g.centers.forEach((id) => { const site = siteOfCenter(id); if (site) rows.push({ department: a.department, area: a.area, siteCode: site.code, costCenterId: id }); });
     });
     return rows;
 }
+// Las columnas: un sitio con un solo centro es UNA columna (el sitio completo); uno con varios trae su columna «Todo el sitio» y una por cada centro.
+function matrixColumns() {
+    const cols = [];
+    options.sites.forEach((s) => {
+        const multi = s.centers.length > 1;
+        cols.push({ kind: 'site', site: s, multi });
+        if (multi) s.centers.forEach((c) => cols.push({ kind: 'center', site: s, center: c, multi }));
+    });
+    return cols;
+}
+function columnHead(col) {
+    if (col.kind === 'center') {
+        const full = `${siteLabel(col.site)} › ${col.center.name || col.center.code}`;
+        return `<th class="hab-col-center" title="${esc(full)}"><span class="hab-site-code">${esc(col.center.name || col.center.code)}</span><span class="hab-site-name">${esc(col.site.code)}</span></th>`;
+    }
+    const name = col.multi ? t('main.habWholeSite') : (col.site.sucursal || (col.site.centers[0] && col.site.centers[0].name) || '');
+    return `<th class="hab-col-site${col.multi ? ' hab-site-start' : ''}" title="${esc(siteLabel(col.site))}"><span class="hab-site-code">${esc(col.site.code)}</span><span class="hab-site-name">${esc(name)}</span></th>`;
+}
+function columnCell(col, key, g, readOnly) {
+    if (col.kind === 'center') {
+        const covered = g.all || g.sites.has(col.site.code);
+        const on = covered || g.centers.has(col.center.id);
+        const full = `${siteLabel(col.site)} › ${col.center.name || col.center.code}`;
+        return `<td class="hab-col-center"><input type="checkbox" data-hab-center="${esc(key)}" data-center="${col.center.id}" data-site="${esc(col.site.code)}"${on ? ' checked' : ''}${covered || readOnly ? ' disabled' : ''} aria-label="${esc(full)}"></td>`;
+    }
+    return `<td class="${col.multi ? 'hab-site-start' : ''}"><input type="checkbox" data-hab-site="${esc(key)}" data-site="${esc(col.site.code)}"${g.all || g.sites.has(col.site.code) ? ' checked' : ''}${g.all || readOnly ? ' disabled' : ''} aria-label="${esc(siteLabel(col.site))}"></td>`;
+}
 function renderMatrix() {
     const readOnly = !canEdit;
-    const head = `<thead><tr><th>${esc(t('main.habAreaCol'))}</th><th>${esc(t('main.habAllSitesNew'))}</th>${options.sites.map((s) => `<th title="${esc(siteLabel(s))}"><span class="hab-site-code">${esc(s.code)}</span><span class="hab-site-name">${esc(s.centerName || s.sucursal || '')}</span></th>`).join('')}</tr></thead>`;
+    const cols = matrixColumns();
+    const head = `<thead><tr><th>${esc(t('main.habAreaCol'))}</th><th>${esc(t('main.habAllSitesNew'))}</th>${cols.map(columnHead).join('')}</tr></thead>`;
     let body = '';
     let lastDept = null;
     options.areas.forEach((a) => {
         if (a.department !== lastDept) {
             lastDept = a.department;
-            body += `<tr class="hab-dept"><td colspan="${2 + options.sites.length}">${esc(deptLabel(a.department))}</td></tr>`;
+            body += `<tr class="hab-dept"><td colspan="${2 + cols.length}">${esc(deptLabel(a.department))}</td></tr>`;
         }
         const g = modal.grid.get(gridKey(a));
         const dis = readOnly ? ' disabled' : '';
         body += `<tr data-key="${esc(gridKey(a))}"><td>${esc(areaLabel(a.department, a.area))}</td>
             <td><input type="checkbox" data-hab-all="${esc(gridKey(a))}"${g.all ? ' checked' : ''}${dis} aria-label="${esc(t('main.habAllSites'))}"></td>
-            ${options.sites.map((s) => `<td><input type="checkbox" data-hab-site="${esc(gridKey(a))}" data-site="${esc(s.code)}"${g.all || g.sites.has(s.code) ? ' checked' : ''}${g.all || readOnly ? ' disabled' : ''} aria-label="${esc(siteLabel(s))}"></td>`).join('')}</tr>`;
+            ${cols.map((col) => columnCell(col, gridKey(a), g, readOnly)).join('')}</tr>`;
     });
     $('hab-table').innerHTML = `${head}<tbody>${body}</tbody>`;
 }
@@ -364,14 +411,29 @@ function onModalChange(event) {
     const allKey = el.dataset.habAll;
     if (allKey) {
         const g = modal.grid.get(allKey);
-        if (el.checked) { g.all = true; g.sites.clear(); } else { g.all = false; g.sites = new Set(options.sites.map((s) => s.code)); }
+        if (el.checked) { g.all = true; g.sites.clear(); g.centers.clear(); } else { g.all = false; g.sites = new Set(options.sites.map((s) => s.code)); }
         renderMatrix();
         return;
     }
     const siteKey = el.dataset.habSite;
     if (siteKey) {
         const g = modal.grid.get(siteKey);
-        if (el.checked) g.sites.add(el.dataset.site); else g.sites.delete(el.dataset.site);
+        const site = siteByCode(el.dataset.site);
+        if (el.checked) {
+            g.sites.add(el.dataset.site);
+            (site ? site.centers : []).forEach((c) => g.centers.delete(c.id)); // el sitio completo ya incluye a todos sus centros
+        } else {
+            g.sites.delete(el.dataset.site);
+            if (site && site.centers.length > 1) site.centers.forEach((c) => g.centers.add(c.id)); // quedan marcados sus centros de hoy, para ir quitando los que no
+        }
+        renderMatrix();
+        return;
+    }
+    const centerKey = el.dataset.habCenter;
+    if (centerKey) {
+        const g = modal.grid.get(centerKey);
+        const id = Number(el.dataset.center);
+        if (el.checked) g.centers.add(id); else g.centers.delete(id);
     }
 }
 async function onModalClick(event) {

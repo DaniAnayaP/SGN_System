@@ -4757,6 +4757,9 @@
     "habClose": "Close",
     "habNone": "Not enabled yet",
     "habSitesCount": "{n} of {total} sites",
+    "habCenter1": "1 center",
+    "habCentersN": "{n} centers",
+    "habWholeSite": "Whole site",
     "habSavedOk": "Enablement saved.",
     "habBulkDone": "{changed} of {total} codes were updated.",
     "habBulkNoChange": "No code changed: they were already like that.",
@@ -6665,16 +6668,16 @@
       "example": "you want to use Calibrations and you do not have it: you pick it (it shows a red dot) and write what you needed to do."
     },
     "habHabilitado": {
-      "what": "Where each code applies: in which department, area and site it can be used. Each site only sees what was enabled for it; IT sees everything. An area «in all sites» also includes sites created later.",
-      "example": "a code enabled in Distribution Center (all sites) and in Point of Sale (PV North and PV South) only shows in those places."
+      "what": "Where each code applies: in which department, area, site and cost center it can be used. Each site only sees what was enabled for it; IT sees everything. An area «in all sites» also includes sites created later, and a whole site also includes cost centers created later.",
+      "example": "a code enabled in Distribution Center (all sites) and in Point of Sale (PV North and PV South) only shows in those places; if PV North has the centers Checkout and Storeroom, you can enable it only in Checkout."
     },
     "habMasivo": {
       "what": "Applies the same enablement to every code shown in the list (the ones that match the filter). Useful to enable many codes at once.",
       "example": "you filter «gloves» and enable them in the 5 points of sale in a single step."
     },
     "habMatriz": {
-      "what": "Check the area and the sites where the code should apply. «All sites» also applies to the area's new sites.",
-      "example": "you check Distribution Center in all its sites and Point of Sale only in PV North."
+      "what": "Check the area and the places where the code should apply. «All» also applies to the area's new sites. A site with several cost centers has its «Whole site» box (it also applies to its new centers) and one box per center, to enable only some of them.",
+      "example": "you check Distribution Center in all its sites and Point of Sale only in the Checkout center of PV North."
     },
     "permBulk": {
       "what": "On a level with one part on and another off (the «−»), the ✓✓ button enables everything inside and the ✕ button removes everything sold as an additional (what the plan gives is not removed). You must save for the change to stay.",

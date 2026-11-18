@@ -13970,12 +13970,12 @@ function skuDistDoneSkus(distRows, skuItems) {
     return done;
 }
 // ---- Habilitación de Códigos (TI › Operaciones TI) --------------------------------------------------------------------------------------------------
-// Dónde vale cada código: por departamento, área y sitio (el sitio es también el centro de costos que lo lleva: 1 a 1 hoy). TI ve todos los códigos; cada sitio verá solo lo habilitado (ver skuEnabledScope). Quien tiene el botón «Autorización para
-// Habilitar» (o el administrador del cliente) agrega y quita; todo cambio queda en el historial del código.
+// Dónde vale cada código: por departamento, área, sitio y centro de costos (la cadena es Sitio > Centro de costos: un sitio puede tener varios centros; «todos los centros» de un sitio incluye los que se creen después). TI ve todos los códigos;
+// cada sitio verá solo lo habilitado (ver skuEnabledIds). Quien tiene el botón «Autorización para Habilitar» (o el administrador del cliente) agrega y quita; todo cambio queda en el historial del código.
 const HAB_TABLE_KEY = 'habilitacion-codigos';
 const HAB_SCREEN = { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Habilitación de Códigos' };
 const habCanEdit = (req) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), HAB_TABLE_KEY, 'colHabCreateAuth');
-// Lo que se puede elegir: las áreas reales de los departamentos contratados (sin las genéricas «Área 1-3») y los sitios del cliente (cada uno con su centro de costos).
+// Lo que se puede elegir: las áreas reales de los departamentos contratados (sin las genéricas «Área 1-3») y los sitios del cliente, cada uno con sus centros de costos (activos). El nombre del sitio es su sucursal, igual que en la barra de arriba.
 function habOptions(req) {
     const options = hrAssignmentOptions(req.user.clientId, req.user.isTestAccount);
     const areas = [];
@@ -13983,29 +13983,46 @@ function habOptions(req) {
         if (!/^area-\d+$/.test(a.id)) areas.push({ department, area: a.id, labelKey: a.labelKey, labelParams: a.labelParams || null });
     }));
     const sites = options.sites.map((code) => {
-        const cc = options.centers.find((c) => c.site_code === code) || {};
-        return { code, sucursal: cc.sucursal || '', centerId: cc.id || null, centerCode: cc.code || '', centerName: cc.name || '' };
+        const centers = options.centers.filter((c) => c.site_code === code);
+        return { code, sucursal: (centers[0] || {}).sucursal || '', centers: centers.map((c) => ({ id: c.id, code: c.code, name: c.name })) };
     });
     return { areas, sites };
 }
-// Revisa lo que llega: cada renglón debe ser un área de un departamento contratado y «todos los sitios» ('') o un sitio del cliente. Regresa los renglones limpios o { error }.
+// Revisa lo que llega: cada renglón debe ser un área de un departamento contratado y «todos los sitios» ('') o un sitio del cliente, con «todos sus centros» (0) o un centro de ese sitio. Regresa los renglones limpios o { error }.
 function habCleanRows(rows, options) {
     if (!Array.isArray(rows) || rows.length > 5000) return { error: 'La lista de habilitaciones no es válida.' };
     const validAreas = new Set(options.areas.map((a) => `${a.department}/${a.area}`));
-    const validSites = new Set(options.sites.map((s) => s.code));
+    const centersOfSite = new Map(options.sites.map((s) => [s.code, new Set(s.centers.map((c) => c.id))]));
     const clean = [];
     for (const r of rows) {
-        const row = { department: String((r && r.department) || ''), area: String((r && r.area) || ''), siteCode: String((r && r.siteCode) || '') };
+        const row = { department: String((r && r.department) || ''), area: String((r && r.area) || ''), siteCode: String((r && r.siteCode) || ''), costCenterId: 0 };
         if (!validAreas.has(`${row.department}/${row.area}`)) return { error: 'Hay un área que el cliente no tiene.' };
-        if (row.siteCode !== '' && !validSites.has(row.siteCode)) return { error: 'Hay un sitio que el cliente no tiene.' };
+        if (row.siteCode !== '' && !centersOfSite.has(row.siteCode)) return { error: 'Hay un sitio que el cliente no tiene.' };
+        const centerId = Math.trunc(Number(r && r.costCenterId)) || 0;
+        if (centerId !== 0) {
+            if (row.siteCode === '' || !centersOfSite.get(row.siteCode).has(centerId)) return { error: 'Hay un centro de costos que no es de ese sitio.' };
+            row.costCenterId = centerId;
+        }
         clean.push(row);
     }
     return { rows: normalizeEnablementRows(clean) };
 }
-// Cómo se escribe una habilitación en el historial: «C. Distribución · CEDIS Puebla (PUEBL)» o «Punto Venta · todos los sitios».
+const habCatalog = (options) => ({ siteCodes: options.sites.map((s) => s.code), centersBySite: Object.fromEntries(options.sites.map((s) => [s.code, s.centers.map((c) => c.id)])) });
+const habPublicRow = (r) => ({ department: r.department, area: r.area, siteCode: r.siteCode, costCenterId: r.costCenterId || 0 });
+// Cómo se escribe una habilitación en el historial: «C. Distribución · PUEBL - Puebla › Compras» o «Punto Venta · todos los sitios».
 function habLabel(row, options) {
-    const site = row.siteCode ? (() => { const s = options.sites.find((x) => x.code === row.siteCode); return s ? `${s.centerName || s.sucursal || s.code} (${s.code})` : row.siteCode; })() : 'todos los sitios';
-    return `${hrAreaNameEs(row.department, row.area)} · ${site}`;
+    let place = 'todos los sitios';
+    if (row.siteCode) {
+        const s = options.sites.find((x) => x.code === row.siteCode);
+        place = s ? (s.sucursal ? `${s.code} - ${s.sucursal}` : s.code) : row.siteCode;
+        if (row.costCenterId) {
+            const c = s && s.centers.find((x) => x.id === row.costCenterId);
+            place += ` › ${c ? (c.name || c.code) : row.costCenterId}`;
+        } else if (s && s.centers.length > 1) {
+            place += ' › todos sus centros';
+        }
+    }
+    return `${hrAreaNameEs(row.department, row.area)} · ${place}`;
 }
 function habLogChange(req, skuRow, options, added, removed) {
     const changedBy = changedByLabel(req);
@@ -14019,7 +14036,7 @@ app.get('/api/business/sku-enablements', requireAuth, (req, res) => {
     const client = getClientById(clientId);
     const options = habOptions(req);
     const byCode = new Map();
-    listSkuEnablements(clientId, isTestAccount).forEach((r) => { if (!byCode.has(r.skuItemId)) byCode.set(r.skuItemId, []); byCode.get(r.skuItemId).push({ department: r.department, area: r.area, siteCode: r.siteCode }); });
+    listSkuEnablements(clientId, isTestAccount).forEach((r) => { if (!byCode.has(r.skuItemId)) byCode.set(r.skuItemId, []); byCode.get(r.skuItemId).push(habPublicRow(r)); });
     res.set('Cache-Control', 'no-store');
     res.json({
         ...options,
@@ -14048,7 +14065,7 @@ app.put('/api/business/sku-enablements/:id', requireAuth, (req, res) => {
     if (clean.error) return res.status(400).json({ message: clean.error });
     const { added, removed } = setSkuEnablements(clientId, isTestAccount, skuRow.id, clean.rows);
     habLogChange(req, skuRow, options, added, removed);
-    res.json({ enabled: listSkuEnablements(clientId, isTestAccount, skuRow.id).map((r) => ({ department: r.department, area: r.area, siteCode: r.siteCode })), changed: added.length + removed.length });
+    res.json({ enabled: listSkuEnablements(clientId, isTestAccount, skuRow.id).map(habPublicRow), changed: added.length + removed.length });
 });
 // Varios códigos a la vez (la lista filtrada de la pantalla): mode 'add' agrega esas habilitaciones y 'remove' las quita.
 app.post('/api/business/sku-enablements/bulk', requireAuth, (req, res) => {
@@ -14064,7 +14081,7 @@ app.post('/api/business/sku-enablements/bulk', requireAuth, (req, res) => {
     if (!clean.rows.length) return res.status(400).json({ message: 'Marca al menos un lugar.' });
     const items = new Map(listSkuItems(clientId, isTestAccount).map((row) => [row.id, row]));
     const ids = [...new Set(body.skuItemIds.map(Number))].filter((id) => items.has(id));
-    const changes = bulkSkuEnablements(clientId, isTestAccount, ids, body.mode, clean.rows, options.sites.map((s) => s.code));
+    const changes = bulkSkuEnablements(clientId, isTestAccount, ids, body.mode, clean.rows, habCatalog(options));
     changes.forEach((c) => habLogChange(req, items.get(c.skuItemId), options, c.added, c.removed));
     res.json({ changed: changes.length, total: ids.length });
 });
