@@ -4871,6 +4871,11 @@
               "permissionOnly": true
             },
             {
+              "id": "colHabDondeEsta",
+              "labelKey": "main.colHabDondeEsta",
+              "permissionOnly": true
+            },
+            {
               "id": "colHabEstatus",
               "labelKey": "main.colHabEstatus",
               "permissionOnly": true

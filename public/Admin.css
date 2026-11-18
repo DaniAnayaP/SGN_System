@@ -9297,3 +9297,18 @@ td.hab-click{ cursor: pointer; }
 .sol-step-time{ margin-left: auto; font-size: 0.76rem; font-weight: 700; }
 .sol-step-meta{ font-size: 0.74rem; color: var(--color-text-secondary); margin-top: 0.1rem; }
 .sol-step-note{ margin-top: 0.25rem; font-size: 0.82rem; }
+/* Habilitación de Códigos › «Dónde está» (pieza 4): la ventana de solo lectura con el croquis del Layout y los lugares del código */
+.modal-panel.hw-panel{ max-width: min(52rem, 96vw); width: 100%; max-height: 92vh; overflow: auto; }
+.hw-tabs{ display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.3rem 0 0.8rem; }
+.hw-tab{ display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.75rem; border-radius: 999px; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text-primary); font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+.hw-tab.active{ border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg)); }
+.hw-count{ font-variant-numeric: tabular-nums; font-size: 0.7rem; font-weight: 700; padding: 0 0.4rem; border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); }
+.hw-center{ margin-bottom: 1.1rem; }
+.hw-center h4{ margin: 0 0 0.4rem; font-size: 0.88rem; }
+.hw-map svg{ display: block; width: 100%; height: auto; max-width: 40rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); }
+.hw-scroll{ overflow-x: auto; margin-top: 0.5rem; border: 1px solid var(--color-border); border-radius: 0.5rem; }
+.hw-table{ border-collapse: collapse; width: 100%; font-size: 0.78rem; }
+.hw-table th, .hw-table td{ padding: 0.4rem 0.65rem; border-bottom: 1px solid var(--color-border); text-align: left; white-space: nowrap; background: var(--color-surface); }
+.hw-table th{ font-weight: 700; color: var(--color-text-secondary); }
+.hw-table tr:last-child td{ border-bottom: 0; }
+.hw-mono{ font-variant-numeric: tabular-nums; font-weight: 600; }

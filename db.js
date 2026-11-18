@@ -8020,6 +8020,16 @@ function listCodeRelations(clientId, forTestAccount = false) {
     return db.prepare(`${CODE_RELATION_SELECT} WHERE r.client_id = ? AND r.is_test_data = ? ORDER BY r.record_number ASC`).all(clientId, forTestAccount ? 1 : 0);
 }
 
+// Cuántos lugares tiene cada código en los Layouts de los sitios (Relación Código) y en cuántos sitios: para la columna «Dónde está» de Habilitación de Códigos (TI). Un centro sin sitio cuenta como su propio sitio.
+function codePlaceCountsBySku(clientId, forTestAccount = false) {
+    const rows = db.prepare(`
+        SELECT r.sku_item_id AS skuItemId, COUNT(*) AS places, COUNT(DISTINCT CASE WHEN COALESCE(cc.site_code, '') != '' THEN cc.site_code ELSE 'centro-' || COALESCE(r.cost_center_id, 0) END) AS sites
+        FROM code_relations r LEFT JOIN cost_centers cc ON cc.id = r.cost_center_id
+        WHERE r.client_id = ? AND r.is_test_data = ? GROUP BY r.sku_item_id
+    `).all(clientId, forTestAccount ? 1 : 0);
+    return new Map(rows.map((r) => [r.skuItemId, { places: r.places, sites: r.sites }]));
+}
+
 function getCodeRelationById(id, clientId, forTestAccount = false) {
     return db.prepare(`${CODE_RELATION_SELECT} WHERE r.id = ? AND r.client_id = ? AND r.is_test_data = ?`).get(id, clientId, forTestAccount ? 1 : 0);
 }
@@ -16644,6 +16654,7 @@ module.exports = {
     countCodeShipRelationsByPlace,
     countShipItemsByPlace,
     listCodeRelations,
+    codePlaceCountsBySku,
     getCodeRelationById,
     createCodeRelation,
     updateCodeRelation,

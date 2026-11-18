@@ -26,6 +26,7 @@ const $ = (id) => document.getElementById(id);
 let codes = []; // [{ id, sku, upc, description, status, enabled: [{ department, area, siteCode, costCenterId }], ...columnas de Control Interno }]
 let options = { areas: [], sites: [] }; // las áreas reales de los departamentos contratados y los sitios del cliente, cada uno con sus centros: [{ code, sucursal, centers: [{ id, code, name }] }]
 let canEdit = false;
+let canSeeWhere = false; // tiene la columna «Dónde está» (pieza 4)
 
 (async function init() {
     try {
@@ -102,6 +103,24 @@ function enabledCell(code) {
     if (canEdit) { td.classList.add('hab-click'); td.addEventListener('click', () => openModal({ mode: 'one', code })); }
     return td;
 }
+// «Dónde está» (pieza 4): cuántos lugares tiene el código en los Layouts de los sitios y en cuántos sitios; al tocarla se abre, solo para ver, el detalle.
+function whereCell(code) {
+    const td = document.createElement('td');
+    td.dataset.col = 'colHabDondeEsta';
+    const p = code.places || { places: 0, sites: 0 };
+    if (!canSeeWhere) { td.textContent = '—'; return td; }
+    if (!p.places) {
+        td.innerHTML = `<span class="hab-chip none">${esc(t('main.habWhereNone'))}</span>`;
+    } else {
+        const places = t(p.places === 1 ? 'main.habWherePlaces1' : 'main.habWherePlacesN', { n: p.places });
+        const sites = t(p.sites === 1 ? 'main.habWhereSites1' : 'main.habWhereSitesN', { n: p.sites });
+        td.innerHTML = `<span class="hab-chip">${esc(t('main.habWhereCount', { n: places, m: sites }))}</span>`;
+    }
+    td.classList.add('hab-click');
+    td.title = t('main.habWhereOpen');
+    td.addEventListener('click', () => openWhere(code));
+    return td;
+}
 function actionsCell(code) {
     const td = document.createElement('td');
     td.dataset.col = 'actions';
@@ -134,6 +153,7 @@ function buildRow(code) {
         cell('colCatRegistroUnico', code.registroUnico, 'col-system'),
         cell('colHabSku', code.sku), cell('colHabDescripcion', code.description), cell('colHabUpc', code.upc),
         enabledCell(code),
+        whereCell(code),
         cell('colHabEstatus', t(code.status === 'inactive' ? 'main.habInactive' : 'main.habActive')),
         actionsCell(code),
     );
@@ -262,6 +282,7 @@ async function refreshTable() {
         if (token !== fetchToken) return; // llegó otra recarga después de esta
         options = { areas: body.areas || [], sites: body.sites || [] };
         canEdit = !!body.canEdit;
+        canSeeWhere = !!body.canSeeWhere;
         codes = body.codes || [];
         codes.forEach(indexSearch);
         computeView();
@@ -470,6 +491,125 @@ async function onModalClick(event) {
         Dashboard.showToast(t('main.habSaveError'), 'error');
     } finally {
         save.disabled = false;
+    }
+}
+
+// ---- «Dónde está» (pieza 4, solo lectura) ----------------------------------------------------------------------------------------------------------------------------------------
+// Los lugares del código en los Layouts de cada sitio (los que se le dieron en Relación Código), agrupados por sitio y centro de costos. Por cada centro: el croquis de su Layout con el código resaltado (zonas y anaqueles) y la tabla con el camino
+// completo de cada lugar. TI ve todos los sitios. Los sitios donde está habilitado pero no tiene lugar salen avisando que todavía no está acomodado. Rutas: GET /api/business/sku-enablements/:id/places y GET /api/business/layout?costCenterId=.
+let whereEl = null;
+let where = null; // { data, site: código del sitio abierto }
+const layoutCache = new Map(); // centro de costos -> Layout (o null si no tiene)
+const WHERE_COLOR = '#2F5FE3';
+const whereSiteLabel = (s) => (s.code ? (s.sucursal ? `${s.code} - ${s.sucursal}` : s.code) : t('main.habWhereNoSite'));
+function whereStatus(p) {
+    if (p.subKind === 'virtual') return t('main.habWhereVirtual');
+    return t(p.status === 'located' ? 'main.habWhereLocated' : 'main.habWherePartial');
+}
+function wherePlaceRow(p) {
+    const fits = p.packLevel != null ? `${t(`main.pkLevel${p.packLevel}`)}${p.packName ? ` · ${p.packName}` : ''}` : '';
+    const caben = p.packCount != null ? `${p.packCount} ${t(p.packLevel === 0 ? 'main.relPackUnitMain' : 'main.relPackUnitPack')}${p.packLevel !== 0 && p.packCapacity != null ? ` · ${p.packCapacity} ${t('main.relPackPz')}` : ''}` : '';
+    return `<tr>
+        <td class="hw-mono">${esc(p.locator || '—')}</td>
+        <td>${esc([p.warehouseName, p.subWarehouseName].filter(Boolean).join(' › ') || '—')}</td>
+        <td>${esc(p.zoneName || '—')}</td>
+        <td>${esc(fits || '—')}</td>
+        <td class="hw-mono">${esc(caben || '—')}</td>
+        <td>${esc(whereStatus(p))}</td></tr>`;
+}
+function whereCenterHtml(center) {
+    return `<section class="hw-center" data-center="${center.id}">
+        <h4>${esc(t('main.habWhereCenter'))}: ${esc(center.name || center.code || '—')}</h4>
+        <div class="hw-map" id="hw-map-${center.id}"></div>
+        <div class="hw-scroll"><table class="hw-table"><thead><tr>
+            <th>${esc(t('main.habWhereColLocator'))}</th><th>${esc(t('main.habWhereColWarehouse'))}</th><th>${esc(t('main.habWhereColZone'))}</th><th>${esc(t('main.habWhereColFits'))}</th><th>${esc(t('main.habWhereColCapacity'))}</th><th>${esc(t('main.habWhereColStatus'))}</th>
+        </tr></thead><tbody>${center.places.map(wherePlaceRow).join('')}</tbody></table></div>
+    </section>`;
+}
+async function whereLayoutOf(centerId) {
+    if (!centerId) return null;
+    if (layoutCache.has(centerId)) return layoutCache.get(centerId);
+    let layout = null;
+    try {
+        const res = await fetch(`/api/business/layout?costCenterId=${centerId}`, { credentials: 'include' });
+        if (res.ok) layout = (await res.json()).layout || null;
+    } catch { layout = null; }
+    layoutCache.set(centerId, layout);
+    return layout;
+}
+// El croquis del Layout del centro con sus lugares resaltados: las zonas y los anaqueles donde está el código; lo demás se ve tenue.
+async function whereDrawMap(center) {
+    const box = document.getElementById(`hw-map-${center.id}`);
+    if (!box) return;
+    const layout = await whereLayoutOf(center.id);
+    if (!document.body.contains(box)) return;
+    if (!layout || !Array.isArray(layout.vertices) || layout.vertices.length < 3 || !window.LayoutMapSvg) {
+        box.innerHTML = `<p class="admin-hint">${esc(t('main.habWhereNoLayout'))}</p>`;
+        return;
+    }
+    const focus = { zones: {}, spaces: {} };
+    center.places.forEach((p) => { if (p.zoneId) focus.zones[p.zoneId] = WHERE_COLOR; if (p.spaceId) focus.spaces[p.spaceId] = WHERE_COLOR; });
+    try {
+        box.innerHTML = `${window.LayoutMapSvg.mapSvg(layout, { theme: window.LayoutMapSvg.theme(''), width: 640, height: 360, measures: false, area: false, focus })}<p class="admin-hint">${esc(t('main.habWhereMapNote'))}</p>`;
+    } catch (err) {
+        console.error('Habilitación de Códigos: no se pudo dibujar el croquis', err);
+        box.innerHTML = `<p class="admin-hint">${esc(t('main.habWhereNoLayout'))}</p>`;
+    }
+}
+function renderWhere() {
+    const data = where.data;
+    $('hw-title').textContent = t('main.habWhereTitle', { sku: data.sku });
+    $('hw-sub').textContent = data.description || '';
+    const tabs = $('hw-tabs');
+    const body = $('hw-body');
+    if (!data.sites.length) {
+        tabs.innerHTML = '';
+        body.innerHTML = `<p class="admin-hint">${esc(t('main.habWhereEmpty'))}</p>`;
+        return;
+    }
+    tabs.innerHTML = data.sites.map((s) => `<button type="button" class="hw-tab${s.code === where.site ? ' active' : ''}" data-site="${esc(s.code)}">${esc(whereSiteLabel(s))} <span class="hw-count">${s.placesCount}</span></button>`).join('');
+    const site = data.sites.find((s) => s.code === where.site) || data.sites[0];
+    if (!site.centers.length) {
+        body.innerHTML = `<p class="admin-hint">${esc(t('main.habWhereEnabledNoPlace'))}</p>`;
+        return;
+    }
+    body.innerHTML = site.centers.map(whereCenterHtml).join('');
+    site.centers.forEach(whereDrawMap);
+}
+async function openWhere(code) {
+    if (!whereEl) {
+        whereEl = document.createElement('div');
+        whereEl.className = 'modal-overlay';
+        whereEl.id = 'hab-where';
+        whereEl.hidden = true;
+        whereEl.innerHTML = `<div class="modal-panel hab-panel hw-panel" role="dialog" aria-modal="true" aria-labelledby="hw-title">
+            <h3 id="hw-title"></h3>
+            <p class="admin-hint" id="hw-sub"></p>
+            <div class="hw-tabs" id="hw-tabs"></div>
+            <div id="hw-body"></div>
+            <p class="admin-hint">${esc(t('main.habWhereReadOnly'))}</p>
+            <div class="admin-form-actions"><button type="button" class="btn btn-secondary" id="hw-close">${esc(t('main.habClose'))}</button></div>
+        </div>`;
+        document.body.appendChild(whereEl);
+        whereEl.addEventListener('click', (event) => {
+            if (event.target === whereEl || event.target.closest('#hw-close')) { whereEl.hidden = true; return; }
+            const tab = event.target.closest('.hw-tab');
+            if (tab && where) { where.site = tab.dataset.site; renderWhere(); }
+        });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && whereEl && !whereEl.hidden) whereEl.hidden = true; });
+    }
+    try {
+        const res = await fetch(`${API}/${code.id}/places`, { credentials: 'include' });
+        if (!res.ok) throw new Error('places failed');
+        const data = await res.json();
+        const first = data.sites.find((x) => x.placesCount > 0) || data.sites[0];
+        where = { data, site: first ? first.code : '' };
+        renderWhere();
+        whereEl.hidden = false;
+        $('hw-close').focus();
+    } catch (err) {
+        console.error('Habilitación de Códigos: failed to read where the code is', err);
+        Dashboard.showToast(t('main.habWhereLoadError'), 'error');
     }
 }
 

@@ -274,6 +274,7 @@ const {
     countCodeShipRelationsByPlace,
     countShipItemsByPlace,
     listCodeRelations,
+    codePlaceCountsBySku,
     getCodeRelationById,
     createCodeRelation,
     updateCodeRelation,
@@ -14047,6 +14048,8 @@ function skuDistDoneSkus(distRows, skuItems) {
 const HAB_TABLE_KEY = 'habilitacion-codigos';
 const HAB_SCREEN = { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Habilitación de Códigos' };
 const habCanEdit = (req) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), HAB_TABLE_KEY, 'colHabCreateAuth');
+// «Dónde está» (pieza 4): la columna de la tabla y su ventana de solo lectura con los lugares del código en los Layouts de cada sitio.
+const habCanSeeWhere = (req) => !!req.user.isClientAdmin || hasColumnGrant(getUserEffectiveGrants(req.user.sub), HAB_TABLE_KEY, 'colHabDondeEsta');
 // Lo que se puede elegir: las áreas reales de los departamentos contratados (sin las genéricas «Área 1-3») y los sitios del cliente, cada uno con sus centros de costos (activos). El nombre del sitio es su sucursal, igual que en la barra de arriba.
 function habOptions(req) {
     const options = hrAssignmentOptions(req.user.clientId, req.user.isTestAccount);
@@ -14117,10 +14120,13 @@ app.get('/api/business/sku-enablements', requireAuth, (req, res) => {
     const options = habOptions(req);
     const byCode = new Map();
     listSkuEnablements(clientId, isTestAccount).forEach((r) => { if (!byCode.has(r.skuItemId)) byCode.set(r.skuItemId, []); byCode.get(r.skuItemId).push(habPublicRow(r)); });
+    const canSeeWhere = habCanSeeWhere(req);
+    const placeCounts = canSeeWhere ? codePlaceCountsBySku(clientId, isTestAccount) : new Map();
     res.set('Cache-Control', 'no-store');
     res.json({
         ...options,
         canEdit: habCanEdit(req),
+        canSeeWhere,
         codes: listSkuItems(clientId, isTestAccount).map((row) => ({
             id: row.id,
             registroUnico: row.db_id,
@@ -14129,8 +14135,55 @@ app.get('/api/business/sku-enablements', requireAuth, (req, res) => {
             description: row.unique_description || row.known_description || row.custom_description || '',
             status: row.status === 'inactive' ? 'inactive' : 'active',
             enabled: byCode.get(row.id) || [],
+            places: placeCounts.get(row.id) || { places: 0, sites: 0 },
             ...getSystemColumnsForRecord({ companyName: client.company_name, ...HAB_SCREEN, centroCostos: '', createdAt: row.created_at }),
         })),
+    });
+});
+// Dónde está un código según el Layout de cada sitio (pieza 4; solo lectura): los lugares de Relación Código agrupados por sitio y centro de costos, con el camino completo (almacén, sub almacén, zona, localizador) y lo que se acomoda
+// ahí. También salen los sitios donde el código está habilitado pero todavía no tiene lugar. TI ve todos los sitios (no depende de los que se eligen arriba). El croquis lo dibuja la pantalla con el Layout de cada centro.
+app.get('/api/business/sku-enablements/:id/places', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!habCanSeeWhere(req)) return res.status(403).json({ message: 'No tienes permiso para ver dónde está el código.' });
+    const { clientId, isTestAccount } = req.user;
+    const skuRow = getSkuItemById(req.params.id, clientId, isTestAccount);
+    if (!skuRow) return res.status(404).json({ message: 'Code not found.' });
+    const client = getClientById(clientId);
+    const options = habOptions(req);
+    const ctx = codeRelationContext(req);
+    const siteOfCenter = new Map();
+    options.sites.forEach((s) => s.centers.forEach((c) => siteOfCenter.set(c.id, s)));
+    const sites = new Map(); // código del sitio ('' = centros sin sitio) -> { code, sucursal, enabled, centers: Map }
+    const siteEntry = (code, sucursal) => {
+        if (!sites.has(code)) sites.set(code, { code, sucursal: sucursal || '', enabled: false, centers: new Map() });
+        return sites.get(code);
+    };
+    listCodeRelations(clientId, isTestAccount).filter((r) => r.sku_item_id === skuRow.id).forEach((r) => {
+        const site = siteOfCenter.get(r.cost_center_id);
+        const entry = site ? siteEntry(site.code, site.sucursal) : siteEntry('', '');
+        const center = site ? site.centers.find((c) => c.id === r.cost_center_id) : null;
+        const centerId = r.cost_center_id || 0;
+        if (!entry.centers.has(centerId)) entry.centers.set(centerId, { id: centerId, code: center ? center.code : '', name: center ? (center.name || center.code) : ((ctx.costCenters.get(centerId) || {}).name || ''), places: [] });
+        const m = mapCodeRelation(r, null, client ? client.company_name : '', ctx);
+        entry.centers.get(centerId).places.push({
+            id: m.id, locator: m.locator, status: m.status, warehouseName: m.warehouseName, subWarehouseName: m.subWarehouseName, subKind: m.subKind,
+            zoneId: m.zoneId, zoneName: m.zoneName, spaceId: m.spaceId, spaceCode: m.spaceCode, footprintCode: m.footprintCode, level: m.level, slot: m.slot, position: m.position,
+            packLevel: m.packLevel, packName: m.packName, packLabel: m.packLabel, packCount: m.packCount, packCapacity: m.packCapacity,
+        });
+    });
+    // los sitios donde está habilitado (todos los sitios, un sitio o un centro) aunque todavía no tenga lugar en su Layout
+    listSkuEnablements(clientId, isTestAccount, skuRow.id).forEach((e) => {
+        if (!e.siteCode) options.sites.forEach((s) => { siteEntry(s.code, s.sucursal).enabled = true; });
+        else { const s = options.sites.find((x) => x.code === e.siteCode); siteEntry(e.siteCode, s ? s.sucursal : '').enabled = true; }
+    });
+    const list = [...sites.values()].sort((a, b) => (a.code === '' ? 1 : b.code === '' ? -1 : a.code.localeCompare(b.code))).map((s) => {
+        const centers = [...s.centers.values()].sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ ...c, places: c.places.sort((a, b) => String(a.locator || a.zoneName).localeCompare(String(b.locator || b.zoneName))) }));
+        return { code: s.code, sucursal: s.sucursal, enabled: s.enabled, placesCount: centers.reduce((n, c) => n + c.places.length, 0), centers };
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        id: skuRow.id, sku: padSku(skuRow.record_number, skuRow.sku_code), description: skuRow.unique_description || skuRow.known_description || skuRow.custom_description || '',
+        sites: list, totals: { places: list.reduce((n, s) => n + s.placesCount, 0), sites: list.filter((s) => s.placesCount > 0).length },
     });
 });
 // Un código: deja sus habilitaciones exactamente como llegan.
