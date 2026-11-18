@@ -622,7 +622,7 @@ async function openUdmDistView(record) {
     udmViewEl.querySelector('#udm-view-close').textContent = Dashboard.t('main.qrsCerrar');
     const go = udmViewEl.querySelector('#udm-view-go');
     go.textContent = Dashboard.t('main.udmVerIr');
-    go.hidden = !Dashboard.hasScreenGrant('supply-chain', 'sc-area-distribution-center', 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion');
+    go.hidden = !Dashboard.hasScreenGrant('information-technology', 'it-area-operations', 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion');
     udmViewEl.hidden = false;
     try {
         const res = await fetch(`/api/business/sku-distribution?skuItemId=${encodeURIComponent(record.id)}`, { credentials: 'include' });
@@ -665,7 +665,7 @@ function buildActionsCell(record, tr) {
     historyBtn.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, record.id));
     td.appendChild(historyBtn);
     // Códigos: solo lectura, con Editar (lo manda a Edición Código). Edición Código: Terminar edición (lo regresa a Códigos). Los dos piden la hoja de Edición Código.
-    if ((CODES_MODE || EDIT_MODE) && Dashboard.hasScreenGrant('supply-chain', 'sc-area-distribution-center', 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo')) {
+    if ((CODES_MODE || EDIT_MODE) && Dashboard.hasScreenGrant('information-technology', 'it-area-operations', 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo')) {
         const moveBtn = document.createElement('button');
         moveBtn.type = 'button';
         moveBtn.className = 'admin-icon-btn';

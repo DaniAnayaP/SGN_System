@@ -3395,7 +3395,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'roles': { area: '', modulo: 'Administración del Negocio', pantalla: 'Roles' },
     'layout': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Layout' },
     'relacion-codigo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código' },
-    'udm-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones de Distribución' },
+    'udm-distribucion': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Presentaciones de Distribución' },
     'relacion-envio': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Relación Código Envío' },
     'alta-activos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Alta Activos' },
     'calibraciones': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Calibraciones' },
@@ -3403,7 +3403,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'actividades-activos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Actividades Activos' },
     'mtto-preventivo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Mantenimiento Preventivo' },
     'mtto-correctivo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Mantenimiento Correctivo' },
-    'presentaciones-distribucion': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Presentaciones Distribución' },
+    'presentaciones-distribucion': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Presentaciones Distribución' },
     'pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Pedido Manual' },
     'surtido-pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Surtido Pedido Manual' },
     'capacidad-almacenamiento': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Capacidad Almacenamiento' },
@@ -3743,7 +3743,7 @@ const TABLE_GRANT_PATHS = {
     // Admin > Mapa de calor (sus iconos: Temperatura | Humedad y Reproducir)
     'mapa-calor': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-admin/cat-admin-mapa-calor' },
     'relacion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo' },
-    'udm-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion' },
+    'udm-distribucion': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion' },
     'relacion-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-envio' },
     'alta-activos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-activos' },
     'calibraciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-calibraciones' },
@@ -3760,20 +3760,20 @@ const TABLE_GRANT_PATHS = {
     'usuarios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-users' },
     'respaldos': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-respaldos' },
     'nuestros-cambios': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-base-datos/bd-cambios' },
-    'nuestros-articulos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-articulos' },
-    'categorias-inventario': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-inventario' },
-    'categorias-compra': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-compra' },
-    'categorias-almacenamiento': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-almacenamiento' },
-    'categorias-rotacion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-rotacion' },
-    'categorias-manejo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-manejo' },
-    'categorias-riesgo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-riesgo' },
-    'categorias-vidautil': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-vidautil' },
-    'categorias-tipocodigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-tipocodigo' },
-    'unidad-medida': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
-    'marcas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-marcas' },
+    'nuestros-articulos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-alta-articulos' },
+    'categorias-inventario': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-inventario' },
+    'categorias-compra': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-compra' },
+    'categorias-almacenamiento': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-almacenamiento' },
+    'categorias-rotacion': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-rotacion' },
+    'categorias-manejo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-manejo' },
+    'categorias-riesgo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-riesgo' },
+    'categorias-vidautil': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-vidautil' },
+    'categorias-tipocodigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-categorias-tipocodigo' },
+    'unidad-medida': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-unidad-medida' },
+    'marcas': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-marcas' },
     'lugares-envio': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-lugares-envio' },
-    'presentaciones-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-presentaciones-distribucion' },
-    'clasificaciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-clasificaciones' },
+    'presentaciones-distribucion': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-centro-dist-presentaciones-distribucion' },
+    'clasificaciones': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-clasificaciones' },
     'almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-almacenes' },
     'sub-almacenes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-sub-almacenes' },
     'activos-fijos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-catalogos/cat-catalogos-centro-dist-activos-fijos' },
@@ -5106,7 +5106,7 @@ const EVIDENCE_FIELD_SOURCES = [
 const EVIDENCE_SCREEN_SYSTEM_META = {
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
-    'nuestros-articulos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Alta Nuestros Artículos' },
+    'nuestros-articulos': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Alta Nuestros Artículos' },
     'alta-activos': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Alta Activos' },
 };
 
@@ -9612,6 +9612,144 @@ function moveScreensToGestionOnce() {
         db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(MOVE_TO_GESTION_KEY);
     })();
     console.log('[db] Gestión: los permisos de Códigos y Presentaciones Distribución pasaron de Catálogos a Gestión (una vez): ' + JSON.stringify(stats) + '.');
+}
+// «Códigos desde TI», pieza 2 (2026-11-19, Daniel: «1, hazlo»): las pantallas que dan de alta, editan y describen los códigos pasaron de C. Distribución a Operaciones TI (Tecnologías de la Información › Operaciones TI), con los mismos
+// ids de pantalla. Los permisos que ya se habían dado (puestos, usuarios, planes, clientes, giros, Árbol Maestro, sus costos y órdenes) pasan, UNA vez, a la sección y área nuevas, para que cada quien conserve su acceso. Y como TI es un
+// departamento que se contrata, a quien tenía esas pantallas se le CONTRATA TI automáticamente (opción 1 de Daniel): el plan con esos permisos recibe el módulo, y el cliente con puestos, usuarios o adicionales sobre ellas lo abre
+// (client_modules y, si su plan no lo trae, sus módulos extra). Solo agrega; nunca quita un acceso ni un módulo.
+const MOVE_CODES_TO_TI_KEY = 'seed-move-codigos-a-ti-v1';
+const CODE_SCREENS_MOVED_TO_TI = [
+    ['cat-operaciones', 'cat-operaciones-centro-dist-alta-articulos'],
+    ['cat-operaciones', 'cat-operaciones-centro-dist-edicion-codigo'],
+    ['cat-operaciones', 'cat-operaciones-centro-dist-udm-distribucion'],
+    ['cat-gestion', 'cat-gestion-centro-dist-codigos'],
+    ['cat-gestion', 'cat-gestion-centro-dist-presentaciones-distribucion'],
+    ['cat-catalogos', 'cat-catalogos-centro-dist-categorias-inventario'],
+    ['cat-catalogos', 'cat-catalogos-centro-dist-categorias-compra'],
+    ['cat-catalogos', 'cat-catalogos-centro-dist-categorias-almacenamiento'],
+    ['cat-catalogos', 'cat-catalogos-centro-dist-categorias-rotacion'],
+    ['cat-catalogos', 'cat-catalogos-centro-dist-categorias-manejo'],
+    ['cat-catalogos', 'cat-catalogos-centro-dist-categorias-riesgo'],
+    ['cat-catalogos', 'cat-catalogos-centro-dist-categorias-vidautil'],
+    ['cat-catalogos', 'cat-catalogos-centro-dist-categorias-tipocodigo'],
+    ['cat-catalogos', 'cat-catalogos-centro-dist-clasificaciones'],
+    ['cat-catalogos', 'cat-catalogos-centro-dist-unidad-medida'],
+    ['cat-catalogos', 'cat-catalogos-centro-dist-marcas'],
+];
+function moveCodeScreensToTiOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(MOVE_CODES_TO_TI_KEY)) return;
+    const FROM = { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center' };
+    const TO = { sectionId: 'information-technology', itemId: 'it-area-operations' };
+    const stats = {};
+    const bump = (key, n) => { if (n) stats[key] = (stats[key] || 0) + n; };
+    const paths = CODE_SCREENS_MOVED_TO_TI.map(([cat, id]) => `${cat}/${id}`);
+    const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    db.transaction(() => {
+        const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name);
+        tables.forEach((table) => {
+            const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+            // 1) permisos: la pantalla (submenu_id = ruta) y todo lo que cuelga de ella (ruta/…) cambian de sección y área; si ya existía en TI (choque) lo de C. Distribución sobra
+            if (cols.includes('section_id') && cols.includes('item_id') && cols.includes('submenu_id')) {
+                paths.forEach((p) => {
+                    bump(table, db.prepare(`UPDATE OR IGNORE ${table} SET section_id = ?, item_id = ? WHERE section_id = ? AND item_id = ? AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?)`)
+                        .run(TO.sectionId, TO.itemId, FROM.sectionId, FROM.itemId, p, p.length + 1, `${p}/`).changes);
+                    db.prepare(`DELETE FROM ${table} WHERE section_id = ? AND item_id = ? AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?)`).run(FROM.sectionId, FROM.itemId, p, p.length + 1, `${p}/`);
+                });
+            }
+            // 2) llaves de texto: node_key («sección::área::ruta») y parent_key («columna::sección::área::categoría::pantalla::…»): solo las que nombran una pantalla movida
+            ['node_key', 'parent_key'].filter((col) => cols.includes(col)).forEach((col) => {
+                const rows = db.prepare(`SELECT id, ${col} AS k FROM ${table} WHERE ${col} LIKE ?`).all(`%${FROM.sectionId}::${FROM.itemId}::%`);
+                const update = db.prepare(`UPDATE OR IGNORE ${table} SET ${col} = ? WHERE id = ?`);
+                rows.forEach((row) => {
+                    let key = row.k;
+                    CODE_SCREENS_MOVED_TO_TI.forEach(([cat, id]) => {
+                        const re = new RegExp(`${escRe(FROM.sectionId)}::${escRe(FROM.itemId)}::${escRe(cat)}(/|::)${escRe(id)}(?=$|[/:])`, 'g');
+                        key = key.replace(re, (m, sep) => `${TO.sectionId}::${TO.itemId}::${cat}${sep}${id}`);
+                    });
+                    if (key === row.k) return;
+                    // si la llave nueva ya existía (choque), la vieja sobra
+                    if (update.run(key, row.id).changes) bump(`${table}.${col}`, 1);
+                    else db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(row.id);
+                });
+            });
+            // 3) órdenes del Árbol Maestro: las pantallas movidas salen de la lista de su categoría en C. Distribución y se suman, al final, a la de TI (si esa lista ya existe)
+            if (cols.includes('parent_key') && cols.includes('ordered_keys')) {
+                const scopeCols = ['business_sector_id', 'level', 'entity_id', 'client_id'].filter((c) => cols.includes(c));
+                ['cat-operaciones', 'cat-gestion', 'cat-catalogos'].forEach((cat) => {
+                    const mine = new Set(CODE_SCREENS_MOVED_TO_TI.filter(([c]) => c === cat).map(([, id]) => id));
+                    db.prepare(`SELECT * FROM ${table} WHERE parent_key = ?`).all(`pantalla::${FROM.sectionId}::${FROM.itemId}::${cat}`).forEach((row) => {
+                        let list = null;
+                        try { list = JSON.parse(row.ordered_keys); } catch { list = null; }
+                        if (!Array.isArray(list)) return;
+                        const removed = list.filter((k) => mine.has(k));
+                        if (!removed.length) return;
+                        db.prepare(`UPDATE ${table} SET ordered_keys = ? WHERE id = ?`).run(JSON.stringify(list.filter((k) => !mine.has(k))), row.id);
+                        bump(`${table}(orden)`, 1);
+                        const where = ['parent_key = ?'].concat(scopeCols.map((c) => `${c} IS ?`)).join(' AND ');
+                        const sibling = db.prepare(`SELECT id, ordered_keys FROM ${table} WHERE ${where}`).get(`pantalla::${TO.sectionId}::${TO.itemId}::${cat}`, ...scopeCols.map((c) => row[c]));
+                        if (!sibling) return;
+                        let tiList = null;
+                        try { tiList = JSON.parse(sibling.ordered_keys); } catch { tiList = null; }
+                        if (!Array.isArray(tiList)) return;
+                        db.prepare(`UPDATE ${table} SET ordered_keys = ? WHERE id = ?`).run(JSON.stringify(tiList.concat(removed.filter((k) => !tiList.includes(k)))), sibling.id);
+                    });
+                });
+            }
+        });
+        // 4) contratar TI a quien tenía esas pantallas (solo agrega)
+        const movedRows = (table, selectCols) => {
+            try {
+                const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+                if (!cols.includes('section_id') || !cols.includes('submenu_id')) return [];
+                const match = paths.map(() => '(submenu_id = ? OR submenu_id LIKE ?)').join(' OR ');
+                return db.prepare(`SELECT DISTINCT ${selectCols} FROM ${table} WHERE section_id = ? AND item_id = ? AND (${match})`).all(TO.sectionId, TO.itemId, ...paths.flatMap((p) => [p, `${p}/%`]));
+            } catch { return []; }
+        };
+        const clientIds = new Set();
+        const planNames = new Set();
+        const addTiToPlan = (planId) => {
+            const plan = db.prepare('SELECT id, name, modules FROM plans WHERE id = ?').get(planId);
+            if (!plan) return;
+            let modules = [];
+            try { modules = JSON.parse(plan.modules) || []; } catch { modules = []; }
+            if (!modules.includes(TO.sectionId)) {
+                modules.push(TO.sectionId);
+                db.prepare('UPDATE plans SET modules = ? WHERE id = ?').run(JSON.stringify(modules), plan.id);
+                bump('plans(módulo TI)', 1);
+            }
+            planNames.add(plan.name);
+        };
+        movedRows('plan_grants', 'plan_id').forEach((r) => addTiToPlan(r.plan_id));
+        movedRows('client_permission_grants', 'client_id').forEach((r) => clientIds.add(r.client_id));
+        movedRows('user_grants', 'user_id').forEach((r) => { const u = db.prepare('SELECT client_id FROM users WHERE id = ?').get(r.user_id); if (u && u.client_id) clientIds.add(u.client_id); });
+        movedRows('job_position_grants', 'job_position_id').forEach((r) => { const p = db.prepare('SELECT client_id FROM job_positions WHERE id = ?').get(r.job_position_id); if (p && p.client_id) clientIds.add(p.client_id); });
+        movedRows('profile_grants', 'profile_id').forEach((r) => { try { const p = db.prepare('SELECT client_id FROM profiles WHERE id = ?').get(r.profile_id); if (p && p.client_id) clientIds.add(p.client_id); } catch { /* sin tabla de perfiles */ } });
+        planNames.forEach((name) => db.prepare('SELECT id FROM clients WHERE plan = ?').all(name).forEach((c) => clientIds.add(c.id)));
+        clientIds.forEach((clientId) => {
+            const client = db.prepare('SELECT id, plan, extra_modules FROM clients WHERE id = ?').get(clientId);
+            if (!client) return;
+            const opened = db.prepare('UPDATE client_modules SET enabled = 1 WHERE client_id = ? AND module_key = ? AND enabled != 1').run(clientId, TO.sectionId).changes;
+            if (!opened && !db.prepare('SELECT 1 FROM client_modules WHERE client_id = ? AND module_key = ?').get(clientId, TO.sectionId)) {
+                db.prepare('INSERT INTO client_modules (client_id, module_key, enabled) VALUES (?, ?, 1)').run(clientId, TO.sectionId);
+                bump('clients(módulo TI abierto)', 1);
+            } else if (opened) bump('clients(módulo TI abierto)', 1);
+            // si su plan no trae TI, queda como módulo extra para que ningún guardado posterior del plan lo cierre
+            const plan = client.plan ? db.prepare('SELECT modules FROM plans WHERE name = ?').get(client.plan) : null;
+            let planModules = [];
+            try { planModules = plan ? JSON.parse(plan.modules) || [] : []; } catch { planModules = []; }
+            if (!planModules.includes(TO.sectionId)) {
+                let extra = [];
+                try { extra = JSON.parse(client.extra_modules) || []; } catch { extra = []; }
+                if (!extra.includes(TO.sectionId)) {
+                    extra.push(TO.sectionId);
+                    db.prepare('UPDATE clients SET extra_modules = ? WHERE id = ?').run(JSON.stringify(extra), clientId);
+                    bump('clients(módulo TI extra)', 1);
+                }
+            }
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(MOVE_CODES_TO_TI_KEY);
+    })();
+    console.log('[db] Códigos desde TI (pieza 2): las pantallas de códigos pasaron de C. Distribución a Operaciones TI con sus permisos, y se contrató TI a quien las tenía (una vez): ' + JSON.stringify(stats) + '.');
 }
 const QR_PEDIDO_MANUAL_SCREEN_SEED_KEY = 'seed-qrs-pedido-manual-screen-v1';
 function seedQrPedidoManualScreenGrants() {
@@ -15895,6 +16033,8 @@ migrateFixedAssetsToModelsOnce();
 migrateAssetUseAuthOnce();
 backfillFixedAssetHistoryOnce();
 moveScreensToGestionOnce();
+// todo o nada (una sola transacción): si algo falla se avisa, el servidor sigue arriba y se reintenta en el siguiente arranque
+try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos desde TI: no se pudieron mover los permisos de las pantallas (se reintentará al arrancar):', err.message); }
 seedQrSeguridadScreenGrants();
 seedQrIncidentesScreenGrants();
 seedQrDondeEstaScreenGrants();

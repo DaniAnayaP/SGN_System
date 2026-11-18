@@ -6551,8 +6551,8 @@ app.delete('/api/business/fleet-units/:id', requireAuth, (req, res) => {
 // NOT here -- confirmed with the client. SKU shown to the user is just
 // record_number zero-padded (see sku_items' own DDL comment in db.js) --
 // never its own column, so it can't drift from the counter that makes it.
-const SKU_ITEM_AREA_LABEL = 'C. Distribución';
-const SKU_ITEM_MODULE_LABEL = 'Cadena de Suministro';
+const SKU_ITEM_AREA_LABEL = 'Operaciones TI';
+const SKU_ITEM_MODULE_LABEL = 'Tecnologías de la Información';
 const SKU_ITEM_SCREEN_LABEL = 'Alta Nuestros Artículos';
 
 // --- Clasificación de un código --------------------------------------------------------------------------------------------------
@@ -6947,7 +6947,7 @@ app.post('/api/business/sku-items/import', requireAuth, requireCostCenter, (req,
 
 // Editar un código ya completo: pasa de Catálogos > Códigos (solo lectura) a Operaciones > Edición Código, donde se corrige con las mismas reglas de siempre (permisos por columna,
 // historial). Al terminar la edición (con los 24 datos llenos) regresa a Códigos. Se pide la hoja de la pantalla Edición Código del árbol; el administrador del cliente no depende de hojas.
-const EDICION_CODIGO_SCREEN = { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuId: 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo' };
+const EDICION_CODIGO_SCREEN = { sectionId: 'information-technology', itemId: 'it-area-operations', submenuId: 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo' };
 function canUseEdicionCodigo(req) {
     return !!req.user.isClientAdmin || isTupleGranted(getUserEffectiveGrants(req.user.sub), EDICION_CODIGO_SCREEN.sectionId, EDICION_CODIGO_SCREEN.itemId, EDICION_CODIGO_SCREEN.submenuId);
 }
@@ -13896,7 +13896,7 @@ function mapSkuDistribution(row, pendingByRecord, companyName, node, pantalla) {
         maxStack: row.max_stack || 0,
         fromArticle: principal, // sus medidas y su peso se capturan en Alta Artículos
         pendingFields: pendingByRecord?.get(row.id) || [],
-        ...getSystemColumnsForRecord({ companyName, area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: pantalla || 'Presentaciones de Distribución', centroCostos: '', createdAt: row.created_at }),
+        ...getSystemColumnsForRecord({ companyName, area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: pantalla || 'Presentaciones de Distribución', centroCostos: '', createdAt: row.created_at }),
     };
 }
 // Un código que todavía no tiene presentaciones se lista igual, con su material principal (unidad, medidas y peso de Alta Artículos) y lo demás de partida: es un renglón SIN GUARDAR (id negativo, virtual = true); al
