@@ -37,6 +37,20 @@
         if (level === 'n3' && m.n3Enabled === false) level = 'n4';
         return level;
     }
+    // Los niveles que usa la empresa de n1 a n4 (el 2 y el 3 se pueden apagar en el Mapa de soporte; el 1 y el 4 siempre).
+    const ORDER = { n0: 0, n1: 1, n2: 2, n3: 3, n4: 4 };
+    function enabledLevels(map) {
+        const m = map || {};
+        return ['n1', ...(m.n2Enabled === false ? [] : ['n2']), ...(m.n3Enabled === false ? [] : ['n3']), 'n4'];
+    }
+    // A qué niveles puede SUBIR un caso que está en `level` (los que usa la empresa y están por encima), del más cercano al más lejano.
+    function upLevels(level, map) {
+        return enabledLevels(map).filter((l) => ORDER[l] > (ORDER[level] || 0));
+    }
+    // A qué niveles puede DEVOLVERSE (los que usa la empresa y están por debajo), del más cercano al más lejano.
+    function downLevels(level, map) {
+        return enabledLevels(map).filter((l) => ORDER[l] < (ORDER[level] || 0)).reverse();
+    }
     // Minutos para la primera respuesta: el más corto de los dos que haya (el de la prioridad y el de la categoría); 0 = sin plazo.
     function firstResponseMinutes(priority, categoryMinutes, map) {
         const byPriority = Number((map || {})[`p${priority}FirstMin`]) || 0;
@@ -44,5 +58,5 @@
         const list = [byPriority, byCategory].filter((n) => n > 0);
         return list.length ? Math.min(...list) : 0;
     }
-    return { IMPACT_LEVELS, WHEN_AFFECTS, LEVELS, isImportant, isUrgent, priorityOf, entryLevel, firstResponseMinutes };
+    return { IMPACT_LEVELS, WHEN_AFFECTS, LEVELS, isImportant, isUrgent, priorityOf, entryLevel, firstResponseMinutes, enabledLevels, upLevels, downLevels };
 }));

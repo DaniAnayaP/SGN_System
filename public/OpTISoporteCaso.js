@@ -50,7 +50,15 @@ function eventText(m) {
     if (m.eventKey === 'int_confirmed') return t('main.spEv_int_confirmed', { name: d.name || author, min: friendlyMinutes(d.minutes) });
     if (m.eventKey === 'int_declined') return t('main.spEv_int_declined', { name: d.name || author }) + (d.reason ? ` — ${d.reason}` : '');
     if (m.eventKey === 'person_joined') return t('main.spEv_person_joined', { name: d.name || author });
+    if (m.eventKey === 'moved') return t(d.direction === 'up' ? 'main.spEv_moved_up' : 'main.spEv_moved_down', { author, from: t(`main.sopLevel_${d.from}`), to: t(`main.sopLevel_${d.to}`) });
     return m.eventKey;
+}
+// El detalle de un traspaso (solo lo ve el equipo con las notas internas): motivo, lo que hizo, las notas y cuántas evidencias.
+function movedDetail(m) {
+    const d = m.eventData || {};
+    if (m.eventKey !== 'moved' || !d.reason) return '';
+    const files = (d.fileIds || []).length;
+    return `<div class="sc-why"><b>${esc(t('main.mvReasonLabel'))}:</b> ${esc(t(`main.mvReason_${d.reason}`))}<br><b>${esc(t('main.mvDidShort'))}:</b> ${esc(d.did)}<br><b>${esc(t('main.mvNotesShort'))}:</b> ${esc(d.notes)}${files ? `<br><b>${esc(t('main.mvFilesShort'))}:</b> ${files}` : ''}</div>`;
 }
 function friendlyMinutes(m) {
     const n = Number(m) || 0;
@@ -62,7 +70,7 @@ function friendlyMinutes(m) {
 function messageHtml(m) {
     if (m.kind === 'event') {
         const att = m.file ? `<div class="sc-ev-att">${fileHtml(m.file)}</div>` : (m.fileLocked ? `<div class="sc-ev-att sp-muted"><i class="bx bx-lock-alt" aria-hidden="true"></i> ${esc(t('main.scLocked'))}</div>` : '');
-        return `<div class="sc-sep ${esc(m.eventKey)}" data-msg="${m.id}"><span>${lvBadge(m.level)} ${esc(eventText(m))}</span><time>${esc(fmtTime(m.createdAt))}</time>${m.body ? `<div class="sc-ev-body">${esc(m.body)}</div>` : ''}${att}</div>`;
+        return `<div class="sc-sep ${esc(m.eventKey)}" data-msg="${m.id}"><span>${lvBadge(m.level)} ${esc(eventText(m))}</span><time>${esc(fmtTime(m.createdAt))}</time>${m.body ? `<div class="sc-ev-body">${esc(m.body)}</div>` : ''}${movedDetail(m)}${att}</div>`;
     }
     const mine = m.authorId === state.chat.meId;
     const att = m.file ? `<div class="sc-att-wrap">${fileHtml(m.file)}</div>` : (m.fileLocked ? `<div class="sp-muted"><i class="bx bx-lock-alt" aria-hidden="true"></i> ${esc(t('main.scLocked'))}</div>` : '');
@@ -155,6 +163,7 @@ async function refresh(first) {
             await loadCase();
             renderHeader(); renderFiles();
             if (state.contactCan) await reloadContact();
+            await reloadMoves();
         }
         if (!first && state.peopleCan) await reloadPeople();
         if (first || got) { renderThread(first); renderFlow(); }
@@ -418,6 +427,165 @@ document.addEventListener('click', async (event) => {
     } finally { send.disabled = false; }
 });
 
+// ---- por dónde pasó el caso, y subirlo o devolverlo ------------------------------------------------------------------------------------------------------------
+// La barra de tiempo en cada nivel y los botones «Subir de nivel» / «Devolver» (cada uno con su hoja del árbol). La ventana pide el motivo, lo que se hizo en el nivel, las notas para el siguiente y al menos una evidencia
+// (se puede grabar la pantalla); al subir avisa si falta alguna evidencia que pide la categoría. Lo escrito no se edita ni se borra.
+const moveState = { data: null, form: null };
+function fmtDuration(min) {
+    const n = Math.max(0, Number(min) || 0);
+    if (n < 1) return '< 1 min';
+    if (n < 60) return `${n} min`;
+    if (n < 1440) return `${Math.floor(n / 60)} h${n % 60 ? ` ${n % 60} min` : ''}`;
+    return `${Math.floor(n / 1440)} d${Math.floor((n % 1440) / 60) ? ` ${Math.floor((n % 1440) / 60)} h` : ''}`;
+}
+async function loadMoves() {
+    const res = await fetch(`${API}/${caseId}/moves`, { credentials: 'include' });
+    if (!res.ok) return false;
+    moveState.data = await res.json();
+    return true;
+}
+function renderLane() {
+    const d = moveState.data;
+    const box = $('sc-lane-card');
+    if (!d) { box.hidden = true; return; }
+    box.hidden = false;
+    const total = d.segments.reduce((a, s) => a + Math.max(s.minutes, 1), 0);
+    const bar = d.segments.map((s) => `<div class="sc-seg ${esc(s.level)} ${esc(s.how)}" style="flex:${Math.max(Math.max(s.minutes, 1) / total * 100, 9)} 1 0" title="${esc(t(`main.sopLevel_${s.level}`))} · ${esc(fmtDuration(s.minutes))}">${lvBadge(s.level)}<b>${esc(fmtDuration(s.minutes))}</b>${s.how === 'down' ? '<span aria-hidden="true">↩</span>' : ''}</div>`).join('');
+    const list = d.segments.map((s) => `<div class="sc-seg-row"><span>${lvBadge(s.level)} ${esc(t(`main.sopLevel_${s.level}`))}</span><span class="sp-muted">${esc(fmtTime(s.startAt))} · ${esc(fmtDuration(s.minutes))}${s.endAt ? '' : ` · ${esc(t('main.mvNow'))}`} · ${esc(t(`main.mvHow_${s.how}`))}</span></div>`).join('');
+    const btns = `${d.canUp ? `<button type="button" class="btn" data-move="up">↑ ${esc(t('main.mvUp'))}</button>` : ''}${d.canDown ? `<button type="button" class="btn btn-secondary" data-move="down">↓ ${esc(t('main.mvDown'))}</button>` : ''}`;
+    box.innerHTML = `<div class="sc-card-head"><h3>${esc(t('main.mvLaneTitle'))}</h3><div class="sc-actions">${btns}</div></div><div class="sc-lane">${bar}</div><div class="sc-seg-list">${list}</div>`;
+}
+async function reloadMoves() {
+    if (!state.chat || !state.chat.canSee || state.chat.isReporter) return;
+    if (await loadMoves()) renderLane();
+}
+let moveEl = null;
+function moveToOptions() { const d = moveState.data; const f = moveState.form; return f.dir === 'up' ? d.upTo : d.downTo; }
+function renderMoveForm() {
+    const d = moveState.data; const f = moveState.form;
+    const opts = moveToOptions();
+    const reasons = d.reasons[f.dir].map((r) => `<button type="button" class="sp-chip${f.reason === r ? ' on' : ''}" role="radio" aria-checked="${f.reason === r}" data-mv-reason="${r}">${esc(t(`main.mvReason_${r}`))}</button>`).join('');
+    const files = f.files.map((x, i) => `<div class="sp-slot-row"><span class="sp-ok"><i class="bx bx-check" aria-hidden="true"></i> ${esc(x.name)} <small class="sp-muted">${esc(fmtSize(x.blob.size))}</small></span><button type="button" class="ms-icon-btn" data-mv-unfile="${i}" aria-label="${esc(t('main.scRemove'))}"><i class="bx bx-trash" aria-hidden="true"></i></button></div>`).join('');
+    const canRec = window.SupportRecorder && SupportRecorder.canRecord();
+    const rec = f.rec ? `<span class="sp-recbar"><span class="sp-recdot"></span><b>${esc(t('main.spFRecording'))} · ${esc(fmtClock(f.rec.seconds))}</b><button type="button" class="btn" data-mv-recstop>${esc(t('main.spFRecStop'))}</button></span>` : (canRec ? `<button type="button" class="btn btn-secondary" data-mv-rec><i class="bx bx-radio-circle-marked" aria-hidden="true"></i> ${esc(t('main.spFRecord'))}</button>` : '');
+    const miss = f.dir === 'up' && d.missingEvidence.length ? `<div class="sc-warn"><b>${esc(t('main.mvMissing'))}</b> ${esc(d.missingEvidence.map((e) => e.name).join(', '))}<label><input type="checkbox" id="mv-confirm"${f.confirmMissing ? ' checked' : ''}> ${esc(t('main.mvMissingConfirm'))}</label></div>` : '';
+    const both = d.canUp && d.canDown;
+    moveEl.querySelector('#mv-body').innerHTML = `
+        ${both ? `<div class="sp-chips"><button type="button" class="sp-chip${f.dir === 'up' ? ' on' : ''}" data-mv-dir="up">↑ ${esc(t('main.mvUp'))}</button><button type="button" class="sp-chip${f.dir === 'down' ? ' on' : ''}" data-mv-dir="down">↓ ${esc(t('main.mvDown'))}</button></div>` : ''}
+        <label class="sp-field"><span>${esc(t('main.mvTo'))} *</span><select id="mv-to">${opts.map((l) => `<option value="${l}"${l === f.to ? ' selected' : ''}>${esc(t(`main.sopLevel_${l}`))}</option>`).join('')}</select></label>
+        <div class="sp-field"><span>${esc(t('main.mvReason'))} *</span><div class="sp-chips" role="radiogroup">${reasons}</div></div>
+        <label class="sp-field"><span>${esc(t('main.mvDid'))} * <small class="sp-muted">${esc(t('main.mvDidHint'))}</small></span><textarea id="mv-did" rows="3" maxlength="${d.maxText}">${esc(f.did)}</textarea></label>
+        <label class="sp-field"><span>${esc(t('main.mvNotes'))} * <small class="sp-muted">${esc(t('main.mvNotesHint'))}</small></span><textarea id="mv-notes" rows="3" maxlength="${d.maxText}">${esc(f.notes)}</textarea></label>
+        <div class="sp-field"><span>${esc(t('main.mvFiles'))} * <small class="sp-muted">${esc(t('main.mvFilesHint'))}</small></span>${files}
+            <div class="sp-slot-row"><label class="btn btn-secondary"><i class="bx bx-paperclip" aria-hidden="true"></i> ${esc(t('main.scAttach'))}<input type="file" id="mv-file" multiple hidden></label>${rec}</div></div>
+        ${miss}`;
+    const send = moveEl.querySelector('#mv-send');
+    send.disabled = f.sending;
+    send.textContent = f.sending ? t('main.spFSending') : t(f.dir === 'up' ? 'main.mvSendUp' : 'main.mvSendDown', { level: t(`main.sopLevel_${f.to}`) });
+    moveEl.querySelector('#mv-title').textContent = t(f.dir === 'up' ? 'main.mvUp' : 'main.mvDown');
+}
+function closeMove() { if (moveState.form && moveState.form.rec) { try { moveState.form.rec.ctl.stop(); } catch (err) { /* ya terminó */ } } if (moveEl) moveEl.hidden = true; moveState.form = null; }
+function openMove(dir) {
+    const d = moveState.data;
+    if (!moveEl) {
+        moveEl = document.createElement('div');
+        moveEl.className = 'modal-overlay';
+        moveEl.hidden = true;
+        moveEl.innerHTML = '<div class="modal-panel sp-form sc-move" role="dialog" aria-modal="true" aria-labelledby="mv-title"><h3 id="mv-title"></h3><div id="mv-body"></div><p class="sp-muted" id="mv-note"></p><div class="admin-form-actions"><button type="button" class="btn" id="mv-send"></button><button type="button" class="btn btn-secondary" id="mv-cancel"></button></div></div>';
+        document.body.appendChild(moveEl);
+        moveEl.addEventListener('click', onMoveClick);
+        moveEl.addEventListener('input', onMoveInput);
+        moveEl.addEventListener('change', onMoveChange);
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && moveState.form && !moveState.form.sending) closeMove(); });
+    }
+    moveState.form = { dir, to: (dir === 'up' ? d.upTo : d.downTo)[0], reason: '', did: '', notes: '', files: [], confirmMissing: false, rec: null, sending: false };
+    moveEl.querySelector('#mv-cancel').textContent = t('main.spFCancel');
+    moveEl.querySelector('#mv-note').textContent = t('main.mvHint');
+    renderMoveForm();
+    moveEl.hidden = false;
+}
+function onMoveInput(event) {
+    const f = moveState.form; if (!f) return;
+    if (event.target.id === 'mv-did') f.did = event.target.value;
+    else if (event.target.id === 'mv-notes') f.notes = event.target.value;
+}
+async function onMoveChange(event) {
+    const f = moveState.form; if (!f) return;
+    const el = event.target;
+    if (el.id === 'mv-to') { f.to = el.value; renderMoveForm(); return; }
+    if (el.id === 'mv-confirm') { f.confirmMissing = el.checked; return; }
+    if (el.id === 'mv-file') {
+        const picked = [...(el.files || [])]; el.value = '';
+        for (const file of picked) {
+            let blob = file;
+            if (file.type && file.type.startsWith('image/')) { try { blob = await Dashboard.compressImageToBlob(file); } catch (err) { blob = file; } }
+            if (blob.size > 12 * 1048576) { Dashboard.showToast(t('main.spTooBig', { name: file.name, mb: 12 }), 'warning'); continue; }
+            f.files.push({ blob, name: file.name });
+        }
+        renderMoveForm();
+    }
+}
+async function onMoveClick(event) {
+    const f = moveState.form; if (!f) return;
+    if (event.target === moveEl || event.target.closest('#mv-cancel')) { if (!f.sending) closeMove(); return; }
+    const dir = event.target.closest('[data-mv-dir]');
+    if (dir) { f.dir = dir.dataset.mvDir; f.to = moveToOptions()[0]; f.reason = ''; renderMoveForm(); return; }
+    const reason = event.target.closest('[data-mv-reason]');
+    if (reason) { f.reason = reason.dataset.mvReason; renderMoveForm(); return; }
+    const un = event.target.closest('[data-mv-unfile]');
+    if (un) { f.files.splice(Number(un.dataset.mvUnfile), 1); renderMoveForm(); return; }
+    if (event.target.closest('[data-mv-rec]')) {
+        try {
+            const ctl = await SupportRecorder.start({ onTick: (s) => { if (f.rec) { f.rec.seconds = s; const lb = moveEl.querySelector('.sp-recbar b'); if (lb) lb.textContent = `${t('main.spFRecording')} · ${fmtClock(s)}`; } } });
+            f.rec = { seconds: 0, ctl };
+            ctl.done.then(({ blob }) => { f.rec = null; if (blob.size <= 12 * 1048576) f.files.push({ blob, name: `grabacion-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.webm` }); else Dashboard.showToast(t('main.spTooBig', { name: t('main.spFRecord'), mb: 12 }), 'warning'); if (moveState.form === f) renderMoveForm(); });
+            renderMoveForm();
+        } catch (err) { Dashboard.showToast(t('main.spRecDenied'), 'warning'); }
+        return;
+    }
+    if (event.target.closest('[data-mv-recstop]')) { if (f.rec) f.rec.ctl.stop(); return; }
+    if (event.target.closest('#mv-send')) submitMove();
+}
+async function submitMove() {
+    const f = moveState.form; const d = moveState.data;
+    if (!f || f.sending) return;
+    const need = (cond, key) => { if (!cond) { Dashboard.showToast(t(key), 'warning'); return false; } return true; };
+    if (!need(f.reason, 'main.mvErrReason') || !need(f.did.trim().length >= d.minText, 'main.mvErrDid') || !need(f.notes.trim().length >= d.minText, 'main.mvErrNotes') || !need(f.files.length, 'main.mvErrFiles')) return;
+    if (f.rec) { Dashboard.showToast(t('main.spErrRecording'), 'warning'); return; }
+    f.sending = true; renderMoveForm();
+    try {
+        const ids = [];
+        for (const item of f.files) {
+            if (item.uploaded) { ids.push(item.uploaded); continue; } // ya subida en un intento anterior
+            const res = await fetch(`${API}/${caseId}/files?move=1`, { method: 'POST', headers: { 'Content-Type': item.blob.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(item.name) }, credentials: 'include', body: item.blob });
+            const out = await res.json().catch(() => ({}));
+            if (!res.ok) { Dashboard.showToast(t('main.spFileFailed', { name: item.name, why: out.message || Dashboard.t('admin.saveError') }), 'warning'); f.sending = false; renderMoveForm(); return; }
+            ids.push(out.file.id);
+            item.uploaded = out.file.id;
+        }
+        const res = await fetch(`${API}/${caseId}/moves`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ direction: f.dir, toLevel: f.to, reason: f.reason, did: f.did, notes: f.notes, fileIds: ids, confirmMissing: f.confirmMissing }) });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning');
+            // las evidencias ya subidas se quedan (marcadas) para el siguiente intento: no se vuelven a mandar
+            f.sending = false; renderMoveForm();
+            return;
+        }
+        closeMove();
+        Dashboard.showToast(t(f.dir === 'up' ? 'main.mvDoneUp' : 'main.mvDoneDown', { level: t(`main.sopLevel_${out.level}`) }), 'success');
+        await Promise.all([loadCase().then(() => { renderHeader(); renderFiles(); }), reloadMoves(), refresh(false)]);
+        renderThread(true);
+    } catch (err) {
+        console.error('Caso de soporte: failed to move', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        if (moveState.form) { moveState.form.sending = false; renderMoveForm(); }
+    }
+}
+document.addEventListener('click', (event) => {
+    const mv = event.target.closest('[data-move]');
+    if (mv && moveState.data) openMove(mv.dataset.move);
+});
+
 // ---- eventos ----------------------------------------------------------------------------------------------------------------------------
 document.addEventListener('click', (event) => {
     const tab = event.target.closest('[data-tab]');
@@ -461,6 +629,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
         renderHeader(); renderFiles();
         if (state.contactCan) { await loadScreens(); await loadContact(); renderContact(); }
         if (state.peopleCan) { await loadPeople(); renderPeople(); }
+        if (state.chat.canSee && !state.chat.isReporter) { if (await loadMoves()) renderLane(); }
         if (state.chat.canSee) { await loadMessages(true); renderTabs(); renderThread(true); renderFlow(); renderComposer(); } else { $('sc-chat-card').hidden = true; $('sc-flow-card').hidden = true; }
         state.timer = setInterval(() => { if (!document.hidden) refresh(false); }, POLL_MS);
     } catch (err) {

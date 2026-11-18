@@ -9094,3 +9094,16 @@ video.sc-att.big{ max-width: 100%; max-height: 360px; }
 .sc-sep[class*=" int_"]{ background: #fdeed8; color: #8a5a1d; }
 .sc-sep.person_joined{ background: #dff5ea; color: #1d7f55; }
 .sc-lv.inv{ background: #8a8fa8; } .sc-step.inv .dotc{ background: #8a8fa8; }
+
+/* Casos de soporte > un caso: por dónde pasó (tiempo en cada nivel) y subir / devolver */
+.sc-lane{ display: flex; gap: 0.3rem; min-height: 2.6rem; }
+.sc-seg{ display: flex; align-items: center; gap: 0.4rem; justify-content: center; min-width: 0; padding: 0.3rem 0.5rem; border-radius: 0.6rem; background: #6b7089; color: #fff; font-size: 0.74rem; white-space: nowrap; overflow: hidden; }
+.sc-seg .sc-lv{ background: rgba(255, 255, 255, 0.28); }
+.sc-seg.n0{ background: #1f8a70; } .sc-seg.n1{ background: #3b6fd6; } .sc-seg.n2{ background: #7a4fd6; } .sc-seg.n3{ background: #c0701c; } .sc-seg.n4{ background: #b8374f; }
+.sc-seg.down{ outline: 2px dashed #fdeed8; outline-offset: -3px; }
+.sc-seg-list{ display: grid; gap: 0.2rem; font-size: 0.76rem; }
+.sc-seg-row{ display: flex; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+.sc-move{ width: min(720px, 94vw); }
+.sc-warn{ display: grid; gap: 0.3rem; padding: 0.5rem 0.7rem; border-radius: 0.6rem; background: #fdeed8; color: #6b3f06; font-size: 0.78rem; }
+.sc-warn label{ display: inline-flex; align-items: center; gap: 0.4rem; }
+.sc-why{ text-align: left; font-size: 0.74rem; background: var(--color-surface); color: var(--color-text-primary); border-radius: 0.5rem; padding: 0.35rem 0.6rem; max-width: 100%; overflow-wrap: anywhere; }

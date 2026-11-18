@@ -581,6 +581,7 @@ const {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
+    listSupportMoves, addSupportMove, usedSupportMoveFileIds,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
 } = require('./db');
@@ -10322,7 +10323,9 @@ app.get('/api/business/support-cases/:id/messages', requireAuth, (req, res) => {
     const filesById = new Map(listSupportCaseFiles(id).map((f) => [f.id, f]));
     res.set('Cache-Control', 'no-store');
     const seeInternal = supportCanSeeNotes(req);
-    res.json({ messages: listSupportCaseMessages(id, { afterId: after, includeNotes: seeInternal }).filter((m) => seeInternal || !(m.kind === 'event' && String(m.event_key).startsWith('int_'))).map((m) => supportMessageOf(m, rec, canFiles, filesById)) });
+    const shown = listSupportCaseMessages(id, { afterId: after, includeNotes: seeInternal }).filter((m) => seeInternal || !(m.kind === 'event' && String(m.event_key).startsWith('int_'))).map((m) => supportMessageOf(m, rec, canFiles, filesById));
+    if (!seeInternal) shown.forEach((m) => { if (m.kind === 'event' && m.eventKey === 'moved') m.eventData = { direction: m.eventData.direction, from: m.eventData.from, to: m.eventData.to }; });
+    res.json({ messages: shown });
 });
 // Escribir en el chat: un mensaje (lo ve el usuario) o una nota interna (solo el equipo). Puede llevar una evidencia ya subida a este caso (fileId). La primera respuesta del equipo queda marcada una sola vez.
 app.post('/api/business/support-cases/:id/messages', requireAuth, (req, res) => {
@@ -10475,14 +10478,14 @@ function supportPeopleGate(req, res, { operate = false } = {}) {
 const supportWindowHours = (clientId) => Number(getSupportMapRow(clientId).confirm_window_hours) || 2;
 const sqlPlusHours = (hours) => sqlUtcFromMs(Date.now() + hours * 3600000);
 // Manda el aviso o la invitación a UNA persona: su fila del caso, el aviso de su campana y (solo para el equipo) el renglón del chat. { row, sent }: sent = false si ya lo tenía.
-function sendSupportPerson(rec, { userId, kind, depth = 0, message = '', fromPerson = null, reason = '', byName = '', byUserId = null, level = 'n1', auto = false }) {
+function sendSupportPerson(rec, { userId, kind, depth = 0, message = '', fromPerson = null, reason = '', byName = '', byUserId = null, level = 'n1', auto = false, extra = {} }) {
     const hours = supportWindowHours(rec.client_id);
     const { row, created } = upsertSupportPerson({ caseId: rec.id, clientId: rec.client_id, userId, kind, depth, byUserId, byName, message, fromPersonId: fromPerson ? fromPerson.id : null, reason, dueAt: sqlPlusHours(hours) });
     if (!created) return { row, sent: false };
     const variant = fromPerson ? 'person-escalated' : (row.kind === 'invite' ? 'person-invite' : 'person-notify');
     publishSupportNotice({
         recipients: [userId], actorUserId: byUserId, actorLabel: byName,
-        payload: { variant, caseId: rec.id, folio: supportFolio(rec.record_number), participantId: row.id, targetName: rec.reporter_name, summary: rec.summary, message, hours, reason, fromName: fromPerson ? (fromPerson.user_name || '') : '', fromKind: fromPerson ? fromPerson.kind : '', by: byName, auto },
+        payload: { variant, caseId: rec.id, folio: supportFolio(rec.record_number), participantId: row.id, targetName: rec.reporter_name, summary: rec.summary, message, hours, reason, fromName: fromPerson ? (fromPerson.user_name || '') : '', fromKind: fromPerson ? fromPerson.kind : '', by: byName, auto, ...extra },
     });
     ensureSupportThread(rec);
     addSupportEvent(rec, fromPerson ? 'int_escalated' : (row.kind === 'invite' ? 'int_invite' : 'int_notify'), { to: row.user_name || '', toUserId: userId, from: fromPerson ? (fromPerson.user_name || '') : '', fromKind: fromPerson ? fromPerson.kind : '', reason, hours, auto }, { level, authorName: byName, authorUserId: byUserId });
@@ -10581,13 +10584,113 @@ app.post('/api/business/support-cases/:id/people/respond', requireAuth, (req, re
     escalateSupportPerson(rec, { ...getSupportPersonById(me.id) }, 'declined');
     res.json({ status: 'declined' });
 });
+// ---- subir y devolver un caso entre niveles ----------------------------------------------------------------------------------------------------------------------------------------------
+// Cualquier nivel puede SUBIR el caso al siguiente (o a uno más arriba) o DEVOLVERLO a uno más abajo, con su botón del árbol (Subir de nivel / Devolver). Siempre pide: el motivo (de una lista), «qué hice» (obligatorio), las
+// notas para el siguiente nivel y al menos una evidencia de lo que se hizo; lo escrito no se edita ni se borra. Al subir, si falta alguna evidencia que pide la categoría, avisa y hay que confirmarlo. Quién puede moverlo: el
+// administrador, o quien tenga el botón y esté en la lista del nivel donde está el caso (Mapa de soporte; si esa lista está vacía, cualquiera con el botón). El nivel 4 (el proveedor) solo lo mueve el administrador.
+const SUPPORT_MOVE_REASONS = {
+    up: ['out_of_scope', 'needs_config', 'needs_code', 'system_bug', 'needs_vendor', 'other'],
+    down: ['missing_evidence', 'missing_info', 'simple', 'misclassified', 'solved', 'other'],
+};
+const SUPPORT_MOVE_TEXT_MIN = 10;
+const SUPPORT_MOVE_TEXT_MAX = 1000;
+const supportCanMove = (req, direction) => supportCan(req, direction === 'up' ? 'colSpSubir' : 'colSpDevolver');
+function supportCanActOnLevel(req, rec) {
+    if (req.user.isClientAdmin) return true;
+    if (rec.level === 'n4') return false;
+    const list = parseClassificationIds(getSupportMapRow(req.user.clientId)[`${rec.level}_users`]);
+    return !list.length || list.includes(req.user.sub);
+}
+const supportMoveOf = (m) => ({ id: m.id, direction: m.direction, from: m.from_level, to: m.to_level, reason: m.reason, did: m.did, notes: m.notes, fileIds: parseJsonOr(m.file_ids, []), missingAck: m.missing_ack === 1, by: m.by_name, byUserId: m.by_user_id, createdAt: sqlUtcIso(m.created_at) });
+// El tiempo que el caso estuvo en cada nivel, en orden: [{ level, startAt, endAt (null = sigue ahí), minutes, how: 'entry' | 'up' | 'down' }].
+function supportSegments(rec, moves) {
+    const iso = (ms) => new Date(ms).toISOString();
+    let level = moves.length ? moves[0].from_level : rec.level;
+    let start = new Date(sqlUtcIso(rec.created_at)).getTime();
+    let how = 'entry';
+    const out = [];
+    for (const m of moves) {
+        const at = new Date(sqlUtcIso(m.created_at)).getTime();
+        out.push({ level, startAt: iso(start), endAt: iso(at), minutes: Math.max(0, Math.round((at - start) / 60000)), how });
+        level = m.to_level; start = at; how = m.direction;
+    }
+    out.push({ level, startAt: iso(start), endAt: null, minutes: Math.max(0, Math.round((Date.now() - start) / 60000)), how });
+    return out;
+}
+function supportMoveGate(req, res, { write = false } = {}) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!rec) { res.status(404).json({ message: 'Ese caso no existe.' }); return null; }
+    if ((!write && !supportHasCol(req, 'colSpChat')) || (supportIsReporter(req, rec) && !req.user.isClientAdmin)) { res.status(403).json({ message: 'No tienes permiso para ver los traspasos de este caso.' }); return null; }
+    return rec;
+}
+app.get('/api/business/support-cases/:id/moves', requireAuth, (req, res) => {
+    const rec = supportMoveGate(req, res);
+    if (!rec) return;
+    const map = supportMapPayload(getSupportMapRow(req.user.clientId), req).map;
+    const moves = listSupportMoves(rec.id);
+    const act = supportCanActOnLevel(req, rec);
+    const upTo = SupportRules.upLevels(rec.level, map);
+    const downTo = SupportRules.downLevels(rec.level, map);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        level: rec.level, moves: moves.map(supportMoveOf), segments: supportSegments(rec, moves), reasons: SUPPORT_MOVE_REASONS, minText: SUPPORT_MOVE_TEXT_MIN, maxText: SUPPORT_MOVE_TEXT_MAX,
+        canUp: upTo.length > 0 && act && supportCanMove(req, 'up'), canDown: downTo.length > 0 && act && supportCanMove(req, 'down'), upTo, downTo,
+        missingEvidence: supportEvidenceStatus(req, rec).filter((e) => !e.done).map((e) => ({ id: e.id, name: e.name, kind: e.kind })),
+    });
+});
+app.post('/api/business/support-cases/:id/moves', requireAuth, (req, res) => {
+    const rec = supportMoveGate(req, res, { write: true });
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code, extra = {}) => res.status(400).json({ message, code, ...extra });
+    const direction = body.direction === 'up' || body.direction === 'down' ? body.direction : '';
+    if (!direction) return bad('Elige si el caso sube o se devuelve.', 'DIRECTION');
+    if (!supportCanMove(req, direction)) return res.status(403).json({ message: `No tienes permiso para ${direction === 'up' ? 'subir' : 'devolver'} casos.` });
+    if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'Este caso lo mueve quien lo atiende en su nivel actual.', code: 'LEVEL' });
+    const map = supportMapPayload(getSupportMapRow(req.user.clientId), req).map;
+    const options = direction === 'up' ? SupportRules.upLevels(rec.level, map) : SupportRules.downLevels(rec.level, map);
+    if (!options.length) return bad(direction === 'up' ? 'Este caso ya está en el último nivel.' : 'Este caso ya está en el primer nivel.', direction === 'up' ? 'TOP' : 'BOTTOM');
+    const toLevel = body.toLevel ? String(body.toLevel) : options[0];
+    if (!options.includes(toLevel)) return bad('Ese nivel no está disponible para este traspaso.', 'LEVEL');
+    const reason = String(body.reason || '');
+    if (!SUPPORT_MOVE_REASONS[direction].includes(reason)) return bad('Elige el motivo.', 'REASON');
+    const clean = (v) => String(v === null || v === undefined ? '' : v).replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, SUPPORT_MOVE_TEXT_MAX);
+    const did = clean(body.did);
+    const notes = clean(body.notes);
+    if (did.length < SUPPORT_MOVE_TEXT_MIN) return bad('Cuenta qué hiciste en tu nivel (obligatorio).', 'DID');
+    if (notes.length < SUPPORT_MOVE_TEXT_MIN) return bad('Escribe las notas para el siguiente nivel.', 'NOTES');
+    const fileIds = Array.isArray(body.fileIds) ? [...new Set(body.fileIds.map(Number).filter((n) => Number.isInteger(n)))] : [];
+    if (!fileIds.length) return bad('Adjunta al menos una evidencia de lo que hiciste.', 'FILES');
+    const used = usedSupportMoveFileIds(rec.id);
+    for (const fileId of fileIds) {
+        const file = getSupportCaseFile(rec.id, fileId);
+        if (!file || used.has(fileId) || file.level === 'n0') return bad('Una de las evidencias no sirve para este traspaso (debe ser de lo que hiciste, nueva y de este caso).', 'FILES');
+    }
+    const missing = direction === 'up' ? supportEvidenceStatus(req, rec).filter((e) => !e.done) : [];
+    if (missing.length && body.confirmMissing !== true) return bad('Faltan evidencias que pide la categoría: si no las adjuntas, es probable que te devuelvan el caso.', 'MISSING_EVIDENCE', { missing: missing.map((e) => ({ id: e.id, name: e.name, kind: e.kind })) });
+    ensureSupportThread(rec);
+    const by = changedByLabel(req);
+    const move = addSupportMove({ caseId: rec.id, clientId: req.user.clientId, direction, fromLevel: rec.level, toLevel, reason, did, notes, fileIds, missingAck: missing.length > 0, byUserId: req.user.sub, byName: by });
+    addSupportEvent(rec, 'moved', { direction, from: rec.level, to: toLevel, reason, did, notes, fileIds, by }, { level: toLevel, authorName: by, authorUserId: req.user.sub });
+    // le llega a las personas del nivel al que pasó (si el Mapa de soporte las tiene) y, si sube al 3 o al 4, al jefe directo de quien reportó
+    const moved = getSupportCase(rec.id, req.user.clientId, req.user.isTestAccount);
+    const target = ['n1', 'n2', 'n3'].includes(toLevel) ? parseClassificationIds(getSupportMapRow(req.user.clientId)[`${toLevel}_users`]).filter((id) => id !== req.user.sub) : [];
+    publishSupportNotice({ recipients: target, actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-arrived', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, targetName: rec.reporter_name, from: rec.level, to: toLevel, direction, reason, by } });
+    if (direction === 'up' && ['n3', 'n4'].includes(toLevel) && map.notifyEscalated && rec.reporter_user_id) {
+        const boss = resolveDirectSupervisorUserId(rec.reporter_user_id);
+        if (boss && boss !== req.user.sub) { try { sendSupportPerson(moved, { userId: boss, kind: 'notify', reason: 'auto_escalated', byName: 'Sistema', byUserId: null, level: toLevel, auto: true, extra: { toLevel } }); } catch (err) { console.error('support escalation notice failed', err); } }
+    }
+    res.status(201).json({ move: supportMoveOf(move), level: toLevel });
+});
 // Subir UNA evidencia (el archivo tal cual, sin envolverlo): X-File-Name = su nombre (codificado) y X-Evidence-Id = a cuál de las que pide la categoría corresponde (opcional: sin él es una evidencia extra).
 app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ type: () => true, limit: '13mb' }), (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const id = Number(req.params.id);
     const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
     if (!rec) return res.status(404).json({ message: 'Ese caso no existe.' });
-    if (!(rec.reporter_user_id === req.user.sub || supportIsParticipant(req, rec) || supportCan(req, 'colSpCreateAuth') || supportCan(req, 'colSpChatSend'))) return res.status(403).json({ message: 'No puedes agregar evidencias a este caso.' });
+    if (!(rec.reporter_user_id === req.user.sub || supportIsParticipant(req, rec) || supportCan(req, 'colSpCreateAuth') || supportCan(req, 'colSpChatSend') || supportCan(req, 'colSpSubir') || supportCan(req, 'colSpDevolver'))) return res.status(403).json({ message: 'No puedes agregar evidencias a este caso.' });
     const buf = req.body;
     if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ message: 'No llegó ningún archivo.', code: 'EMPTY' });
     if (countSupportCaseFiles(id) >= SUPPORT_FILES_PER_CASE) return res.status(400).json({ message: `Un caso lleva hasta ${SUPPORT_FILES_PER_CASE} evidencias.`, code: 'MAXFILES' });
@@ -10608,9 +10711,9 @@ app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ typ
     const level = supportAuthorLevel(req, rec);
     const fileId = addSupportCaseFile({ caseId: id, clientId: req.user.clientId, evidenceId, kind: kindInfo.kind, name, mime: kindInfo.mime, data: buf, level, uploadedBy: changedByLabel(req) });
     // en el chat sale como «agregó una evidencia» (con la evidencia a la vista de quien puede verla)
-    // (?chat=1: el archivo viaja dentro de un mensaje del chat, que lo muestra; no hace falta el renglón aparte)
+    // (?chat=1: el archivo viaja dentro de un mensaje del chat, que lo muestra; ?move=1: viaja en un traspaso; no hace falta el renglón aparte)
     ensureSupportThread(rec);
-    if (req.query.chat !== '1') addSupportEvent(rec, 'file', { name, kind: kindInfo.kind }, { level, authorName: changedByLabel(req), authorUserId: req.user.sub, fileId });
+    if (req.query.chat !== '1' && req.query.move !== '1') addSupportEvent(rec, 'file', { name, kind: kindInfo.kind }, { level, authorName: changedByLabel(req), authorUserId: req.user.sub, fileId });
     try { logTableChange({ clientId: req.user.clientId, tableKey: SUPPORT_CASE_TABLE_KEY, recordId: rec.id, recordLabel: `Caso ${supportFolio(rec.record_number)}`, action: 'update', fieldKey: 'main.colSpEvidencias', oldValue: '', newValue: name, changedBy: changedByLabel(req) }); } catch (err) { console.error('support file log failed', err); }
     res.status(201).json({ file: supportFileOf({ id: fileId, evidence_id: evidenceId, kind: kindInfo.kind, name, mime: kindInfo.mime, size: buf.length, level, uploaded_by: changedByLabel(req), created_at: sqlUtcFromMs(Date.now()) }), fileCount: countSupportCaseFiles(id) });
 });

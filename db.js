@@ -14820,6 +14820,46 @@ function createSupportAccessRequest(r) {
 function listSupportAccessRequests(caseId) {
     return db.prepare('SELECT id, target_user_id, requested_by_name, items, note, created_at FROM support_access_requests WHERE case_id = ? ORDER BY id DESC').all(caseId);
 }
+// ---- Subir y devolver un caso entre niveles --------------------------------------------------------------------------------------------------------------------------------------------------
+// Cada traspaso queda guardado, sin poder editarse ni borrarse: de qué nivel a cuál, si subió o se devolvió, el motivo (de una lista), lo que hizo quien lo pasa («qué hice»), sus notas para el siguiente nivel y las
+// evidencias de lo que hizo (ids de support_case_files; una evidencia se usa en un solo traspaso). Con ellos se arma el tiempo que el caso estuvo en cada nivel.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS support_case_moves (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        case_id        INTEGER NOT NULL REFERENCES support_cases(id) ON DELETE CASCADE,
+        client_id      INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        direction      TEXT NOT NULL,
+        from_level     TEXT NOT NULL,
+        to_level       TEXT NOT NULL,
+        reason         TEXT NOT NULL DEFAULT '',
+        did            TEXT NOT NULL DEFAULT '',
+        notes          TEXT NOT NULL DEFAULT '',
+        file_ids       TEXT NOT NULL DEFAULT '[]',
+        missing_ack    INTEGER NOT NULL DEFAULT 0,
+        by_user_id     INTEGER,
+        by_name        TEXT NOT NULL DEFAULT '',
+        created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_case_moves_case ON support_case_moves (case_id, id);
+`);
+function listSupportMoves(caseId) {
+    return db.prepare('SELECT * FROM support_case_moves WHERE case_id = ? ORDER BY id ASC').all(caseId);
+}
+// Guarda el traspaso y cambia el nivel del caso en un solo paso.
+function addSupportMove(m) {
+    return db.transaction(() => {
+        const id = db.prepare('INSERT INTO support_case_moves (case_id, client_id, direction, from_level, to_level, reason, did, notes, file_ids, missing_ack, by_user_id, by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(m.caseId, m.clientId, m.direction, m.fromLevel, m.toLevel, m.reason, m.did, m.notes, JSON.stringify(m.fileIds || []), m.missingAck ? 1 : 0, m.byUserId || null, m.byName || '').lastInsertRowid;
+        db.prepare('UPDATE support_cases SET level = ? WHERE id = ?').run(m.toLevel, m.caseId);
+        return db.prepare('SELECT * FROM support_case_moves WHERE id = ?').get(id);
+    })();
+}
+// Las evidencias que ya se usaron en algún traspaso de este caso (no se vuelven a usar).
+function usedSupportMoveFileIds(caseId) {
+    const used = new Set();
+    listSupportMoves(caseId).forEach((m) => { try { JSON.parse(m.file_ids || '[]').forEach((id) => used.add(Number(id))); } catch { /* sin evidencias legibles */ } });
+    return used;
+}
 // ---- Quién reportó y su equipo: avisos e invitaciones del caso ----------------------------------------------------------------------------------------------------------------------------
 // Una fila por persona y caso. kind: 'notify' (se le AVISA: una nota en la campana, sin entrar al chat; debe tocar «Enterado») o 'invite' (se le INVITA al chat: ve la conversación y escribe, nunca las notas internas;
 // debe aceptar). status: pending, confirmed (Enterado), accepted, declined o expired (no respondió en el plazo del Mapa de soporte). Si no responde (o rechaza), el aviso pasa al jefe de esa persona con la nota de qué
@@ -15194,6 +15234,7 @@ seedSoporteEvidenceKindsOnce();
 
 module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
+    listSupportMoves, addSupportMove, usedSupportMoveFileIds,
     getSupportCaseById, getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
     listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,

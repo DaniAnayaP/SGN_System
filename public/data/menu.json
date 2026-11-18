@@ -3734,6 +3734,16 @@
                   "id": "colSpPedirAcceso",
                   "labelKey": "main.colSpPedirAcceso",
                   "permissionOnly": true
+                },
+                {
+                  "id": "colSpSubir",
+                  "labelKey": "main.colSpSubir",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSpDevolver",
+                  "labelKey": "main.colSpDevolver",
+                  "permissionOnly": true
                 }
               ]
             }

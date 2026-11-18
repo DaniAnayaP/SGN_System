@@ -10623,7 +10623,7 @@ function renderSupportNoticeRow(item) {
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
     const v = item.variant || '';
     const isPerson = v.startsWith('person-');
-    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated' }[v] || (item.auto ? 'main.noticeSupportUrgent' : 'main.noticeSupportNotify');
+    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated' }[v] || (v === 'case-arrived' ? 'main.noticeSupportArrived' : (item.auto ? (item.reason === 'auto_escalated' ? 'main.noticeSupportEscalatedAuto' : 'main.noticeSupportUrgent') : 'main.noticeSupportNotify'));
     const tag = document.createElement('div');
     tag.className = 'notifications-item-meta';
     tag.style.fontWeight = '700';
@@ -10641,8 +10641,10 @@ function renderSupportNoticeRow(item) {
             const what = item.fromKind === 'invite' ? (item.reason === 'declined' ? 'main.noticeSupportWhatDeclined' : 'main.noticeSupportWhatNoAccept') : 'main.noticeSupportWhatNoConfirm';
             text = t('main.noticeSupportEscalatedLine', { ...base, who: item.fromName || '—', what: t(what), reason: t(`main.perReason_${item.reason || 'no_response'}`) });
         } else if (v === 'person-invite') text = t('main.noticeSupportInviteLine', base);
-        else text = item.auto ? t('main.noticeSupportUrgentLine', base) : t('main.noticeSupportNotifyLine', base);
+        else text = item.auto ? (item.reason === 'auto_escalated' ? t('main.noticeSupportEscalatedAutoLine', { ...base, to: t(`main.sopLevel_${item.toLevel}`) }) : t('main.noticeSupportUrgentLine', base)) : t('main.noticeSupportNotifyLine', base);
         desc.textContent = `${text}${item.message ? ` — ${item.message}` : ''}`;
+    } else if (v === 'case-arrived') {
+        desc.textContent = t(item.direction === 'up' ? 'main.noticeSupportArrivedUp' : 'main.noticeSupportArrivedDown', { ...base, from: t(`main.sopLevel_${item.from}`), to: t(`main.sopLevel_${item.to}`), reason: t(`main.mvReason_${item.reason}`) });
     } else {
         const items = (item.items || []).map((i) => (i.labelKey ? t(i.labelKey) : t(`main.supAcc_${i.code}`))).join(', ');
         desc.textContent = `${t('main.noticeSupportAccessLine', { by: item.actorLabel || '—', target: item.targetName || '—', folio: item.folio || '', screen: item.screenKey ? t(item.screenKey) : '', items })}${item.note ? ` — ${item.note}` : ''}`;
@@ -10689,7 +10691,7 @@ function renderSupportNoticeRow(item) {
             actions.append(hint);
         } else if (item.pStatus) showDone(item.pStatus);
         row.append(actions);
-    } else if (v === 'access-request' && item.caseId) {
+    } else if ((v === 'access-request' || v === 'case-arrived') && item.caseId) {
         const link = document.createElement('a');
         link.href = `OpTISoporteCaso.html?id=${encodeURIComponent(item.caseId)}`;
         link.className = 'notifications-item-meta';
