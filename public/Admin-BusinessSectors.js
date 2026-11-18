@@ -487,8 +487,11 @@ async function openSectorTreeModal(sector) {
         const order = await fetch(`/api/admin/permission-order?level=giro&entityId=${sector.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const classificationOverrides = await fetch(`/api/admin/permission-classifications?level=giro&entityId=${sector.id}`, { credentials: 'include' })
             .then((r) => (r.ok ? r.json() : null)).then((data) => (data && data.overrides) || []).catch(() => []);
+        // Relación de Accesos: lo mínimo de cada acceso se marca solo y queda bloqueado, y lo que toca sale recomendado (si no hay reglas o no se leen, el árbol funciona como siempre)
+        const accessRules = await fetch('/api/admin/access-relations/rules', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.rules) || []).catch(() => []);
         sectorTree = window.PermissionTree.create(sectorTreeContainer, {
             order,
+            accessRules,
             grantMode: 'giro',
             masterGate: statusData.statuses || [],
             masterCosts: costsData.costs || [],

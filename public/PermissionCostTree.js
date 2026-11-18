@@ -192,8 +192,76 @@
         // Los centros de costos del cliente ({ id, code, name }[]): cada uno es una hoja de «Centros de Costo» dentro de General (llave main / cc-list / cc-<id>), igual que en el árbol de
         // Roles (PermissionTree.js). Solo lo pasa la pantalla Usuarios; los árboles de planes y clientes no los llevan (un plan es siempre el árbol universal).
         costCenters = [],
+        // Relación de Accesos (pieza 5b): las reglas que manda GET /api/admin/access-relations/rules (ver AccessRules.js). Solo el árbol del plan y «+ Adicionales» de un cliente: lo mínimo de cada acceso habilitado se marca solo y queda
+        // bloqueado (renglón teal con candado) y lo que el acceso toca sale recomendado (violeta). El servidor repite la misma regla al guardar.
+        accessRules = null,
     } = {}) {
         let sectionsData = [];
+        const accessEngine = accessRules && window.AccessRules && (mode === 'grantReadonlyCost' || (mode === 'clientTricolor' && interactive && allowRemoveExtras)) ? window.AccessRules.create(accessRules) : null;
+        let accessRequired = new Map(); // llave -> nombres de los accesos habilitados que la necesitan
+        let accessTouched = new Map(); // llave del acceso que se toca -> nombres de quien lo recomienda
+        let accessReady = false; // después de abrir el árbol, lo que entra solo se avisa
+        const accessNamesText = (names) => { const list = [...new Set(names)]; return `${list.slice(0, 2).join(', ')}${list.length > 2 ? ` +${list.length - 2}` : ''}`; };
+        const accessToast = (message, kind) => { if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, kind); };
+        // Recalcula lo bloqueado y lo recomendado y marca lo que falta del mínimo: en el plan en su conjunto de permisos; en el cliente como adicionales por agregar (lo que el plan ya da no se repite).
+        // Lo que no está habilitado para servicio en el Árbol Maestro no entra (sale en blocked). Regresa { added, addedBy, blocked }.
+        function recomputeAccessRules() {
+            if (!accessEngine || !accessEngine.hasRules) { accessRequired = new Map(); accessTouched = new Map(); return { added: [], addedBy: [], blocked: [] }; }
+            const isClient = mode === 'clientTricolor';
+            const triggers = () => (isClient ? effectiveClientSet() : grantSet);
+            const options = isClient
+                ? { coverKeys: planGrantSet, canAdd: (k) => !isLimitLocked(k) }
+                : { canAdd: (k) => grantSet.has(k) || !isServiceLocked(k) };
+            const first = accessEngine.resolve(triggers(), options);
+            first.added.forEach((k) => (isClient ? stageAdd(k) : grantSet.add(k)));
+            const settled = first.added.length ? accessEngine.resolve(triggers(), options) : first;
+            accessRequired = settled.required;
+            // lo recomendado también sale de lo que el PLAN ya tiene habilitado (el cliente lo puede agregar como adicional)
+            accessTouched = isClient ? accessEngine.resolve(new Set([...planGrantSet, ...triggers()])).touched : settled.touched;
+            return { added: first.added, addedBy: first.addedBy, blocked: first.blocked };
+        }
+        // Lo que no se pudo quitar por ser mínimo de un acceso habilitado: un solo aviso aunque se intenten varias llaves a la vez.
+        let lockedNames = [];
+        let lockedTimer = null;
+        function noteLockedKeys(keys) {
+            keys.forEach((k) => { lockedNames.push(...(accessRequired.get(k) || accessRequired.get(String(k).replace(/#app$/, '')) || [])); });
+            if (lockedTimer) return;
+            lockedTimer = setTimeout(() => {
+                lockedTimer = null;
+                if (lockedNames.length) accessToast(t('admin.minLockedToast', { access: accessNamesText(lockedNames) }), 'warning');
+                lockedNames = [];
+            }, 0);
+        }
+        const isRequiredKey = (k) => !!accessEngine && (accessRequired.has(k) || accessRequired.has(String(k).replace(/#app$/, '')));
+        // La marca visual de un renglón: bloqueado (su llave es mínimo de un acceso habilitado) o recomendado (lo toca un acceso habilitado y todavía no está marcado).
+        function decorateAccessRow(row, key) {
+            if (!accessEngine || !accessEngine.hasRules || key == null || String(key).endsWith('#app')) return;
+            let names = accessRequired.get(key);
+            let full = !!names;
+            if (!names && String(key).split('::')[2]) {
+                for (const [k, v] of accessRequired) { if (k.startsWith(`${key}/`)) { names = v; break; } }
+            }
+            if (names) {
+                row.classList.add(full ? 'perm-tree-row-min' : 'perm-tree-row-min-part');
+                if (full) {
+                    const badge = document.createElement('span');
+                    badge.className = 'perm-tree-access-badge perm-tree-access-badge-min';
+                    badge.title = t('admin.minLockedTitle', { access: accessNamesText(names) });
+                    badge.innerHTML = '<i class="bx bx-lock-alt" aria-hidden="true"></i>';
+                    row.appendChild(badge);
+                }
+            }
+            const touchedBy = accessTouched.get(key);
+            const have = mode === 'clientTricolor' ? (planGrantSet.has(key) || effectiveClientSet().has(key)) : grantSet.has(key);
+            if (touchedBy && !have) {
+                row.classList.add('perm-tree-row-touch');
+                const pill = document.createElement('span');
+                pill.className = 'perm-tree-access-badge perm-tree-access-badge-touch';
+                pill.title = t('admin.minRecommendedTitle', { access: accessNamesText(touchedBy) });
+                pill.textContent = t('admin.minRecommended');
+                row.appendChild(pill);
+            }
+        }
         const classificationOverrides = new Map();
         (classOverrides || []).forEach((o) => {
             if (!o || !o.nodeKey || !o.classificationId) return;
@@ -284,6 +352,7 @@
             else pendingAdditions.add(k);
         }
         function stageDrop(k) {
+            if (accessEngine && isRequiredKey(k) && effectiveClientSet().has(k)) { noteLockedKeys([k]); return; } // mínimo indispensable de un acceso habilitado: no se quita
             pendingAdditions.delete(k);
             if (!canRemove) return;
             if (allowRemove && planGrantSet.has(k) && !String(k).startsWith('main::')) excludedKeys.add(k); // lo que da el puesto no se borra de su Rol: se le resta a esta persona
@@ -654,6 +723,7 @@
                 row.appendChild(historyBtn);
             }
 
+            if (accessEngine && costKey != null) decorateAccessRow(row, costKey);
             return { row, input };
         }
 
@@ -763,6 +833,11 @@
                     setTimeout(() => render(), 0); // la casilla que se tocó vuelve a verse desmarcada
                 }
                 keys = allowed;
+            }
+            // Relación de Accesos: lo que es mínimo indispensable de un acceso habilitado no se quita
+            if (!checked && accessEngine) {
+                const locked = keys.filter(isRequiredKey);
+                if (locked.length) { noteLockedKeys(locked); keys = keys.filter((k) => !isRequiredKey(k)); setTimeout(() => render(), 0); }
             }
             keys.forEach((k) => {
                 if (checked) grantSet.add(k);
@@ -1463,6 +1538,11 @@
         }
 
         function render() {
+            if (accessEngine) {
+                const live = recomputeAccessRules();
+                if (accessReady && live.addedBy.length) accessToast(t('admin.minAutoLive', { access: accessNamesText(live.addedBy) }), 'info');
+                if (accessReady && live.blocked.length) accessToast(t('admin.minAutoBlockedLive', { access: accessNamesText(live.blocked) }), 'warning');
+            }
             container.innerHTML = '';
             if (mode === 'grantReadonlyCost') {
                 const header = document.createElement('div');
@@ -1807,7 +1887,9 @@
 
                 expandedSections = new Set();
                 expandedItems = new Set();
+                accessReady = false;
                 render();
+                accessReady = true; // desde aquí, lo que entra solo se avisa
             },
             // Modal-wide "Igualar Visión APP con Web" button (grantReadonlyCost
             // only) -- a no-op call in any other mode.

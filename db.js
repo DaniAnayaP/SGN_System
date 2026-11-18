@@ -13472,6 +13472,30 @@ function validateAccessRelations(accessKey, minimum, touches) {
     }
     return { minimum: min, touches: tou };
 }
+// Las reglas que usan los árboles de permisos del navegador (Giro, Plan y cliente; ver AccessRules.js): una por cada acceso con relaciones, con su MÍNIMO ya expandido a las llaves que marca el árbol (web y app) y las llaves de lo que toca.
+// Las llaves son las de los árboles («sección::área::ruta», con #app para App). labelFn(llave) pone el nombre que se lee en los avisos.
+function buildAccessRules(labelFn) {
+    const keyOf = (t) => `${t.sectionId}::${t.itemId || ''}::${t.submenuId || ''}`;
+    const catalog = buildAccessCatalog();
+    const byAccess = new Map();
+    listAccessRelations().forEach((r) => {
+        if (!byAccess.has(r.access)) byAccess.set(r.access, { minimum: [], touches: [] });
+        byAccess.get(r.access)[r.kind === 'minimum' ? 'minimum' : 'touches'].push(r.related);
+    });
+    const rules = [];
+    byAccess.forEach((v, access) => {
+        if (!catalog.index.has(access)) return;
+        const minimum = v.minimum.filter((k) => catalog.index.has(k));
+        const unique = (list) => [...new Set(list)];
+        rules.push({
+            access, label: labelFn ? labelFn(access) : access,
+            web: unique(minimum.flatMap((k) => accessMinimumTuples(k, '').map(keyOf))),
+            app: unique(minimum.flatMap((k) => accessMinimumTuples(k, ACCESS_APP_SUFFIX).map(keyOf))),
+            touches: v.touches.filter((k) => catalog.index.has(k)),
+        });
+    });
+    return rules;
+}
 // Deja las marcas de ese acceso exactamente como llegan. Regresa lo que cambió: { added: [{ related, kind }], removed: [{ related, kind }] }.
 function setAccessRelations(accessKey, minimum, touches, updatedBy) {
     const before = new Map(db.prepare('SELECT related_key AS related, kind FROM access_relations WHERE access_key = ?').all(accessKey).map((r) => [r.related, r.kind]));
@@ -17311,6 +17335,7 @@ module.exports = {
     validateAccessRelations,
     setAccessRelations,
     expandAccessMinimums,
+    buildAccessRules,
     logClientChange,
     logPlanChange,
     listSaasAdmins,

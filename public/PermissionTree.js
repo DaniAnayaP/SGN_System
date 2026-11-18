@@ -279,7 +279,7 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, order = null, classOverrides = null, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null, describeColorId = null, classificationEditor = null, grantLimits = null } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, order = null, classOverrides = null, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null, describeColorId = null, classificationEditor = null, grantLimits = null, accessRules = null } = {}) {
         // Shown inside every $ Web/$ App input (see buildCostInput below) --
         // purely a label, never affects the number stored/sent; the caller
         // (Admin-ArbolMaestro.js) is the one that actually knows/persists
@@ -458,6 +458,66 @@
         // walking back up to Departamento every time.
         let masterGateMap = new Map();
         let giroGateBlockMap = new Map();
+        // ── Relación de Accesos (pieza 5b, parte visual; solo grantMode 'giro') ───────────────────────────────────────────────────
+        // accessRules = las reglas que manda GET /api/admin/access-relations/rules (ver AccessRules.js). Al marcar un acceso que tiene relaciones, su MÍNIMO INDISPENSABLE se marca solo (y la cadena), queda
+        // bloqueado mientras ese acceso esté habilitado (renglón teal con candado) y lo que el acceso TOCA sale como recomendado (renglón violeta, sin marcar). El servidor repite la misma regla al guardar.
+        const accessEngine = grantMode && accessRules && window.AccessRules ? window.AccessRules.create(accessRules) : null;
+        let accessRequired = new Map(); // llave -> nombres de los accesos habilitados que la necesitan
+        let accessTouched = new Map(); // llave del acceso que se toca -> nombres de quien lo recomienda
+        // Recalcula lo bloqueado y lo recomendado y, si applyAdds, marca lo que falta del mínimo. Lo que el Árbol Maestro no deja habilitar no entra (sale en blocked). Regresa { added, addedBy, blocked }.
+        function recomputeAccessRules(applyAdds) {
+            if (!accessEngine || !accessEngine.hasRules) { accessRequired = new Map(); accessTouched = new Map(); return { added: [], addedBy: [], blocked: [] }; }
+            // las llaves que el árbol no tiene (por ejemplo «solo ver») no tienen bloqueo del Árbol Maestro: pasan
+            const canAdd = (key) => {
+                const isApp = key.endsWith(APP_SUFFIX);
+                const block = giroGateBlockMap.get(isApp ? key.slice(0, -APP_SUFFIX.length) : key);
+                return !block || !(isApp ? block.appBlocked : block.webBlocked);
+            };
+            const first = accessEngine.resolve(grantSet, { canAdd });
+            if (applyAdds) first.added.forEach((k) => grantSet.add(k));
+            const settled = applyAdds && first.added.length ? accessEngine.resolve(grantSet, { canAdd }) : first;
+            accessRequired = settled.required;
+            accessTouched = settled.touched;
+            return { added: first.added, addedBy: first.addedBy, blocked: first.blocked };
+        }
+        const accessNamesText = (names) => { const list = [...new Set(names)]; return `${list.slice(0, 2).join(', ')}${list.length > 2 ? ` +${list.length - 2}` : ''}`; };
+        function showGiroInfo(message) {
+            if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, 'info');
+        }
+        // Los avisos de lo que acaba de entrar solo, de lo que no se pudo agregar y de lo que no se pudo quitar por ser mínimo de un acceso habilitado.
+        function announceAccessRules(live, skippedKeys) {
+            if (live.addedBy.length) showGiroInfo(t('admin.minAutoLive', { access: accessNamesText(live.addedBy) }));
+            if (live.blocked.length) showGiroToast(t('admin.minAutoBlockedLive', { access: accessNamesText(live.blocked) }));
+            if (skippedKeys.length) showGiroToast(t('admin.minLockedToast', { access: accessNamesText(skippedKeys.flatMap((k) => accessRequired.get(k) || accessRequired.get(k + APP_SUFFIX) || [])) }));
+        }
+        // La marca visual de un renglón: bloqueado (todo lo que tiene adentro es mínimo de un acceso habilitado) o recomendado (lo toca un acceso habilitado y todavía no está marcado).
+        function decorateAccessRow(row, key) {
+            if (!accessEngine || !accessEngine.hasRules || !key) return;
+            const leaves = hasStatusChildren(key) ? collectLeafStatusKeys(key) : [key];
+            if (accessRequired.size && leaves.length) {
+                const needed = leaves.filter((k) => accessRequired.has(k) || accessRequired.has(k + APP_SUFFIX));
+                if (needed.length) {
+                    const names = needed.flatMap((k) => accessRequired.get(k) || accessRequired.get(k + APP_SUFFIX) || []);
+                    row.classList.add(needed.length === leaves.length ? 'perm-tree-row-min' : 'perm-tree-row-min-part');
+                    if (needed.length === leaves.length) {
+                        const badge = document.createElement('span');
+                        badge.className = 'perm-tree-access-badge perm-tree-access-badge-min';
+                        badge.title = t('admin.minLockedTitle', { access: accessNamesText(names) });
+                        badge.innerHTML = '<i class="bx bx-lock-alt" aria-hidden="true"></i>';
+                        row.appendChild(badge);
+                    }
+                }
+            }
+            const touchedBy = accessTouched.get(key);
+            if (touchedBy && !(leaves.length && leaves.every((k) => grantSet.has(k)))) {
+                row.classList.add('perm-tree-row-touch');
+                const pill = document.createElement('span');
+                pill.className = 'perm-tree-access-badge perm-tree-access-badge-touch';
+                pill.title = t('admin.minRecommendedTitle', { access: accessNamesText(touchedBy) });
+                pill.textContent = t('admin.minRecommended');
+                row.appendChild(pill);
+            }
+        }
         // key -> the human label shown on that row, filled in as
         // statusRow renders each one -- lets a caller (Admin-ArbolMaestro.js's
         // confirm-changes screen) turn a bare {sectionId,itemId,submenuId}
@@ -2290,6 +2350,7 @@
                 countBadge.className = 'perm-tree-mstatus-count-badge';
                 countBadge.textContent = String(Math.max(1, collectDescendantStatusKeys(key).length));
                 row.appendChild(countBadge);
+                if (grantMode) decorateAccessRow(row, key);
             }
             if (key) {
                 // Stashed so a caller (Admin-ArbolMaestro.js's confirm-
@@ -4868,19 +4929,25 @@
                     return;
                 }
                 const turnOn = state !== 'granted';
+                const lockedKeys = []; // hojas que no se pudieron quitar: son mínimo indispensable de un acceso que sigue habilitado
                 leaves.forEach((leafKey) => {
                     const block = giroGateBlockMap.get(leafKey) || { webBlocked: true, appBlocked: true };
                     if (platform === 'web') {
                         if (block.webBlocked) return;
                         if (turnOn) grantSet.add(leafKey);
+                        else if (accessRequired.has(leafKey) || accessRequired.has(leafKey + APP_SUFFIX)) lockedKeys.push(leafKey);
                         else { grantSet.delete(leafKey); grantSet.delete(leafKey + APP_SUFFIX); }
                     } else {
                         if (block.appBlocked || !grantSet.has(leafKey)) return;
                         if (turnOn) grantSet.add(leafKey + APP_SUFFIX);
+                        else if (accessRequired.has(leafKey + APP_SUFFIX)) lockedKeys.push(leafKey + APP_SUFFIX);
                         else grantSet.delete(leafKey + APP_SUFFIX);
                     }
                 });
+                // Relación de Accesos: lo que se acaba de marcar trae su mínimo; lo bloqueado se avisa
+                const live = recomputeAccessRules(true);
                 renderStatusTree();
+                announceAccessRules(live, lockedKeys);
             });
             return btn;
         }
@@ -4916,7 +4983,7 @@
             // buildGiroGateBlockMap) on every render, same as
             // statusChildrenMap above; a no-op map read by nothing when
             // grantMode is off.
-            if (grantMode) giroGateBlockMap = buildGiroGateBlockMap();
+            if (grantMode) { giroGateBlockMap = buildGiroGateBlockMap(); recomputeAccessRules(false); }
             treeRoot.innerHTML = '';
             treeRoot.appendChild(buildStatusTreeHeader());
             sectionsData.forEach((section) => {
@@ -5767,6 +5834,9 @@
                     });
                     expandedSections = new Set();
                     expandedItems = new Set();
+                    // Relación de Accesos: al abrir, lo mínimo de lo que el Giro ya tiene habilitado queda marcado (sin avisar: es lo que el servidor también haría al guardar)
+                    giroGateBlockMap = buildGiroGateBlockMap();
+                    recomputeAccessRules(true);
                     render();
                     if (document.fonts && document.fonts.ready) {
                         document.fonts.ready.then(() => { if (grantMode) render(); });

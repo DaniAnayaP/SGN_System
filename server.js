@@ -551,6 +551,7 @@ const {
     validateAccessRelations,
     setAccessRelations,
     expandAccessMinimums,
+    buildAccessRules,
     logClientChange,
     logPlanChange,
     listSaasAdmins,
@@ -3512,6 +3513,12 @@ app.get('/api/admin/access-relations', requireAuth, requireAdmin, (req, res) => 
     if (!accessRelCan(req, 'controles::a0')) return res.status(403).json({ message: 'No tienes acceso a la Relación de Accesos.' });
     res.set('Cache-Control', 'no-store');
     res.json({ nodes: buildAccessCatalog().nodes, relations: listAccessRelations(), canEdit: accessRelCan(req, 'controles::a1') });
+});
+// Las reglas de Relación de Accesos para los árboles de permisos del Giro, el Plan y Nuestros Clientes (ver AccessRules.js): las puede leer quien entre a cualquiera de esas pantallas.
+app.get('/api/admin/access-relations/rules', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-business-sectors', 'saas-plans', 'saas-clients'])) return;
+    res.set('Cache-Control', 'no-store');
+    res.json({ rules: buildAccessRules(accessLabelEs) });
 });
 app.put('/api/admin/access-relations', requireAuth, requireAdmin, (req, res) => {
     if (!accessRelCan(req, 'controles::a1')) return res.status(403).json({ message: 'No tienes permiso para guardar relaciones de accesos.' });

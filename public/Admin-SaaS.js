@@ -1240,8 +1240,10 @@ async function openPermisosAdicionalesModal(client) {
         // Lo que no está habilitado para servicio en el Árbol Maestro se ve, pero no se puede asignar al cliente: al intentarlo avisa por qué.
         const masterStatuses = await fetch('/api/admin/master-permission-status', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.statuses) || []).catch(() => []);
         const grantLimits = window.PermissionCostTree.serviceLimits(masterStatuses);
+        // Relación de Accesos: lo mínimo de lo que se vende como adicional se agrega solo (salvo lo que el plan ya da) y queda bloqueado; lo que toca sale recomendado
+        const accessRules = await fetch('/api/admin/access-relations/rules', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.rules) || []).catch(() => []);
         adicionalesTree = window.PermissionCostTree.create(permisosAdicionalesContainer, {
-            order, classOverrides, grantLimits, mode: 'clientTricolor', interactive: true, allowRemoveExtras: true, currency: adicionalesCurrency,
+            order, classOverrides, grantLimits, accessRules, mode: 'clientTricolor', interactive: true, allowRemoveExtras: true, currency: adicionalesCurrency,
             historyEndpoint: '/api/admin/client-permission-change-log', historyParams: { clientId: client.id },
         });
         await adicionalesTree.init(planGrants || [], costs, grants || []);

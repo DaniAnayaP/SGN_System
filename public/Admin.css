@@ -9355,3 +9355,12 @@ td.hab-click{ cursor: pointer; }
 .ra-actions{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.9rem; }
 .ra-summary{ margin-right: auto; font-size: 0.8rem; font-weight: 600; }
 @media (max-width: 52rem){ .ra-layout{ grid-template-columns: minmax(0, 1fr); } .ra-list{ max-height: 40vh; } }
+/* Relación de Accesos en los árboles de permisos (pieza 5b): lo mínimo bloqueado (teal, con candado) y lo recomendado (violeta) */
+.perm-tree-row-min{ background: color-mix(in srgb, #14937f 16%, transparent); box-shadow: inset 3px 0 0 #14937f; }
+.perm-tree-row-min-part{ box-shadow: inset 3px 0 0 color-mix(in srgb, #14937f 55%, transparent); }
+.perm-tree-row-touch{ background: color-mix(in srgb, #7c5cd6 14%, transparent); box-shadow: inset 3px 0 0 #7c5cd6; }
+.perm-tree-access-badge{ display: inline-flex; align-items: center; gap: 0.25rem; margin-left: 0.4rem; padding: 0 0.5rem; border-radius: 999px; font-size: 0.68rem; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+.perm-tree-access-badge-min{ background: color-mix(in srgb, #14937f 22%, var(--color-surface)); color: #0b6b5c; }
+.perm-tree-access-badge-touch{ background: color-mix(in srgb, #7c5cd6 20%, var(--color-surface)); color: #5a3fb0; }
+body.dark-mode .perm-tree-access-badge-min{ color: #5fd3bf; }
+body.dark-mode .perm-tree-access-badge-touch{ color: #b9a4ff; }
