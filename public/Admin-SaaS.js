@@ -1236,7 +1236,7 @@ async function openPermisosAdicionalesModal(client) {
         const masterStatuses = await fetch('/api/admin/master-permission-status', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.statuses) || []).catch(() => []);
         const grantLimits = window.PermissionCostTree.serviceLimits(masterStatuses);
         adicionalesTree = window.PermissionCostTree.create(permisosAdicionalesContainer, {
-            order, classOverrides, grantLimits, mode: 'clientTricolor', interactive: true, currency: adicionalesCurrency,
+            order, classOverrides, grantLimits, mode: 'clientTricolor', interactive: true, allowRemoveExtras: true, currency: adicionalesCurrency,
             historyEndpoint: '/api/admin/client-permission-change-log', historyParams: { clientId: client.id },
         });
         await adicionalesTree.init(planGrants || [], costs, grants || []);
