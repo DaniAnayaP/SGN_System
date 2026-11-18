@@ -579,6 +579,7 @@ const {
     deleteSupportMaterial,
     SUPPORT_MATERIAL_CATEGORIES,
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
+    getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -10095,6 +10096,171 @@ app.patch('/api/business/support-map', requireAuth, (req, res) => {
     res.json({ ...supportMapPayload(row, req), rejectedFields, conflictFields });
 });
 
+// --- Casos de soporte (TI > Operaciones TI > Operaciones) ------------------------------------------------------------------------------------------------
+// Una solicitud de soporte: lo que pasó, la categoría, qué implica (cada impacto del Mapa de soporte con su nivel) y cuándo afecta; de ahí salen la PRIORIDAD, el nivel donde entra y el plazo de la primera respuesta
+// (public/SupportRules.js). Las evidencias (capturas, grabación de pantalla, archivos) se suben después, una por una, y no se editan ni se borran. Una cuenta de prueba solo ve los casos que ella misma abre.
+const SupportRules = require('./public/SupportRules.js');
+const SUPPORT_CASE_TABLE_KEY = 'casos-soporte';
+const SUPPORT_CASE_SCREEN_LABEL = 'Casos de soporte';
+const SUPPORT_STATUS_LABELS = { open: 'Abierto' };
+const SUPPORT_SUMMARY_MAX = 160;
+const SUPPORT_TEXT_MAX = 2000;
+const SUPPORT_ANSWER_MAX = 500;
+const SUPPORT_FILES_PER_CASE = 20;
+const SUPPORT_FILE_LIMITS = { capture: 2 * 1024 * 1024, recording: 12 * 1024 * 1024, file: 10 * 1024 * 1024 }; // bytes; la grabación dura hasta 2 minutos
+const SUPPORT_FILE_EXT = { pdf: 'application/pdf', txt: 'text/plain', log: 'text/plain', csv: 'text/csv', json: 'application/json', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', zip: 'application/zip' };
+const supportFolio = (n) => `SP-${String(n).padStart(4, '0')}`;
+const supportCan = (req, colKey) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), SUPPORT_CASE_TABLE_KEY, colKey);
+const supportCanSeeFiles = (req) => !!req.user.isClientAdmin || hasColumnGrant(getUserEffectiveGrants(req.user.sub), SUPPORT_CASE_TABLE_KEY, 'colSpEvidencias');
+const parseJsonOr = (text, fallback) => { try { const v = JSON.parse(text || ''); return v === null || v === undefined ? fallback : v; } catch { return fallback; } };
+// Qué es el archivo que llegó, por sus primeros bytes (no por lo que diga quien lo manda): captura (imagen), grabación (video) o archivo (solo los tipos de la lista). null = no se acepta.
+function sniffSupportFile(buf, name) {
+    if (buf.length < 12) return null;
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return { kind: 'capture', mime: 'image/jpeg' };
+    if (buf[0] === 0x89 && buf.toString('latin1', 1, 4) === 'PNG') return { kind: 'capture', mime: 'image/png' };
+    if (buf.toString('latin1', 0, 4) === 'GIF8') return { kind: 'capture', mime: 'image/gif' };
+    if (buf.toString('latin1', 0, 4) === 'RIFF' && buf.toString('latin1', 8, 12) === 'WEBP') return { kind: 'capture', mime: 'image/webp' };
+    if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return { kind: 'recording', mime: 'video/webm' };
+    if (buf.toString('latin1', 4, 8) === 'ftyp') return { kind: 'recording', mime: 'video/mp4' };
+    const ext = String(name || '').toLowerCase().split('.').pop();
+    if (SUPPORT_FILE_EXT[ext] && !(buf[0] === 0x4d && buf[1] === 0x5a)) return { kind: 'file', mime: 'application/octet-stream' };
+    return null;
+}
+const sqlUtcFromMs = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+// Lo que el servidor manda de un caso (una fila de la tabla). Las evidencias solo salen con ids para quien tiene la columna Evidencias o abrió el caso.
+function supportCaseRowOf(r, client, withFiles) {
+    return {
+        id: r.id, folio: supportFolio(r.record_number), type: r.case_type, summary: r.summary, screen: r.screen_label, action: r.action_label, errorText: r.error_text,
+        categoryId: r.category_id, category: r.category_name, priority: r.priority, level: r.level, status: r.status, whenAffects: r.when_affects, keepWorking: r.keep_working === 1,
+        impacts: parseJsonOr(r.impacts, []), answers: parseJsonOr(r.answers, {}), reporter: r.reporter_name, reporterUserId: r.reporter_user_id,
+        createdAt: sqlUtcIso(r.created_at), dueAt: sqlUtcIso(r.first_response_due_at), fileCount: r.file_count || 0, withFiles: !!withFiles,
+        system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: SUPPORT_CASE_SCREEN_LABEL, centroCostos: '', createdAt: r.created_at }),
+    };
+}
+const supportFileOf = (f) => ({ id: f.id, evidenceId: f.evidence_id, kind: f.kind, name: f.name, mime: f.mime, size: f.size, by: f.uploaded_by, createdAt: sqlUtcIso(f.created_at) });
+// Lo que el formulario de «Nueva solicitud» necesita: las categorías activas con lo que piden, los impactos del Mapa de soporte y los topes.
+function supportFormOptions(req) {
+    const { clientId, isTestAccount } = req.user;
+    const map = supportMapPayload(getSupportMapRow(clientId), req).map;
+    const evidences = new Map(listArticleCategories(clientId, 'soporte-evidencias', isTestAccount).filter((e) => e.status === 'active' && String(e.name || '').trim()).map((e) => [e.id, { id: e.id, name: String(e.name).trim(), kind: e.kind || 'data' }]));
+    const categories = listArticleCategories(clientId, 'soporte-categorias', isTestAccount).filter((c) => c.status === 'active' && String(c.name || '').trim())
+        .map((c) => ({ id: c.id, name: String(c.name).trim(), kind: c.kind || '', firstResponseMin: c.first_response_min || 0, evidences: parseClassificationIds(c.evidence_ids).map((id) => evidences.get(id)).filter(Boolean) }));
+    return { map, categories, impacts: map.impacts, limits: { summary: SUPPORT_SUMMARY_MAX, text: SUPPORT_TEXT_MAX, answer: SUPPORT_ANSWER_MAX, files: SUPPORT_FILES_PER_CASE, bytes: SUPPORT_FILE_LIMITS } };
+}
+app.get('/api/business/support-cases/form', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const o = supportFormOptions(req);
+    res.set('Cache-Control', 'no-store');
+    res.json({ categories: o.categories, impacts: o.impacts, limits: o.limits, map: o.map, canCreate: supportCan(req, 'colSpCreateAuth') });
+});
+app.get('/api/business/support-cases', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const LIMIT = 5000;
+    const rows = listSupportCases(clientId, isTestAccount, { limit: LIMIT });
+    res.set('Cache-Control', 'no-store');
+    res.json({ truncated: rows.length >= LIMIT, max: LIMIT, canCreate: supportCan(req, 'colSpCreateAuth'), canFiles: supportCanSeeFiles(req), cases: rows.map((r) => supportCaseRowOf(r, client, false)) });
+});
+app.post('/api/business/support-cases', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!supportCan(req, 'colSpCreateAuth')) return res.status(403).json({ message: 'No tienes permiso para abrir solicitudes de soporte.' });
+    const { clientId, isTestAccount } = req.user;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    const clean = (v, max) => String(v === null || v === undefined ? '' : v).replace(/[ \t]+/g, ' ').trim().slice(0, max);
+    const summary = clean(body.summary, SUPPORT_SUMMARY_MAX).replace(/\s+/g, ' ');
+    if (!summary) return bad('Falta contar qué pasó en una frase.', 'SUMMARY');
+    const options = supportFormOptions(req);
+    const category = options.categories.find((c) => c.id === Number(body.categoryId));
+    if (!category) return bad('Falta elegir la categoría.', 'CATEGORY');
+    // Cada impacto del Mapa de soporte lleva su nivel (0 Ninguno a 3 Alto); el que no se manda queda en Ninguno.
+    const given = Array.isArray(body.impacts) ? body.impacts : [];
+    const known = new Map(options.impacts.map((i) => [i.name.toLowerCase(), i.name]));
+    const levelOf = new Map();
+    for (const item of given) {
+        const name = known.get(String((item && item.name) || '').trim().toLowerCase());
+        const level = Number(item && item.level);
+        if (!name || !Number.isInteger(level) || level < 0 || level > 3) return bad('Uno de los impactos no es válido.', 'IMPACT');
+        levelOf.set(name, level);
+    }
+    const impacts = options.impacts.map((i) => ({ name: i.name, level: levelOf.get(i.name) || 0 }));
+    if (!SupportRules.WHEN_AFFECTS.includes(body.when)) return bad('Falta decir cuándo te afecta.', 'WHEN');
+    if (typeof body.keepWorking !== 'boolean') return bad('Falta decir si puedes seguir trabajando mientras.', 'KEEP');
+    // Lo escrito que pide la categoría (las evidencias de tipo «dato»): solo las de esa categoría.
+    const dataSlots = new Map(category.evidences.filter((e) => e.kind === 'data').map((e) => [e.id, e]));
+    const answers = {};
+    for (const [key, value] of Object.entries(body.answers && typeof body.answers === 'object' ? body.answers : {})) {
+        if (!dataSlots.has(Number(key))) return bad('Una respuesta no es de esta categoría.', 'ANSWER');
+        const text = clean(value, SUPPORT_ANSWER_MAX);
+        if (text) answers[key] = text;
+    }
+    const priority = SupportRules.priorityOf(impacts, body.when);
+    const level = SupportRules.entryLevel(category.kind, options.map);
+    const minutes = SupportRules.firstResponseMinutes(priority, category.firstResponseMin, options.map);
+    const created = createSupportCase({
+        clientId, isTestAccount, type: 'c', summary, screen: clean(body.screen, 120), action: clean(body.action, 120), errorText: clean(body.errorText, SUPPORT_TEXT_MAX),
+        categoryId: category.id, categoryName: category.name, impacts, when: body.when, keepWorking: body.keepWorking, priority, level, answers,
+        reporterUserId: req.user.sub, reporterName: changedByLabel(req), dueAt: minutes ? sqlUtcFromMs(Date.now() + minutes * 60000) : null,
+    });
+    const folio = supportFolio(created.record_number);
+    try { logTableChange({ clientId, tableKey: SUPPORT_CASE_TABLE_KEY, recordId: created.id, recordLabel: `Caso ${folio}`, action: 'create', changedBy: changedByLabel(req) }); } catch (err) { console.error('support case log failed', err); }
+    notifyButtonAction(req, SUPPORT_CASE_TABLE_KEY, 'create', folio);
+    res.status(201).json({ case: supportCaseRowOf(created, getClientById(clientId), true), maxFiles: SUPPORT_FILES_PER_CASE });
+});
+// El caso con sus evidencias (la lista de archivos solo para quien tiene la columna Evidencias o abrió el caso).
+app.get('/api/business/support-cases/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese caso no existe.' });
+    const mine = rec.reporter_user_id === req.user.sub;
+    const withFiles = mine || supportCanSeeFiles(req);
+    res.set('Cache-Control', 'no-store');
+    res.json({ case: supportCaseRowOf(rec, getClientById(req.user.clientId), withFiles), files: withFiles ? listSupportCaseFiles(id).map(supportFileOf) : [], canAddFiles: mine || supportCan(req, 'colSpCreateAuth'), maxFiles: SUPPORT_FILES_PER_CASE });
+});
+// Subir UNA evidencia (el archivo tal cual, sin envolverlo): X-File-Name = su nombre (codificado) y X-Evidence-Id = a cuál de las que pide la categoría corresponde (opcional: sin él es una evidencia extra).
+app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ type: () => true, limit: '13mb' }), (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!rec) return res.status(404).json({ message: 'Ese caso no existe.' });
+    if (!(rec.reporter_user_id === req.user.sub || supportCan(req, 'colSpCreateAuth'))) return res.status(403).json({ message: 'No puedes agregar evidencias a este caso.' });
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ message: 'No llegó ningún archivo.', code: 'EMPTY' });
+    if (countSupportCaseFiles(id) >= SUPPORT_FILES_PER_CASE) return res.status(400).json({ message: `Un caso lleva hasta ${SUPPORT_FILES_PER_CASE} evidencias.`, code: 'MAXFILES' });
+    let name = '';
+    try { name = decodeURIComponent(String(req.headers['x-file-name'] || '')); } catch { name = ''; }
+    name = name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').trim().slice(0, 120) || 'evidencia';
+    const kindInfo = sniffSupportFile(buf, name);
+    if (!kindInfo) return res.status(400).json({ message: 'Ese tipo de archivo no se acepta. Sube una imagen, un video o un PDF, Excel, Word, texto o ZIP.', code: 'TYPE' });
+    if (buf.length > SUPPORT_FILE_LIMITS[kindInfo.kind]) return res.status(400).json({ message: `El archivo pesa demasiado (hasta ${Math.round(SUPPORT_FILE_LIMITS[kindInfo.kind] / 1048576)} MB).`, code: 'SIZE' });
+    let evidenceId = null;
+    if (req.headers['x-evidence-id']) {
+        evidenceId = Number(req.headers['x-evidence-id']);
+        const category = supportFormOptions(req).categories.find((c) => c.id === rec.category_id);
+        const slot = category && category.evidences.find((e) => e.id === evidenceId);
+        if (!slot || slot.kind === 'data') return res.status(400).json({ message: 'Esa evidencia no es de este caso.', code: 'EVIDENCE' });
+        if ((slot.kind === 'capture' && kindInfo.kind !== 'capture') || (slot.kind === 'recording' && kindInfo.kind !== 'recording')) return res.status(400).json({ message: `Esa evidencia pide ${slot.kind === 'capture' ? 'una imagen' : 'una grabación de pantalla'}.`, code: 'EVIDENCE' });
+    }
+    const fileId = addSupportCaseFile({ caseId: id, clientId: req.user.clientId, evidenceId, kind: kindInfo.kind, name, mime: kindInfo.mime, data: buf, uploadedBy: changedByLabel(req) });
+    try { logTableChange({ clientId: req.user.clientId, tableKey: SUPPORT_CASE_TABLE_KEY, recordId: rec.id, recordLabel: `Caso ${supportFolio(rec.record_number)}`, action: 'update', fieldKey: 'main.colSpEvidencias', oldValue: '', newValue: name, changedBy: changedByLabel(req) }); } catch (err) { console.error('support file log failed', err); }
+    res.status(201).json({ file: supportFileOf({ id: fileId, evidence_id: evidenceId, kind: kindInfo.kind, name, mime: kindInfo.mime, size: buf.length, uploaded_by: changedByLabel(req), created_at: sqlUtcFromMs(Date.now()) }), fileCount: countSupportCaseFiles(id) });
+});
+app.get('/api/business/support-cases/:id/files/:fileId', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).end();
+    const id = Number(req.params.id);
+    const fileId = Number(req.params.fileId);
+    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!rec || !Number.isInteger(fileId)) return res.status(404).end();
+    if (!(rec.reporter_user_id === req.user.sub || supportCanSeeFiles(req))) return res.status(403).end();
+    const file = getSupportCaseFile(id, fileId);
+    if (!file) return res.status(404).end();
+    const inline = file.kind === 'capture' || file.kind === 'recording';
+    res.set({ 'Content-Type': file.mime, 'Cache-Control': 'private, max-age=300', 'X-Content-Type-Options': 'nosniff', 'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(file.name)}` });
+    res.send(file.data);
+});
+
 // --- Mapa de calor (Admin) --------------------------------------------------------------------------------------------------------------------------
 // La pantalla Admin > Mapa de calor dibuja el Layout de UN centro de costos con cada zona pintada según lo que marcaron sus sensores a la hora elegida. El servidor manda el Layout (lo que hace falta para dibujarlo: contorno, zonas
 // y los sensores con su zona) y las lecturas de sensores de un rango de tiempo (hasta 48 h; las horas van en UTC); la hora local, el promedio por zona y los colores los saca la pantalla.
@@ -10899,7 +11065,15 @@ function prepareIncidentCriterionPatch(categoryType, patch) {
 // «Evidencias de Soporte», sin repetir y en el orden del catálogo; las inactivas solo si ya estaban puestas).
 const SUPPORT_ENTRY_LEVELS = ['n0', 'n1', 'n2', 'n3'];
 const SUPPORT_ENTRY_LEVEL_LABELS = { n0: 'Nivel 0 · Autoservicio', n1: 'Nivel 1 · Mesa de ayuda', n2: 'Nivel 2 · Soporte especializado', n3: 'Nivel 3 · Ingeniería' };
+// Evidencias de Soporte: su tipo dice qué se le pide a quien abre el caso (una captura, la grabación de pantalla, un archivo o un dato escrito).
+const SUPPORT_EVIDENCE_KINDS = ['capture', 'recording', 'file', 'data'];
+const SUPPORT_EVIDENCE_KIND_LABELS = { capture: 'Captura de pantalla', recording: 'Grabación de pantalla', file: 'Archivo', data: 'Dato escrito' };
 function prepareSupportCategoryPatch(req, categoryType, existing, patch) {
+    if (categoryType === 'soporte-evidencias') {
+        if (!Object.prototype.hasOwnProperty.call(patch, 'kind')) return { patch, sanitizers: {} };
+        if (!['', ...SUPPORT_EVIDENCE_KINDS].includes(patch.kind)) return { error: { status: 400, message: 'El tipo debe ser Captura de pantalla, Grabación de pantalla, Archivo o Dato escrito.' } };
+        return { patch, sanitizers: { kind: (v) => SUPPORT_EVIDENCE_KIND_LABELS[v] || '' } };
+    }
     if (categoryType !== 'soporte-categorias') return { patch, sanitizers: {} };
     const bad = (message) => ({ error: { status: 400, message } });
     const out = { ...patch };
@@ -10961,6 +11135,7 @@ function mapArticleCategoryRecord(row, pendingByRecord, companyName, ctx = null)
             criteriaIds: parseClassificationIds(row.criteria_ids), avisoIds: parseClassificationIds(row.aviso_ids),
         } : {}),
         ...(row.category_type === 'incidentes-criterios' ? { kind: row.kind } : {}),
+        ...(row.category_type === 'soporte-evidencias' ? { kind: row.kind || '' } : {}),
         ...(row.category_type === 'soporte-categorias' ? { kind: row.kind || '', firstResponseMin: row.first_response_min || 0, evidenceIds: parseClassificationIds(row.evidence_ids) } : {}),
         ...(row.category_type === 'activos-criterios' ? { kind: row.kind || '', unit: row.unit || '', builtinKey: row.builtin_key || '', colId: criterionCol(row) } : {}),
         ...(row.category_type === 'activos-avisos' ? { builtinKey: row.builtin_key || '' } : {}),

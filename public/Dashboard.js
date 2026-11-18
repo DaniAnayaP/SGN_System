@@ -13094,6 +13094,7 @@ const TABLE_GRANT_PATHS = {
     'soporte-evidencias': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-evidencias' },
     'soporte-causas': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-causas' },
     'mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
+    'casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
     'relacion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo' },
     'udm-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion' },

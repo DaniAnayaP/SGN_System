@@ -3355,6 +3355,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'soporte-evidencias': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Evidencias de Soporte' },
     'soporte-causas': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Causas de Soporte' },
     'mapa-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Mapa de soporte' },
+    'casos-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Casos de soporte' },
     'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
@@ -3760,6 +3761,8 @@ const TABLE_GRANT_PATHS = {
     'soporte-categorias': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-categorias' },
     'soporte-evidencias': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-evidencias' },
     'soporte-causas': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-causas' },
+    // Operaciones > Casos de soporte: sus columnas, su botón «Nueva solicitud» (colSpCreateAuth) y los iconos de la tabla.
+    'casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     // Admin > Mapa de soporte: sus cuatro grupos de ajustes (colMsPrioridades, colMsImpactos, colMsNiveles, colMsReglas) y el icono del historial.
     'mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
     'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
@@ -3973,6 +3976,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'soporte-categorias': CATEGORY_BUTTON_NOTIFY,
     'soporte-evidencias': CATEGORY_BUTTON_NOTIFY,
     'soporte-causas': CATEGORY_BUTTON_NOTIFY,
+    'casos-soporte': { create: 'colSpCreateAuth' },
     'layout': { create: 'colLayoutCrearDesdeCero' },
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
     'udm-distribucion': { create: 'colUdmDCreateAuth', delete: 'colUdmDDeleteAuth' },
@@ -7532,7 +7536,8 @@ const ARTICLE_CATEGORY_EXTRA_FIELDS = {
         firstResponseMin: { column: 'first_response_min', fieldKey: 'main.colSopPrimeraRespuesta' },
         evidenceIds: { column: 'evidence_ids', fieldKey: 'main.colSopEvidencias' },
     },
-    'soporte-evidencias': {},
+    // Tipo de evidencia: capture (una captura de pantalla), recording (la grabación de pantalla), file (un archivo) o data (un dato que se escribe).
+    'soporte-evidencias': { kind: { column: 'kind', fieldKey: 'main.colSopEvTipo' } },
     'soporte-causas': {},
     'transito-equipos': {
         kind: { column: 'kind', fieldKey: 'main.colTrEquipTipo' },
@@ -14486,7 +14491,7 @@ function seedIncidentesCriteriosValuesOnce() {
     console.log(`[db] Seeded the Criterios de Incidentes catalog (Pickeo cruzado, Error de lote, Acomodar por agrupación) for existing clients: ${seeded} values (one-time).`);
 }
 // Soporte por niveles (TI > Operaciones TI > Catálogos): cada empresa arranca con las evidencias, las categorías y las causas de la maqueta de Daniel; agrega y cambia las suyas desde Catálogos.
-const SOPORTE_EVIDENCIAS_DEFAULTS = ['Captura del error', 'Grabación de pantalla', 'Hora aproximada', 'Qué datos puso', 'Qué botón no ve', 'Dato esperado', 'Excel o archivo', 'Descripción', 'Ejemplo o dibujo'];
+const SOPORTE_EVIDENCIAS_DEFAULTS = [['Captura del error', 'capture'], ['Grabación de pantalla', 'recording'], ['Hora aproximada', 'data'], ['Qué datos puso', 'data'], ['Qué botón no ve', 'data'], ['Dato esperado', 'data'], ['Excel o archivo', 'file'], ['Descripción', 'data'], ['Ejemplo o dibujo', 'file']];
 const SOPORTE_CATEGORIAS_DEFAULTS = [
     { name: 'Duda de uso', kind: 'n0', minutes: 0, evidence: [] },
     { name: 'Error al guardar', kind: 'n1', minutes: 60, evidence: ['Captura del error', 'Grabación de pantalla', 'Hora aproximada', 'Qué datos puso'] },
@@ -14499,9 +14504,9 @@ const SOPORTE_CATALOGS_SEED_KEY = 'seed-soporte-catalogos-v1';
 function seedSoporteCatalogsValues(clientId) {
     if (db.prepare("SELECT 1 FROM article_categories WHERE client_id = ? AND category_type IN ('soporte-categorias', 'soporte-evidencias', 'soporte-causas') LIMIT 1").get(clientId)) return 0;
     const evidenceIdByName = new Map();
-    SOPORTE_EVIDENCIAS_DEFAULTS.forEach((name) => {
+    SOPORTE_EVIDENCIAS_DEFAULTS.forEach(([name, kind]) => {
         const row = createArticleCategory({ clientId, categoryType: 'soporte-evidencias', isTestData: false });
-        db.prepare("UPDATE article_categories SET name = ?, status = 'active' WHERE id = ?").run(name, row.id);
+        db.prepare("UPDATE article_categories SET name = ?, kind = ?, status = 'active' WHERE id = ?").run(name, kind, row.id);
         evidenceIdByName.set(name, row.id);
     });
     SOPORTE_CATEGORIAS_DEFAULTS.forEach(({ name, kind, minutes, evidence }) => {
@@ -14514,6 +14519,17 @@ function seedSoporteCatalogsValues(clientId) {
         db.prepare("UPDATE article_categories SET name = ?, status = 'active' WHERE id = ?").run(name, row.id);
     });
     return SOPORTE_EVIDENCIAS_DEFAULTS.length + SOPORTE_CATEGORIAS_DEFAULTS.length + SOPORTE_CAUSAS_DEFAULTS.length;
+}
+// Las evidencias que ya se habían sembrado (sin tipo) reciben el tipo de la maqueta por su nombre (una sola vez); las que la empresa agregó se quedan sin tipo y se eligen en su pantalla.
+const SOPORTE_EVIDENCIAS_KIND_SEED_KEY = 'seed-soporte-evidencias-tipo-v1';
+function seedSoporteEvidenceKindsOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(SOPORTE_EVIDENCIAS_KIND_SEED_KEY)) return;
+    let n = 0;
+    db.transaction(() => {
+        SOPORTE_EVIDENCIAS_DEFAULTS.forEach(([name, kind]) => { n += db.prepare("UPDATE article_categories SET kind = ? WHERE category_type = 'soporte-evidencias' AND kind = '' AND name = ?").run(kind, name).changes; });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(SOPORTE_EVIDENCIAS_KIND_SEED_KEY);
+    })();
+    console.log(`[db] Soporte: tipo de evidencia puesto a ${n} evidencias de la maqueta (one-time).`);
 }
 function seedSoporteCatalogsValuesOnce() {
     if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(SOPORTE_CATALOGS_SEED_KEY)) return;
@@ -14576,6 +14592,85 @@ db.exec(`
         const ddl = d.kind === 'int' || d.kind === 'bool' ? `INTEGER NOT NULL DEFAULT ${Number(d.def)}` : `TEXT NOT NULL DEFAULT '${String(d.def).replace(/'/g, "''")}'`;
         db.exec(`ALTER TABLE support_map ADD COLUMN ${d.column} ${ddl}`);
     });
+}
+// ---- Casos de soporte (TI > Operaciones TI > Operaciones > Casos de soporte) ------------------------------------------------------------------------------------------------------------
+// Un caso es una solicitud de soporte con su folio por empresa (SP-0001), lo que se marcó de impacto y cuándo afecta (de ahí sale la prioridad), el nivel donde entró y las respuestas a lo que pide su categoría.
+// Las evidencias (capturas, grabaciones de pantalla y archivos) van en support_case_files y NO se editan ni se borran. is_test_data: una cuenta de prueba solo ve los casos que ella misma abre.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS support_cases (
+        id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id             INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data          INTEGER NOT NULL DEFAULT 0,
+        record_number         INTEGER NOT NULL,
+        case_type             TEXT NOT NULL DEFAULT 'c',
+        summary               TEXT NOT NULL DEFAULT '',
+        screen_label          TEXT NOT NULL DEFAULT '',
+        action_label          TEXT NOT NULL DEFAULT '',
+        error_text            TEXT NOT NULL DEFAULT '',
+        category_id           INTEGER,
+        category_name         TEXT NOT NULL DEFAULT '',
+        impacts               TEXT NOT NULL DEFAULT '[]',
+        when_affects          TEXT NOT NULL DEFAULT 'none',
+        keep_working          INTEGER NOT NULL DEFAULT 1,
+        priority              INTEGER NOT NULL DEFAULT 4,
+        level                 TEXT NOT NULL DEFAULT 'n1',
+        status                TEXT NOT NULL DEFAULT 'open',
+        answers               TEXT NOT NULL DEFAULT '{}',
+        reporter_user_id      INTEGER,
+        reporter_name         TEXT NOT NULL DEFAULT '',
+        first_response_due_at TEXT,
+        created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (client_id, record_number)
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_cases_client ON support_cases (client_id, is_test_data, status, created_at);
+    CREATE TABLE IF NOT EXISTS support_case_files (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        case_id      INTEGER NOT NULL REFERENCES support_cases(id) ON DELETE CASCADE,
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        evidence_id  INTEGER,
+        kind         TEXT NOT NULL,
+        name         TEXT NOT NULL DEFAULT '',
+        mime         TEXT NOT NULL,
+        size         INTEGER NOT NULL DEFAULT 0,
+        data         BLOB NOT NULL,
+        uploaded_by  TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_case_files_case ON support_case_files (case_id);
+`);
+const SUPPORT_CASE_SELECT = 'SELECT c.*, (SELECT COUNT(*) FROM support_case_files f WHERE f.case_id = c.id) AS file_count FROM support_cases c';
+function getSupportCase(id, clientId, isTestAccount) {
+    return db.prepare(`${SUPPORT_CASE_SELECT} WHERE c.id = ? AND c.client_id = ? AND c.is_test_data = ?`).get(id, clientId, isTestAccount ? 1 : 0) || null;
+}
+function listSupportCases(clientId, isTestAccount, { limit = 5000 } = {}) {
+    return db.prepare(`${SUPPORT_CASE_SELECT} WHERE c.client_id = ? AND c.is_test_data = ? ORDER BY c.created_at DESC, c.id DESC LIMIT ?`).all(clientId, isTestAccount ? 1 : 0, limit);
+}
+// El folio es por empresa: el siguiente número de ESA empresa (la cuenta de prueba comparte la secuencia para no repetir folios).
+function createSupportCase(c) {
+    return db.transaction(() => {
+        const n = db.prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM support_cases WHERE client_id = ?').get(c.clientId).n;
+        const id = db.prepare(`INSERT INTO support_cases (client_id, is_test_data, record_number, case_type, summary, screen_label, action_label, error_text, category_id, category_name, impacts, when_affects, keep_working,
+            priority, level, answers, reporter_user_id, reporter_name, first_response_due_at)
+            VALUES (@clientId, @isTest, @n, @type, @summary, @screen, @action, @errorText, @categoryId, @categoryName, @impacts, @when, @keepWorking, @priority, @level, @answers, @reporterUserId, @reporterName, @due)`).run({
+            clientId: c.clientId, isTest: c.isTestAccount ? 1 : 0, n, type: c.type || 'c', summary: c.summary, screen: c.screen || '', action: c.action || '', errorText: c.errorText || '', categoryId: c.categoryId,
+            categoryName: c.categoryName || '', impacts: JSON.stringify(c.impacts || []), when: c.when, keepWorking: c.keepWorking ? 1 : 0, priority: c.priority, level: c.level, answers: JSON.stringify(c.answers || {}),
+            reporterUserId: c.reporterUserId || null, reporterName: c.reporterName || '', due: c.dueAt || null,
+        }).lastInsertRowid;
+        return getSupportCase(id, c.clientId, c.isTestAccount);
+    })();
+}
+function listSupportCaseFiles(caseId) {
+    return db.prepare('SELECT id, evidence_id, kind, name, mime, size, uploaded_by, created_at FROM support_case_files WHERE case_id = ? ORDER BY id ASC').all(caseId);
+}
+function countSupportCaseFiles(caseId) {
+    return db.prepare('SELECT COUNT(*) AS n FROM support_case_files WHERE case_id = ?').get(caseId).n;
+}
+function addSupportCaseFile(f) {
+    return db.prepare('INSERT INTO support_case_files (case_id, client_id, evidence_id, kind, name, mime, size, data, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(f.caseId, f.clientId, f.evidenceId || null, f.kind, f.name, f.mime, f.data.length, f.data, f.uploadedBy || '').lastInsertRowid;
+}
+function getSupportCaseFile(caseId, fileId) {
+    return db.prepare('SELECT id, evidence_id, kind, name, mime, size, data FROM support_case_files WHERE case_id = ? AND id = ?').get(caseId, fileId) || null;
 }
 // Las personas de la empresa que se pueden poner a atender un nivel: usuarios activos (una cuenta de prueba solo ve las de prueba, como en el resto de las pantallas).
 function listSupportMapUsers(clientId, isTestAccount) {
@@ -14816,9 +14911,11 @@ migrateCodeRelationPositionsOnce();
 seedTransitoEquiposValuesOnce();
 seedIncidentesCriteriosValuesOnce();
 seedSoporteCatalogsValuesOnce();
+seedSoporteEvidenceKindsOnce();
 
 module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
+    getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listTemperatureActivity, hasTemperatureActivityBefore,
     getUserExclusions, setUserExclusions, applyUserExclusions,
     isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,

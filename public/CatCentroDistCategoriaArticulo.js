@@ -305,7 +305,7 @@ function applyCategoryFilters() {
     getTbody().querySelectorAll('tr').forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colActivoFijoLetraCodigo', 'colActivoFijoLetra', 'colTrEquipTipo', 'colIncCritCategoria', 'colSopEntraEn', 'colSopPrimeraRespuesta', 'colSopEvidencias', 'colCritLimite', 'colCritUnidad']
+        const haystack = ['colCatCode', 'colCatName', 'colCatDescription', 'colCatClasificaciones', 'colAlmCentroCostos', 'colSubAlmAlmacen', 'colSubAlmTipo', 'colSubAlmUbicacion', 'colActClasMetrica', 'colActivoFijoLetraCodigo', 'colActivoFijoLetra', 'colTrEquipTipo', 'colIncCritCategoria', 'colSopEntraEn', 'colSopPrimeraRespuesta', 'colSopEvidencias', 'colSopEvTipo', 'colCritLimite', 'colCritUnidad']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !SearchSyntax.matches('contains', text, haystack);
@@ -684,6 +684,10 @@ function buildExtraCells(record) {
             buildOptionCell(record, 'colTrEquipTipo', 'kind', 'transitEquipKind', ['person', 'forklift', 'cart', 'platform', 'other'].map((k) => ({ value: k, label: Dashboard.t(`main.trKind_${k}`) })), record.kind || '', '', (v) => ({ kind: v })),
             sizeCell('colTrEquipAncho', 'widthM', record.widthM), sizeCell('colTrEquipLargo', 'lengthM', record.lengthM), sizeCell('colTrEquipAlto', 'heightM', record.heightM),
         ];
+    }
+    if (CATEGORY_TYPE === 'soporte-evidencias') {
+        // Evidencias de Soporte: de qué tipo es (lo que se le pide a quien abre el caso).
+        return [buildOptionCell(record, 'colSopEvTipo', 'kind', 'sopEvTipo', ['capture', 'recording', 'file', 'data'].map((k) => ({ value: k, label: Dashboard.t(`main.sopEvKind_${k}`) })), record.kind || '', '', (v) => ({ kind: v }))];
     }
     if (IS_SUPPORT_CATEGORY) {
         // Categorías de Soporte: en qué nivel entra el caso (N0 a N3; el N4 es el proveedor), los minutos de la primera respuesta (vacío = sin plazo) y las evidencias que se piden.

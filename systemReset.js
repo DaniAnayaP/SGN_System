@@ -65,6 +65,8 @@ const TABLES = {
     catalog_value_requests: { action: WIPE, group: 'captures' },
     catalog_value_request_hops: { action: WIPE, group: 'captures' },
     support_materials: { action: WIPE, group: 'captures' },
+    support_cases: { action: WIPE, group: 'captures' }, // Soporte por niveles: los casos (2026-11-18)
+    support_case_files: { action: WIPE, group: 'captures' }, // y sus evidencias (capturas, grabaciones de pantalla, archivos)
     // Personalización y reglas de cada cliente
     field_fill_rules: { action: WIPE, group: 'clientSettings' },
     support_map: { action: WIPE, group: 'clientSettings' }, // Admin > Mapa de soporte: los ajustes de Soporte de cada empresa (2026-11-18)
