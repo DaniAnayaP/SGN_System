@@ -70,6 +70,8 @@ const TABLES = {
     support_case_moves: { action: WIPE, group: 'captures' }, // los traspasos de cada caso (subió o se devolvió, con su motivo y lo que se hizo)
     support_case_people: { action: WIPE, group: 'captures' }, // los avisos e invitaciones de cada caso (y a quién subieron)
     support_case_closures: { action: WIPE, group: 'captures' }, // lo que se resolvió, cerró, no quedó conforme o se reabrió de cada caso
+    support_help_articles: { action: WIPE, group: 'clientSettings' }, // TI › Catálogos › Errores y ayuda: la ayuda rápida (Nivel 0) que arma cada empresa
+    support_help_uses: { action: WIPE, group: 'captures' }, // cada «me sirvió» o «no me sirvió» de la ayuda rápida
     support_interrupts: { action: WIPE, group: 'captures' }, // lo que decidió quien atendía algo cuando llegó un caso Urgente (pausar o terminar primero)
     support_case_ratings: { action: WIPE, group: 'captures' }, // las calificaciones: del usuario a la atención y entre niveles al recibir o pasar un caso
     support_case_attempts: { action: WIPE, group: 'captures' }, // los intentos de contacto con el usuario antes de cerrar un caso sin respuesta

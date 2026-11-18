@@ -463,6 +463,9 @@
     "gesTiSoportesCerradosAbbr1": "Cerrados",
     "repTiKpiSoporte": "KPI de Soporte",
     "repTiKpiSoporteAbbr1": "KPI",
+    "support": "Soporte",
+    "catTiSoporteAyuda": "Errores y ayuda",
+    "catTiSoporteAyudaAbbr1": "Ayuda",
     "opTransVolNuestrosTraslados": "Nuestros Traslados",
     "opTransVolNuestrosTrasladosAbbr1": "Nuestros Trasl.",
     "opTransVolNuestrosTrasladosAbbr2": "Traslados",
@@ -4631,6 +4634,48 @@
     "kpDrill_3": "Causa del incidente",
     "kpDrillCases": "Los {n} casos:",
     "kpDrillHint": "Cada columna se toca para bajar un nivel. Con «Falta de capacitación» se ve qué departamento necesita capacitación; con «Error del sistema», qué se le reporta al proveedor.",
+    "colAyArticulos": "Artículos",
+    "hlWhatHappened": "¿Qué pasó?",
+    "ayNoAccess": "No tienes permiso para ver Errores y ayuda.",
+    "ayNew": "Agregar ayuda",
+    "ayEdit": "Editar ayuda",
+    "ayTitle": "Título",
+    "ayTitleHint": "(cómo se llama esta ayuda)",
+    "ayError": "Texto del error",
+    "ayErrorHint": "(lo que ve la persona; si un aviso trae este texto se le ofrece esta ayuda)",
+    "ayWhat": "Qué pasó",
+    "ayWhatShort": "Qué pasó / qué se requiere",
+    "ayNeed": "Qué se requiere",
+    "ayManual": "Manual",
+    "ayManualTitle": "Nombre del manual",
+    "ayManualUrl": "Enlace del manual",
+    "ayManualUrlHint": "(una página de Material Apoyo, por ejemplo MaterialApoyo-Procesos.html, o una dirección https)",
+    "ayStatus": "Estatus",
+    "ayStatus_active": "Activo",
+    "ayStatus_inactive": "Inactivo",
+    "ayEmpty": "Todavía no hay ayuda. Agrega la primera.",
+    "ayFormSave": "Guardar",
+    "ayFormSaved": "Ayuda guardada.",
+    "soHelpTitle": "Ayuda rápida",
+    "soSearchLabel": "Busca lo que te pasó",
+    "soSearchPlaceholder": "Escribe una palabra del error o de lo que quieres hacer",
+    "soNoMatch": "No encontramos ayuda con eso. Pide soporte aquí abajo.",
+    "soNoHelp": "Tu empresa todavía no tiene ayuda rápida.",
+    "soWhat": "¿Qué pasó?",
+    "soNeed": "Qué se requiere",
+    "soManual": "Ver el manual",
+    "soHelped": "Me sirvió",
+    "soNotHelped": "No me sirvió, pedir ayuda",
+    "soThanks": "Gracias por contarnos.",
+    "soAskTitle": "Pedir soporte",
+    "soAskText": "Si la ayuda no resolvió lo tuyo, abre una solicitud: la atiende la Mesa de ayuda y la sigues desde aquí.",
+    "soHelpDesk": "Mesa de ayuda: {names}",
+    "soMineTitle": "Mis solicitudes",
+    "soNoCases": "Todavía no has pedido soporte.",
+    "soAssignee": "la atiende {name}",
+    "soRateNow": "Califica la atención",
+    "soReopenUntil": "puedes reabrirla hasta el {when}",
+    "soNoSupport": "Tu empresa todavía no tiene el Soporte contratado.",
     "colSpCreateAuth": "Nueva solicitud",
     "spNew": "Nueva solicitud",
     "spNewTitle": "Nueva solicitud de soporte",
@@ -7990,6 +8035,30 @@
     "kpDesglose": {
       "what": "Dónde están los problemas, paso por paso: elige cómo agrupar (departamento de quien reporta, su equipo o el departamento del sistema) y toca cada columna para bajar de nivel hasta la causa del incidente y los casos.",
       "example": "Almacén › Mtto. Correctivo › Error al guardar › Error del sistema: 2 casos."
+    },
+    "soAyuda": {
+      "what": "La ayuda rápida de tu empresa: errores explicados en palabras sencillas y los manuales donde está el proceso. Busca lo que te pasó; si te sirvió, avisa con «Me sirvió» y no necesitas abrir una solicitud.",
+      "example": "Escribes «fecha de cierre» y ves qué pasó, qué se requiere y el manual «Cómo cerrar una falla»."
+    },
+    "soPedir": {
+      "what": "Si la ayuda no resolvió lo tuyo, abre una solicitud nueva. La atiende la Mesa de ayuda; puede subir a un nivel con más experiencia y siempre la cierra con tu conformidad.",
+      "example": "Abres la solicitud desde aquí con lo que te pasó y una captura."
+    },
+    "soMias": {
+      "what": "Las solicitudes que abriste: su estatus, el nivel donde van y quién las atiende. Tócala para ver el chat, el recorrido, calificar la atención al terminar o reabrirla.",
+      "example": "SP-0031: «En trabajo» en la Mesa de ayuda, la atiende Marta."
+    },
+    "ayAgregar": {
+      "what": "Agrega una ayuda: el texto del error, qué pasó, qué se requiere y el manual. Cualquier usuario de la empresa la ve en «Soporte».",
+      "example": "Texto del error «fecha de cierre anterior al reporte»; qué se requiere: «una fecha igual o posterior»; manual: Cómo cerrar una falla."
+    },
+    "ayHistorial": {
+      "what": "Quién agregó o cambió cada ayuda, cuándo y qué cambió.",
+      "example": "Marta cambió el estatus de «Activo» a «Inactivo»."
+    },
+    "ayLista": {
+      "what": "Las ayudas de la empresa. Lo inactivo deja de mostrarse a los usuarios. Si el texto del error aparece en un aviso del sistema, ese aviso ofrece «¿Qué pasó?» con esta ayuda.",
+      "example": "Aviso: «La fecha de cierre es anterior…» → «¿Qué pasó?» → la ayuda con su manual."
     },
     "spPersonas": {
       "what": "La ficha de quien reportó y su organigrama (de Roles, Usuarios y Mi Recurso Humano): los jefes de arriba, su jefe directo y sus compañeros. Con Ver y operar, marca a cada persona con «Avisar» (una nota en su campana, sin entrar al chat; debe tocar «Enterado») o «Invitar» (se suma al chat y no ve las notas internas; debe aceptar). Si alguien no responde en el plazo del Mapa de soporte, o rechaza, el aviso pasa a su jefe con la nota de qué pasó, y así hacia arriba.",

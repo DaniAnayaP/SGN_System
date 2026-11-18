@@ -3357,6 +3357,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'mapa-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Mapa de soporte' },
     'casos-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Casos de soporte' },
     'soportes-cerrados': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Soportes cerrados' },
+    'ayuda-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Errores y ayuda' },
     'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
@@ -3766,6 +3767,7 @@ const TABLE_GRANT_PATHS = {
     'casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     'kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
+    'ayuda-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
     // Admin > Mapa de soporte: sus cuatro grupos de ajustes (colMsPrioridades, colMsImpactos, colMsNiveles, colMsReglas) y el icono del historial.
     'mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
     'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
@@ -15190,6 +15192,61 @@ function listSupportUserNamesByIds(ids) {
     if (!list.length) return [];
     return db.prepare(`SELECT id, name FROM users WHERE id IN (${list.map(() => '?').join(',')})`).all(...list);
 }
+// ---- Nivel 0 de Soporte: ayuda rápida (errores explicados y manuales) ------------------------------------------------------------------------------------------------------------------------
+// Cada empresa arma su lista de «errores y ayuda» (TI › Catálogos › Errores y ayuda): el texto del error que se le muestra a la persona, qué pasó, qué se requiere y el manual o proceso donde está explicado (Material Apoyo o un enlace).
+// Cualquier usuario de la empresa la ve en «Soporte» (y en los avisos de error que coinciden con un texto) y dice si le sirvió o no: eso es el Nivel 0 (autoservicio) y alimenta el KPI «Resueltos en Nivel 0».
+// is_test_data: una cuenta de prueba solo ve lo que ella misma arma.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS support_help_articles (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data  INTEGER NOT NULL DEFAULT 0,
+        title         TEXT NOT NULL DEFAULT '',
+        error_text    TEXT NOT NULL DEFAULT '',
+        what          TEXT NOT NULL DEFAULT '',
+        need          TEXT NOT NULL DEFAULT '',
+        manual_title  TEXT NOT NULL DEFAULT '',
+        manual_url    TEXT NOT NULL DEFAULT '',
+        status        TEXT NOT NULL DEFAULT 'active',
+        created_by    TEXT NOT NULL DEFAULT '',
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_help_articles_client ON support_help_articles (client_id, is_test_data, status);
+    CREATE TABLE IF NOT EXISTS support_help_uses (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data  INTEGER NOT NULL DEFAULT 0,
+        article_id    INTEGER NOT NULL,
+        user_id       INTEGER,
+        helped        INTEGER NOT NULL DEFAULT 0,
+        source        TEXT NOT NULL DEFAULT 'support',
+        created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_help_uses_client ON support_help_uses (client_id, is_test_data, created_at);
+`);
+function listSupportHelpArticles(clientId, isTestAccount, { activeOnly = false } = {}) {
+    return db.prepare(`SELECT * FROM support_help_articles WHERE client_id = ? AND is_test_data = ? ${activeOnly ? "AND status = 'active'" : ''} ORDER BY title COLLATE NOCASE ASC, id ASC LIMIT 2000`).all(clientId, isTestAccount ? 1 : 0);
+}
+function getSupportHelpArticle(id, clientId, isTestAccount) {
+    return db.prepare('SELECT * FROM support_help_articles WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, isTestAccount ? 1 : 0) || null;
+}
+function createSupportHelpArticle(a) {
+    const id = db.prepare('INSERT INTO support_help_articles (client_id, is_test_data, title, error_text, what, need, manual_title, manual_url, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(a.clientId, a.isTestAccount ? 1 : 0, a.title, a.errorText || '', a.what || '', a.need || '', a.manualTitle || '', a.manualUrl || '', a.status === 'inactive' ? 'inactive' : 'active', a.createdBy || '').lastInsertRowid;
+    return db.prepare('SELECT * FROM support_help_articles WHERE id = ?').get(id);
+}
+function updateSupportHelpArticle(id, a) {
+    db.prepare("UPDATE support_help_articles SET title = ?, error_text = ?, what = ?, need = ?, manual_title = ?, manual_url = ?, status = ?, updated_at = datetime('now') WHERE id = ?")
+        .run(a.title, a.errorText || '', a.what || '', a.need || '', a.manualTitle || '', a.manualUrl || '', a.status === 'inactive' ? 'inactive' : 'active', id);
+    return db.prepare('SELECT * FROM support_help_articles WHERE id = ?').get(id);
+}
+function addSupportHelpUse(u) {
+    db.prepare('INSERT INTO support_help_uses (client_id, is_test_data, article_id, user_id, helped, source) VALUES (?, ?, ?, ?, ?, ?)').run(u.clientId, u.isTestAccount ? 1 : 0, u.articleId, u.userId || null, u.helped ? 1 : 0, u.source || 'support');
+}
+function listSupportHelpUsesForClient(clientId, isTestAccount) {
+    return db.prepare('SELECT * FROM support_help_uses WHERE client_id = ? AND is_test_data = ? ORDER BY id ASC').all(clientId, isTestAccount ? 1 : 0);
+}
 // ---- Quién reportó y su equipo: avisos e invitaciones del caso ----------------------------------------------------------------------------------------------------------------------------
 // Una fila por persona y caso. kind: 'notify' (se le AVISA: una nota en la campana, sin entrar al chat; debe tocar «Enterado») o 'invite' (se le INVITA al chat: ve la conversación y escribe, nunca las notas internas;
 // debe aceptar). status: pending, confirmed (Enterado), accepted, declined o expired (no respondió en el plazo del Mapa de soporte). Si no responde (o rechaza), el aviso pasa al jefe de esa persona con la nota de qué
@@ -15565,6 +15622,7 @@ seedSoporteEvidenceKindsOnce();
 module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    listSupportHelpArticles, getSupportHelpArticle, createSupportHelpArticle, updateSupportHelpArticle, addSupportHelpUse, listSupportHelpUsesForClient,
     listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,
     assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted,
     addSupportRating, getSupportRating, listSupportRatings, lastSupportClosedClosureId, listSupportRatingReminderCandidates, markSupportRatingReminded,

@@ -3551,6 +3551,29 @@
               "permissionOnly": true
             }
           ]
+        },
+        {
+          "id": "cat-catalogos-ti-soporte-ayuda",
+          "labelKey": "menu.catTiSoporteAyuda",
+          "abbrKeys": [
+            "menu.catTiSoporteAyudaAbbr1"
+          ],
+          "icon": "bx-help-circle",
+          "href": "AdminTISoporteAyuda.html",
+          "submenu": [
+            {
+              "id": "colAyArticulos",
+              "labelKey": "main.colAyArticulos",
+              "permissionOnly": true
+            }
+          ],
+          "iconsSubmenu": [
+            {
+              "id": "iconHistory",
+              "labelKey": "main.changeHistory",
+              "permissionOnly": true
+            }
+          ]
         }
       ],
       "cat-operaciones": [

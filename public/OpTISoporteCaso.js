@@ -1161,6 +1161,11 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
     try {
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
+        // Quien llega desde «Soporte» (sin la hoja de la lista de Operaciones) regresa a «Soporte»
+        if (new URLSearchParams(location.search).get('from') === 'support') {
+            const back = document.querySelector('.sc-back');
+            if (back) { back.setAttribute('href', 'Soporte.html'); const label = back.querySelector('span'); if (label) { label.setAttribute('data-i18n', 'menu.support'); label.textContent = Dashboard.t('menu.support'); } }
+        }
         if (!Number.isInteger(caseId) || caseId < 1) { $('sc-root').innerHTML = `<p class="sp-muted">${esc(t('main.scNotFound'))}</p>`; return; }
         await loadCase();
         $('sc-root').hidden = false;

@@ -147,6 +147,47 @@ function limitDroppedMessage(dropped) {
     return t('admin.limitDroppedNotice', { count: dropped.count });
 }
 
+// Un aviso de error o de alerta que trae el texto de una ayuda de «Errores y ayuda» (TI › Catálogos) se explica solo: «¿Qué pasó?» abre qué pasó, qué se requiere, el manual y «me sirvió» / «pedir ayuda». La lista se pide una sola vez por página.
+let supportHelpPromise = null;
+function loadSupportHelp() {
+    if (!supportHelpPromise) {
+        supportHelpPromise = (typeof currentRole !== 'undefined' && currentRole === 'admin') ? Promise.resolve([])
+            : fetch('/api/business/support-help', { credentials: 'include' }).then((r) => (r.ok ? r.json() : { articles: [] })).then((j) => j.articles || []).catch(() => []);
+    }
+    return supportHelpPromise;
+}
+function attachSupportExplain(msgEl, message) {
+    loadSupportHelp().then((list) => {
+        const m = String(message || '').toLowerCase();
+        const hit = list.find((a) => a.errorText && m.includes(String(a.errorText).toLowerCase()));
+        if (!hit) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'toast-explain';
+        btn.textContent = t('main.hlWhatHappened');
+        btn.addEventListener('click', () => openSupportExplain(hit, message));
+        msgEl.append(' ', btn);
+    });
+}
+function openSupportExplain(article, message) {
+    const e = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let overlay = document.getElementById('support-explain-modal');
+    if (!overlay) { overlay = document.createElement('div'); overlay.id = 'support-explain-modal'; overlay.className = 'modal-overlay'; overlay.hidden = true; document.body.appendChild(overlay); }
+    const external = /^https?:/i.test(article.manualUrl || '');
+    overlay.innerHTML = `<div class="modal-panel support-explain-panel" role="dialog" aria-modal="true"><h3>${e(article.title)}</h3>${article.what ? `<div><b>${e(t('main.soWhat'))}</b><p class="sp-pre">${e(article.what)}</p></div>` : ''}${article.need ? `<div><b>${e(t('main.soNeed'))}</b><p class="sp-pre">${e(article.need)}</p></div>` : ''}${article.manualUrl ? `<p><a class="btn btn-secondary" href="${e(article.manualUrl)}"${external ? ' target="_blank" rel="noopener"' : ''}>${e(article.manualTitle || t('main.soManual'))}</a></p>` : ''}<div class="admin-form-actions"><button type="button" class="btn" data-se="yes">${e(t('main.soHelped'))}</button><button type="button" class="btn btn-secondary" data-se="no">${e(t('main.soNotHelped'))}</button><button type="button" class="btn btn-secondary" data-se="close">${e(t('main.close'))}</button></div></div>`;
+    overlay.onclick = async (event) => {
+        const b = event.target.closest('[data-se]');
+        if (!b) { if (event.target === overlay) overlay.hidden = true; return; }
+        if (b.dataset.se === 'close') { overlay.hidden = true; return; }
+        const helped = b.dataset.se === 'yes';
+        try { await fetch(`/api/business/support-help/${article.id}/use`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ helped, source: 'error' }) }); } catch (err) { /* sin conexión */ }
+        overlay.hidden = true;
+        if (helped) showToast(t('main.soThanks'), 'success');
+        else location.href = `Soporte.html?new=1&title=${encodeURIComponent(article.title)}&error=${encodeURIComponent(message)}`;
+    };
+    overlay.hidden = false;
+}
+
 function showToast(message, type = 'info', { title, duration = TOAST_DEFAULT_DURATION } = {}) {
     const kind = TOAST_ICONS[type] ? type : 'info';
     const container = ensureToastContainer();
@@ -168,6 +209,7 @@ function showToast(message, type = 'info', { title, duration = TOAST_DEFAULT_DUR
     titleEl.className = 'toast-title';
     titleEl.textContent = `${title || t(TOAST_TITLE_KEYS[kind])}: `;
     msgEl.append(titleEl, document.createTextNode(message));
+    if (kind === 'warning' || kind === 'error') attachSupportExplain(msgEl, message);
 
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
@@ -1388,11 +1430,19 @@ function applyScreenGrantFilter(data) {
 // Inicio, Panel y Tablero (los tres de General) de un usuario o perfil del cliente salen solo si se los asignaron en su árbol, como todo lo demás: un usuario recién creado, sin nada asignado, no ve ninguna opción. El
 // administrador del cliente sin configuración propia los ve siempre (hasMainButtonPermission) y la cuenta SaaS arma su menú aparte (con sus propios permisos), así que no pasa por aquí.
 const MAIN_NAV_ITEM_IDS = ['home', 'panel', 'dashboard'];
+// «Soporte» (para todos los usuarios de una empresa con TI contratado, sin pasar por el árbol): sale junto a Inicio, Panel y Tablero.
+const SUPPORT_NAV_ITEM = { id: 'support', labelKey: 'menu.support', icon: 'bx-support', href: 'Soporte.html' };
 function applyMainNavGrantFilter(data) {
     if (currentRole === 'admin') return data;
+    const withSupport = contractedModuleKeys.includes('information-technology');
     return {
         ...data,
-        sections: data.sections.map((s) => (s.id !== 'main' ? s : { ...s, items: (s.items || []).filter((i) => !MAIN_NAV_ITEM_IDS.includes(i.id) || hasMainButtonPermission(i.id)) })),
+        sections: data.sections.map((s) => {
+            if (s.id !== 'main') return s;
+            const items = (s.items || []).filter((i) => !MAIN_NAV_ITEM_IDS.includes(i.id) || hasMainButtonPermission(i.id));
+            if (withSupport) { const at = items.findIndex((i) => i.id === 'dashboard'); items.splice(at >= 0 ? at + 1 : items.length, 0, SUPPORT_NAV_ITEM); }
+            return { ...s, items };
+        }),
     };
 }
 
@@ -13201,6 +13251,7 @@ const TABLE_GRANT_PATHS = {
     'casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     'kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
+    'ayuda-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
     'incidentes': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-incidentes' },
     'relacion-codigo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-relacion-codigo' },
     'udm-distribucion': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-udm-distribucion' },
@@ -13283,12 +13334,18 @@ const SCREEN_GRANT_PATHS = {
     // Admin > Mapa de calor: el Layout pintado con la temperatura o la humedad de los sensores, por hora.
     'cat-admin-mapa-calor': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-admin/cat-admin-mapa-calor' },
     'cat-admin-ti-mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
+    'cat-operaciones-ti-casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
+    'cat-gestion-ti-soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
+    'cat-reportes-ti-kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
+    'cat-catalogos-ti-soporte-ayuda': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
 };
 
 function hasScreenAccess(activePage) {
     // Panel.html: igual que en el menú, solo con el permiso Panel del árbol (el administrador del cliente sin configuración propia siempre). Inicio-en.html NO se bloquea: es la página a la que se llega al entrar
     // (vacía, sin datos) y desde ella se llega a lo que la cuenta sí tiene.
     if (activePage === 'panel') return hasMainButtonPermission('panel');
+    // La pantalla de UN caso de soporte (OpTISoporteCaso.html) la abre quien reportó el caso (desde «Soporte», sin ninguna hoja del árbol), el equipo y quien ve Soportes cerrados: el servidor decide quién abre cada caso.
+    if (activePage === 'cat-operaciones-ti-casos-soporte' && /OpTISoporteCaso\.html/i.test(location.pathname)) return true;
     const path = SCREEN_GRANT_PATHS[activePage];
     if (!path) return true; // not one of the mapped pages — unaffected, same as today
     return hasScreenGrant(path.sectionId, path.itemId, path.submenuPrefix);

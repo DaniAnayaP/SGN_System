@@ -582,6 +582,7 @@ const {
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    listSupportHelpArticles, getSupportHelpArticle, createSupportHelpArticle, updateSupportHelpArticle, addSupportHelpUse, listSupportHelpUsesForClient,
     listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,
     assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted,
     addSupportRating, getSupportRating, listSupportRatings, lastSupportClosedClosureId, listSupportRatingReminderCandidates, markSupportRatingReminded,
@@ -10251,9 +10252,9 @@ app.get('/api/business/support-closed', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({ truncated: rows.length >= LIMIT, max: LIMIT, cases: rows.map((r) => ({ ...supportCaseRowOf(r, client, false, 'Soportes cerrados'), causeName: r.cause_name || '', totalMinutes: r.closed_at ? Math.max(0, Math.round((new Date(sqlUtcIso(r.closed_at)).getTime() - new Date(sqlUtcIso(r.created_at)).getTime()) / 60000)) : 0 })) });
 });
-app.post('/api/business/support-cases', requireAuth, (req, res) => {
+function handleSupportCaseCreate(req, res, openToAll) {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    if (!supportCan(req, 'colSpCreateAuth')) return res.status(403).json({ message: 'No tienes permiso para abrir solicitudes de soporte.' });
+    if (!openToAll && !supportCan(req, 'colSpCreateAuth')) return res.status(403).json({ message: 'No tienes permiso para abrir solicitudes de soporte.' });
     const { clientId, isTestAccount } = req.user;
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const bad = (message, code) => res.status(400).json({ message, code });
@@ -10318,7 +10319,8 @@ app.post('/api/business/support-cases', requireAuth, (req, res) => {
     try { logTableChange({ clientId, tableKey: SUPPORT_CASE_TABLE_KEY, recordId: created.id, recordLabel: `Caso ${folio}`, action: 'create', changedBy: changedByLabel(req) }); } catch (err) { console.error('support case log failed', err); }
     notifyButtonAction(req, SUPPORT_CASE_TABLE_KEY, 'create', folio);
     res.status(201).json({ case: supportCaseRowOf(created, getClientById(clientId), true), maxFiles: SUPPORT_FILES_PER_CASE });
-});
+}
+app.post('/api/business/support-cases', requireAuth, (req, res) => handleSupportCaseCreate(req, res, false));
 // El caso con sus evidencias (la lista de archivos solo para quien tiene la columna Evidencias o abrió el caso).
 app.get('/api/business/support-cases/:id', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -11478,7 +11480,7 @@ function supportKpiCompute(req, { period, type }) {
         untaken: { n: untakenNow.length, late: untakenLate.length },
         evidenceClosed: { n: withEvidence.length, of: done.length, pct: pct(withEvidence.length, done.length) },
         conform: { n: closedClosures.length, of: decisions.length, pct: pct(closedClosures.length, decisions.length), notConform: decisions.filter((z) => z.kind === 'not_conform').length, noReply: decisions.filter((z) => z.kind === 'noresp').length },
-        n0: null,
+        n0: (() => { const uses = listSupportHelpUsesForClient(clientId, isTestAccount).filter((u) => (!range.from || ts(u.created_at) >= range.from) && (!range.to || ts(u.created_at) < range.to)); const helped = uses.filter((u) => u.helped === 1).length; return { n: helped, of: uses.length, pct: pct(helped, uses.length) }; })(),
     };
     // ---- casos que no se están tomando (ahora): desde cuándo, cómo va su primera respuesta y si el sistema ya avisó
     const arrivedAt = (c) => { const m = [...(movesBy.get(c.id) || [])].pop(); return m ? m.created_at : c.created_at; };
@@ -11526,6 +11528,107 @@ app.get('/api/business/support-kpi', requireAuth, (req, res) => {
     Object.keys(SUPPORT_KPI_COLS).forEach((k) => { if (sections[k]) result[k] = out[k]; });
     res.set('Cache-Control', 'no-store');
     res.json(result);
+});
+// ---- «Soporte» para todos los usuarios y Nivel 0 (ayuda rápida) ---------------------------------------------------------------------------------------------------------------------------------
+// Cualquier usuario de una empresa que tiene TI contratado abre «Soporte» (Soporte.html): busca ayuda rápida (los errores explicados y manuales que arma la empresa en TI › Catálogos › Errores y ayuda), dice si le sirvió o no (Nivel 0),
+// abre una solicitud nueva (sin necesitar la hoja «Nueva solicitud» del árbol, que es la de la lista de Operaciones) y sigue las suyas: estatus, nivel, quién las atiende, calificar la atención y reabrir. Rutas /api/business/my-support*.
+const supportOpenToAll = (req) => !!req.user.clientId && getClientModuleKeys(req.user.clientId).includes('information-technology');
+const supportNoSupport = (res) => res.status(403).json({ message: 'Tu empresa todavía no tiene el Soporte contratado.', code: 'NOSUPPORT' });
+app.get('/api/business/my-support', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!supportOpenToAll(req)) return supportNoSupport(res);
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const row = getSupportMapRow(clientId);
+    const level1 = new Set(parseClassificationIds(row.n1_users));
+    const helpDesk = listSupportMapUsers(clientId, isTestAccount).filter((u) => level1.has(u.id)).map((u) => u.name);
+    const rows = listSupportCases(clientId, isTestAccount, { limit: 2000 }).filter((r) => r.reporter_user_id === req.user.sub);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        canCreate: true, helpDesk, askRating: row.ask_user_rating === 1, reopenDays: SUPPORT_REOPEN_DAYS,
+        cases: rows.map((r) => ({ ...supportCaseRowOf(r, client, false), rateCan: supportUserRatingState(req, r).canRate, reopenCan: supportCanReopen(req, r), reopenUntil: supportCanReopen(req, r) ? new Date(supportReopenUntilMs(r)).toISOString() : null })),
+    });
+});
+app.get('/api/business/my-support/form', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!supportOpenToAll(req)) return supportNoSupport(res);
+    const o = supportFormOptions(req);
+    res.set('Cache-Control', 'no-store');
+    res.json({ categories: o.categories, impacts: o.impacts, limits: o.limits, map: o.map, canCreate: true });
+});
+app.get('/api/business/my-support/screens', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!supportOpenToAll(req)) return supportNoSupport(res);
+    res.set('Cache-Control', 'private, max-age=60');
+    res.json({ screens: listSupportScreens(req.user.clientId).map((s) => ({ id: s.id, labelKey: s.labelKey, categoryLabelKey: s.categoryLabelKey, nodeId: s.nodeId, department: s.sectionId, area: s.itemId, categoryId: s.categoryId, actions: s.actions.map((a) => ({ id: a.id, kind: a.kind, labelKey: a.labelKey, needs: a.needs })) })) });
+});
+app.post('/api/business/my-support', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!supportOpenToAll(req)) return supportNoSupport(res);
+    return handleSupportCaseCreate(req, res, true);
+});
+// La ayuda rápida: los errores explicados y manuales activos de la empresa (los ve cualquier usuario; una empresa sin TI contratado recibe la lista vacía).
+const supportHelpOf = (a) => ({ id: a.id, title: a.title, errorText: a.error_text, what: a.what, need: a.need, manualTitle: a.manual_title, manualUrl: a.manual_url, status: a.status, updatedAt: sqlUtcIso(a.updated_at) });
+app.get('/api/business/support-help', requireAuth, (req, res) => {
+    if (!req.user.clientId || !supportOpenToAll(req)) return res.json({ articles: [] });
+    res.set('Cache-Control', 'private, max-age=30');
+    res.json({ articles: listSupportHelpArticles(req.user.clientId, req.user.isTestAccount, { activeOnly: true }).map(supportHelpOf) });
+});
+// «Me sirvió» / «No me sirvió»: cada respuesta es una consulta de Nivel 0 (la que sirvió cuenta como resuelta sin abrir caso).
+app.post('/api/business/support-help/:id/use', requireAuth, (req, res) => {
+    if (!req.user.clientId || !supportOpenToAll(req)) return res.status(403).json({ message: 'Tu empresa todavía no tiene el Soporte contratado.', code: 'NOSUPPORT' });
+    const article = getSupportHelpArticle(Number(req.params.id), req.user.clientId, req.user.isTestAccount);
+    if (!article || article.status !== 'active') return res.status(404).json({ message: 'Esa ayuda no existe.' });
+    if (typeof (req.body || {}).helped !== 'boolean') return res.status(400).json({ message: 'Dinos si te sirvió o no.', code: 'HELPED' });
+    addSupportHelpUse({ clientId: req.user.clientId, isTestAccount: req.user.isTestAccount, articleId: article.id, userId: req.user.sub, helped: req.body.helped, source: req.body.source === 'error' ? 'error' : 'support' });
+    res.status(201).json({ ok: true });
+});
+// Administrar la ayuda rápida (TI › Catálogos › Errores y ayuda): se ve con la columna «Artículos» (Ver) y se agrega o edita con Ver y operar.
+const SUPPORT_HELP_TABLE_KEY = 'ayuda-soporte';
+const supportHelpLevel = (req) => (req.user.isClientAdmin ? 'editar' : (hasColumnGrant(supportColGrants(req), SUPPORT_HELP_TABLE_KEY, 'colAyArticulos') ? getColumnGrantLevel(supportColGrants(req), SUPPORT_HELP_TABLE_KEY, 'colAyArticulos') : null));
+const supportHelpCanEdit = (req) => ['ver-y-operar', 'editar'].includes(supportHelpLevel(req));
+const SUPPORT_HELP_FIELDS = [['title', 'title', 'main.ayTitle'], ['errorText', 'error_text', 'main.ayError'], ['what', 'what', 'main.ayWhat'], ['need', 'need', 'main.ayNeed'], ['manualTitle', 'manual_title', 'main.ayManualTitle'], ['manualUrl', 'manual_url', 'main.ayManualUrl'], ['status', 'status', 'main.ayStatus']];
+// Valida lo que se escribió: título obligatorio, al menos «qué pasó» o «qué se requiere», y el enlace solo puede ser de la propia plataforma o http(s) (nunca javascript:).
+function supportHelpClean(body, existing) {
+    const clean = (v, max) => String(v === null || v === undefined ? '' : v).replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, max);
+    const has = (k) => body && Object.prototype.hasOwnProperty.call(body, k);
+    const pick = (k, col, max) => (has(k) ? clean(body[k], max) : (existing ? existing[col] : ''));
+    const v = { title: pick('title', 'title', 120).replace(/\s+/g, ' '), errorText: pick('errorText', 'error_text', 200).replace(/\s+/g, ' '), what: pick('what', 'what', 1000), need: pick('need', 'need', 1000), manualTitle: pick('manualTitle', 'manual_title', 120).replace(/\s+/g, ' '), manualUrl: pick('manualUrl', 'manual_url', 300).replace(/\s+/g, ''), status: has('status') ? String(body.status) : (existing ? existing.status : 'active') };
+    if (v.title.length < 3) return { error: { message: 'Escribe el título (al menos 3 letras).', code: 'TITLE' } };
+    if (!['active', 'inactive'].includes(v.status)) return { error: { message: 'El estatus debe ser activo o inactivo.', code: 'STATUS' } };
+    if (!v.what && !v.need) return { error: { message: 'Explica qué pasó o qué se requiere.', code: 'CONTENT' } };
+    if (v.manualUrl && !/^(https?:\/\/[^\s]+|(?!\/\/)(?!.*\.\.)\/?[A-Za-z0-9_\-./]+\.html(\?[^\s]*)?)$/.test(v.manualUrl)) return { error: { message: 'El enlace del manual debe ser una página de la plataforma (.html) o una dirección http(s).', code: 'URL' } };
+    return { value: v };
+}
+app.get('/api/business/support-help-admin', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!supportHelpLevel(req)) return res.status(403).json({ message: 'No tienes permiso para ver Errores y ayuda.' });
+    const admin = !!req.user.isClientAdmin;
+    res.set('Cache-Control', 'no-store');
+    res.json({ articles: listSupportHelpArticles(req.user.clientId, req.user.isTestAccount).map(supportHelpOf), canEdit: supportHelpCanEdit(req), canHistory: admin || hasTableIconGrant(admin ? [] : getUserEffectiveGrants(req.user.sub), SUPPORT_HELP_TABLE_KEY, 'iconHistory') });
+});
+app.post('/api/business/support-help-admin', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!supportHelpCanEdit(req)) return res.status(403).json({ message: 'No tienes permiso para agregar ayuda.' });
+    const out = supportHelpClean(req.body || {}, null);
+    if (out.error) return res.status(400).json(out.error);
+    const row = createSupportHelpArticle({ clientId: req.user.clientId, isTestAccount: req.user.isTestAccount, ...out.value, createdBy: changedByLabel(req) });
+    try { logTableChange({ clientId: req.user.clientId, tableKey: SUPPORT_HELP_TABLE_KEY, recordId: row.id, recordLabel: row.title, action: 'create', changedBy: changedByLabel(req) }); } catch (err) { console.error('support help log failed', err); }
+    res.status(201).json({ article: supportHelpOf(row) });
+});
+app.patch('/api/business/support-help-admin/:id', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!supportHelpCanEdit(req)) return res.status(403).json({ message: 'No tienes permiso para editar la ayuda.' });
+    const existing = getSupportHelpArticle(Number(req.params.id), req.user.clientId, req.user.isTestAccount);
+    if (!existing) return res.status(404).json({ message: 'Esa ayuda no existe.' });
+    const out = supportHelpClean(req.body || {}, existing);
+    if (out.error) return res.status(400).json(out.error);
+    const row = updateSupportHelpArticle(existing.id, out.value);
+    SUPPORT_HELP_FIELDS.forEach(([key, col, fieldKey]) => {
+        if (String(existing[col]) === String(row[col])) return;
+        try { logTableChange({ clientId: req.user.clientId, tableKey: SUPPORT_HELP_TABLE_KEY, recordId: row.id, recordLabel: row.title, action: 'update', fieldKey, oldValue: existing[col], newValue: row[col], changedBy: changedByLabel(req) }); } catch (err) { console.error('support help log failed', err); }
+    });
+    res.json({ article: supportHelpOf(row) });
 });
 // Subir UNA evidencia (el archivo tal cual, sin envolverlo): X-File-Name = su nombre (codificado) y X-Evidence-Id = a cuál de las que pide la categoría corresponde (opcional: sin él es una evidencia extra).
 app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ type: () => true, limit: '13mb' }), (req, res) => {

@@ -459,6 +459,9 @@
     "gesTiSoportesCerradosAbbr1": "Closed",
     "repTiKpiSoporte": "Support KPI",
     "repTiKpiSoporteAbbr1": "KPI",
+    "support": "Support",
+    "catTiSoporteAyuda": "Errors and help",
+    "catTiSoporteAyudaAbbr1": "Help",
     "opTransVolNuestrosTraslados": "Our Transfers",
     "opTransVolNuestrosTrasladosAbbr1": "Our Transf.",
     "opTransVolNuestrosTrasladosAbbr2": "Transfers",
@@ -4632,6 +4635,48 @@
     "kpDrill_3": "Cause of the incident",
     "kpDrillCases": "The {n} cases:",
     "kpDrillHint": "Tap each column to go down one level. With “Lack of training” you see which department needs training; with “System error”, what is reported to the vendor.",
+    "colAyArticulos": "Articles",
+    "hlWhatHappened": "What happened?",
+    "ayNoAccess": "You do not have permission to see Errors and help.",
+    "ayNew": "Add help",
+    "ayEdit": "Edit help",
+    "ayTitle": "Title",
+    "ayTitleHint": "(what this help is called)",
+    "ayError": "Error text",
+    "ayErrorHint": "(what the person sees; if a notice carries this text, this help is offered)",
+    "ayWhat": "What happened",
+    "ayWhatShort": "What happened / what is required",
+    "ayNeed": "What is required",
+    "ayManual": "Manual",
+    "ayManualTitle": "Manual name",
+    "ayManualUrl": "Manual link",
+    "ayManualUrlHint": "(a Support Material page, for example MaterialApoyo-Procesos.html, or an https address)",
+    "ayStatus": "Status",
+    "ayStatus_active": "Active",
+    "ayStatus_inactive": "Inactive",
+    "ayEmpty": "There is no help yet. Add the first one.",
+    "ayFormSave": "Save",
+    "ayFormSaved": "Help saved.",
+    "soHelpTitle": "Quick help",
+    "soSearchLabel": "Search what happened to you",
+    "soSearchPlaceholder": "Type a word from the error or from what you want to do",
+    "soNoMatch": "We found no help for that. Ask for support below.",
+    "soNoHelp": "Your company has no quick help yet.",
+    "soWhat": "What happened?",
+    "soNeed": "What is required",
+    "soManual": "See the manual",
+    "soHelped": "It helped",
+    "soNotHelped": "It did not help, ask for support",
+    "soThanks": "Thank you for telling us.",
+    "soAskTitle": "Ask for support",
+    "soAskText": "If the help did not solve it, open a request: the Help desk handles it and you follow it from here.",
+    "soHelpDesk": "Help desk: {names}",
+    "soMineTitle": "My requests",
+    "soNoCases": "You have not asked for support yet.",
+    "soAssignee": "handled by {name}",
+    "soRateNow": "Rate the service",
+    "soReopenUntil": "you can reopen it until {when}",
+    "soNoSupport": "Your company does not have Support contracted yet.",
     "colSpCreateAuth": "New request",
     "spNew": "New request",
     "spNewTitle": "New support request",
@@ -7991,6 +8036,30 @@
     "kpDesglose": {
       "what": "Where the problems are, step by step: choose how to group (reporter's department, their team or the system department) and tap each column to go down to the cause of the incident and the cases.",
       "example": "Warehouse › Corrective maintenance › Error saving › System error: 2 cases."
+    },
+    "soAyuda": {
+      "what": "Your company's quick help: errors explained in plain words and the manuals where the process is. Search what happened to you; if it helped, say “It helped” and you do not need to open a request.",
+      "example": "You type “closing date” and see what happened, what is required and the manual “How to close a failure”."
+    },
+    "soPedir": {
+      "what": "If the help did not solve it, open a new request. The Help desk handles it; it can move up to a more experienced level and it always closes it with your agreement.",
+      "example": "You open the request from here with what happened and a screenshot."
+    },
+    "soMias": {
+      "what": "The requests you opened: their status, the level they are at and who handles them. Tap one to see the chat, the timeline, rate the service when it ends or reopen it.",
+      "example": "SP-0031: “In progress” at the Help desk, handled by Marta."
+    },
+    "ayAgregar": {
+      "what": "Add a help: the error text, what happened, what is required and the manual. Any user of the company sees it in “Support”.",
+      "example": "Error text “closing date earlier than the report”; required: “a date equal or later”; manual: How to close a failure."
+    },
+    "ayHistorial": {
+      "what": "Who added or changed each help, when and what changed.",
+      "example": "Marta changed the status from “Active” to “Inactive”."
+    },
+    "ayLista": {
+      "what": "The company's helps. Inactive ones stop being shown to users. If the error text appears in a system notice, that notice offers “What happened?” with this help.",
+      "example": "Notice: “The closing date is earlier…” → “What happened?” → the help with its manual."
     },
     "spPersonas": {
       "what": "The reporter’s profile and their org chart (from Roles, Users and My Human Resource): the managers above, their direct manager and their coworkers. With View and operate, mark each person with \"Notify\" (a note in their bell, without entering the chat; they must tap \"Acknowledged\") or \"Invite\" (they join the chat and do not see internal notes; they must accept). If someone does not respond in the Support map deadline, or declines, the notice goes to their manager with the note of what happened, and so on upward.",

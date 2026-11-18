@@ -9158,3 +9158,15 @@ video.sc-att.big{ max-width: 100%; max-height: 360px; }
 .kp-path{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; font-size: 0.8rem; } .kp-crumb{ padding: 0.1rem 0.6rem; border-radius: 999px; border: 1px solid var(--color-border); } .kp-crumb.last{ background: var(--color-text-primary); color: var(--color-surface); } .kp-sep{ color: var(--color-text-secondary); }
 .kp-drill{ display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.7rem; align-items: start; } .kp-dcol{ display: grid; gap: 0.3rem; align-content: start; } .kp-dcol h4{ margin: 0; font-size: 0.8rem; }
 .kp-drow{ position: relative; display: flex; justify-content: space-between; gap: 0.5rem; text-align: left; font: inherit; font-size: 0.78rem; padding: 0.3rem 0.6rem 0.5rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; overflow: hidden; } .kp-drow i{ position: absolute; left: 0; bottom: 0; height: 0.22rem; background: #3b6fd6; } .kp-drow.sel{ border-color: #3b6fd6; background: #dde8fb; color: #1d3d7a; }
+
+/* Soporte (para todos): ayuda rápida, mis solicitudes y el aviso de error que se explica solo */
+#so-root, #ay-root{ display: grid; gap: 0.9rem; }
+#ay-root td{ overflow-wrap: anywhere; min-width: 6rem; vertical-align: top; }
+.so-articles, .so-cases{ display: grid; gap: 0.4rem; }
+.so-article{ border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); overflow: hidden; } .so-article.open{ border-color: #3b6fd6; }
+.so-article-head{ overflow-wrap: anywhere; display: grid; gap: 0.1rem; width: 100%; text-align: left; font: inherit; padding: 0.55rem 0.8rem; border: 0; background: none; color: var(--color-text-primary); cursor: pointer; }
+.so-article-body{ display: grid; gap: 0.5rem; padding: 0.2rem 0.8rem 0.8rem; font-size: 0.85rem; } .so-article-body p{ margin: 0.15rem 0 0; }
+.so-case{ display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; padding: 0.6rem 0.8rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); color: var(--color-text-primary); text-decoration: none; font-size: 0.85rem; } .so-case:hover{ border-color: #3b6fd6; }
+.support-explain-panel{ width: min(520px, 94vw); max-height: 90vh; overflow: auto; display: grid; gap: 0.75rem; }
+.support-explain-panel p{ margin: 0.2rem 0 0; }
+.support-explain-panel .admin-form-actions{ display: flex; flex-wrap: wrap; gap: 0.5rem; }

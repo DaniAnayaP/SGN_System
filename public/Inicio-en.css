@@ -3697,6 +3697,18 @@
     .toast-title{
         font-weight: 700;
     }
+    .toast-explain{
+        margin-left: 0.4rem;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-decoration: underline;
+        color: inherit;
+        cursor: pointer;
+    }
     .toast-close{
         flex-shrink: 0;
         align-self: flex-start;
