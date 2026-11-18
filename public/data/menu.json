@@ -285,6 +285,14 @@
     }
   ],
   "areaOverrides": {
+    "supply-chain/sc-area-point-of-sale": {
+      "cat-operaciones": [
+        { "id": "cat-operaciones-pv-ventas", "labelKey": "menu.opPvVentas", "icon": "bx-store-alt", "href": "OpPvVentas.html" }
+      ],
+      "cat-gestion": [
+        { "id": "cat-gestion-pv-transacciones", "labelKey": "menu.gesPvTransacciones", "icon": "bx-transfer", "href": "GesPvTransacciones.html" }
+      ]
+    },
     "supply-chain/sc-area-transport-1": {
       "cat-catalogos": [
         { "id": "cat-catalogos-transporte-vol-clientes", "labelKey": "menu.catTransVolClientes", "icon": "bx-window", "href": "#" },

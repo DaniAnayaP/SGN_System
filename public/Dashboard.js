@@ -13454,6 +13454,9 @@ const SCREEN_GRANT_PATHS = {
     'cat-admin-ti-mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
     'cat-operaciones-ti-casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     'cat-gestion-ti-soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
+    // Punto Venta: Ventas (Operaciones) y Transacciones (Gestión), por ahora vacías
+    'cat-operaciones-pv-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-operaciones/cat-operaciones-pv-ventas' },
+    'cat-gestion-pv-transacciones': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-gestion/cat-gestion-pv-transacciones' },
     'cat-reportes-ti-kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'cat-catalogos-ti-soporte-ayuda': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
 };
