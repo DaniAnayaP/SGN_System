@@ -546,6 +546,10 @@ const {
     getAllClientChanges,
     getSaasTableChanges,
     logSaasTableChange,
+    buildAccessCatalog,
+    listAccessRelations,
+    validateAccessRelations,
+    setAccessRelations,
     logClientChange,
     logPlanChange,
     listSaasAdmins,
@@ -2503,7 +2507,7 @@ const SAAS_APP_STATUSES = ['active', 'inactive', 'development'];
 
 // Historial de cambios de las tablas de SaaS sin tabla propia (saas_table_changes):
 // Nuestras Apps, Nuestros Respaldos y Material de Apoyo. Con ?recordId=, solo esa fila.
-const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo'];
+const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo', 'relacion-accesos'];
 function logSaasChange(req, tableKey, recordId, recordLabel, fieldKey, oldValue, newValue, action = 'update') {
     logSaasTableChange({ tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy: changedByLabel(req) });
 }
@@ -3460,6 +3464,32 @@ app.get('/api/admin/limits-audit', requireAuth, requireAdmin, (req, res) => {
         return res.status(403).json({ message: 'No tienes acceso a la Auditoría de Límites.' });
     }
     res.json({ clients: scanLimitViolations() });
+});
+
+// Relación de Accesos (SaaS, pieza 5 de Códigos desde TI): por cada acceso del árbol, su mínimo indispensable (se habilitará solo y bloqueado desde el Giro) y los accesos que toca (solo recomendados). Ver access_relations en db.js.
+// Ver: el acceso «Ver la relación» (saas-access-relations, controles::a0); guardar: «Guardar relaciones» (controles::a1). Por defecto solo admin_saas.
+const ACCESS_REL_SCREEN = 'saas-access-relations';
+const accessRelCan = (req, key) => hasSaasGrant(getSaasUserGrants(req.user.sub), ACCESS_REL_SCREEN, key, req.user.isSaasSuperAdmin);
+app.get('/api/admin/access-relations', requireAuth, requireAdmin, (req, res) => {
+    if (!accessRelCan(req, 'controles::a0')) return res.status(403).json({ message: 'No tienes acceso a la Relación de Accesos.' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ nodes: buildAccessCatalog().nodes, relations: listAccessRelations(), canEdit: accessRelCan(req, 'controles::a1') });
+});
+app.put('/api/admin/access-relations', requireAuth, requireAdmin, (req, res) => {
+    if (!accessRelCan(req, 'controles::a1')) return res.status(403).json({ message: 'No tienes permiso para guardar relaciones de accesos.' });
+    const body = req.body || {};
+    const accessKey = String(body.access || '');
+    const clean = validateAccessRelations(accessKey, body.minimum, body.touches);
+    if (clean.error) return res.status(400).json({ message: clean.error, code: clean.code });
+    const { added, removed } = setAccessRelations(accessKey, clean.minimum, clean.touches, changedByLabel(req));
+    // el historial dice los nombres que mandó la pantalla (la persona que lo ve lee «Guardar (Autorización para Crear)», no una llave)
+    const labels = body.labels && typeof body.labels === 'object' ? body.labels : {};
+    const name = (k) => String(labels[k] || k).slice(0, 200);
+    const kindName = (k) => (k === 'minimum' ? 'mínimo indispensable' : 'recomendado');
+    const changedBy = changedByLabel(req);
+    removed.forEach((r) => logSaasTableChange({ tableKey: 'relacion-accesos', recordId: accessKey, recordLabel: name(accessKey), action: 'update', fieldKey: 'admin.relAccKind', oldValue: `${kindName(r.kind)}: ${name(r.related)}`, newValue: '', changedBy }));
+    added.forEach((r) => logSaasTableChange({ tableKey: 'relacion-accesos', recordId: accessKey, recordLabel: name(accessKey), action: 'update', fieldKey: 'admin.relAccKind', oldValue: '', newValue: `${kindName(r.kind)}: ${name(r.related)}`, changedBy }));
+    res.json({ relations: listAccessRelations().filter((r) => r.access === accessKey), changed: added.length + removed.length });
 });
 
 // Reinicio del Sistema: borra todos los registros de uso (clientes, usuarios de clientes, capturas, historiales) y deja la configuración, para

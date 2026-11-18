@@ -9312,3 +9312,46 @@ td.hab-click{ cursor: pointer; }
 .hw-table th{ font-weight: 700; color: var(--color-text-secondary); }
 .hw-table tr:last-child td{ border-bottom: 0; }
 .hw-mono{ font-variant-numeric: tabular-nums; font-weight: 600; }
+/* Relación de Accesos (SaaS, pieza 5): elegir el acceso, el árbol con las dos columnas de marcas y la cadena de mínimos */
+.ra-layout{ display: grid; grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+.ra-side{ display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.ra-label{ font-weight: 700; font-size: 0.85rem; }
+.ra-input{ width: 100%; padding: 0.5rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-primary); font: inherit; }
+.ra-count{ margin: 0; font-size: 0.76rem; color: var(--color-text-secondary); }
+.ra-list{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; max-height: 70vh; overflow: auto; }
+.ra-item{ width: 100%; text-align: left; display: grid; gap: 0.1rem; padding: 0.5rem 0.65rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-primary); cursor: pointer; font: inherit; }
+.ra-item:hover, .ra-item.active{ border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface)); }
+.ra-item-name{ font-weight: 700; font-size: 0.84rem; }
+.ra-item-path{ font-size: 0.7rem; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.ra-item-state{ font-size: 0.72rem; color: var(--color-text-secondary); }
+.ra-item-state.set{ color: var(--color-text-primary); font-weight: 600; }
+.ra-type{ display: inline-block; margin-left: 0.4rem; padding: 0 0.45rem; border-radius: 999px; font-size: 0.66rem; font-weight: 600; background: var(--color-bg); color: var(--color-text-secondary); vertical-align: middle; }
+.ra-main{ min-width: 0; }
+.ra-head h3{ margin: 0; }
+.ra-path{ margin: 0.15rem 0 0.6rem; font-size: 0.78rem; color: var(--color-text-secondary); }
+.ra-legend{ display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.6rem; }
+.ra-chip{ padding: 0.15rem 0.65rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; border: 1px solid transparent; }
+.ra-chip-min{ background: color-mix(in srgb, #14937f 18%, var(--color-surface)); border-color: #14937f; }
+.ra-chip-touch{ background: color-mix(in srgb, #7c5cd6 18%, var(--color-surface)); border-color: #7c5cd6; }
+.ra-chip-none{ background: var(--color-bg); border-color: var(--color-border); color: var(--color-text-secondary); }
+.ra-tree-wrap{ margin-top: 0.6rem; max-height: 62vh; overflow: auto; border: 1px solid var(--color-border); border-radius: 0.5rem; }
+.ra-tree{ width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.ra-tree th{ position: sticky; top: 0; z-index: 1; background: var(--color-surface); text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--color-border); color: var(--color-text-secondary); font-weight: 700; }
+.ra-tree td{ padding: 0.3rem 0.6rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
+.ra-col-mark{ width: 4.6rem; text-align: center !important; }
+.ra-name{ white-space: normal; text-align: left; }
+.ra-caret{ display: inline-flex; align-items: center; justify-content: center; width: 1.3rem; height: 1.3rem; margin-right: 0.15rem; border: 0; background: none; color: inherit; cursor: pointer; padding: 0; }
+.ra-caret-gap{ display: inline-block; width: 1.45rem; }
+.ra-branch .ra-label-text{ font-weight: 700; }
+.ra-row-min td{ background: color-mix(in srgb, #14937f 14%, var(--color-surface)); }
+.ra-row-touch td{ background: color-mix(in srgb, #7c5cd6 14%, var(--color-surface)); }
+.ra-row-min.ra-row-touch td{ background: linear-gradient(90deg, color-mix(in srgb, #14937f 14%, var(--color-surface)), color-mix(in srgb, #7c5cd6 14%, var(--color-surface))); }
+.ra-self td{ box-shadow: inset 0 0 0 1px var(--color-accent); }
+.ra-chain{ margin-top: 0.9rem; }
+.ra-chain h4{ margin: 0 0 0.3rem; font-size: 0.86rem; }
+.ra-chain-list{ list-style: none; margin: 0; padding: 0; display: grid; gap: 0.25rem; font-size: 0.8rem; }
+.ra-chain-root{ font-weight: 700; }
+.ra-needs{ color: var(--color-text-secondary); }
+.ra-actions{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.9rem; }
+.ra-summary{ margin-right: auto; font-size: 0.8rem; font-weight: 600; }
+@media (max-width: 52rem){ .ra-layout{ grid-template-columns: minmax(0, 1fr); } .ra-list{ max-height: 40vh; } }

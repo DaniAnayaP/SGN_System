@@ -215,6 +215,13 @@ window.SAAS_ADMIN_CATALOG = [
                 ],
             },
             {
+                // Relación de Accesos (pieza 5 de Códigos desde TI): por cada acceso, su mínimo indispensable y lo que toca (server.js /api/admin/access-relations). Ver = a0, Guardar = a1; por defecto solo admin_saas.
+                itemId: 'saas-access-relations', labelKey: 'menu.accessRelations', href: 'Admin-RelacionAccesos.html',
+                apartados: [
+                    { id: 'controles', label: 'Controles de la pantalla', acciones: ['Ver la relación', 'Guardar relaciones'] },
+                ],
+            },
+            {
                 // Reinicio del Sistema: borra los registros de uso y deja la configuración (server.js /api/admin/system-reset/*). El servidor
                 // además exige ser admin_saas, así que este acceso solo decide quién VE la pantalla; por defecto solo admin_saas.
                 itemId: 'saas-system-reset', labelKey: 'menu.systemReset', href: 'Admin-ReinicioSistema.html',

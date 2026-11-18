@@ -1460,6 +1460,19 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_saas_table_changes_table ON saas_table_changes(table_key, record_id);
 
+    -- access_relations: «Relación de Accesos» (SaaS, pieza 5 de Códigos desde TI). Por cada acceso del árbol (pantalla, columna, botón o icono; su llave es planTupleKey: «sección::área::ruta») se marca su MÍNIMO
+    -- INDISPENSABLE para operarlo (kind 'minimum': se habilitará solo y bloqueado desde el Giro) y los accesos que TOCA (kind 'touches': solo se recomiendan). Marcar un contenedor (pantalla, apartado...) vale para toda su rama.
+    CREATE TABLE IF NOT EXISTS access_relations (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        access_key   TEXT NOT NULL,
+        related_key  TEXT NOT NULL,
+        kind         TEXT NOT NULL CHECK (kind IN ('minimum', 'touches')),
+        updated_by   TEXT NOT NULL DEFAULT '',
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(access_key, related_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_access_relations_access ON access_relations(access_key);
+
     -- Costo Accesos-Permisos: a price per plan per tree node, at EVERY
     -- level (Departamento/Área/Categoría/Pantalla/Columna), stored and
     -- summed independently per level ON PURPOSE (a priced Departamento AND
@@ -13213,6 +13226,153 @@ function buildPlanTreeSections() {
     return cachedPlanTreeSections;
 }
 
+// ---------------------------------------------------------------------------
+// Catálogo plano de TODOS los accesos del árbol (departamentos, áreas, apartados, pantallas, columnas, botones e iconos), cada uno con su llave (planTupleKey, la misma de los permisos), su padre y el tipo. Es lo que usa la pantalla
+// «Relación de Accesos» del SaaS. Se arma una vez de menu.json con las mismas reglas de buildPlanTreeSections y de las rutas de TABLE_GRANT_PATHS (columna: <pantalla>/<clasificación>/<columna>; icono: <pantalla>/<icono>).
+// Compacto a propósito (son miles): { k: llave, p: llave del padre ('' = raíz), ty: tipo, l: labelKey, lp: parámetros del nombre }.
+// ---------------------------------------------------------------------------
+let accessCatalogCache = null;
+function buildAccessCatalog() {
+    if (accessCatalogCache) return accessCatalogCache;
+    const T = planTupleKey;
+    const nodes = [];
+    const seen = new Set();
+    const add = (key, parent, type, labelKey, labelParams) => {
+        if (seen.has(key)) return false;
+        seen.add(key);
+        const n = { k: key, p: parent, ty: type, l: labelKey || '' };
+        if (labelParams) n.lp = labelParams;
+        nodes.push(n);
+        return true;
+    };
+    // lo de adentro de una pantalla: sus clasificaciones (columnas y botones), pantallas anidadas, columnas sueltas e iconos
+    const walkScreen = (screen, key, section, item, base) => {
+        (screen.submenu || []).forEach((c) => {
+            const path = `${base}/${c.id}`;
+            const ck = T(section, item, path);
+            if (c.isClassification) {
+                add(ck, key, 'group', c.labelKey);
+                (c.submenu || []).forEach((l) => add(T(section, item, `${path}/${l.id}`), ck, c.id === 'class-botones' ? 'button' : 'column', l.labelKey, l.labelParams));
+            } else if ((c.submenu || []).some((x) => !x.permissionOnly && !x.isClassification) || (c.href && c.href !== '#')) {
+                add(ck, key, 'pantalla', c.labelKey, c.labelParams);
+                walkScreen(c, ck, section, item, path);
+            } else {
+                add(ck, key, 'column', c.labelKey, c.labelParams);
+            }
+        });
+        (screen.iconsSubmenu || []).forEach((ic) => add(T(section, item, `${base}/${ic.id}`), key, 'icon', ic.labelKey));
+    };
+    const menuJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'data', 'menu.json'), 'utf8'));
+    const areaCategories = menuJson.areaCategories || [];
+    const areaOverrides = menuJson.areaOverrides || {};
+    const areasByDept = menuJson.areas || {};
+    const mainSection = (menuJson.sections || []).find((s) => s.id === 'main');
+    // General (los botones de arriba, Configuración y lo que cuelga de ella): sus accesos son del nivel «main» (itemId = el botón, sin ruta o con la ruta de adentro)
+    if (mainSection) {
+        const rootKey = T('main', null, null);
+        add(rootKey, '', 'department', 'menu.mainSection');
+        const adminBusiness = mainSection.items.find((i) => i.id === 'admin-business');
+        const buttonConfigItems = PLAN_TREE_BUTTON_CONFIG_ITEM_IDS.map((id) => mainSection.items.find((i) => i.id === id)).filter(Boolean);
+        const walkMain = (children, parentKey, itemId, base) => {
+            (children || []).forEach((c) => {
+                const path = base ? `${base}/${c.id}` : c.id;
+                const ck = T('main', itemId, path);
+                if (c.isClassification) {
+                    add(ck, parentKey, 'group', c.labelKey);
+                    (c.submenu || []).forEach((l) => add(T('main', itemId, `${path}/${l.id}`), ck, 'column', l.labelKey, l.labelParams));
+                    return;
+                }
+                const hasKids = (c.submenu || []).length > 0;
+                add(ck, parentKey, c.permissionOnly && !hasKids ? 'button' : 'pantalla', c.labelKey, c.labelParams);
+                if (c.id === 'btn-config-botones') {
+                    buttonConfigItems.forEach((b) => add(T('main', b.id, null), ck, 'button', b.labelKey));
+                } else if (c.id === 'btn-admin-negocio' && adminBusiness) {
+                    walkMain(adminBusiness.submenu, ck, itemId, path);
+                } else {
+                    walkMain(c.submenu, ck, itemId, path);
+                }
+            });
+        };
+        mainSection.items
+            .filter((i) => i.id !== 'admin-business' && !PLAN_TREE_BUTTON_CONFIG_ITEM_IDS.includes(i.id))
+            .forEach((i) => {
+                const ik = T('main', i.id, null);
+                add(ik, rootKey, i.permissionOnly && !(i.submenu || []).length ? 'button' : 'pantalla', i.labelKey);
+                walkMain(i.submenu, ik, i.id, '');
+            });
+    }
+    (menuJson.sections || []).filter((s) => s.id !== 'main').forEach((s) => {
+        const deptKey = T(s.id, null, null);
+        add(deptKey, '', 'department', '');
+        const areaDefs = areasByDept[s.id] || GENERIC_AREA_IDS.map((id, i) => ({ id, labelKey: 'menu.area.generic', labelParams: { n: i + 1 } }));
+        areaDefs.forEach((a) => {
+            const areaKey = T(s.id, a.id, null);
+            add(areaKey, deptKey, 'area', a.labelKey || '', a.labelParams);
+            categoriesForAreaServer(s.id, a.id, areaCategories, areaOverrides).forEach((cat) => {
+                const catKey = T(s.id, a.id, cat.id);
+                add(catKey, areaKey, 'apartado', cat.labelKey);
+                (cat.submenu || []).forEach((p) => {
+                    const pk = T(s.id, a.id, `${cat.id}/${p.id}`);
+                    add(pk, catKey, 'pantalla', p.labelKey, p.labelParams);
+                    walkScreen(p, pk, s.id, a.id, `${cat.id}/${p.id}`);
+                });
+            });
+        });
+    });
+    accessCatalogCache = { nodes, keys: new Set(nodes.map((n) => n.k)) };
+    return accessCatalogCache;
+}
+
+// Las relaciones guardadas: [{ access, related, kind, updatedBy, updatedAt }].
+function listAccessRelations() {
+    return db.prepare('SELECT access_key AS access, related_key AS related, kind, updated_by AS updatedBy, updated_at AS updatedAt FROM access_relations ORDER BY access_key, kind, related_key').all();
+}
+// Revisa lo que se quiere guardar de UN acceso: llaves que existen en el árbol, ninguna es el acceso mismo, ninguna repetida entre «mínimo» y «toca» y el mínimo no puede cerrar un ciclo (A necesita B y B necesita A, directo o por una cadena).
+// Regresa { minimum, touches } limpios o { error, code }.
+function validateAccessRelations(accessKey, minimum, touches) {
+    const catalog = buildAccessCatalog();
+    if (!catalog.keys.has(accessKey)) return { error: 'Ese acceso no existe en el árbol.', code: 'ACCESS' };
+    const clean = (list) => [...new Set((Array.isArray(list) ? list : []).map((k) => String(k)))];
+    const min = clean(minimum);
+    const tou = clean(touches);
+    for (const k of [...min, ...tou]) {
+        if (!catalog.keys.has(k)) return { error: 'Hay un acceso marcado que no existe en el árbol.', code: 'RELATED' };
+        if (k === accessKey) return { error: 'Un acceso no puede relacionarse consigo mismo.', code: 'SELF' };
+    }
+    if (min.some((k) => tou.includes(k))) return { error: 'Un acceso no puede ser a la vez mínimo indispensable y recomendado.', code: 'BOTH' };
+    // ciclo: ¿desde algún mínimo nuevo se llega, por los mínimos ya guardados, de vuelta al acceso?
+    const edges = new Map();
+    db.prepare("SELECT access_key AS a, related_key AS r FROM access_relations WHERE kind = 'minimum' AND access_key != ?").all(accessKey).forEach((e) => {
+        if (!edges.has(e.a)) edges.set(e.a, []);
+        edges.get(e.a).push(e.r);
+    });
+    const seen = new Set();
+    const stack = [...min];
+    while (stack.length) {
+        const k = stack.pop();
+        if (k === accessKey) return { error: 'Eso cerraría un ciclo: ese acceso ya necesita a este.', code: 'CYCLE' };
+        if (seen.has(k)) continue;
+        seen.add(k);
+        (edges.get(k) || []).forEach((n) => stack.push(n));
+    }
+    return { minimum: min, touches: tou };
+}
+// Deja las marcas de ese acceso exactamente como llegan. Regresa lo que cambió: { added: [{ related, kind }], removed: [{ related, kind }] }.
+function setAccessRelations(accessKey, minimum, touches, updatedBy) {
+    const before = new Map(db.prepare('SELECT related_key AS related, kind FROM access_relations WHERE access_key = ?').all(accessKey).map((r) => [r.related, r.kind]));
+    const after = new Map([...minimum.map((k) => [k, 'minimum']), ...touches.map((k) => [k, 'touches'])]);
+    const added = [];
+    const removed = [];
+    db.transaction(() => {
+        db.prepare('DELETE FROM access_relations WHERE access_key = ?').run(accessKey);
+        const insert = db.prepare('INSERT INTO access_relations (access_key, related_key, kind, updated_by) VALUES (?, ?, ?, ?)');
+        after.forEach((kind, related) => insert.run(accessKey, related, kind, updatedBy || ''));
+    })();
+    after.forEach((kind, related) => { if (before.get(related) !== kind) added.push({ related, kind }); });
+    before.forEach((kind, related) => { if (after.get(related) !== kind) removed.push({ related, kind }); });
+    return { added, removed };
+}
+
 function planTupleKey(sectionId, itemId, submenuId) {
     return `${sectionId}::${itemId || ''}::${submenuId || ''}`;
 }
@@ -17031,6 +17191,10 @@ module.exports = {
     getAllClientChanges,
     getSaasTableChanges,
     logSaasTableChange,
+    buildAccessCatalog,
+    listAccessRelations,
+    validateAccessRelations,
+    setAccessRelations,
     logClientChange,
     logPlanChange,
     listSaasAdmins,
