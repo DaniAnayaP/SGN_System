@@ -9118,3 +9118,10 @@ video.sc-att.big{ max-width: 100%; max-height: 360px; }
 .sc-sim label{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: 0.78rem; }
 .sc-warn-line{ display: flex; align-items: flex-start; gap: 0.4rem; font-size: 0.78rem; } .sc-warn-line input{ margin-top: 0.15rem; flex: none; }
 .sc-sg-table{ overflow-x: auto; max-width: 100%; }
+
+/* Casos de soporte > un caso: cierre con conformidad */
+.sp-status[data-k="confirm"]{ background: #dde8fb; color: #2a54a8; border-color: transparent; } .sp-status[data-k="done"]{ background: #dff5ea; color: #1d7f55; border-color: transparent; } .sp-status[data-k="noresp"]{ background: #ececf1; color: #555a73; border-color: transparent; }
+.sc-attempt{ font-size: 0.78rem; padding: 0.25rem 0.6rem; border-radius: 0.5rem; background: #dff5ea; color: #1d7f55; overflow-wrap: anywhere; } .sc-attempt.miss{ background: #fdeed8; color: #8a5a1d; }
+.sc-attempt-form{ display: flex; flex-wrap: wrap; gap: 0.4rem; } .sc-attempt-form input{ flex: 1 1 12rem; min-width: 0; font: inherit; font-size: 0.8rem; padding: 0.3rem 0.5rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-primary); }
+.sc-attempt-form select{ font: inherit; font-size: 0.8rem; padding: 0.3rem 0.5rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-primary); }
+.sp-meta-line{ font-size: 0.78rem; overflow-wrap: anywhere; }

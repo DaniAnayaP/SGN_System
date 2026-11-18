@@ -3759,6 +3759,16 @@
                   "id": "colSpCambiarEstatus",
                   "labelKey": "main.colSpCambiarEstatus",
                   "permissionOnly": true
+                },
+                {
+                  "id": "colSpResolver",
+                  "labelKey": "main.colSpResolver",
+                  "permissionOnly": true
+                },
+                {
+                  "id": "colSpCerrar",
+                  "labelKey": "main.colSpCerrar",
+                  "permissionOnly": true
                 }
               ]
             }

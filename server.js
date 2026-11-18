@@ -582,6 +582,7 @@ const {
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
@@ -10140,6 +10141,7 @@ function supportCaseRowOf(r, client, withFiles) {
         impacts: parseJsonOr(r.impacts, []), answers: parseJsonOr(r.answers, {}), reporter: r.reporter_name, reporterUserId: r.reporter_user_id,
         createdAt: sqlUtcIso(r.created_at), dueAt: sqlUtcIso(r.first_response_due_at), firstResponseAt: sqlUtcIso(r.first_response_at), fileCount: r.file_count || 0, withFiles: !!withFiles,
         general: r.general_id ? { id: r.general_id, folio: supportGeneralFolio(r.general_number || 0) } : null, classifiedAt: sqlUtcIso(r.classified_at), classifiedBy: r.classified_by || '',
+        confirmAt: sqlUtcIso(r.confirm_at), closedAt: sqlUtcIso(r.closed_at), closedBy: r.closed_by || '', closeDid: r.close_did || '', reopenedCount: r.reopened_count || 0,
         system: getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: SUPPORT_CASE_SCREEN_LABEL, centroCostos: '', createdAt: r.created_at }),
     };
 }
@@ -10311,6 +10313,7 @@ app.get('/api/business/support-cases/:id', requireAuth, (req, res) => {
         people: { canSee: supportCanSeePeople(req), canOperate: supportCanOperatePeople(req) },
         me: iAmIn ? { kind: iAmIn.kind, status: iAmIn.status } : null,
         statusCan: supportCanChangeStatus(req, rec), classCan: supportCanSeeClass(req) && !supportIsReporter(req, rec),
+        closingCan: !supportIsReporter(req, rec) && (supportHasCol(req, 'colSpChat') || supportCan(req, 'colSpResolver') || supportCan(req, 'colSpCerrar')), reopenCan: supportCanReopen(req, rec), reopenUntil: supportCanReopen(req, rec) ? new Date(supportReopenUntilMs(rec)).toISOString() : null,
     });
 });
 // El chat del caso. ?after=<id> trae solo lo posterior (la pantalla lo pide cada rato). Las notas internas solo salen con la columna Notas internas; los archivos de los mensajes, solo con la columna Evidencias o para quien abrió el caso.
@@ -10327,14 +10330,17 @@ app.get('/api/business/support-cases/:id/messages', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     const seeInternal = supportCanSeeNotes(req);
     const shown = listSupportCaseMessages(id, { afterId: after, includeNotes: seeInternal }).filter((m) => seeInternal || !(m.kind === 'event' && String(m.event_key).startsWith('int_'))).map((m) => supportMessageOf(m, rec, canFiles, filesById));
-    if (!seeInternal) shown.forEach((m) => { if (m.kind === 'event' && m.eventKey === 'moved') m.eventData = { direction: m.eventData.direction, from: m.eventData.from, to: m.eventData.to }; });
+    if (!seeInternal) shown.forEach((m) => {
+        if (m.kind === 'event' && m.eventKey === 'moved') m.eventData = { direction: m.eventData.direction, from: m.eventData.from, to: m.eventData.to, solved: m.eventData.reason === 'solved' };
+        else if (m.kind === 'event' && m.eventKey === 'closed') m.eventData = { noresp: !!m.eventData.noresp, attempts: m.eventData.attempts || 0 };
+    });
     res.json({ messages: shown });
 });
 // Escribir en el chat: un mensaje (lo ve el usuario) o una nota interna (solo el equipo). Puede llevar una evidencia ya subida a este caso (fileId). La primera respuesta del equipo queda marcada una sola vez.
 app.post('/api/business/support-cases/:id/messages', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const id = Number(req.params.id);
-    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    let rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
     if (!rec) return res.status(404).json({ message: 'Ese caso no existe.' });
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const bad = (message, code, status = 400) => res.status(status).json({ message, code });
@@ -10347,6 +10353,11 @@ app.post('/api/business/support-cases/:id/messages', requireAuth, (req, res) => 
         if (!Number.isInteger(fileId) || !getSupportCaseFile(id, fileId)) return bad('Esa evidencia no es de este caso.', 'FILE');
     }
     if (!text && !fileId) return bad('Escribe un mensaje.', 'EMPTY');
+    // un caso cerrado no recibe mensajes; si quien reportó escribe en uno «cerrado sin respuesta» (dentro de los 7 días), se reabre solo
+    if (['done', 'noresp'].includes(rec.status)) {
+        if (rec.status === 'noresp' && !note && supportCanReopen(req, rec)) { supportReopenFlow(req, rec, { said: text || '…', toLevel: 'n1', byTeam: false }); rec = getSupportCase(id, req.user.clientId, req.user.isTestAccount); }
+        else return bad('Este caso ya está cerrado.', 'CLOSED');
+    }
     ensureSupportThread(rec);
     const level = supportAuthorLevel(req, rec);
     const created = addSupportCaseMessage({ caseId: id, clientId: req.user.clientId, kind: note ? 'note' : 'message', level, authorUserId: req.user.sub, authorName: changedByLabel(req), body: text, fileId });
@@ -10599,7 +10610,7 @@ app.post('/api/business/support-cases/:id/people/respond', requireAuth, (req, re
 // administrador, o quien tenga el botón y esté en la lista del nivel donde está el caso (Mapa de soporte; si esa lista está vacía, cualquiera con el botón). El nivel 4 (el proveedor) solo lo mueve el administrador.
 const SUPPORT_MOVE_REASONS = {
     up: ['out_of_scope', 'needs_config', 'needs_code', 'system_bug', 'needs_vendor', 'other'],
-    down: ['missing_evidence', 'missing_info', 'simple', 'misclassified', 'solved', 'other'],
+    down: ['missing_evidence', 'missing_info', 'simple', 'misclassified', 'other'],
 };
 const SUPPORT_MOVE_TEXT_MIN = 10;
 const SUPPORT_MOVE_TEXT_MAX = 1000;
@@ -10623,7 +10634,8 @@ function supportSegments(rec, moves) {
         out.push({ level, startAt: iso(start), endAt: iso(at), minutes: Math.max(0, Math.round((at - start) / 60000)), how });
         level = m.to_level; start = at; how = m.direction;
     }
-    out.push({ level, startAt: iso(start), endAt: null, minutes: Math.max(0, Math.round((Date.now() - start) / 60000)), how });
+    const endMs = rec.closed_at ? new Date(sqlUtcIso(rec.closed_at)).getTime() : null;
+    out.push({ level, startAt: iso(start), endAt: endMs ? iso(endMs) : null, minutes: Math.max(0, Math.round(((endMs || Date.now()) - start) / 60000)), how });
     return out;
 }
 function supportMoveGate(req, res, { write = false } = {}) {
@@ -10645,7 +10657,7 @@ app.get('/api/business/support-cases/:id/moves', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({
         level: rec.level, moves: moves.map(supportMoveOf), segments: supportSegments(rec, moves), reasons: SUPPORT_MOVE_REASONS, minText: SUPPORT_MOVE_TEXT_MIN, maxText: SUPPORT_MOVE_TEXT_MAX,
-        canUp: upTo.length > 0 && act && supportCanMove(req, 'up'), canDown: downTo.length > 0 && act && supportCanMove(req, 'down'), upTo, downTo,
+        canUp: upTo.length > 0 && act && supportCanMove(req, 'up') && !['done', 'noresp'].includes(rec.status), canDown: downTo.length > 0 && act && supportCanMove(req, 'down') && !['done', 'noresp'].includes(rec.status), upTo, downTo,
         missingEvidence: supportEvidenceStatus(req, rec).filter((e) => !e.done).map((e) => ({ id: e.id, name: e.name, kind: e.kind })),
     });
 });
@@ -10656,6 +10668,7 @@ app.post('/api/business/support-cases/:id/moves', requireAuth, (req, res) => {
     const bad = (message, code, extra = {}) => res.status(400).json({ message, code, ...extra });
     const direction = body.direction === 'up' || body.direction === 'down' ? body.direction : '';
     if (!direction) return bad('Elige si el caso sube o se devuelve.', 'DIRECTION');
+    if (['done', 'noresp'].includes(rec.status)) return bad('Este caso ya está cerrado.', 'CLOSED');
     if (!supportCanMove(req, direction)) return res.status(403).json({ message: `No tienes permiso para ${direction === 'up' ? 'subir' : 'devolver'} casos.` });
     if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'Este caso lo mueve quien lo atiende en su nivel actual.', code: 'LEVEL' });
     const map = supportMapPayload(getSupportMapRow(req.user.clientId), req).map;
@@ -10679,18 +10692,7 @@ app.post('/api/business/support-cases/:id/moves', requireAuth, (req, res) => {
     }
     const missing = direction === 'up' ? supportEvidenceStatus(req, rec).filter((e) => !e.done) : [];
     if (missing.length && body.confirmMissing !== true) return bad('Faltan evidencias que pide la categoría: si no las adjuntas, es probable que te devuelvan el caso.', 'MISSING_EVIDENCE', { missing: missing.map((e) => ({ id: e.id, name: e.name, kind: e.kind })) });
-    ensureSupportThread(rec);
-    const by = changedByLabel(req);
-    const move = addSupportMove({ caseId: rec.id, clientId: req.user.clientId, direction, fromLevel: rec.level, toLevel, reason, did, notes, fileIds, missingAck: missing.length > 0, byUserId: req.user.sub, byName: by });
-    addSupportEvent(rec, 'moved', { direction, from: rec.level, to: toLevel, reason, did, notes, fileIds, by }, { level: toLevel, authorName: by, authorUserId: req.user.sub });
-    // le llega a las personas del nivel al que pasó (si el Mapa de soporte las tiene) y, si sube al 3 o al 4, al jefe directo de quien reportó
-    const moved = getSupportCase(rec.id, req.user.clientId, req.user.isTestAccount);
-    const target = ['n1', 'n2', 'n3'].includes(toLevel) ? parseClassificationIds(getSupportMapRow(req.user.clientId)[`${toLevel}_users`]).filter((id) => id !== req.user.sub) : [];
-    publishSupportNotice({ recipients: target, actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-arrived', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, targetName: rec.reporter_name, from: rec.level, to: toLevel, direction, reason, by } });
-    if (direction === 'up' && ['n3', 'n4'].includes(toLevel) && map.notifyEscalated && rec.reporter_user_id) {
-        const boss = resolveDirectSupervisorUserId(rec.reporter_user_id);
-        if (boss && boss !== req.user.sub) { try { sendSupportPerson(moved, { userId: boss, kind: 'notify', reason: 'auto_escalated', byName: 'Sistema', byUserId: null, level: toLevel, auto: true, extra: { toLevel } }); } catch (err) { console.error('support escalation notice failed', err); } }
-    }
+    const move = supportApplyMove(req, rec, { direction, toLevel, reason, did, notes, fileIds, missingAck: missing.length > 0 });
     res.status(201).json({ move: supportMoveOf(move), level: toLevel });
 });
 // ---- estatus del caso ------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -10757,7 +10759,7 @@ function supportAffectedOf(req, rec) {
 }
 const supportGeneralOf = (g, cases, { withCases = false } = {}) => ({
     id: g.id, folio: supportGeneralFolio(g.record_number), title: g.title, role: g.role_name, screen: g.screen_label, action: g.action_label, level: g.level, priority: g.priority, status: g.status, affected: g.affected_count, notified: g.notified_count,
-    casesCount: g.cases_count === undefined ? (cases ? cases.length : 0) : g.cases_count, openedBy: g.opened_by_name, createdAt: sqlUtcIso(g.created_at),
+    casesCount: g.cases_count === undefined ? (cases ? cases.length : 0) : g.cases_count, openedBy: g.opened_by_name, createdAt: sqlUtcIso(g.created_at), resolvedAt: sqlUtcIso(g.resolved_at), resolvedBy: g.resolved_by || '', resolvedDid: g.resolved_did || '',
     ...(withCases ? { cases: (cases || []).map((c) => ({ id: c.id, folio: supportFolio(c.record_number), reporter: c.reporter_name, status: c.status, level: c.level, priority: c.priority })) } : {}),
 });
 app.get('/api/business/support-cases/:id/classification', requireAuth, (req, res) => {
@@ -10768,7 +10770,7 @@ app.get('/api/business/support-cases/:id/classification', requireAuth, (req, res
     const general = rec.general_id ? getSupportGeneralById(rec.general_id) : null;
     const out = {
         canOperate, type: rec.case_type, classifiedAt: sqlUtcIso(rec.classified_at), classifiedBy: rec.classified_by || '', locked: !!rec.general_id,
-        general: general ? supportGeneralOf(general, listSupportGeneralCases(general.id), { withCases: true }) : null, analysis: null,
+        general: general ? { ...supportGeneralOf(general, listSupportGeneralCases(general.id), { withCases: true }), canResolve: general.status === 'open' && !supportIsReporter(req, rec) && supportCan(req, 'colSpResolver') && supportCanActOnLevel(req, { level: general.level }) } : null, analysis: null,
         levels: SupportRules.enabledLevels(map).filter((l) => l !== 'n4'), titleMin: SUPPORT_GENERAL_TITLE_MIN, titleMax: SUPPORT_GENERAL_TITLE_MAX, defaultTitle: rec.summary.slice(0, SUPPORT_GENERAL_TITLE_MAX),
     };
     if (canOperate && !rec.general_id) {
@@ -10842,6 +10844,232 @@ app.post('/api/business/support-cases/:id/classify', requireAuth, (req, res) => 
     }
     res.status(201).json({ type: 'p', general: supportGeneralOf(getSupportGeneralById(linked.id), listSupportGeneralCases(linked.id), { withCases: true }), notified });
 });
+// ---- cierre con conformidad ------------------------------------------------------------------------------------------------------------------------------------------------------------
+// 1) Quien atiende el caso en su nivel (botón «Marcar resuelto») dice qué hizo y adjunta evidencia: el caso regresa a la Mesa de ayuda (Nivel 1, la dueña) con el estatus «Por confirmar con el usuario».
+// 2) La Mesa de ayuda (botón «Cerrar caso») lo cierra SIEMPRE, con el usuario: Conforme → Terminado (causa de la lista, qué se hizo y evidencia de que quedó resuelto, de las que llegaron después de quedar por confirmar);
+//    No conforme → se reabre y vuelve al nivel que lo trabajó, con lo que dijo el usuario; Sin respuesta → «Cerrado sin respuesta» solo con 3 intentos de contacto registrados (canal y nota) desde que quedó por confirmar.
+// 3) El usuario puede reabrir un caso cerrado durante 7 días (o escribir en uno «sin respuesta»: se reabre solo). Cada paso queda en support_case_closures y en el recorrido; lo escrito no se edita ni se borra.
+const SUPPORT_WORKING_STATUSES = ['open', 'review', 'working', 'testing'];
+const SUPPORT_CLOSED_STATUSES = ['done', 'noresp'];
+const SUPPORT_REOPEN_DAYS = 7;
+const SUPPORT_NEED_ATTEMPTS = 3;
+const SUPPORT_MAX_ATTEMPTS = 10;
+const SUPPORT_ATTEMPT_CHANNELS = ['chat', 'call', 'email', 'other'];
+const SUPPORT_CLOSE_TEXT_MIN = 10;
+const SUPPORT_SAID_MIN = 5;
+const supportCleanText = (v, max = SUPPORT_MOVE_TEXT_MAX) => String(v === null || v === undefined ? '' : v).replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, max);
+const supportCanResolve = (req, rec) => !supportIsReporter(req, rec) && supportCan(req, 'colSpResolver') && supportCanActOnLevel(req, rec) && SUPPORT_WORKING_STATUSES.includes(rec.status);
+const supportCanClose = (req, rec) => !supportIsReporter(req, rec) && supportCan(req, 'colSpCerrar') && rec.level === 'n1' && supportCanActOnLevel(req, rec) && rec.status === 'confirm';
+const supportReopenUntilMs = (rec) => (rec.closed_at ? new Date(sqlUtcIso(rec.closed_at)).getTime() + SUPPORT_REOPEN_DAYS * 86400000 : null);
+const supportCanReopen = (req, rec) => supportIsReporter(req, rec) && SUPPORT_CLOSED_STATUSES.includes(rec.status) && supportReopenUntilMs(rec) !== null && Date.now() <= supportReopenUntilMs(rec);
+// Las evidencias de un traspaso o de «marcar resuelto»: de este caso, hechas por el equipo (no por quien reportó) y que no se hayan usado en otro traspaso.
+function supportMoveFilesOk(rec, fileIds) {
+    const used = usedSupportMoveFileIds(rec.id);
+    return fileIds.every((fileId) => { const file = getSupportCaseFile(rec.id, fileId); return !!file && !used.has(fileId) && file.level !== 'n0'; });
+}
+const supportFileIdsOf = (body) => (Array.isArray(body.fileIds) ? [...new Set(body.fileIds.map(Number).filter((n) => Number.isInteger(n)))] : []);
+// A las personas que atienden un nivel (Mapa de soporte), menos quien hace el cambio.
+function supportNoticeToLevel(req, level, payload) {
+    if (!['n1', 'n2', 'n3'].includes(level)) return [];
+    const recipients = parseClassificationIds(getSupportMapRow(req.user.clientId)[`${level}_users`]).filter((id) => id !== req.user.sub);
+    return publishSupportNotice({ recipients, actorUserId: req.user.sub, actorLabel: changedByLabel(req), payload });
+}
+// Pasa el caso a otro nivel: guarda el traspaso, anota el renglón del recorrido y avisa a quien atiende el nivel de llegada (y al jefe directo si sube al 3 o al 4). quiet = sin avisos (cuando se mueven varios casos juntos).
+function supportApplyMove(req, rec, m, { quiet = false } = {}) {
+    ensureSupportThread(rec);
+    const by = changedByLabel(req);
+    const move = addSupportMove({ caseId: rec.id, clientId: req.user.clientId, direction: m.direction, fromLevel: rec.level, toLevel: m.toLevel, reason: m.reason, did: m.did, notes: m.notes || '', fileIds: m.fileIds || [], missingAck: !!m.missingAck, status: m.status, byUserId: req.user.sub, byName: by });
+    addSupportEvent(rec, 'moved', { direction: m.direction, from: rec.level, to: m.toLevel, reason: m.reason, did: m.did, notes: m.notes || '', fileIds: m.fileIds || [], by }, { level: m.toLevel, authorName: by, authorUserId: req.user.sub });
+    if (quiet) return move;
+    // le llega a las personas del nivel al que pasó (si el Mapa de soporte las tiene) y, si sube al 3 o al 4, al jefe directo de quien reportó
+    supportNoticeToLevel(req, m.toLevel, { variant: 'case-arrived', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, targetName: rec.reporter_name, from: rec.level, to: m.toLevel, direction: m.direction, reason: m.reason, by });
+    const map = supportMapPayload(getSupportMapRow(req.user.clientId), req).map;
+    if (m.direction === 'up' && ['n3', 'n4'].includes(m.toLevel) && map.notifyEscalated && rec.reporter_user_id) {
+        const boss = resolveDirectSupervisorUserId(rec.reporter_user_id);
+        const moved = getSupportCase(rec.id, req.user.clientId, req.user.isTestAccount);
+        if (boss && boss !== req.user.sub) { try { sendSupportPerson(moved, { userId: boss, kind: 'notify', reason: 'auto_escalated', byName: 'Sistema', byUserId: null, level: m.toLevel, auto: true, extra: { toLevel: m.toLevel } }); } catch (err) { console.error('support escalation notice failed', err); } }
+    }
+    return move;
+}
+function supportCauseOptions(req) {
+    return listArticleCategories(req.user.clientId, 'soporte-causas', req.user.isTestAccount).filter((c) => c.status === 'active' && String(c.name || '').trim()).map((c) => ({ id: c.id, name: String(c.name).trim() }));
+}
+// Reabre un caso cerrado (lo reabrió el usuario) o que no quedó conforme (lo decidió la Mesa de ayuda): vuelve a «Abierto» en el nivel que corresponde y le avisa a quien lo atiende.
+function supportReopenFlow(req, rec, { said, toLevel = 'n1', byTeam = false }) {
+    ensureSupportThread(rec);
+    const by = changedByLabel(req);
+    if (toLevel !== rec.level) addSupportMove({ caseId: rec.id, clientId: rec.client_id, direction: 'up', fromLevel: rec.level, toLevel, reason: 'reopened', did: said, notes: '', fileIds: [], missingAck: false, byUserId: req.user.sub, byName: by });
+    reopenSupportCase(rec.id);
+    addSupportClosure({ caseId: rec.id, clientId: rec.client_id, kind: byTeam ? 'not_conform' : 'reopened', byUserId: req.user.sub, byName: by, fromLevel: rec.level, toLevel, said });
+    addSupportEvent(rec, 'reopened', { by, said, to: toLevel, byTeam }, { level: byTeam ? 'n1' : 'n0', authorName: by, authorUserId: req.user.sub });
+    supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel(rec.status), supportStatusLabel('open'));
+    supportNoticeToLevel(req, toLevel, { variant: 'case-reopened', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, targetName: rec.reporter_name, to: toLevel, said, by });
+}
+function supportClosingGate(req, res) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!rec) { res.status(404).json({ message: 'Ese caso no existe.' }); return null; }
+    if (!supportCanOpenCase(req, rec)) { res.status(403).json({ message: 'No tienes permiso para ver este caso.' }); return null; }
+    return rec;
+}
+// Lo que necesita la tarjeta «Cierre» del equipo: quién lo resolvió y qué hizo, las causas, las evidencias que llegaron desde que quedó por confirmar y los intentos de contacto.
+app.get('/api/business/support-cases/:id/closing', requireAuth, (req, res) => {
+    const rec = supportClosingGate(req, res);
+    if (!rec) return;
+    if (supportIsReporter(req, rec) && !req.user.isClientAdmin) return res.status(403).json({ message: 'El cierre lo ve el equipo de soporte.' });
+    if (!(supportHasCol(req, 'colSpChat') || supportCan(req, 'colSpResolver') || supportCan(req, 'colSpCerrar'))) return res.status(403).json({ message: 'No tienes permiso para el cierre de este caso.' });
+    const canClose = supportCanClose(req, rec);
+    const closures = listSupportClosures(rec.id);
+    const lastResolved = [...closures].reverse().find((c) => c.kind === 'resolved') || null;
+    const attempts = rec.status === 'confirm' ? listSupportAttempts(rec.id, rec.confirm_at) : [];
+    const eligible = rec.status === 'confirm' && rec.confirm_at ? listSupportCaseFiles(rec.id).filter((f) => f.created_at >= rec.confirm_at).map(supportFileOf) : [];
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        status: rec.status, level: rec.level, confirmAt: sqlUtcIso(rec.confirm_at), closedAt: sqlUtcIso(rec.closed_at), closedBy: rec.closed_by || '', closeDid: rec.close_did || '', cause: rec.cause_name || '', reopenedCount: rec.reopened_count || 0,
+        canResolve: supportCanResolve(req, rec), canClose, minText: SUPPORT_CLOSE_TEXT_MIN, minSaid: SUPPORT_SAID_MIN, maxText: SUPPORT_MOVE_TEXT_MAX,
+        causes: canClose ? supportCauseOptions(req) : [], files: canClose ? eligible : [], channels: SUPPORT_ATTEMPT_CHANNELS, needAttempts: SUPPORT_NEED_ATTEMPTS, maxAttempts: SUPPORT_MAX_ATTEMPTS,
+        attempts: attempts.map((a) => ({ id: a.id, channel: a.channel, note: a.note, by: a.by_name, createdAt: sqlUtcIso(a.created_at) })),
+        resolved: lastResolved ? { by: lastResolved.by_name, level: lastResolved.from_level, did: lastResolved.did, fileCount: parseJsonOr(lastResolved.file_ids, []).length, general: lastResolved.said || '', createdAt: sqlUtcIso(lastResolved.created_at) } : null,
+        closures: closures.map((c) => ({ id: c.id, kind: c.kind, by: c.by_name, from: c.from_level, to: c.to_level, cause: c.cause_name, createdAt: sqlUtcIso(c.created_at) })),
+    });
+});
+// Marcar resuelto: de un nivel con el botón «Marcar resuelto», con qué se hizo y evidencia; el caso regresa a la Mesa de ayuda por confirmar con el usuario.
+app.post('/api/business/support-cases/:id/resolve', requireAuth, (req, res) => {
+    const rec = supportClosingGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (supportIsReporter(req, rec) && !req.user.isClientAdmin) return res.status(403).json({ message: 'Quien reportó no marca resuelto el caso.' });
+    if (!supportCan(req, 'colSpResolver')) return res.status(403).json({ message: 'No tienes permiso para marcar casos como resueltos.' });
+    if (!supportCanActOnLevel(req, rec)) return res.status(403).json({ message: 'Este caso lo marca resuelto quien lo atiende en su nivel actual.', code: 'LEVEL' });
+    if (!SUPPORT_WORKING_STATUSES.includes(rec.status)) return bad(rec.status === 'confirm' ? 'Este caso ya está por confirmar con el usuario.' : 'Este caso ya está cerrado.', rec.status === 'confirm' ? 'CONFIRM' : 'CLOSED');
+    const did = supportCleanText(body.did);
+    if (did.length < SUPPORT_CLOSE_TEXT_MIN) return bad('Cuenta qué hiciste para resolverlo (obligatorio).', 'DID');
+    const fileIds = supportFileIdsOf(body);
+    if (!fileIds.length) return bad('Adjunta al menos una evidencia de lo que hiciste.', 'FILES');
+    if (!supportMoveFilesOk(rec, fileIds)) return bad('Una de las evidencias no sirve (debe ser de lo que hiciste, nueva y de este caso).', 'FILES');
+    const by = changedByLabel(req);
+    const from = rec.level;
+    if (from !== 'n1') supportApplyMove(req, rec, { direction: 'down', toLevel: 'n1', reason: 'solved', did, notes: '', fileIds, status: 'confirm' });
+    else { ensureSupportThread(rec); setSupportCaseConfirm(rec.id); addSupportEvent(rec, 'resolved', { by }, { level: 'n1', authorName: by, authorUserId: req.user.sub }); }
+    addSupportClosure({ caseId: rec.id, clientId: req.user.clientId, kind: 'resolved', byUserId: req.user.sub, byName: by, fromLevel: from, toLevel: 'n1', did, fileIds });
+    supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel(rec.status), supportStatusLabel('confirm'));
+    if (rec.reporter_user_id && rec.reporter_user_id !== req.user.sub) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-resolved', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, by } });
+    res.status(201).json({ status: 'confirm', level: 'n1' });
+});
+// Un intento de contacto con el usuario (canal y nota): con 3 desde que quedó por confirmar se puede cerrar sin respuesta.
+app.post('/api/business/support-cases/:id/attempts', requireAuth, (req, res) => {
+    const rec = supportClosingGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (!supportCanClose(req, rec)) return res.status(403).json({ message: 'Solo la Mesa de ayuda registra los intentos de contacto de un caso por confirmar.', code: 'FORBIDDEN' });
+    const channel = String(body.channel || '');
+    if (!SUPPORT_ATTEMPT_CHANNELS.includes(channel)) return bad('Elige cómo lo contactaste.', 'CHANNEL');
+    const note = supportCleanText(body.note, 500);
+    if (note.length < SUPPORT_SAID_MIN) return bad('Escribe una nota del intento (qué hiciste y qué pasó).', 'NOTE');
+    const so = listSupportAttempts(rec.id, rec.confirm_at);
+    if (so.length >= SUPPORT_MAX_ATTEMPTS) return bad('Ya hay demasiados intentos registrados: ciérralo sin respuesta.', 'MAX');
+    ensureSupportThread(rec);
+    const by = changedByLabel(req);
+    const a = addSupportAttempt({ caseId: rec.id, clientId: req.user.clientId, channel, note, byUserId: req.user.sub, byName: by });
+    addSupportEvent(rec, 'int_attempt', { channel, n: so.length + 1, by }, { level: 'n1', authorName: by, authorUserId: req.user.sub });
+    res.status(201).json({ attempt: { id: a.id, channel: a.channel, note: a.note, by: a.by_name, createdAt: sqlUtcIso(a.created_at) }, count: so.length + 1 });
+});
+// Cerrar el caso con el usuario: conformity 'ok' (Terminado), 'none' (no quedó conforme: se reabre) o 'noresp' (cerrado sin respuesta).
+app.post('/api/business/support-cases/:id/close', requireAuth, (req, res) => {
+    const rec = supportClosingGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (!supportCanClose(req, rec)) {
+        if (supportCan(req, 'colSpCerrar') && !supportIsReporter(req, rec) && rec.status !== 'confirm') return bad(SUPPORT_CLOSED_STATUSES.includes(rec.status) ? 'Este caso ya está cerrado.' : 'Primero hay que marcarlo resuelto: el cierre es con el caso por confirmar con el usuario.', SUPPORT_CLOSED_STATUSES.includes(rec.status) ? 'CLOSED' : 'STATE');
+        return res.status(403).json({ message: 'Solo la Mesa de ayuda cierra el caso con el usuario.', code: 'FORBIDDEN' });
+    }
+    const conformity = String(body.conformity || '');
+    if (!['ok', 'none', 'noresp'].includes(conformity)) return bad('Elige si el usuario quedó conforme.', 'CONFORMITY');
+    const by = changedByLabel(req);
+    ensureSupportThread(rec);
+    if (conformity === 'none') {
+        const said = supportCleanText(body.said);
+        if (said.length < SUPPORT_SAID_MIN) return bad('Escribe qué dijo el usuario (qué sigue fallando).', 'SAID');
+        const map = supportMapPayload(getSupportMapRow(req.user.clientId), req).map;
+        const worked = [...listSupportMoves(rec.id)].reverse().find((m) => m.reason === 'solved');
+        const toLevel = worked && SupportRules.enabledLevels(map).includes(worked.from_level) ? worked.from_level : 'n1';
+        supportReopenFlow(req, rec, { said, toLevel, byTeam: true });
+        return res.json({ status: 'open', level: toLevel });
+    }
+    let status = 'done'; let causeId = null; let causeName = ''; let did = ''; let fileIds = [];
+    if (conformity === 'ok') {
+        const cause = supportCauseOptions(req).find((c) => c.id === Number(body.causeId));
+        if (!cause) return bad('Elige la causa del problema.', 'CAUSE');
+        causeId = cause.id; causeName = cause.name;
+        did = supportCleanText(body.did);
+        if (did.length < SUPPORT_CLOSE_TEXT_MIN) return bad('Cuenta qué se hizo para resolverlo (obligatorio).', 'DID');
+        fileIds = supportFileIdsOf(body);
+        if (!fileIds.length) return bad('Adjunta al menos una evidencia de que quedó resuelto.', 'FILES');
+        if (!fileIds.every((fileId) => { const f = getSupportCaseFile(rec.id, fileId); return !!f && !!rec.confirm_at && f.created_at >= rec.confirm_at; })) return bad('Las evidencias del cierre deben ser de este caso y de después de que quedó por confirmar.', 'FILES');
+    } else {
+        const attempts = listSupportAttempts(rec.id, rec.confirm_at);
+        if (attempts.length < SUPPORT_NEED_ATTEMPTS) return bad(`Para cerrarlo sin respuesta faltan intentos de contacto: llevas ${attempts.length} de ${SUPPORT_NEED_ATTEMPTS}.`, 'ATTEMPTS');
+        status = 'noresp';
+        did = supportCleanText(`Sin respuesta del usuario tras ${attempts.length} intentos de contacto.`);
+    }
+    closeSupportCase({ caseId: rec.id, status, by, causeId, causeName, did });
+    addSupportClosure({ caseId: rec.id, clientId: req.user.clientId, kind: status === 'done' ? 'closed' : 'noresp', byUserId: req.user.sub, byName: by, fromLevel: 'n1', toLevel: 'n1', causeId, causeName, did, fileIds });
+    addSupportEvent(rec, 'closed', { by, noresp: status === 'noresp', cause: causeName, attempts: status === 'noresp' ? listSupportAttempts(rec.id, rec.confirm_at).length : 0 }, { level: 'n1', authorName: by, authorUserId: req.user.sub });
+    supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel('confirm'), supportStatusLabel(status));
+    if (rec.general_id) closeSupportGeneralIfDone(rec.general_id);
+    if (rec.reporter_user_id && rec.reporter_user_id !== req.user.sub) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-closed', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, noresp: status === 'noresp', until: new Date(Date.now() + SUPPORT_REOPEN_DAYS * 86400000).toISOString(), by } });
+    res.json({ status });
+});
+// El usuario reabre su caso cerrado (hasta 7 días después): dice qué sigue fallando y el caso vuelve a la Mesa de ayuda.
+app.post('/api/business/support-cases/:id/reopen', requireAuth, (req, res) => {
+    const rec = supportClosingGate(req, res);
+    if (!rec) return;
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (!supportIsReporter(req, rec)) return res.status(403).json({ message: 'Solo quien reportó el caso lo reabre.', code: 'FORBIDDEN' });
+    if (!SUPPORT_CLOSED_STATUSES.includes(rec.status)) return bad('Este caso no está cerrado.', 'STATE');
+    if (!supportCanReopen(req, rec)) return bad(`Ya pasaron más de ${SUPPORT_REOPEN_DAYS} días desde que se cerró: abre una solicitud nueva.`, 'EXPIRED');
+    const said = supportCleanText(req.body && req.body.said);
+    if (said.length < SUPPORT_SAID_MIN) return bad('Cuéntanos qué sigue fallando.', 'SAID');
+    supportReopenFlow(req, rec, { said, toLevel: 'n1', byTeam: false });
+    res.json({ status: 'open', level: 'n1' });
+});
+// Resolver un Soporte general: cada caso ligado que se esté trabajando regresa a la Mesa de ayuda por confirmar con su usuario (ninguno se cierra solo) y se les avisa.
+app.post('/api/business/support-cases/:id/general-resolve', requireAuth, (req, res) => {
+    const rec = supportClosingGate(req, res);
+    if (!rec) return;
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (supportIsReporter(req, rec) && !req.user.isClientAdmin) return res.status(403).json({ message: 'Quien reportó no resuelve el Soporte general.' });
+    const g = rec.general_id ? getSupportGeneral(rec.general_id, req.user.clientId, req.user.isTestAccount) : null;
+    if (!g) return bad('Este caso no está ligado a un Soporte general.', 'GENERAL');
+    if (!supportCan(req, 'colSpResolver')) return res.status(403).json({ message: 'No tienes permiso para marcar como resuelto.' });
+    if (!supportCanActOnLevel(req, { level: g.level })) return res.status(403).json({ message: 'El Soporte general lo resuelve quien lo atiende (en su nivel).', code: 'LEVEL' });
+    if (g.status !== 'open') return bad('Este Soporte general ya se resolvió.', 'STATE');
+    const did = supportCleanText(body.did);
+    if (did.length < SUPPORT_CLOSE_TEXT_MIN) return bad('Cuenta qué se hizo para resolverlo (obligatorio).', 'DID');
+    const fileIds = supportFileIdsOf(body);
+    if (!fileIds.length) return bad('Adjunta al menos una evidencia de lo que se hizo.', 'FILES');
+    if (!supportMoveFilesOk(rec, fileIds)) return bad('Una de las evidencias no sirve (debe ser de lo que hiciste, nueva y de este caso).', 'FILES');
+    const by = changedByLabel(req);
+    const folio = supportGeneralFolio(g.record_number);
+    const cases = listSupportGeneralWorkingCases(g.id);
+    resolveSupportGeneral(g.id, { by, did });
+    cases.forEach((c) => {
+        const from = c.level;
+        if (from !== 'n1') supportApplyMove(req, c, { direction: 'down', toLevel: 'n1', reason: 'solved', did, notes: '', fileIds: c.id === rec.id ? fileIds : [], status: 'confirm' }, { quiet: true });
+        else { ensureSupportThread(c); setSupportCaseConfirm(c.id); }
+        addSupportEvent(c, 'general_resolved', { general: folio, by }, { level: 'n1', authorName: by, authorUserId: req.user.sub });
+        addSupportClosure({ caseId: c.id, clientId: req.user.clientId, kind: 'resolved', byUserId: req.user.sub, byName: by, fromLevel: from, toLevel: 'n1', did, said: folio, fileIds: c.id === rec.id ? fileIds : [] });
+        supportLogCaseChange(req, c, 'main.colSpEstatus', supportStatusLabel(c.status), supportStatusLabel('confirm'));
+        if (c.reporter_user_id && c.reporter_user_id !== req.user.sub) publishSupportNotice({ recipients: [c.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-resolved', caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary, generalFolio: folio, by } });
+    });
+    supportNoticeToLevel(req, 'n1', { variant: 'general-resolved', generalId: g.id, generalFolio: folio, generalTitle: g.title, count: cases.length, by });
+    res.status(201).json({ general: supportGeneralOf(getSupportGeneralById(g.id), listSupportGeneralCases(g.id), { withCases: true }), cases: cases.length });
+});
 // Subir UNA evidencia (el archivo tal cual, sin envolverlo): X-File-Name = su nombre (codificado) y X-Evidence-Id = a cuál de las que pide la categoría corresponde (opcional: sin él es una evidencia extra).
 app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ type: () => true, limit: '13mb' }), (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -10849,6 +11077,7 @@ app.post('/api/business/support-cases/:id/files', requireAuth, express.raw({ typ
     const rec = Number.isInteger(id) ? getSupportCase(id, req.user.clientId, req.user.isTestAccount) : null;
     if (!rec) return res.status(404).json({ message: 'Ese caso no existe.' });
     if (!(rec.reporter_user_id === req.user.sub || supportIsParticipant(req, rec) || supportCan(req, 'colSpCreateAuth') || supportCan(req, 'colSpChatSend') || supportCan(req, 'colSpSubir') || supportCan(req, 'colSpDevolver'))) return res.status(403).json({ message: 'No puedes agregar evidencias a este caso.' });
+    if (['done', 'noresp'].includes(rec.status)) return res.status(400).json({ message: 'Este caso ya está cerrado.', code: 'CLOSED' });
     const buf = req.body;
     if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ message: 'No llegó ningún archivo.', code: 'EMPTY' });
     if (countSupportCaseFiles(id) >= SUPPORT_FILES_PER_CASE) return res.status(400).json({ message: `Un caso lleva hasta ${SUPPORT_FILES_PER_CASE} evidencias.`, code: 'MAXFILES' });

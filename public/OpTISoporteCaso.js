@@ -50,10 +50,16 @@ function eventText(m) {
     if (m.eventKey === 'int_confirmed') return t('main.spEv_int_confirmed', { name: d.name || author, min: friendlyMinutes(d.minutes) });
     if (m.eventKey === 'int_declined') return t('main.spEv_int_declined', { name: d.name || author }) + (d.reason ? ` — ${d.reason}` : '');
     if (m.eventKey === 'person_joined') return t('main.spEv_person_joined', { name: d.name || author });
+    if (m.eventKey === 'moved' && (d.solved || d.reason === 'solved')) return t('main.spEv_moved_solved', { author, from: t(`main.sopLevel_${d.from}`), to: t(`main.sopLevel_${d.to}`) });
     if (m.eventKey === 'moved') return t(d.direction === 'up' ? 'main.spEv_moved_up' : 'main.spEv_moved_down', { author, from: t(`main.sopLevel_${d.from}`), to: t(`main.sopLevel_${d.to}`) });
     if (m.eventKey === 'status_changed') return t(d.auto ? 'main.spEv_status_auto' : 'main.spEv_status_changed', { author, from: t(`main.spStatus_${d.from}`), to: t(`main.spStatus_${d.to}`) });
     if (m.eventKey === 'classified') return d.type === 'c' ? t('main.spEv_classified_c', { author }) : t(d.created ? 'main.spEv_classified_p_new' : 'main.spEv_classified_p_existing', { author, general: d.general }) + (d.others ? t('main.spEv_classified_more', { n: d.others }) : '');
     if (m.eventKey === 'general_linked') return t('main.spEv_general_linked', { author, general: d.general });
+    if (m.eventKey === 'resolved') return t('main.spEv_resolved', { author });
+    if (m.eventKey === 'general_resolved') return t('main.spEv_general_resolved', { general: d.general });
+    if (m.eventKey === 'closed') return d.noresp ? t('main.spEv_closed_noresp', { author, n: d.attempts || 0 }) : t('main.spEv_closed_ok', { author }) + (d.cause ? t('main.spEv_closed_cause', { cause: d.cause }) : '');
+    if (m.eventKey === 'reopened') return d.byTeam ? t('main.spEv_reopened_team', { to: t(`main.sopLevel_${d.to}`), said: d.said || '' }) : t('main.spEv_reopened_user', { author, said: d.said || '' });
+    if (m.eventKey === 'int_attempt') return t('main.spEv_int_attempt', { author, n: d.n || 1, channel: t(`main.clCh_${d.channel}`) });
     return m.eventKey;
 }
 // El detalle de un traspaso (solo lo ve el equipo con las notas internas): motivo, lo que hizo, las notas y cuántas evidencias.
@@ -61,7 +67,7 @@ function movedDetail(m) {
     const d = m.eventData || {};
     if (m.eventKey !== 'moved' || !d.reason) return '';
     const files = (d.fileIds || []).length;
-    return `<div class="sc-why"><b>${esc(t('main.mvReasonLabel'))}:</b> ${esc(t(`main.mvReason_${d.reason}`))}<br><b>${esc(t('main.mvDidShort'))}:</b> ${esc(d.did)}<br><b>${esc(t('main.mvNotesShort'))}:</b> ${esc(d.notes)}${files ? `<br><b>${esc(t('main.mvFilesShort'))}:</b> ${files}` : ''}</div>`;
+    return `<div class="sc-why"><b>${esc(t('main.mvReasonLabel'))}:</b> ${esc(t(`main.mvReason_${d.reason}`))}<br><b>${esc(t('main.mvDidShort'))}:</b> ${esc(d.did)}${d.notes ? `<br><b>${esc(t('main.mvNotesShort'))}:</b> ${esc(d.notes)}` : ''}${files ? `<br><b>${esc(t('main.mvFilesShort'))}:</b> ${files}` : ''}</div>`;
 }
 function friendlyMinutes(m) {
     const n = Number(m) || 0;
@@ -133,6 +139,8 @@ function renderComposer() {
     const ch = state.chat;
     const box = $('sc-composer');
     if (!ch.canSend && !ch.canWriteNotes) { box.hidden = true; return; }
+    // un caso cerrado no recibe mensajes (salvo que sea «sin respuesta» y quien reportó pueda reabrirlo escribiendo)
+    if (['done', 'noresp'].includes(state.c.status) && !(state.c.status === 'noresp' && state.reopenCan)) { box.hidden = true; return; }
     box.hidden = false;
     const note = $('sc-note') && $('sc-note').checked;
     const text = $('sc-text') ? $('sc-text').value : '';
@@ -150,6 +158,7 @@ async function loadCase() {
     if (!res.ok) throw new Error(body.message || 'load failed');
     state.c = body.case; state.files = body.files || []; state.chat = body.chat; state.contactCan = !!(body.contact && body.contact.canSee); state.peopleCan = !!(body.people && body.people.canSee);
     state.statusCan = !!body.statusCan; state.classCan = !!body.classCan;
+    state.closingCan = !!body.closingCan; state.reopenCan = !!body.reopenCan; state.reopenUntil = body.reopenUntil || null;
 }
 async function loadMessages(first) {
     if (!state.chat.canSee) return false;
@@ -170,6 +179,7 @@ async function refresh(first) {
             if (state.contactCan) await reloadContact();
             await reloadMoves();
             await reloadClass();
+            await reloadClosing();
         }
         if (!first && state.peopleCan) await reloadPeople();
         if (first || got) { renderThread(first); renderFlow(); }
@@ -624,10 +634,12 @@ function newClassForm() {
 }
 function generalBoxHtml(g) {
     const rows = (g.cases || []).map((c) => `<tr><td><b>${esc(c.folio)}</b></td><td>${esc(c.reporter || '—')}</td><td>${lvBadge(c.level)}</td><td><span class="sp-tag sp-status" data-k="${esc(c.status)}">${esc(t(`main.spStatus_${c.status}`))}</span></td></tr>`).join('');
-    return `<div class="sc-sg"><div class="sc-card-head"><h4>${esc(t('main.clGeneralTitle', { folio: g.folio }))}</h4><span class="sp-tag sp-type" data-k="p">${esc(t('main.spType_p'))}</span></div>
+    return `<div class="sc-sg"><div class="sc-card-head"><h4>${esc(t('main.clGeneralTitle', { folio: g.folio }))}</h4><span class="sc-tags"><span class="sp-tag sp-type" data-k="p">${esc(t('main.spType_p'))}</span><span class="sp-tag sp-general">${esc(t(`main.clGenSt_${g.status}`))}</span></span></div>
         <dl class="sp-meta"><div class="sp-wide"><dt>${esc(t('main.clGenWhat'))}</dt><dd>${esc(g.title)}</dd></div><div><dt>${esc(t('main.clGenRole'))}</dt><dd>${esc(g.role ? t('main.clGenRoleVal', { role: g.role, n: g.affected }) : '—')}</dd></div>
         <div><dt>${esc(t('main.clGenLevel'))}</dt><dd>${esc(t(`main.sopLevel_${g.level}`))}</dd></div><div><dt>${esc(t('main.colSpPrioridad'))}</dt><dd><span class="sp-tag sp-pri" data-k="${g.priority}">${esc(t(`main.msPri_${g.priority}`))}</span></dd></div><div><dt>${esc(t('main.clGenNotified'))}</dt><dd>${g.notified}</dd></div></dl>
         <div class="sc-sg-table"><table class="ms-table"><thead><tr><th>${esc(t('main.clColCase'))}</th><th>${esc(t('main.clColUser'))}</th><th>${esc(t('main.colSpNivel'))}</th><th>${esc(t('main.colSpEstatus'))}</th></tr></thead><tbody>${rows}</tbody></table></div>
+        ${g.status !== 'open' ? `<p class="sp-muted">${esc(t('main.clGenResolvedLine', { by: g.resolvedBy || '—', when: g.resolvedAt ? fmtTime(g.resolvedAt) : '—', did: g.resolvedDid || '' }))}</p>` : ''}
+        ${g.canResolve ? `<div class="admin-form-actions"><button type="button" class="btn" data-cl-resolve-general>✓ ${esc(t('main.clGenResolveBtn'))}</button></div>` : ''}
         <p class="sp-muted">${esc(t('main.clGenHint'))}</p></div>`;
 }
 function renderClass() {
@@ -723,6 +735,283 @@ document.addEventListener('click', (event) => {
     if (event.target.closest('#cl-save')) submitClass();
 });
 
+// ---- cierre con conformidad: marcar resuelto, confirmar con el usuario, cerrar, cerrar sin respuesta y reabrir ----------------------------------------------------------------
+// «Marcar resuelto» (botón del árbol) pide qué se hizo y evidencia y regresa el caso a la Mesa de ayuda por confirmar con el usuario. La Mesa de ayuda lo cierra (botón «Cerrar caso»): conforme (causa, qué se hizo y evidencia
+// de que quedó resuelto), no conforme (se reabre) o sin respuesta (con 3 intentos de contacto registrados). Quien reportó puede reabrirlo hasta 7 días después. Lo escrito no se edita ni se borra.
+const fmtClock = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+const CLOSED_STATUSES = ['done', 'noresp'];
+const MAX_EVIDENCE_BYTES = 12 * 1048576;
+const closeState = { data: null, form: null, reopenText: '', reopening: false };
+async function loadClosing() {
+    const res = await fetch(`${API}/${caseId}/closing`, { credentials: 'include' });
+    if (!res.ok) return false;
+    closeState.data = await res.json();
+    return true;
+}
+// Evidencia nueva dentro de un formulario (adjuntar o grabar la pantalla): target = { blobs: [{ blob, name, uploaded }], rec }.
+async function addEvidenceFiles(target, list) {
+    for (const file of list) {
+        let blob = file;
+        if (file.type && file.type.startsWith('image/')) { try { blob = await Dashboard.compressImageToBlob(file); } catch (err) { blob = file; } }
+        if (blob.size > MAX_EVIDENCE_BYTES) { Dashboard.showToast(t('main.spTooBig', { name: file.name, mb: 12 }), 'warning'); continue; }
+        target.blobs.push({ blob, name: file.name });
+    }
+}
+async function startEvidenceRec(target, rerender) {
+    try {
+        const ctl = await SupportRecorder.start({ onTick: (s) => { if (target.rec) { target.rec.seconds = s; document.querySelectorAll('.sp-recbar b').forEach((b) => { b.textContent = `${t('main.spFRecording')} · ${fmtClock(s)}`; }); } } });
+        target.rec = { seconds: 0, ctl };
+        ctl.done.then(({ blob }) => {
+            target.rec = null;
+            if (blob.size <= MAX_EVIDENCE_BYTES) target.blobs.push({ blob, name: `grabacion-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.webm` });
+            else Dashboard.showToast(t('main.spTooBig', { name: t('main.spFRecord'), mb: 12 }), 'warning');
+            rerender();
+        });
+        rerender();
+    } catch (err) { Dashboard.showToast(t('main.spRecDenied'), 'warning'); }
+}
+function evidenceControlsHtml(target, attr) {
+    const canRec = window.SupportRecorder && SupportRecorder.canRecord();
+    const blobs = target.blobs.map((x, i) => `<div class="sp-slot-row"><span class="sp-ok"><i class="bx bx-check" aria-hidden="true"></i> ${esc(x.name)} <small class="sp-muted">${esc(fmtSize(x.blob.size))}</small></span><button type="button" class="ms-icon-btn" data-${attr}-unfile="${i}" aria-label="${esc(t('main.scRemove'))}"><i class="bx bx-trash" aria-hidden="true"></i></button></div>`).join('');
+    const rec = target.rec ? `<span class="sp-recbar"><span class="sp-recdot"></span><b>${esc(t('main.spFRecording'))} · ${esc(fmtClock(target.rec.seconds))}</b><button type="button" class="btn" data-${attr}-recstop>${esc(t('main.spFRecStop'))}</button></span>` : (canRec ? `<button type="button" class="btn btn-secondary" data-${attr}-rec><i class="bx bx-radio-circle-marked" aria-hidden="true"></i> ${esc(t('main.spFRecord'))}</button>` : '');
+    return `${blobs}<div class="sp-slot-row"><label class="btn btn-secondary"><i class="bx bx-paperclip" aria-hidden="true"></i> ${esc(t('main.scAttach'))}<input type="file" data-${attr}-file multiple hidden></label>${rec}</div>`;
+}
+// Sube las evidencias nuevas del formulario (?move=1: no crean un renglón aparte); regresa los ids (con los que ya estaban subidos) o null si alguna falló.
+async function uploadEvidence(target) {
+    const ids = [];
+    for (const item of target.blobs) {
+        if (item.uploaded) { ids.push(item.uploaded); continue; }
+        const res = await fetch(`${API}/${caseId}/files?move=1`, { method: 'POST', headers: { 'Content-Type': item.blob.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(item.name) }, credentials: 'include', body: item.blob });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) { Dashboard.showToast(t('main.spFileFailed', { name: item.name, why: out.message || Dashboard.t('admin.saveError') }), 'warning'); return null; }
+        item.uploaded = out.file.id; ids.push(out.file.id);
+    }
+    return ids;
+}
+async function afterClosingChange() {
+    await loadCase(); renderHeader(); renderFiles();
+    await reloadMoves();
+    await reloadClass();
+    await reloadClosing();
+    await refresh(false);
+    renderThread(true);
+}
+async function reloadClosing() {
+    if (state.closingCan) await loadClosing();
+    renderClosing();
+}
+function attemptsHtml(d, f) {
+    const list = d.attempts.map((a, i) => `<div class="sc-attempt ok"><b>${i + 1}</b> ${esc(t(`main.clCh_${a.channel}`))} · ${esc(fmtTime(a.createdAt))} · ${esc(a.by || '')} — ${esc(a.note)}</div>`).join('');
+    const missing = Math.max(0, d.needAttempts - d.attempts.length);
+    const add = d.attempts.length < d.maxAttempts ? `<div class="sc-attempt-form"><select data-cf-ach>${d.channels.map((c) => `<option value="${c}"${c === f.attempt.channel ? ' selected' : ''}>${esc(t(`main.clCh_${c}`))}</option>`).join('')}</select><input type="text" data-cf-anote maxlength="500" placeholder="${esc(t('main.clAttemptNote'))}" value="${esc(f.attempt.note)}"><button type="button" class="btn btn-secondary" data-cf-aadd${f.sending ? ' disabled' : ''}>${esc(t('main.clAttemptAdd'))}</button></div>` : '';
+    return `<div class="sc-sg"><h4>${esc(t('main.clNoReplyTitle'))}</h4>${list || `<p class="sp-muted">${esc(t('main.clNoAttempts'))}</p>`}${missing ? `<div class="sc-attempt miss"><b>!</b> ${esc(t('main.clAttemptsMissing', { n: missing }))}</div>` : ''}${add}
+        <p class="sp-muted">${esc(t('main.clNoReplyHint'))}</p><div class="admin-form-actions"><button type="button" class="btn btn-secondary" data-cf-noresp${missing || f.sending ? ' disabled' : ''}>${esc(t('main.clCloseNoReply'))}</button></div></div>`;
+}
+function closeFormHtml(d, f) {
+    const files = d.files.map((x) => `<label class="sc-sim"><input type="checkbox" data-cf-pick="${x.id}"${f.picked.has(x.id) ? ' checked' : ''}> <span>${lvBadge(x.level || 'n0')} <b>${esc(x.name)}</b> <small class="sp-muted">${esc(fmtSize(x.size))} · ${esc(x.by || '')} · ${esc(fmtTime(x.createdAt))}</small></span></label>`).join('');
+    const ok = f.conformity === 'ok';
+    const body = ok
+        ? `<label class="sp-field"><span>${esc(t('main.clCause'))} *</span><select data-cf-cause><option value="">—</option>${d.causes.map((c) => `<option value="${c.id}"${String(c.id) === f.cause ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+           <label class="sp-field"><span>${esc(t('main.clDid'))} * <small class="sp-muted">${esc(t('main.clDidHint'))}</small></span><textarea data-cf-did rows="3" maxlength="${d.maxText}">${esc(f.did)}</textarea></label>
+           <div class="sp-field"><span>${esc(t('main.clEvidence'))} * <small class="sp-muted">${esc(t('main.clEvidenceHint'))}</small></span><div class="sc-sim">${files}</div>${evidenceControlsHtml(f, 'cf')}</div>`
+        : `<label class="sp-field"><span>${esc(t('main.clSaid'))} *</span><textarea data-cf-said rows="3" maxlength="${d.maxText}">${esc(f.said)}</textarea></label><div class="sc-warn">${esc(t('main.clReopenHint'))}</div>`;
+    return `<div class="sp-field"><span>${esc(t('main.clConform'))} *</span><div class="sp-chips" role="radiogroup"><button type="button" class="sp-chip${ok ? ' on' : ''}" role="radio" aria-checked="${ok}" data-cf-conf="ok">${esc(t('main.clConformYes'))}</button><button type="button" class="sp-chip${!ok ? ' on' : ''}" role="radio" aria-checked="${!ok}" data-cf-conf="none">${esc(t('main.clConformNo'))}</button></div></div>${body}
+        <div class="admin-form-actions"><button type="button" class="btn" data-cf-close${f.sending ? ' disabled' : ''}>${esc(f.sending ? t('main.spFSending') : (ok ? t('main.clCloseBtn') : t('main.clReopenBtn')))}</button></div>`;
+}
+function renderClosing() {
+    const box = $('sc-close-card');
+    const c = state.c; const d = closeState.data;
+    const closed = CLOSED_STATUSES.includes(c.status);
+    let head = ''; let inner = '';
+    if (!closed && c.status !== 'confirm') {
+        if (d && d.canResolve) { head = `<button type="button" class="btn" data-cl-resolve>✓ ${esc(t('main.rsBtn'))}</button>`; inner = `<p class="sp-muted">${esc(t('main.rsHint'))}</p>`; }
+        else { box.hidden = true; return; }
+    } else if (c.status === 'confirm') {
+        const r = d && d.resolved;
+        const who = r ? `<div class="sp-meta-line"><b>${esc(t('main.clResolvedBy'))}:</b> ${lvBadge(r.level)} ${esc(r.by)} · ${esc(fmtTime(r.createdAt))}${r.general ? ` · ${esc(r.general)}` : ''}<br><b>${esc(t('main.clDid'))}:</b> ${esc(r.did)}${r.fileCount ? `<br><b>${esc(t('main.mvFilesShort'))}:</b> ${r.fileCount}` : ''}</div>` : '';
+        if (!d) inner = `<p>${esc(t('main.clUserConfirmWait'))}</p>`;
+        else if (d.canClose) {
+            if (!closeState.form) closeState.form = { conformity: 'ok', cause: '', did: '', said: '', picked: new Set(), blobs: [], rec: null, sending: false, attempt: { channel: 'chat', note: '' } };
+            inner = `${who}<div class="sc-warn">${esc(t('main.clConfirmHint'))}</div>${closeFormHtml(d, closeState.form)}${attemptsHtml(d, closeState.form)}`;
+        } else inner = `${who}<p class="sp-muted">${esc(t('main.clOnlyHelpDesk'))}</p>`;
+    } else {
+        const lines = `<dl class="sp-meta"><div><dt>${esc(t('main.clClosedBy'))}</dt><dd>${esc(c.closedBy || '—')}</dd></div><div><dt>${esc(t('main.clClosedAt'))}</dt><dd>${esc(c.closedAt ? fmtDate(c.closedAt) : '—')}</dd></div>
+            ${d && d.cause ? `<div><dt>${esc(t('main.clCause'))}</dt><dd>${esc(d.cause)}</dd></div>` : ''}${c.reopenedCount ? `<div><dt>${esc(t('main.clReopened'))}</dt><dd>${c.reopenedCount}</dd></div>` : ''}
+            <div class="sp-wide"><dt>${esc(t(c.status === 'noresp' ? 'main.clNoReplyTitle' : 'main.clDid'))}</dt><dd class="sp-pre">${esc(c.closeDid || '—')}</dd></div></dl>`;
+        let reopen = '';
+        if (state.reopenCan) reopen = `<div class="sc-sg"><h4>${esc(t('main.clReopenTitle'))}</h4><p class="sp-muted">${esc(t('main.clReopenUntil', { when: fmtDate(state.reopenUntil) }))}</p><label class="sp-field"><span>${esc(t('main.clReopenSaid'))} *</span><textarea data-cl-rsaid rows="2" maxlength="500">${esc(closeState.reopenText)}</textarea></label><div class="admin-form-actions"><button type="button" class="btn" data-cl-reopen${closeState.reopening ? ' disabled' : ''}>${esc(t('main.clReopenAction'))}</button></div></div>`;
+        else if (state.chat && state.chat.isReporter) reopen = `<p class="sp-muted">${esc(t('main.clReopenExpired'))}</p>`;
+        inner = `${lines}${reopen}`;
+    }
+    box.hidden = false;
+    box.innerHTML = `<div class="sc-card-head"><h3>${esc(t('main.clCloseTitle'))}</h3><div class="sc-tags"><span class="sp-tag sp-status" data-k="${esc(c.status)}">${esc(t(`main.spStatus_${c.status}`))}</span>${head}</div></div>${inner}`;
+}
+// ---- la ventana de «Marcar resuelto» (de un caso o de un Soporte general) ----
+let resolveEl = null;
+const resolveState = { form: null };
+function renderResolveForm() {
+    const f = resolveState.form;
+    resolveEl.querySelector('#rs-body').innerHTML = `<label class="sp-field"><span>${esc(t('main.rsDid'))} * <small class="sp-muted">${esc(t('main.mvDidHint'))}</small></span><textarea id="rs-did" rows="3" maxlength="1000">${esc(f.did)}</textarea></label>
+        <div class="sp-field"><span>${esc(t('main.mvFiles'))} * <small class="sp-muted">${esc(t('main.mvFilesHint'))}</small></span>${evidenceControlsHtml(f, 'rs')}</div>`;
+    const send = resolveEl.querySelector('#rs-send');
+    send.disabled = f.sending;
+    send.textContent = f.sending ? t('main.spFSending') : t(f.general ? 'main.rsSendGeneral' : 'main.rsSend');
+    resolveEl.querySelector('#rs-title').textContent = t(f.general ? 'main.rsTitleGeneral' : 'main.rsTitle');
+}
+function closeResolve() { if (resolveState.form && resolveState.form.rec) { try { resolveState.form.rec.ctl.stop(); } catch (err) { /* ya terminó */ } } if (resolveEl) resolveEl.hidden = true; resolveState.form = null; }
+function openResolve(general) {
+    if (!resolveEl) {
+        resolveEl = document.createElement('div');
+        resolveEl.className = 'modal-overlay';
+        resolveEl.hidden = true;
+        resolveEl.innerHTML = '<div class="modal-panel sp-form sc-move" role="dialog" aria-modal="true" aria-labelledby="rs-title"><h3 id="rs-title"></h3><div id="rs-body"></div><p class="sp-muted" id="rs-note"></p><div class="admin-form-actions"><button type="button" class="btn" id="rs-send"></button><button type="button" class="btn btn-secondary" id="rs-cancel"></button></div></div>';
+        document.body.appendChild(resolveEl);
+        resolveEl.addEventListener('click', onResolveClick);
+        resolveEl.addEventListener('input', (event) => { if (event.target.id === 'rs-did' && resolveState.form) resolveState.form.did = event.target.value; });
+        resolveEl.addEventListener('change', async (event) => {
+            const f = resolveState.form; if (!f || !event.target.matches('[data-rs-file]')) return;
+            const picked = [...(event.target.files || [])]; event.target.value = '';
+            await addEvidenceFiles(f, picked); renderResolveForm();
+        });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && resolveState.form && !resolveState.form.sending) closeResolve(); });
+    }
+    resolveState.form = { general: !!general, did: '', blobs: [], rec: null, sending: false };
+    resolveEl.querySelector('#rs-cancel').textContent = t('main.spFCancel');
+    resolveEl.querySelector('#rs-note').textContent = t(general ? 'main.rsHintGeneral' : 'main.rsModalHint');
+    renderResolveForm();
+    resolveEl.hidden = false;
+}
+async function onResolveClick(event) {
+    const f = resolveState.form; if (!f) return;
+    if (event.target === resolveEl || event.target.closest('#rs-cancel')) { if (!f.sending) closeResolve(); return; }
+    const un = event.target.closest('[data-rs-unfile]');
+    if (un) { f.blobs.splice(Number(un.dataset.rsUnfile), 1); renderResolveForm(); return; }
+    if (event.target.closest('[data-rs-rec]')) { await startEvidenceRec(f, () => { if (resolveState.form === f) renderResolveForm(); }); return; }
+    if (event.target.closest('[data-rs-recstop]')) { if (f.rec) f.rec.ctl.stop(); return; }
+    if (event.target.closest('#rs-send')) submitResolve();
+}
+async function submitResolve() {
+    const f = resolveState.form; const d = closeState.data;
+    if (!f || f.sending) return;
+    if (f.did.trim().length < ((d && d.minText) || 10)) { Dashboard.showToast(t('main.rsErrDid'), 'warning'); return; }
+    if (!f.blobs.length) { Dashboard.showToast(t('main.mvErrFiles'), 'warning'); return; }
+    if (f.rec) { Dashboard.showToast(t('main.spErrRecording'), 'warning'); return; }
+    f.sending = true; renderResolveForm();
+    try {
+        const ids = await uploadEvidence(f);
+        if (!ids) { f.sending = false; renderResolveForm(); return; }
+        const res = await fetch(`${API}/${caseId}/${f.general ? 'general-resolve' : 'resolve'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ did: f.did, fileIds: ids }) });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); f.sending = false; renderResolveForm(); return; }
+        const general = f.general;
+        closeResolve();
+        Dashboard.showToast(general ? t('main.rsDoneGeneral', { n: out.cases }) : t('main.rsDone'), 'success');
+        await afterClosingChange();
+    } catch (err) {
+        console.error('Caso de soporte: failed to resolve', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        if (resolveState.form) { resolveState.form.sending = false; renderResolveForm(); }
+    }
+}
+// ---- cerrar / sin respuesta / reabrir ----
+async function postJson(path, body) {
+    const res = await fetch(`${API}/${caseId}/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body) });
+    const out = await res.json().catch(() => ({}));
+    return { ok: res.ok, out };
+}
+async function submitClose(mode) {
+    const f = closeState.form; const d = closeState.data;
+    if (!f || f.sending) return;
+    const body = { conformity: mode || f.conformity };
+    if (body.conformity === 'ok') {
+        if (!f.cause) { Dashboard.showToast(t('main.clErrCause'), 'warning'); return; }
+        if (f.did.trim().length < d.minText) { Dashboard.showToast(t('main.rsErrDid'), 'warning'); return; }
+        if (!f.picked.size && !f.blobs.length) { Dashboard.showToast(t('main.clErrEvidence'), 'warning'); return; }
+        if (f.rec) { Dashboard.showToast(t('main.spErrRecording'), 'warning'); return; }
+        body.causeId = Number(f.cause); body.did = f.did;
+    } else if (body.conformity === 'none') {
+        if (f.said.trim().length < d.minSaid) { Dashboard.showToast(t('main.clErrSaid'), 'warning'); return; }
+        body.said = f.said;
+    }
+    f.sending = true; renderClosing();
+    try {
+        if (body.conformity === 'ok') {
+            const up = await uploadEvidence(f);
+            if (!up) { f.sending = false; renderClosing(); return; }
+            body.fileIds = [...f.picked, ...up];
+        }
+        const { ok, out } = await postJson('close', body);
+        if (!ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); f.sending = false; renderClosing(); return; }
+        closeState.form = null;
+        Dashboard.showToast(out.status === 'open' ? t('main.clDoneReopen', { level: t(`main.sopLevel_${out.level}`) }) : t(out.status === 'noresp' ? 'main.clDoneNoReply' : 'main.clDoneClosed'), 'success');
+        await afterClosingChange();
+    } catch (err) {
+        console.error('Caso de soporte: failed to close', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        if (closeState.form) { closeState.form.sending = false; renderClosing(); }
+    }
+}
+async function submitAttempt() {
+    const f = closeState.form; if (!f || f.sending) return;
+    if (f.attempt.note.trim().length < ((closeState.data && closeState.data.minSaid) || 5)) { Dashboard.showToast(t('main.clErrAttemptNote'), 'warning'); return; }
+    f.sending = true; renderClosing();
+    const { ok, out } = await postJson('attempts', { channel: f.attempt.channel, note: f.attempt.note });
+    f.sending = false;
+    if (!ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); renderClosing(); return; }
+    f.attempt.note = '';
+    await loadClosing(); renderClosing();
+    await refresh(false);
+}
+async function submitReopen() {
+    if (closeState.reopening) return;
+    if (closeState.reopenText.trim().length < 5) { Dashboard.showToast(t('main.clErrReopen'), 'warning'); return; }
+    closeState.reopening = true; renderClosing();
+    try {
+        const { ok, out } = await postJson('reopen', { said: closeState.reopenText });
+        closeState.reopening = false;
+        if (!ok) { Dashboard.showToast(out.message || Dashboard.t('admin.saveError'), 'warning'); renderClosing(); return; }
+        closeState.reopenText = '';
+        Dashboard.showToast(t('main.clDoneReopenUser'), 'success');
+        await afterClosingChange();
+    } catch (err) {
+        closeState.reopening = false;
+        console.error('Caso de soporte: failed to reopen', err);
+        Dashboard.showToast(Dashboard.t('admin.saveError'), 'error');
+        renderClosing();
+    }
+}
+document.addEventListener('click', async (event) => {
+    if (event.target.closest('[data-cl-resolve]')) { openResolve(false); return; }
+    if (event.target.closest('[data-cl-resolve-general]')) { openResolve(true); return; }
+    if (event.target.closest('[data-cl-reopen]')) { submitReopen(); return; }
+    const f = closeState.form; if (!f || f.sending) return;
+    const conf = event.target.closest('[data-cf-conf]');
+    if (conf) { f.conformity = conf.dataset.cfConf; renderClosing(); return; }
+    const un = event.target.closest('[data-cf-unfile]');
+    if (un) { f.blobs.splice(Number(un.dataset.cfUnfile), 1); renderClosing(); return; }
+    if (event.target.closest('[data-cf-rec]')) { await startEvidenceRec(f, () => { if (closeState.form === f) renderClosing(); }); return; }
+    if (event.target.closest('[data-cf-recstop]')) { if (f.rec) f.rec.ctl.stop(); return; }
+    if (event.target.closest('[data-cf-close]')) { submitClose(); return; }
+    if (event.target.closest('[data-cf-noresp]')) { submitClose('noresp'); return; }
+    if (event.target.closest('[data-cf-aadd]')) submitAttempt();
+});
+document.addEventListener('change', async (event) => {
+    const f = closeState.form; const el = event.target;
+    if (!f) return;
+    if (el.matches('[data-cf-cause]')) f.cause = el.value;
+    else if (el.matches('[data-cf-ach]')) f.attempt.channel = el.value;
+    else if (el.matches('[data-cf-pick]')) { const id = Number(el.dataset.cfPick); if (el.checked) f.picked.add(id); else f.picked.delete(id); }
+    else if (el.matches('[data-cf-file]')) { const picked = [...(el.files || [])]; el.value = ''; await addEvidenceFiles(f, picked); renderClosing(); }
+});
+document.addEventListener('input', (event) => {
+    const el = event.target;
+    if (el.matches('[data-cl-rsaid]')) { closeState.reopenText = el.value; return; }
+    const f = closeState.form; if (!f) return;
+    if (el.matches('[data-cf-did]')) f.did = el.value;
+    else if (el.matches('[data-cf-said]')) f.said = el.value;
+    else if (el.matches('[data-cf-anote]')) f.attempt.note = el.value;
+});
+
 // ---- eventos ----------------------------------------------------------------------------------------------------------------------------
 document.addEventListener('click', (event) => {
     const tab = event.target.closest('[data-tab]');
@@ -768,6 +1057,8 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && st
         if (state.peopleCan) { await loadPeople(); renderPeople(); }
         if (state.chat.canSee && !state.chat.isReporter) { if (await loadMoves()) renderLane(); }
         if (state.classCan) { if (await loadClass()) renderClass(); }
+        if (state.closingCan) await loadClosing();
+        renderClosing();
         if (state.chat.canSee) { await loadMessages(true); renderTabs(); renderThread(true); renderFlow(); renderComposer(); } else { $('sc-chat-card').hidden = true; $('sc-flow-card').hidden = true; }
         state.timer = setInterval(() => { if (!document.hidden) refresh(false); }, POLL_MS);
     } catch (err) {

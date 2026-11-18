@@ -14850,7 +14850,9 @@ function addSupportMove(m) {
     return db.transaction(() => {
         const id = db.prepare('INSERT INTO support_case_moves (case_id, client_id, direction, from_level, to_level, reason, did, notes, file_ids, missing_ack, by_user_id, by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
             .run(m.caseId, m.clientId, m.direction, m.fromLevel, m.toLevel, m.reason, m.did, m.notes, JSON.stringify(m.fileIds || []), m.missingAck ? 1 : 0, m.byUserId || null, m.byName || '').lastInsertRowid;
-        db.prepare("UPDATE support_cases SET level = ?, status = 'open' WHERE id = ?").run(m.toLevel, m.caseId); // al llegar a un nivel nadie lo ha tomado: vuelve a «Abierto»
+        // al llegar a un nivel nadie lo ha tomado: vuelve a «Abierto» (o queda «Por confirmar con el usuario» si lo regresan resuelto a la Mesa de ayuda)
+        const status = m.status === 'confirm' ? 'confirm' : 'open';
+        db.prepare("UPDATE support_cases SET level = ?, status = ?, confirm_at = CASE WHEN ? = 'confirm' THEN datetime('now') ELSE NULL END WHERE id = ?").run(m.toLevel, status, status, m.caseId);
         return db.prepare('SELECT * FROM support_case_moves WHERE id = ?').get(id);
     })();
 }
@@ -14959,6 +14961,89 @@ function listSupportSameRolePeople(clientId, roleId, isTestAccount) {
     if (!roleId) return [];
     return db.prepare('SELECT hw.user_id AS userId, u.name AS name FROM hr_workers hw JOIN users u ON u.id = hw.user_id WHERE hw.client_id = ? AND hw.job_position_id = ? AND hw.is_test_data = ? AND u.active != 0 AND u.is_test_account = ? ORDER BY u.name ASC LIMIT 1000')
         .all(clientId, roleId, isTestAccount ? 1 : 0, isTestAccount ? 1 : 0);
+}
+// ---- Cierre con conformidad: resolver, confirmar con el usuario, cerrar, cerrar sin respuesta y reabrir ----------------------------------------------------------------------------------
+// Quien atiende el caso en su nivel lo MARCA RESUELTO (con qué hizo y evidencia): el caso regresa a la Mesa de ayuda (Nivel 1, la dueña del caso) con el estatus «Por confirmar con el usuario» (confirm). La Mesa de ayuda
+// lo cierra siempre, con la conformidad del usuario: Terminado (done, con la causa, qué se hizo y la evidencia de que quedó resuelto), No conforme (se reabre y vuelve al nivel que lo trabajó) o «Cerrado sin respuesta»
+// (noresp) tras 3 intentos de contacto registrados. El usuario puede reabrir un caso cerrado durante 7 días. Cada paso queda en support_case_closures (para los KPI); los intentos de contacto, en support_case_attempts.
+// confirm_at = cuándo quedó por confirmar (las evidencias del cierre y los intentos cuentan desde ahí); closed_at = cuándo se cerró; reopened_count = cuántas veces se reabrió.
+for (const [col, ddl] of [['confirm_at', 'TEXT'], ['closed_at', 'TEXT'], ['closed_by', "TEXT NOT NULL DEFAULT ''"], ['cause_id', 'INTEGER'], ['cause_name', "TEXT NOT NULL DEFAULT ''"], ['close_did', "TEXT NOT NULL DEFAULT ''"], ['reopened_count', 'INTEGER NOT NULL DEFAULT 0']]) {
+    if (!db.prepare('PRAGMA table_info(support_cases)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE support_cases ADD COLUMN ${col} ${ddl}`);
+}
+for (const [col, ddl] of [['resolved_at', 'TEXT'], ['resolved_by', "TEXT NOT NULL DEFAULT ''"], ['resolved_did', "TEXT NOT NULL DEFAULT ''"]]) {
+    if (!db.prepare('PRAGMA table_info(support_generals)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE support_generals ADD COLUMN ${col} ${ddl}`);
+}
+db.exec(`
+    CREATE TABLE IF NOT EXISTS support_case_closures (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        case_id      INTEGER NOT NULL REFERENCES support_cases(id) ON DELETE CASCADE,
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        kind         TEXT NOT NULL,
+        by_user_id   INTEGER,
+        by_name      TEXT NOT NULL DEFAULT '',
+        from_level   TEXT NOT NULL DEFAULT '',
+        to_level     TEXT NOT NULL DEFAULT '',
+        cause_id     INTEGER,
+        cause_name   TEXT NOT NULL DEFAULT '',
+        did          TEXT NOT NULL DEFAULT '',
+        said         TEXT NOT NULL DEFAULT '',
+        file_ids     TEXT NOT NULL DEFAULT '[]',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_case_closures_case ON support_case_closures (case_id, id);
+    CREATE TABLE IF NOT EXISTS support_case_attempts (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        case_id      INTEGER NOT NULL REFERENCES support_cases(id) ON DELETE CASCADE,
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        channel      TEXT NOT NULL DEFAULT 'chat',
+        note         TEXT NOT NULL DEFAULT '',
+        by_user_id   INTEGER,
+        by_name      TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_support_case_attempts_case ON support_case_attempts (case_id, id);
+`);
+// kind: resolved (lo marcó resuelto quien lo atendía), closed (la Mesa de ayuda lo cerró conforme), not_conform (no quedó conforme: se reabrió), noresp (cerrado sin respuesta), reopened (el usuario lo reabrió).
+function addSupportClosure(c) {
+    const id = db.prepare('INSERT INTO support_case_closures (case_id, client_id, kind, by_user_id, by_name, from_level, to_level, cause_id, cause_name, did, said, file_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(c.caseId, c.clientId, c.kind, c.byUserId || null, c.byName || '', c.fromLevel || '', c.toLevel || '', c.causeId || null, c.causeName || '', c.did || '', c.said || '', JSON.stringify(c.fileIds || [])).lastInsertRowid;
+    return db.prepare('SELECT * FROM support_case_closures WHERE id = ?').get(id);
+}
+function listSupportClosures(caseId) {
+    return db.prepare('SELECT * FROM support_case_closures WHERE case_id = ? ORDER BY id ASC').all(caseId);
+}
+function addSupportAttempt(a) {
+    const id = db.prepare('INSERT INTO support_case_attempts (case_id, client_id, channel, note, by_user_id, by_name) VALUES (?, ?, ?, ?, ?, ?)').run(a.caseId, a.clientId, a.channel, a.note, a.byUserId || null, a.byName || '').lastInsertRowid;
+    return db.prepare('SELECT * FROM support_case_attempts WHERE id = ?').get(id);
+}
+// Los intentos de contacto desde que el caso quedó por confirmar (sinceSql = su confirm_at).
+function listSupportAttempts(caseId, sinceSql) {
+    return db.prepare('SELECT * FROM support_case_attempts WHERE case_id = ? AND created_at >= ? ORDER BY id ASC').all(caseId, sinceSql || '0000-00-00 00:00:00');
+}
+function setSupportCaseConfirm(caseId) {
+    db.prepare("UPDATE support_cases SET status = 'confirm', confirm_at = datetime('now') WHERE id = ?").run(caseId);
+}
+function closeSupportCase({ caseId, status, by, causeId, causeName, did }) {
+    db.prepare("UPDATE support_cases SET status = ?, closed_at = datetime('now'), closed_by = ?, cause_id = ?, cause_name = ?, close_did = ? WHERE id = ?").run(status, by || '', causeId || null, causeName || '', did || '', caseId);
+}
+function reopenSupportCase(caseId) {
+    db.prepare("UPDATE support_cases SET status = 'open', confirm_at = NULL, closed_at = NULL, reopened_count = reopened_count + 1 WHERE id = ?").run(caseId);
+}
+function resolveSupportGeneral(id, { by, did }) {
+    db.prepare("UPDATE support_generals SET status = 'resolved', resolved_at = datetime('now'), resolved_by = ?, resolved_did = ? WHERE id = ?").run(by || '', did || '', id);
+}
+// Los casos ligados que todavía se están trabajando (para resolverlos todos juntos).
+function listSupportGeneralWorkingCases(generalId) {
+    return db.prepare(`SELECT * FROM support_cases WHERE general_id = ? AND status IN ${SUPPORT_OPEN_STATUSES_SQL} ORDER BY id ASC`).all(generalId);
+}
+// Cuando ya se cerraron todos los casos ligados a un Soporte general resuelto, el general también se cierra.
+function closeSupportGeneralIfDone(generalId) {
+    const g = db.prepare('SELECT status FROM support_generals WHERE id = ?').get(generalId);
+    if (!g || g.status !== 'resolved') return false;
+    const left = db.prepare("SELECT COUNT(*) AS n FROM support_cases WHERE general_id = ? AND status NOT IN ('done', 'noresp')").get(generalId).n;
+    if (left > 0) return false;
+    db.prepare("UPDATE support_generals SET status = 'closed' WHERE id = ?").run(generalId);
+    return true;
 }
 // ---- Quién reportó y su equipo: avisos e invitaciones del caso ----------------------------------------------------------------------------------------------------------------------------
 // Una fila por persona y caso. kind: 'notify' (se le AVISA: una nota en la campana, sin entrar al chat; debe tocar «Enterado») o 'invite' (se le INVITA al chat: ve la conversación y escribe, nunca las notas internas;
@@ -15335,6 +15420,7 @@ seedSoporteEvidenceKindsOnce();
 module.exports = {
     SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds,
+    addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
