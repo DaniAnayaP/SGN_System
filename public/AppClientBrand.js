@@ -20,6 +20,9 @@
     const ASKED_KEY = 'sgnCompanyAsked';
     const HAD_SESSION_KEY = 'sgnHadSession';
     const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+    // App PROPIA de un cliente (Apps Nuestros Clientes, pieza 6): el armado por cliente (.github/scripts/prepare-client-app.js) pone aquí la clave de la empresa en la COPIA que va dentro del APK; en la app de todos queda vacío.
+    // Con clave puesta la app NO pide el código de empresa, no ofrece «Cambiar de empresa» ni «Usar el inicio de SGN», y siempre se queda con la marca de esa empresa (aunque el servidor no responda).
+    const PRESET_COMPANY = ''; // @@SGN_PRESET_COMPANY@@ (no cambiar este renglón a mano: el armado lo busca tal cual)
 
     // Textos: los del idioma cargado por login.js si ya están; si no, el de respaldo (en inglés, como el resto de access-screen.js).
     const tr = (key, fallback, params) => {
@@ -46,6 +49,8 @@
         } catch { return null; }
     }
     let saved = readSaved();
+    // En la app propia de un cliente solo vale lo guardado de ESA empresa (si el aparato traía otra, se olvida).
+    if (PRESET_COMPANY && saved && saved.slug !== PRESET_COMPANY) { try { localStorage.removeItem(BRAND_KEY); } catch { /* nada */ } saved = null; }
     function writeSaved(slug, config) {
         const value = { slug, config, savedAt: Date.now() };
         try { localStorage.setItem(BRAND_KEY, JSON.stringify(value)); } catch {
@@ -262,6 +267,7 @@
 
     // ---- el menú (≡): cambiar de empresa / volver al inicio de SGN ----
     function setupMenu(screen) {
+        if (PRESET_COMPANY) return; // la app propia de un cliente no cambia de empresa
         if (!screen || document.getElementById('access-menu-btn')) return;
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -296,13 +302,21 @@
     // ---- al abrir: ¿hay que pedir el código? y ponerse al día con el servidor ----
     // Solo la primera vez y solo a quien nunca ha iniciado sesión en la app y no dijo «sin código».
     const shouldAsk = () => {
-        try { return !saved && localStorage.getItem(ASKED_KEY) !== '1' && localStorage.getItem(HAD_SESSION_KEY) !== '1'; } catch { return false; }
+        if (PRESET_COMPANY) return false;
+        try { return !saved &&localStorage.getItem(ASKED_KEY) !== '1' && localStorage.getItem(HAD_SESSION_KEY) !== '1'; } catch { return false; }
     };
     // En segundo plano: si cambió lo publicado se guarda (y, si la persona aún no empezó a escribir, se recarga para verlo); si la empresa ya no existe o dejó de publicar para celular, se olvida.
     async function refresh() {
+        const idle = () => { const pw = document.getElementById('access-password-screen'); const user = document.getElementById('access-pw-username'); return (!pw || pw.hidden) && (!user || !user.value); };
+        // App propia: la primera vez no hay nada guardado; se trae la marca de SU empresa (sin pedir código) y se recarga para verla. Si no hay señal, queda el inicio de siempre y se reintenta en la próxima apertura.
+        if (PRESET_COMPANY && !saved) {
+            const first = await fetchConfig(PRESET_COMPANY, '', 10000);
+            if (first.data) { writeSaved(PRESET_COMPANY, first.data); if (idle()) window.location.reload(); }
+            return;
+        }
         if (!saved) return;
         const result = await fetchConfig(saved.slug, saved.config.version, 8000);
-        const idle = () => { const pw = document.getElementById('access-password-screen'); const user = document.getElementById('access-pw-username'); return (!pw || pw.hidden) && (!user || !user.value); };
+        if (result.missing && PRESET_COMPANY) return; // la app propia no se vuelve la de SGN aunque la empresa deje de publicar: se queda con lo último que trajo
         if (result.missing) { clearSaved(); if (idle()) window.location.reload(); return; }
         if (result.data) { writeSaved(saved.slug, result.data); if (idle()) window.location.reload(); }
     }

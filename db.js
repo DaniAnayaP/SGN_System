@@ -3417,6 +3417,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'solicitudes-codigo': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Solicitudes de alta de código' },
     'config-botones': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Configuración de botones' },
     'mi-app': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Mi App' },
+    'mi-app-tiendas': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Mi App en tiendas' },
     'expansiones': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Expansiones' },
     'sesiones-capacitacion': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Sesiones de capacitación' },
     'pedir-alta-codigo': { area: '', modulo: 'Operaciones', pantalla: 'Pedir alta de código' },
@@ -15533,7 +15534,9 @@ db.exec(`
 // su último cambio (si SGN vuelve a publicar después, el sistema avisa antes de sobrescribirlo). «Volver a lo inicial» regresa a initial. La clave y la identidad de la app (nombre abreviado y color del ícono) las cambia solo SGN.
 {
     const cols = db.prepare('PRAGMA table_info(client_login_configs)').all().map((c) => c.name);
-    [['initial', "TEXT NOT NULL DEFAULT ''"], ['initial_at', 'TEXT'], ['initial_by', "TEXT NOT NULL DEFAULT ''"], ['client_changed_at', 'TEXT'], ['client_changed_by', "TEXT NOT NULL DEFAULT ''"], ['live_icon', "TEXT NOT NULL DEFAULT ''"], ['initial_icon', "TEXT NOT NULL DEFAULT ''"]]
+    [['initial', "TEXT NOT NULL DEFAULT ''"], ['initial_at', 'TEXT'], ['initial_by', "TEXT NOT NULL DEFAULT ''"], ['client_changed_at', 'TEXT'], ['client_changed_by', "TEXT NOT NULL DEFAULT ''"], ['live_icon', "TEXT NOT NULL DEFAULT ''"], ['initial_icon', "TEXT NOT NULL DEFAULT ''"],
+        ['store_status', "TEXT NOT NULL DEFAULT 'none'"], ['store_apk_url', "TEXT NOT NULL DEFAULT ''"], ['store_play_url', "TEXT NOT NULL DEFAULT ''"], ['store_appstore_url', "TEXT NOT NULL DEFAULT ''"], ['store_version', "TEXT NOT NULL DEFAULT ''"],
+        ['store_requested_at', 'TEXT'], ['store_requested_by', "TEXT NOT NULL DEFAULT ''"], ['store_updated_at', 'TEXT'], ['store_updated_by', "TEXT NOT NULL DEFAULT ''"]]
         .forEach(([name, def]) => { if (!cols.includes(name)) db.exec(`ALTER TABLE client_login_configs ADD COLUMN ${name} ${def}`); });
 }
 // Palabras que no pueden ser la clave de un cliente: rutas y carpetas de la aplicación.
@@ -15745,6 +15748,54 @@ function removeMiAppGrant(clientId) {
         db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(KEY);
     })();
 })();
+// «Mi App en tiendas» (pieza 6): la app PROPIA del cliente (su ícono, su nombre y su clave ya cargada), de pago (nodo con costo en el Árbol Maestro: quien lo tiene contratado ve la pantalla). SGN es el dueño de las apps en las tiendas. El cliente la pide
+// (status 'requested'); SGN la arma en la nube (GitHub › Actions › «Build client APK»), la publica y deja aquí los enlaces: el APK para Android y, si ya está, Google Play y App Store (status 'ready').
+const STORE_STATUSES = ['none', 'requested', 'building', 'ready'];
+const STORE_URL_RE = /^https:\/\/[^\s<>"']{4,480}$/i;
+// El identificador de la app en las tiendas: com.geipsa.sgn.<clave>; la clave puede traer guiones y empezar con número, y un identificador de Android no.
+function loginBundleId(slug) {
+    const part = String(slug || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'cliente';
+    return `com.geipsa.sgn.${/^[0-9]/.test(part) ? `c${part}` : part}`;
+}
+function deserializeStoreApp(row) {
+    if (!row) return null;
+    return {
+        slug: row.slug, bundleId: loginBundleId(row.slug), status: STORE_STATUSES.includes(row.store_status) ? row.store_status : 'none', apkUrl: row.store_apk_url || '', playUrl: row.store_play_url || '', appStoreUrl: row.store_appstore_url || '', version: row.store_version || '',
+        requestedAt: row.store_requested_at || null, requestedBy: row.store_requested_by || '', updatedAt: row.store_updated_at || null, updatedBy: row.store_updated_by || '',
+    };
+}
+function getClientStoreApp(clientId) {
+    return deserializeStoreApp(db.prepare('SELECT * FROM client_login_configs WHERE client_id = ?').get(clientId));
+}
+function getClientStoreAppBySlug(slug) {
+    return deserializeStoreApp(db.prepare('SELECT * FROM client_login_configs WHERE slug = ?').get(String(slug || '')));
+}
+// SGN deja el estado y los enlaces. { before, store } o { error: 'NOT_FOUND' | 'STATUS' | 'URL' | 'VERSION' | 'NEEDS_LINK', field }.
+function setClientStoreApp(clientId, data, updatedBy) {
+    const before = getClientStoreApp(clientId);
+    if (!before) return { error: 'NOT_FOUND' };
+    const src = data && typeof data === 'object' ? data : {};
+    const status = src.status === undefined ? before.status : src.status;
+    if (!STORE_STATUSES.includes(status)) return { error: 'STATUS', field: 'status' };
+    const url = (key, field, current) => { const v = src[key] === undefined ? current : String(src[key] || '').trim(); if (v && !STORE_URL_RE.test(v)) throw Object.assign(new Error('url'), { code: 'URL', field }); return v; };
+    try {
+        const apkUrl = url('apkUrl', 'apkUrl', before.apkUrl); const playUrl = url('playUrl', 'playUrl', before.playUrl); const appStoreUrl = url('appStoreUrl', 'appStoreUrl', before.appStoreUrl);
+        const version = src.version === undefined ? before.version : String(src.version || '').trim();
+        if (version.length > 20 || (version && !/^[0-9A-Za-z][0-9A-Za-z.+_-]*$/.test(version))) return { error: 'VERSION', field: 'version' };
+        if (status === 'ready' && !apkUrl && !playUrl && !appStoreUrl) return { error: 'NEEDS_LINK', field: 'apkUrl' };
+        db.prepare("UPDATE client_login_configs SET store_status = ?, store_apk_url = ?, store_play_url = ?, store_appstore_url = ?, store_version = ?, store_updated_at = datetime('now'), store_updated_by = ? WHERE client_id = ?")
+            .run(status, apkUrl, playUrl, appStoreUrl, version, updatedBy || '', clientId);
+    } catch (err) { if (err && err.code === 'URL') return { error: 'URL', field: err.field }; throw err; }
+    return { before, store: getClientStoreApp(clientId) };
+}
+// El cliente (que ya tiene contratada la pantalla) pide su app: solo si todavía no la ha pedido.
+function requestClientStoreApp(clientId, requestedBy) {
+    const before = getClientStoreApp(clientId);
+    if (!before) return { error: 'NOT_FOUND' };
+    if (before.status !== 'none') return { error: 'ALREADY' };
+    db.prepare("UPDATE client_login_configs SET store_status = 'requested', store_requested_at = datetime('now'), store_requested_by = ?, store_updated_at = datetime('now'), store_updated_by = ? WHERE client_id = ?").run(requestedBy || '', requestedBy || '', clientId);
+    return { before, store: getClientStoreApp(clientId) };
+}
 // Quitar la personalización: se borra todo (borrador, publicado y clave) y el cliente vuelve al inicio de siempre. La clave queda libre.
 function removeClientLogin(clientId) {
     const before = getClientLogin(clientId);
@@ -18332,6 +18383,7 @@ module.exports = {
     getEffectiveColumnClassifications,
     scanLimitViolations,
     getClientContractGrants,
+    getClientAdminContractGrants,
     clampNewGrantsToLimits,
     getUserEffectiveGrantsRaw,
     resetLimitsCache,
@@ -18507,7 +18559,7 @@ module.exports = {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, removeClientLogin, setClientLoginSlug,
+    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,

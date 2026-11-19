@@ -1,0 +1,83 @@
+name: Build client APK
+
+# Arma la app PROPIA de UN cliente (Apps Nuestros Clientes, pieza 6 «Mi App en tiendas»): la misma app de SGN pero con el
+# ícono, el nombre abreviado y el identificador del cliente, y con su código de empresa ya puesto (no lo pide).
+# Se corre a mano: GitHub › Actions › «Build client APK» › Run workflow › clave del cliente (la de …/c/<clave>).
+# Los datos salen del servidor (GET /api/public/client-app-build/<clave>): el cliente tiene que haber PEDIDO su app y tener
+# publicado su inicio (de ahí sale el ícono).
+#
+# A propósito NO toca el repositorio ni public/downloads/SGN-App.apk (la descarga de SGN desde el Login sigue siendo
+# la de build-apk.yml): el APK sale como archivo del trabajo («Artifacts», 30 días). Sin más cambios al repositorio.
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: 'Clave del cliente (la de …/c/<clave>)'
+        required: true
+        type: string
+      server:
+        description: 'Dirección del servidor de SGN (déjala como está salvo que pruebes en otro)'
+        required: false
+        default: 'https://sgnsystem-production.up.railway.app'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Capacitor CLI dependencies
+        working-directory: mobile-app
+        run: npm install
+
+      - name: Sync web assets into the native app
+        run: node mobile-app/sync-web-assets.js
+
+      # Los valores entran por variables de entorno (no pegados en el comando) y el programa los valida.
+      - name: Prepare the client app (name, icon, identifier, company code)
+        env:
+          CLIENT_SLUG: ${{ inputs.slug }}
+          SGN_SERVER: ${{ inputs.server }}
+        run: node .github/scripts/prepare-client-app.js --slug "$CLIENT_SLUG" --server "$SGN_SERVER" --version-code "${{ github.run_number }}"
+
+      - name: Stamp a unique Service Worker cache version
+        run: sed -i "s/const CACHE_VERSION = '[^']*';/const CACHE_VERSION = 'sgn-client-app-shell-${{ github.run_id }}-${{ github.run_attempt }}';/" mobile-app/www/sw.js
+
+      - name: Sync the Capacitor Android project
+        working-directory: mobile-app
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        run: chmod +x mobile-app/android/gradlew
+
+      # Debug firmado con la misma llave de siempre (ci-debug.keystore): se instala directo en Android.
+      # Para Google Play hace falta un paquete .aab firmado con llave de subida: eso se agrega cuando se abra la cuenta de la tienda.
+      - name: Build debug APK
+        working-directory: mobile-app/android
+        run: ./gradlew assembleDebug
+
+      - name: Name the APK
+        env:
+          CLIENT_SLUG: ${{ inputs.slug }}
+        run: cp mobile-app/android/app/build/outputs/apk/debug/app-debug.apk "SGN-$CLIENT_SLUG.apk"
+
+      - name: Keep the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SGN-apk-${{ inputs.slug }}-${{ github.run_number }}
+          path: SGN-${{ inputs.slug }}.apk
+          retention-days: 30
+          if-no-files-found: error

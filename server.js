@@ -483,6 +483,7 @@ const {
     listClientsOnPlan,
     renameClientsPlan,
     getClientContractGrants,
+    getClientAdminContractGrants,
     clampNewGrantsToLimits,
     getHrAssignedCenterIds,
     getHrAssignedCenterGrants,
@@ -580,7 +581,7 @@ const {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, removeClientLogin, setClientLoginSlug,
+    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
@@ -1889,6 +1890,7 @@ const CL_ERRORS = {
     FORMAT: [400, 'La clave usa de 3 a 40 letras minúsculas sin acentos, números y guiones.'], RESERVED: [400, 'Esa clave está reservada por el sistema.'], TAKEN: [409, 'Esa clave ya la tiene otro cliente.'],
     COLOR: [400, 'Un color no es válido.'], IMAGE: [400, 'La imagen debe ser PNG, JPG, WEBP, GIF o SVG.'], IMAGE_SIZE: [400, 'La imagen es demasiado grande.'], BACKGROUND_TYPE: [400, 'Ese tipo de fondo no existe.'],
     SHORT_NAME: [400, 'El nombre abreviado lleva hasta 12 letras, números, espacios y . & \' + -'],
+    STATUS: [400, 'Ese estado no existe.'], URL: [400, 'Los enlaces deben empezar con https://.'], VERSION: [400, 'La versión lleva hasta 20 letras, números, puntos y guiones.'], NEEDS_LINK: [400, 'Para marcarla como lista pon al menos un enlace (APK, Google Play o App Store).'],
     ICON: [400, 'La imagen del ícono no es válida.'], CLIENT_CHANGED: [409, 'El cliente cambió esta personalización después de lo inicial. Si publicas, se sobrescriben sus cambios.'], NO_INITIAL: [409, 'SGN todavía no ha publicado lo inicial de este cliente: no hay a dónde volver.'],
 };
 // Los PNG del ícono (192 y 512 px) que el navegador dibuja al publicar (opción C: instalar desde la dirección del cliente). Se revisa que sean PNG de verdad y del tamaño que dicen; { icon: texto JSON } ('' si no vino) o { error: true }.
@@ -1914,7 +1916,9 @@ const CL_FIELD_ES = {
     'texts.welcome': 'Frase de bienvenida', 'texts.formTitle': 'Título del formulario', 'texts.appButton': 'Botón de entrada', 'show.welcomeScreen': 'Pantalla de bienvenida', 'show.faceId': 'Face ID o huella',
     'show.appLink': 'Enlace para descargar la app', 'show.language': 'Selector de idioma', 'show.forgot': '«Olvidé mi contraseña»', 'show.register': 'Registro de usuarios nuevos', 'show.social': 'Inicio con redes sociales',
     'identity.shortName': 'Nombre abreviado de la app', 'identity.iconColor': 'Color del ícono de la app',
+    'store.status': 'App propia en tiendas: estado', 'store.apkUrl': 'App propia: enlace del APK', 'store.playUrl': 'App propia: enlace de Google Play', 'store.appStoreUrl': 'App propia: enlace de App Store', 'store.version': 'App propia: versión',
 };
+const STORE_STATUS_ES = { none: 'Sin pedir', requested: 'Pedida', building: 'En preparación', ready: 'Lista' };
 const CL_BACKGROUND_ES = { solid: 'Color liso', gradient: 'Degradado', image: 'Imagen', pattern: 'Patrón de la marca' };
 const clFlatten = (draft) => { const out = {}; Object.entries(draft).forEach(([group, values]) => Object.entries(values).forEach(([key, value]) => { out[`${group}.${key}`] = value; })); return out; };
 const clValueEs = (path, value) => {
@@ -1926,11 +1930,11 @@ const clValueEs = (path, value) => {
     return value === '' ? '(el de la compañía)' : String(value);
 };
 // Cada cambio queda en DOS historiales: el de SGN (Apps Nuestros Clientes) y el del cliente (TI › Mi App), y dice si lo hizo SGN o alguien del cliente (fromClient).
-function clLog(req, clientId, action, fieldKey, oldText, newText, { fromClient = false } = {}) {
+function clLog(req, clientId, action, fieldKey, oldText, newText, { fromClient = false, clientTable = 'mi-app' } = {}) {
     const company = getClientLoginCompany(clientId);
     const label = changedByLabel(req);
     logSaasTableChange({ tableKey: 'apps-clientes-saas', recordId: clientId, recordLabel: company ? company.name : String(clientId), action, fieldKey, oldValue: oldText, newValue: newText, changedBy: fromClient ? `Cliente · ${label}` : label });
-    logTableChange({ clientId, tableKey: 'mi-app', recordId: clientId, recordLabel: 'Mi App', action, fieldKey, oldValue: oldText, newValue: newText, changedBy: fromClient ? label : `SGN · ${label}` });
+    logTableChange({ clientId, tableKey: clientTable, recordId: clientId, recordLabel: clientTable === 'mi-app' ? 'Mi App' : 'Mi App en tiendas', action, fieldKey, oldValue: oldText, newValue: newText, changedBy: fromClient ? label : `SGN · ${label}` });
 }
 // El detalle de UN cliente para el editor: su compañía (logo y colores para la vista previa), el borrador completo (con imágenes) y qué puede hacer esta cuenta.
 function saasClDetail(req, clientId) {
@@ -1938,6 +1942,7 @@ function saasClDetail(req, clientId) {
     return {
         company: getClientLoginCompany(clientId),
         config: config ? { slug: config.slug, address: `/c/${config.slug}`, draft: config.draft, dirty: config.dirty, web: config.web, app: config.app, published: !!config.live, liveAt: config.liveAt, liveBy: config.liveBy, updatedAt: config.updatedAt, updatedBy: config.updatedBy, clientChange: config.clientChangedAt ? { at: config.clientChangedAt, by: config.clientChangedBy } : null, initialAt: config.initialAt, initialBy: config.initialBy } : null,
+        store: config ? getClientStoreApp(clientId) : null, storeContracted: storeContracted(clientId),
         defaults: defaultLoginDraft(),
         reserved: LOGIN_RESERVED_SLUGS,
         can: Object.fromEntries(Object.keys(SAAS_CL_LEAVES).map((k) => [k, saasClCan(req, k)])),
@@ -2017,6 +2022,46 @@ app.delete('/api/admin/client-logins/:clientId', requireAuth, requireAdmin, (req
     res.json(saasClDetail(req, company.id));
 });
 
+// --- Mi App en tiendas (pieza 6): la app PROPIA del cliente, de pago ---------------------------------------------------------------------------------------------------------------------
+// Es una pantalla más de TI › Configuración Compañía (cat-operaciones-ti-cc-app-tiendas) con COSTO en el Árbol Maestro: la ve quien la tiene contratada (SGN se la vende en «+ Permisos Adicionales»). Con ella el cliente PIDE su app
+// (su ícono, su nombre abreviado y su clave ya cargada); SGN es el dueño de las apps en las tiendas: la arma en la nube (GitHub › Actions › «Build client APK»), la publica y deja en Apps Nuestros Clientes el estado y los enlaces
+// (APK para Android, Google Play, App Store). El cliente ve el estado y sus enlaces. Los datos de armado salen de /api/public/client-app-build/<clave> (solo lo que ya es público de la marca).
+const MI_APP_STORE_NODE = { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuId: 'cat-operaciones/cat-operaciones-ti-cc-app-tiendas' };
+function storeContracted(clientId) {
+    return isTupleGranted(getClientAdminContractGrants(clientId), MI_APP_STORE_NODE.sectionId, MI_APP_STORE_NODE.itemId, MI_APP_STORE_NODE.submenuId);
+}
+app.put('/api/admin/client-logins/:clientId/store', requireAuth, requireAdmin, (req, res) => {
+    const company = clGate(req, res, 'edit');
+    if (!company) return;
+    const result = setClientStoreApp(company.id, req.body, changedByLabel(req));
+    if (result.error === 'NOT_FOUND') return clFail(res, result);
+    if (result.error) { const [status, message] = CL_ERRORS[result.error] || [400, 'No se pudo hacer.']; return res.status(status).json({ message, code: result.error, field: result.field }); }
+    const text = { status: (v) => STORE_STATUS_ES[v] || v, apkUrl: (v) => v || '(sin enlace)', playUrl: (v) => v || '(sin enlace)', appStoreUrl: (v) => v || '(sin enlace)', version: (v) => v || '(sin versión)' };
+    Object.keys(text).filter((k) => result.before[k] !== result.store[k]).forEach((k) => clLog(req, company.id, 'update', 'main.cliHistStore', `${CL_FIELD_ES[`store.${k}`]}: ${text[k](result.before[k])}`, `${CL_FIELD_ES[`store.${k}`]}: ${text[k](result.store[k])}`, { clientTable: 'mi-app-tiendas' }));
+    res.json(saasClDetail(req, company.id));
+});
+// El cliente ve el estado de su app propia y, si ya está lista, sus enlaces; y la pide (solo si la tiene contratada: su acceso a esta pantalla viene del contrato).
+app.get('/api/business/mi-app/store', requireAuth, (req, res) => {
+    if (!miAppGate(req, res, false)) return;
+    const store = getClientStoreApp(req.user.clientId);
+    if (!store) return res.status(404).json({ message: 'SGN todavía no te ha creado un inicio personalizado.', code: 'NO_CONFIG' });
+    const detail = miAppDetail(req);
+    res.set('Cache-Control', 'no-store');
+    const draft = detail.config.draft;
+    const iconColor = draft.identity.iconColor || draft.brand.primary || clHexOrEmpty(detail.company && detail.company.primaryColor) || '#3a4bc9';
+    res.json({ store, contracted: storeContracted(req.user.clientId), canEdit: !!req.user.isClientAdmin, name: detail.name, slug: detail.config.slug, iconColor, iconPublished: detail.config.published, iconVersion: (getClientLogin(req.user.clientId) || {}).iconVersion || '', company: { name: detail.company ? detail.company.name : '' } });
+});
+app.post('/api/business/mi-app/store/request', requireAuth, (req, res) => {
+    if (!miAppGate(req, res, true)) return;
+    if (!storeContracted(req.user.clientId)) return res.status(403).json({ message: 'Tu contrato todavía no incluye la app en tiendas.', code: 'NOT_CONTRACTED' });
+    const result = requestClientStoreApp(req.user.clientId, changedByLabel(req));
+    if (result.error === 'NOT_FOUND') return res.status(404).json({ message: 'SGN todavía no te ha creado un inicio personalizado.', code: 'NO_CONFIG' });
+    if (result.error === 'ALREADY') return res.status(409).json({ message: 'Ya pediste tu app.', code: 'ALREADY' });
+    clLog(req, req.user.clientId, 'update', 'main.cliHistStore', `${CL_FIELD_ES['store.status']}: ${STORE_STATUS_ES.none}`, `${CL_FIELD_ES['store.status']}: ${STORE_STATUS_ES.requested}`, { fromClient: true, clientTable: 'mi-app-tiendas' });
+    miAppSendToSgn(req, 'Mi App en tiendas: el cliente pidió su app propia');
+    res.status(201).json({ store: result.store });
+});
+
 // --- Mi App (TI › Configuración Compañía): el cliente ajusta SU app --------------------------------------------------------------------------------------------------------------------------
 // Lo mismo que edita SGN en Apps Nuestros Clientes (misma tabla), pero desde el sistema del cliente: SGN la deja armada como INICIAL y el cliente la cambia y publica directo (sin aprobación de SGN). Lo que NO puede cambiar: la clave y la
 // identidad de la app (nombre abreviado y color del ícono), porque cambian la app ya instalada y el enlace ya entregado: para eso «Pedir cambio a SGN» (llega a SGN como una solicitud en Expansiones). «Volver a lo inicial» regresa a lo que SGN dejó.
@@ -2084,24 +2129,29 @@ app.get('/api/business/mi-app/link', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json({ url, qrRows: layoutQrRows(url), slug: config.slug, live: config.web === 'published' || config.web === 'published_changes' });
 });
-// «Pedir cambio a SGN»: lo que el cliente no puede cambiar solo (la clave y la identidad de la app). Llega a SGN como una solicitud de tipo «otra cosa» en Expansiones, con su aviso en la campana.
-app.post('/api/business/mi-app/change-request', requireAuth, (req, res) => {
-    if (!miAppGate(req, res, true)) return;
-    if (!getClientLogin(req.user.clientId)) return res.status(404).json({ message: 'SGN todavía no te ha creado un inicio personalizado.', code: 'NO_CONFIG' });
-    const message = String((req.body || {}).message || '').replace(/\s+/g, ' ').trim();
-    if (message.length < 5 || message.length > 500) return res.status(400).json({ message: 'Cuéntale a SGN qué quieres cambiar (de 5 a 500 letras).', code: 'MESSAGE' });
-    const estimate = estimateExpansionItems(req.user.clientId, [{ type: 'other', text: `Mi App: ${message}` }]);
+// Una solicitud de tipo «otra cosa» en Expansiones, con su aviso en la campana de SGN (la usan «Pedir cambio a SGN» y «Pedir mi app»). Devuelve la solicitud creada.
+function miAppSendToSgn(req, text) {
+    const estimate = estimateExpansionItems(req.user.clientId, [{ type: 'other', text }]);
     const created = createExpansionRequest({
         clientId: req.user.clientId, forTestAccount: !!req.user.isTestAccount, requestedBy: changedByLabel(req), requestedByUserId: req.user.sub,
-        items: estimate.items, note: `Mi App: ${message}`, currency: estimate.currency, estCost: estimate.estCost, estPending: estimate.estPending,
+        items: estimate.items, note: text, currency: estimate.currency, estCost: estimate.estCost, estPending: estimate.estPending,
     });
     const base = { clientId: req.user.clientId, tableKey: EXP_TABLE, recordId: created.id, recordLabel: created.label, changedBy: changedByLabel(req) };
     logTableChange({ ...base, action: 'create', fieldKey: '', oldValue: '', newValue: '' });
     logTableChange({ ...base, action: 'update', fieldKey: 'main.colExpQue', oldValue: '', newValue: expSummaryEs(created.items) });
     try {
         const client = getClientById(req.user.clientId);
-        publishExpansionNotice({ recipientIds: listSaasUserIdsForScreen(SAAS_EXP_ITEM), event: 'new', toSaas: true, request: { id: created.id, label: created.label, client: client ? client.company_name : '', summary: `Mi App: ${message}`.slice(0, 120), currency: created.currency }, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
+        publishExpansionNotice({ recipientIds: listSaasUserIdsForScreen(SAAS_EXP_ITEM), event: 'new', toSaas: true, request: { id: created.id, label: created.label, client: client ? client.company_name : '', summary: text.slice(0, 120), currency: created.currency }, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
     } catch (err) { console.error('Mi App: no se pudo avisar a SGN en la campana', err && err.message); }
+    return created;
+}
+// «Pedir cambio a SGN»: lo que el cliente no puede cambiar solo (la clave y la identidad de la app). Llega a SGN como una solicitud de tipo «otra cosa» en Expansiones, con su aviso en la campana.
+app.post('/api/business/mi-app/change-request', requireAuth, (req, res) => {
+    if (!miAppGate(req, res, true)) return;
+    if (!getClientLogin(req.user.clientId)) return res.status(404).json({ message: 'SGN todavía no te ha creado un inicio personalizado.', code: 'NO_CONFIG' });
+    const message = String((req.body || {}).message || '').replace(/\s+/g, ' ').trim();
+    if (message.length < 5 || message.length > 500) return res.status(400).json({ message: 'Cuéntale a SGN qué quieres cambiar (de 5 a 500 letras).', code: 'MESSAGE' });
+    const created = miAppSendToSgn(req, `Mi App: ${message}`);
     res.status(201).json({ ok: true, label: created.label });
 });
 
@@ -2114,6 +2164,32 @@ const clHexOf = (rgb) => `#${rgb.map((v) => Math.max(0, Math.min(255, Math.round
 const clDarken = (hex, factor) => clHexOf(clRgb(hex).map((v) => v * (1 - factor)));
 const clLighten = (hex, factor) => clHexOf(clRgb(hex).map((v) => v + (255 - v) * factor));
 const clHexOrEmpty = (value) => (typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : '');
+// «Mi App en tiendas» (pieza 6): los datos de armado de la app propia (los usa el flujo de GitHub «Build client APK», ver más arriba el bloque de Mi App en tiendas).
+// Lo que pide el armado en la nube: solo marca pública (nombre abreviado, color, identificador de la app y su ícono) y solo si el cliente ya pidió su app.
+function storeBuildInfo(slug) {
+    const config = getClientLoginBySlug(slug);
+    const store = config ? getClientStoreApp(config.clientId) : null;
+    if (!config || !store || store.status === 'none') return null;
+    const company = getClientLoginCompany(config.clientId);
+    if (!company || company.status === 'inactivo') return null;
+    const source = config.live || config.draft;
+    const primary = source.brand.primary || clHexOrEmpty(company.primaryColor) || '#3a4bc9';
+    return { slug: config.slug, bundleId: store.bundleId, appName: source.identity.shortName || company.suggestedShortName || company.name.slice(0, 12), companyName: company.name, color: source.identity.iconColor || primary, iconColor: source.identity.iconColor || primary, hasIcon: config.hasIcon, version: store.version, status: store.status };
+}
+app.get('/api/public/client-app-build/:slug', publicClientLoginLimiter, (req, res) => {
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    const info = /^[a-z0-9-]{3,40}$/.test(String(req.params.slug)) ? storeBuildInfo(req.params.slug) : null;
+    if (!info) return res.status(404).json({ message: 'Not found.', code: 'NOT_FOUND' });
+    res.json({ ...info, iconUrl: info.hasIcon ? `/api/public/client-app-build/${info.slug}/icon.png` : '' });
+});
+app.get('/api/public/client-app-build/:slug/icon.png', publicClientLoginLimiter, (req, res) => {
+    const info = /^[a-z0-9-]{3,40}$/.test(String(req.params.slug)) ? storeBuildInfo(req.params.slug) : null;
+    const config = info ? getClientLoginBySlug(info.slug) : null;
+    const png = config ? getClientLoginIconPng(config.clientId, 512) : null;
+    if (!png) return res.status(404).end();
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
+    res.type('image/png').send(png);
+});
 // Lo publicado de una clave para computadora, listo para pintar; null si no hay nada que mostrar.
 // El fondo de la marca (el mismo que dibuja la vista previa). imageLayer = lo que va en lugar de la imagen: url("…") en la página, var(--cl-bg-image) en la app (ahí la imagen viaja dentro de los datos para tenerla sin conexión).
 function clBackgroundCss(type, color1, color2, imageLayer) {

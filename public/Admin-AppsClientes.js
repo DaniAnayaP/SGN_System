@@ -296,6 +296,7 @@ function buildEditor() {
             <div class="cli-row"><code class="cli-addr" id="cli-link-url"></code></div>
             <div class="cli-inline cli-linkbtns"><button type="button" class="btn btn-secondary sc-mini" id="cli-link-copy">${esc(t('admin.saasCliLinkCopy'))}</button><button type="button" class="btn btn-secondary sc-mini" id="cli-link-open">${esc(t('admin.saasCliLinkOpen'))}</button><button type="button" class="btn btn-secondary sc-mini" id="cli-link-qr">${esc(t('admin.saasCliLinkQr'))}</button></div>
             <div class="cli-qr" id="cli-qr"></div></div>` : ''}
+        ${storeGroupHtml()}
         </div><div class="cli-prev" id="cli-previews"></div></div>`;
     // se pone lo del borrador en los controles
     syncControls();
@@ -303,6 +304,43 @@ function buildEditor() {
     document.querySelectorAll('#cli-body input, #cli-body button').forEach((el) => { if (el.id === 'cli-slug' || el.id === 'cli-slug-save' || el.id === 'cli-icon-dl' || el.closest('#cli-link-grp')) return; if (disabled) el.disabled = true; });
     const slugInput = $('#cli-slug'); const slugSave = $('#cli-slug-save');
     slugInput.disabled = !state.can.slug; slugSave.disabled = !state.can.slug;
+}
+// ---- App propia en tiendas (pieza 6): el cliente la pide en TI › Mi App en tiendas; SGN la arma en la nube (GitHub › Actions › «Build client APK»), la publica y deja aquí el estado y los enlaces ----
+const STORE_STATES = ['none', 'requested', 'building', 'ready'];
+function storeGroupHtml() {
+    const ed = state.editor; const s = ed.store;
+    if (!s) return '';
+    const wait = s.status === 'none' ? '' : t('admin.saasCliStoreRequestedBy', { by: s.requestedBy || '—', date: s.requestedAt ? stamp(s.requestedAt) : '—' });
+    const urlRow = (id, label) => `<label class="cli-row"><span>${esc(label)}</span><input type="url" class="cli-fld" id="${id}" maxlength="480" spellcheck="false" placeholder="https://…"></label>`;
+    return `<div class="cli-grp" data-help-key="cliStore" id="cli-store-grp"><h4>${esc(t('admin.saasCliGrpStore'))} <span class="cli-ch cli-ch-app">${esc(t(ed.storeContracted ? 'admin.saasCliStoreContractedYes' : 'admin.saasCliStoreContractedNo'))}</span></h4>
+        <p class="cli-sub">${esc(wait)}</p>
+        <label class="cli-row"><span>${esc(t('admin.saasCliStoreStatus'))}</span><select class="cli-fld" id="cli-store-status">${STORE_STATES.map((k) => `<option value="${k}">${esc(t(`main.atState_${k}`))}</option>`).join('')}</select></label>
+        <label class="cli-row"><span>${esc(t('admin.saasCliStoreVersion'))}</span><input type="text" class="cli-fld" id="cli-store-version" maxlength="20" spellcheck="false" placeholder="1.0.0"></label>
+        ${urlRow('cli-store-apk', t('admin.saasCliStoreApk'))}${urlRow('cli-store-play', t('admin.saasCliStorePlay'))}${urlRow('cli-store-apple', t('admin.saasCliStoreApple'))}
+        <div class="cli-row"><span>${esc(t('admin.saasCliStoreBundle'))}</span><code class="cli-addr">${esc(s.bundleId)}</code></div>
+        <div class="cli-inline"><button type="button" class="btn sc-mini" id="cli-store-save">${esc(t('admin.saasCliStoreSave'))}</button><button type="button" class="btn btn-secondary sc-mini" id="cli-store-copy">${esc(t('admin.saasCliStoreCopy'))}</button></div></div>`;
+}
+function syncStore() {
+    const s = state.editor && state.editor.store;
+    if (!s || !$('#cli-store-status')) return;
+    $('#cli-store-status').value = s.status; $('#cli-store-version').value = s.version;
+    $('#cli-store-apk').value = s.apkUrl; $('#cli-store-play').value = s.playUrl; $('#cli-store-apple').value = s.appStoreUrl;
+}
+const doSaveStore = () => guarded(async () => {
+    const ed = state.editor;
+    const detail = await call('PUT', `${API}/${ed.clientId}/store`, { status: $('#cli-store-status').value, version: $('#cli-store-version').value, apkUrl: $('#cli-store-apk').value, playUrl: $('#cli-store-play').value, appStoreUrl: $('#cli-store-apple').value });
+    adopt(detail, true);
+    syncStore();
+    Dashboard.showToast(t('admin.saasCliDone'), 'success');
+});
+async function copyStoreBuildLink() {
+    const url = `${window.location.origin}/api/public/client-app-build/${encodeURIComponent(state.editor.config.slug)}`;
+    try { await navigator.clipboard.writeText(url); } catch {
+        const probe = document.createElement('textarea'); probe.value = url; document.body.appendChild(probe); probe.select();
+        try { document.execCommand('copy'); } catch { /* sin portapapeles */ }
+        probe.remove();
+    }
+    Dashboard.showToast(t('admin.saasCliLinkCopied'), 'success');
 }
 function getPath(obj, path) { return path.split('.').reduce((o, k) => (o ? o[k] : undefined), obj); }
 function setPath(obj, path, value) { const keys = path.split('.'); const last = keys.pop(); keys.reduce((o, k) => o[k], obj)[last] = value; }
@@ -367,6 +405,8 @@ function bindEditor() {
         else if (btn.id === 'cli-bg-reset') { ed.work.background.image = ''; touch(); }
         else if (btn.id === 'cli-slug-save') saveSlug();
         else if (btn.id === 'cli-icon-dl') downloadIcon();
+        else if (btn.id === 'cli-store-save') doSaveStore();
+        else if (btn.id === 'cli-store-copy') copyStoreBuildLink();
         else if (btn.id === 'cli-link-copy') copyLink();
         else if (btn.id === 'cli-link-open' && ed.link) window.open(ed.link.url, '_blank', 'noopener');
         else if (btn.id === 'cli-link-qr' && ed.link) downloadQr(ed.link.qrRows, ed.link.slug);
@@ -422,6 +462,7 @@ async function copyLink() {
 function adopt(detail, keepWork) {
     const ed = state.editor;
     ed.company = detail.company; ed.config = detail.config; ed.reserved = detail.reserved; state.can = { ...state.can, ...detail.can };
+    ed.store = detail.store; ed.storeContracted = detail.storeContracted;
     if (!keepWork) { ed.work = clone(detail.config.draft); ed.savedJson = JSON.stringify(detail.config.draft); }
 }
 async function guarded(fn) {
@@ -494,7 +535,7 @@ async function openEditor(clientId) {
             detail = await call('POST', `${API}/${clientId}`, {});
             loadList();
         }
-        state.editor = { clientId, company: detail.company, config: detail.config, reserved: detail.reserved, work: clone(detail.config.draft), savedJson: JSON.stringify(detail.config.draft) };
+        state.editor = { clientId, company: detail.company, config: detail.config, reserved: detail.reserved, store: detail.store, storeContracted: detail.storeContracted, work: clone(detail.config.draft), savedJson: JSON.stringify(detail.config.draft) };
         state.can = { ...state.can, ...detail.can };
     } catch (err) { listError.textContent = explain(err); listError.hidden = false; return; }
     const ed = state.editor;
@@ -507,6 +548,7 @@ async function openEditor(clientId) {
     document.getElementById('cli-list').hidden = true;
     root.hidden = false;
     buildEditor();
+    syncStore();
     renderPreviews();
     loadLink();
     document.getElementById('cli-back').addEventListener('click', () => { closeEditor(); loadList(); });

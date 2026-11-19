@@ -13939,6 +13939,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-ti-solicitudes-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-solicitudes-codigo' },
     'cat-operaciones-ti-cc-config-botones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-config-botones' },
     'cat-operaciones-ti-cc-mi-app': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-mi-app' },
+    'cat-operaciones-ti-cc-app-tiendas': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-app-tiendas' },
     'cat-operaciones-ti-cc-expansiones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-expansiones' },
     'cat-operaciones-ti-cc-sesiones-capacitacion': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-sesiones-capacitacion' },
     'cat-operaciones-ti-impl-cronograma': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-cronograma' },

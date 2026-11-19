@@ -6484,6 +6484,16 @@
           "labelKey": "menu.ccMiApp",
           "href": "OpTIMiApp.html",
           "icon": "bx-devices"
+        },
+        {
+          "id": "cat-operaciones-ti-cc-app-tiendas",
+          "labelKey": "menu.ccAppTiendas",
+          "abbrKeys": [
+            "menu.ccAppTiendasAbbr1",
+            "menu.ccAppTiendasAbbr2"
+          ],
+          "href": "OpTIMiAppTiendas.html",
+          "icon": "bx-store"
         }
       ]
     }
