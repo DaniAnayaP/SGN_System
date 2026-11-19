@@ -584,7 +584,7 @@ const {
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
     LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, countImplementationUnreadComments, markImplementationTask,
-    addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, addImplementationNote, updateImplementationNote, removeImplementationNote, findImplementationNote, logImplementationEvent, IMPLEMENTATION_LEVEL_THREAD, IMPLEMENTATION_NOTE_MAX, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    listImplementationEventsForClient, addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, addImplementationNote, updateImplementationNote, removeImplementationNote, findImplementationNote, logImplementationEvent, IMPLEMENTATION_LEVEL_THREAD, IMPLEMENTATION_NOTE_MAX, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,
@@ -639,7 +639,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual', work_plans: 'menu.workPlans' };
+const EXTRA_SCREEN_LABEL_KEYS = { 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'implementacion-historial': 'menu.gesTiImplHistorial', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual', work_plans: 'menu.workPlans' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -1951,6 +1951,19 @@ app.get('/api/business/implementation/contracted', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     res.set('Cache-Control', 'no-store');
     res.json(getImplementationContracted(req.user.clientId));
+});
+// Historial de la implementación (pieza 3b del Cronograma, solo consulta): lo que pasó en la implementación de la compañía, del más nuevo al más viejo, con las 13 columnas de Control Interno que lleva toda tabla (la fecha y la hora son
+// las del evento, en la zona de la compañía). Cualquier usuario de la compañía con la pantalla lo consulta.
+app.get('/api/business/implementation/history', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const client = getClientById(req.user.clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        events: listImplementationEventsForClient(req.user.clientId).map((e) => ({
+            ...e,
+            ...getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: 'Implementación Inicial', modulo: 'Tecnologías de la Información', pantalla: 'Historial de la implementación', centroCostos: '', createdAt: e.createdAt }),
+        })),
+    });
 });
 // Nivel 8 «Capacitación»: un cumplimiento por cada módulo habilitado, con cuántas personas lo usan, sus sesiones y cuántas ya se capacitaron. El implementador marca cada módulo como cumplido (necesita al menos una sesión realizada con asistentes).
 app.get('/api/business/implementation/training', requireAuth, (req, res) => {

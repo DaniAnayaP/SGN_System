@@ -3431,6 +3431,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'mi-app-tiendas': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Mi App en tiendas' },
     'expansiones': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Expansiones' },
     'sesiones-capacitacion': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Sesiones de capacitación' },
+    'implementacion-historial': { area: 'Implementación Inicial', modulo: 'Tecnologías de la Información', pantalla: 'Historial de la implementación' },
     'pedir-alta-codigo': { area: '', modulo: 'Operaciones', pantalla: 'Pedir alta de código' },
     'soportes-cerrados': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Soportes cerrados' },
     'ayuda-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Errores y ayuda' },
@@ -3849,6 +3850,7 @@ const TABLE_GRANT_PATHS = {
     'expansiones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-expansiones' },
     'sesiones-capacitacion': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-sesiones-capacitacion' },
     'implementacion': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-cronograma' },
+    'implementacion-historial': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-gestion/cat-gestion-ti-impl-historial' },
     'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     'kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'ayuda-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
@@ -9644,6 +9646,13 @@ function seedRelacionEnvioGrants() {
     if (!path) return;
     seedLeavesForScreenHolders(RELACION_ENVIO_SEED_KEY, path, ['cat-operaciones/cat-operaciones-centro-dist-relacion-envio'], 'the Relación Código Envío screen');
 }
+// Implementación Inicial > Gestión > Historial de la implementación (2026-11-19): la pantalla (solo consulta) la reciben, una sola vez, quienes ya tienen el Cronograma; si no, no la verían en una compañía que ya está implementando.
+const IMPL_HISTORIAL_SEED_KEY = 'seed-implementacion-historial-screen-v1';
+function seedImplementacionHistorialGrants() {
+    const path = TABLE_GRANT_PATHS.implementacion;
+    if (!path) return;
+    seedLeavesForScreenHolders(IMPL_HISTORIAL_SEED_KEY, path, ['cat-gestion/cat-gestion-ti-impl-historial'], 'the Implementation history screen');
+}
 // Operaciones > Alta Activos (2026-11-12): la pantalla nueva la reciben, una sola vez, quienes ya tienen el Layout (de ahí sale lo que ahora se da de alta aquí). Los botones (nuevo activo y desactivar) los asigna el administrador desde el árbol.
 const ALTA_ACTIVOS_SCREEN_SEED_KEY = 'seed-alta-activos-screen-v1';
 function seedAltaActivosGrants() {
@@ -15365,6 +15374,18 @@ function getImplementation(clientId) {
 function logImplementationEvent(implementationId, levelKey, event, detail, byLabel) {
     db.prepare('INSERT INTO implementation_events (implementation_id, level_key, event, detail, by_label) VALUES (?, ?, ?, ?, ?)').run(implementationId, levelKey || '', event, String(detail || '').slice(0, 300), byLabel || '');
 }
+// Historial de la implementación de la compañía (pieza 3b del Cronograma): lo que pasó, del más nuevo al más viejo (implementation_events; la hora está en UTC). Cada evento trae su nivel, su renglón (si fue de un renglón del sistema) y el texto
+// que dejó quien lo hizo. Sin implementación iniciada no hay nada que contar.
+const IMPLEMENTATION_TASK_EVENTS = ['task_done', 'task_na', 'task_reopened'];
+function listImplementationEventsForClient(clientId) {
+    const impl = db.prepare('SELECT id FROM implementations WHERE client_id = ?').get(clientId);
+    if (!impl) return [];
+    return db.prepare('SELECT id, level_key, event, detail, by_label, at FROM implementation_events WHERE implementation_id = ? ORDER BY id DESC LIMIT 5000').all(impl.id).map((r) => {
+        const task = IMPLEMENTATION_TASK_EVENTS.includes(r.event);
+        const module = task && r.level_key === IMPLEMENTATION_TRAINING_LEVEL ? MODULE_CATALOG.find((m) => m.key === r.detail) : null;
+        return { id: r.id, levelKey: r.level_key, event: r.event, taskKey: task ? r.detail : '', taskLabelKey: module ? module.labelKey : '', detail: task ? '' : r.detail, byLabel: r.by_label, createdAt: r.at };
+    });
+}
 // Un renglón por compañía que no esté inactiva, con su avance (o «sin iniciar»): lo que ve el implementador en su pantalla.
 function listImplementationsSummary() {
     return listClients().filter((c) => c.status !== 'inactivo').map((c) => {
@@ -19502,6 +19523,7 @@ seedPmDescargarSoloVer();
 seedPresentacionesCatalogGrants();
 seedRelacionEnvioGrants();
 seedAltaActivosGrants();
+seedImplementacionHistorialGrants();
 seedGestionActivosGrants();
 seedCompraSurtidoPedidoManualGrants();
 seedSurtidoPedidoManualButtons();
@@ -20259,7 +20281,7 @@ module.exports = {
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
     LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, countImplementationUnreadComments, markImplementationTask,
-    addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, addImplementationNote, updateImplementationNote, removeImplementationNote, findImplementationNote, logImplementationEvent, IMPLEMENTATION_LEVEL_THREAD, IMPLEMENTATION_NOTE_MAX, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    listImplementationEventsForClient, addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, addImplementationNote, updateImplementationNote, removeImplementationNote, findImplementationNote, logImplementationEvent, IMPLEMENTATION_LEVEL_THREAD, IMPLEMENTATION_NOTE_MAX, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,
