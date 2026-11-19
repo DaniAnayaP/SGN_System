@@ -197,6 +197,14 @@
         accessRules = null,
     } = {}) {
         let sectionsData = [];
+        // Versión de lo que se ha marcado: sube con cada alta o baja en los conjuntos de permisos de este árbol (TrackedSet). Sirve para no repetir cuentas pesadas (el conjunto efectivo del cliente y las
+        // reglas de Relación de Accesos) en los dibujos que no cambian nada, como abrir o cerrar un nodo: antes cada clic las rehacía completas y eso era lo lento.
+        let dataVersion = 0;
+        class TrackedSet extends Set {
+            add(value) { dataVersion += 1; return super.add(value); }
+            delete(value) { dataVersion += 1; return super.delete(value); }
+            clear() { dataVersion += 1; super.clear(); }
+        }
         const accessEngine = accessRules && window.AccessRules && (mode === 'grantReadonlyCost' || (mode === 'clientTricolor' && interactive && allowRemoveExtras)) ? window.AccessRules.create(accessRules) : null;
         let accessRequired = new Map(); // llave -> nombres de los accesos habilitados que la necesitan
         let accessTouched = new Map(); // llave del acceso que se toca -> nombres de quien lo recomienda
@@ -300,12 +308,16 @@
             if (!o || !o.nodeKey || !o.classificationId) return;
             classificationOverrides.set(o.nodeKey, { classificationId: o.classificationId, classificationLabel: o.classificationLabel || null, from: o.from });
         });
-        let grantSet = new Set(); // costEdit/grantReadonlyCost modes
+        let grantSet = new TrackedSet(); // costEdit/grantReadonlyCost modes
         // El conjunto del plan (verde); con mainIncluded, además toda llave de General cuenta como cubierta por el plan.
         class PlanSet extends Set {
             // excluded (solo «Otorgar Accesos» de una persona): lo que el puesto da y se le quitó a ella ya no cuenta como cubierto
             has(key) { if (this.excluded && this.excluded.has(key)) return false; return super.has(key) || (mainIncluded && String(key).startsWith('main::')); }
         }
+        // Lo que hay «más abajo» de cada nivel (sus pantallas, columnas e iconos) depende solo de la forma del árbol, que no cambia mientras está abierto: se calcula una vez por nivel y no en cada dibujo
+        // (cada clic en un nodo o casilla vuelve a dibujar todo y recorría el árbol completo de cada departamento, también de los cerrados). Se olvida si el árbol se vuelve a armar (init).
+        const coverageCache = new Map();
+        let coverageCacheFor = null;
         const limitReasonCache = new Map();
         function limitReasonKey(key) {
             if (!grantLimits) return null;
@@ -335,9 +347,9 @@
         }
         let planGrantSet = new PlanSet(); // clientTricolor: coverage granted by the client's PLAN (green)
         let clientGrantSet = new Set(); // clientTricolor: already-saved "+ adicionales" sold to THIS client (yellow)
-        let pendingAdditions = new Set(); // clientTricolor + interactive: unsaved additions toggled in this session
+        let pendingAdditions = new TrackedSet(); // clientTricolor + interactive: unsaved additions toggled in this session
         // allowRemove (solo «Otorgar Accesos» de una persona): lo que ya se había dado como adicional y se quita en esta sesión (todavía sin guardar). Lo que da el puesto (verde) nunca se quita aquí.
-        let pendingRemovals = new Set();
+        let pendingRemovals = new TrackedSet();
         // allowRemoveExtras («+ Adicionales» de un cliente): lo vendido como adicional (amarillo, ya guardado o de esta sesión) se puede quitar; lo que da el PLAN (verde) no. canRemove: cualquiera de los dos modos.
         const canRemove = allowRemove || allowRemoveExtras;
         const removableColor = (c) => c === 'yellow' || (allowRemove && c === 'green');
@@ -345,7 +357,7 @@
         // Sin casillas azules ni botoncitos aparte. Lo que da el plan (verde) no se quita.
         const toggleMode = allowRemoveExtras && interactive;
         // allowRemove: lo que da el PUESTO y se le quita a esta persona (las llaves, ya guardadas o de esta sesión), y los permisos crudos del puesto (para saber qué contenedores cubren lo quitado).
-        let excludedKeys = new Set();
+        let excludedKeys = new TrackedSet();
         let planRawGrants = [];
         let costMap = new Map(); // tupleKey -> cost, editable in costEdit mode, read-only reference otherwise
         // grantReadonlyCost only -- a Plan's own Sector's CURRENT raw grants
@@ -372,10 +384,17 @@
         // (but not yet saved) in the interactive "+ Adicionales" modal — the
         // read-only "Permisos Contratados" modal never has pendingAdditions,
         // so this degenerates to plain clientGrantSet there.
+        // Se calcula una vez por cambio (dataVersion) y se devuelve el mismo conjunto, que nadie modifica: antes cada llamada copiaba TODOS los permisos del cliente y se llama miles de veces en cada dibujo
+        // (una por casilla de cada fila), así que con algo marcado cada clic se volvía lentísimo.
+        let effectiveCache = null;
+        let effectiveCacheVersion = -1;
         function effectiveClientSet() {
             if (!interactive || (pendingAdditions.size === 0 && pendingRemovals.size === 0)) return clientGrantSet;
+            if (effectiveCache && effectiveCacheVersion === dataVersion) return effectiveCache;
             const set = new Set([...clientGrantSet].filter((k) => !pendingRemovals.has(k)));
             pendingAdditions.forEach((k) => set.add(k));
+            effectiveCache = set;
+            effectiveCacheVersion = dataVersion;
             return set;
         }
         // Marcar / desmarcar una llave en esta sesión: lo ya guardado que se vuelve a marcar solo deja de estar «por quitar»; lo nuevo que se desmarca solo deja de estar «por agregar».
@@ -775,12 +794,26 @@
         function extraSlotArgs(ownKey, leafKeys, coverageKeys) {
             if (mode !== 'clientTricolor') return [ownKey, undefined];
             let color = colorFor(leafKeys);
-            const deeper = typeof coverageKeys === 'function' ? coverageKeys() : [];
+            let deeper = [];
+            let deeperUnique = [];
+            if (typeof coverageKeys === 'function') {
+                if (coverageCacheFor !== sectionsData) { coverageCache.clear(); coverageCacheFor = sectionsData; }
+                let cached = ownKey == null ? null : coverageCache.get(ownKey);
+                if (!cached) {
+                    deeper = coverageKeys();
+                    cached = { keys: deeper, unique: [...new Set(deeper)] };
+                    if (ownKey != null) coverageCache.set(ownKey, cached);
+                }
+                deeper = cached.keys;
+                deeperUnique = cached.unique;
+            }
             if ((color === 'green' || color === 'yellow') && deeper.length) {
                 if (deeper.length > leafKeys.length && colorFor(deeper) === null) color = null;
             }
             const covered = (k) => planGrantSet.has(k) || clientGrantSet.has(k);
-            const nested = [...new Set(deeper)].filter((k) => !leafKeys.includes(k) && !covered(k));
+            // (leafSet: con .includes() esto era leafKeys × deeper por CADA fila, también de los departamentos cerrados, y era lo que hacía lento abrir un nodo o marcar una casilla)
+            const leafSet = new Set(leafKeys);
+            const nested = deeperUnique.filter((k) => !leafSet.has(k) && !covered(k));
             const own = grantLimits ? leafKeys.filter((k) => !isLimitLocked(k)) : leafKeys;
             const stageable = [...own, ...(grantLimits ? nested.filter((k) => !isLimitLocked(k)) : nested)];
             // lo que todavía no cubre ni el plan ni lo ya vendido: es lo que agrega un nivel «a medias» al marcarlo
@@ -1571,9 +1604,20 @@
             });
         }
 
+        // Relación de Accesos: lo bloqueado y lo recomendado solo cambia cuando cambia lo marcado; en un dibujo que no cambia nada (abrir o cerrar un nodo) se reusan sin rehacer la cuenta.
+        // Lo que se avisa es lo de siempre: lo bloqueado se repite en cada dibujo, y lo que entró solo se avisa una vez (en el dibujo siguiente ya no hay nada nuevo que agregar).
+        let accessResultVersion = -1;
+        let accessResultBlocked = [];
         function render() {
             if (accessEngine) {
-                const live = recomputeAccessRules();
+                let live;
+                if (accessResultVersion === dataVersion) {
+                    live = { added: [], addedBy: [], blocked: accessResultBlocked };
+                } else {
+                    live = recomputeAccessRules();
+                    accessResultBlocked = live.blocked;
+                    accessResultVersion = dataVersion; // después de la cuenta: lo que ella misma marcó ya cuenta
+                }
                 if (accessReady && live.addedBy.length) accessToast(t('admin.minAutoLive', { access: accessNamesText(live.addedBy) }), 'info');
                 if (accessReady && live.blocked.length) accessToast(t('admin.minAutoBlockedLive', { access: accessNamesText(live.blocked) }), 'warning');
             }
@@ -1882,20 +1926,22 @@
                     sectionsData = pruneToVisible(sectionsData, [...visibleGrants, ...(initialGrants || []), ...(clientGrants || [])]);
                 }
 
-                pendingAdditions = new Set();
-                pendingRemovals = new Set();
+                dataVersion += 1; // el árbol se arma de nuevo: lo guardado en los conjuntos calculados ya no vale
+                pendingAdditions = new TrackedSet();
+                pendingRemovals = new TrackedSet();
                 if (mode === 'clientTricolor') {
-                    grantSet = new Set();
+                    grantSet = new TrackedSet();
                     planGrantSet = new PlanSet(buildExpandedSet(initialGrants));
                     planRawGrants = initialGrants || [];
-                    excludedKeys = new Set((allowRemove ? exclusions || [] : []).map((g) => keyOf(g.sectionId, g.itemId, g.submenuId)));
+                    excludedKeys = new TrackedSet((allowRemove ? exclusions || [] : []).map((g) => keyOf(g.sectionId, g.itemId, g.submenuId)));
                     planGrantSet.excluded = excludedKeys;
                     clientGrantSet = buildExpandedSet(clientGrants);
                 } else {
-                    grantSet = buildExpandedSet(initialGrants);
+                    grantSet = new TrackedSet(buildExpandedSet(initialGrants));
                     planGrantSet = new PlanSet();
                     clientGrantSet = new Set();
                 }
+                dataVersion += 1;
 
                 costMap = new Map((initialCosts || []).filter((c) => c.cost > 0).map((c) => [keyOf(c.sectionId, c.itemId, c.submenuId), c.cost]));
 
