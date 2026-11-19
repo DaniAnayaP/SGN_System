@@ -16080,6 +16080,63 @@ function listMyWorkPlanActivities(clientId, userId) {
         || (a.planTitle < b.planTitle ? -1 : a.planTitle > b.planTitle ? 1 : 0) || a.itemId - b.itemId);
     return { activities: all.slice(0, WORK_PLAN_LIMITS.mineMax).map(({ position, ...rest }) => rest), counts: { open, done: all.length - open }, truncated: all.length > WORK_PLAN_LIMITS.mineMax };
 }
+// Las personas a cargo de esa persona (pieza 3b): quienes la tienen como jefa directa por el organigrama (workPlanBossOf, la misma regla del interruptor de la jefa), activas y de esa compañía. [{ userId, name }] por nombre.
+function workPlanDirectReports(clientId, userId) {
+    const mine = db.prepare('SELECT job_position_id AS positionId FROM hr_workers WHERE user_id = ? AND client_id = ? AND job_position_id IS NOT NULL').all(userId, clientId).map((r) => r.positionId);
+    if (!mine.length) return [];
+    const marks = mine.map(() => '?').join(',');
+    const candidates = db.prepare(`SELECT DISTINCT w.user_id AS userId FROM hr_workers w JOIN job_positions p ON p.id = w.job_position_id
+        WHERE w.client_id = ? AND w.user_id IS NOT NULL AND w.user_id != ? AND p.client_id = ? AND p.reports_to_job_position_id IN (${marks})`).all(clientId, userId, clientId, ...mine);
+    const out = [];
+    candidates.forEach(({ userId: uid }) => {
+        const account = db.prepare('SELECT active FROM users WHERE id = ? AND client_id = ?').get(uid, clientId);
+        if (!account || account.active === 0) return;
+        if (workPlanBossOf(clientId, uid) !== userId) return;
+        out.push({ userId: uid, name: workPlanOwnerName(uid) });
+    });
+    return out.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }) || a.userId - b.userId);
+}
+// «Mi equipo» (pieza 3b): las actividades (responsable o quien ejecuta) de las personas a cargo de esa persona, SOLO en los planes ACTIVOS que ella puede ver (los suyos, los que le compartieron y los de su equipo con el interruptor de la jefa
+// encendido): lo que la dueña no le abrió no se ve. Es solo lectura. Un renglón con dos personas del equipo sale una vez por cada una. members = todas las personas a su cargo con cuántas les faltan / están vencidas / hechas (aunque no tengan nada);
+// activities = lo mismo que «Mis actividades» más `person` (userId, name) y el papel de ESA persona. today (YYYY-MM-DD, la fecha de quien pregunta; sin ella la del servidor) decide qué está vencido en los conteos.
+function listTeamWorkPlanActivities(clientId, userId, today) {
+    const team = workPlanDirectReports(clientId, userId);
+    if (!team.length) return { members: [], activities: [], truncated: false };
+    const day = typeof today === 'string' && isRealDateOnly(today) ? today : new Date().toISOString().slice(0, 10);
+    const names = new Map(team.map((m) => [m.userId, m.name]));
+    const all = [];
+    workPlanAccessibleEntries(clientId, userId).filter((e) => e.row.status === 'active').forEach(({ row, access }) => {
+        const items = workPlanItemsFor(row, access, userId);
+        const byId = new Map(items.map((i) => [i.id, i]));
+        const levels = workPlanLevelsOf(row);
+        items.forEach((i) => {
+            const people = [];
+            if (i.responsibleUserId != null && names.has(i.responsibleUserId)) people.push(i.responsibleUserId);
+            if (i.executorUserId != null && names.has(i.executorUserId) && !people.includes(i.executorUserId)) people.push(i.executorUserId);
+            if (!people.length) return;
+            const path = [];
+            for (let p = i.parentId == null ? null : byId.get(i.parentId); p; p = p.parentId == null ? null : byId.get(p.parentId)) path.unshift(p.title);
+            people.forEach((uid) => {
+                const resp = i.responsibleUserId === uid;
+                const exec = i.executorUserId === uid;
+                all.push({
+                    person: { userId: uid, name: names.get(uid) }, planId: row.id, planTitle: row.title, planOrigin: access.origin, itemId: i.id, title: i.title, path, depth: i.depth, levelName: levels[i.depth - 1] || '', isLeaf: i.childCount === 0,
+                    startDate: i.rangeStart, endDate: i.rangeEnd, status: i.effectiveStatus, progress: i.progress, role: resp && exec ? 'both' : (resp ? 'responsible' : 'executor'),
+                    responsibleName: i.responsibleName || '', executorName: i.executorName || '', commentCount: i.commentCount, unreadCount: i.unreadCount,
+                });
+            });
+        });
+    });
+    const members = team.map((m) => {
+        const mine = all.filter((a) => a.person.userId === m.userId);
+        const open = mine.filter((a) => a.status !== 'done');
+        return { userId: m.userId, name: m.name, open: open.length, late: open.filter((a) => a.endDate && a.endDate < day).length, done: mine.length - open.length };
+    });
+    all.sort((a, b) => (a.status === 'done') - (b.status === 'done')
+        || (a.endDate && b.endDate ? (a.endDate < b.endDate ? -1 : a.endDate > b.endDate ? 1 : 0) : (a.endDate ? -1 : (b.endDate ? 1 : 0)))
+        || (a.person.name < b.person.name ? -1 : a.person.name > b.person.name ? 1 : 0) || a.itemId - b.itemId);
+    return { members, activities: all.slice(0, WORK_PLAN_LIMITS.mineMax), truncated: all.length > WORK_PLAN_LIMITS.mineMax };
+}
 // Los ids de los planes a los que esa persona tiene acceso (propios, compartidos y de su equipo): el historial de un plan solo lo ven ellos (ver las rutas de table-changes en server.js).
 function listAccessibleWorkPlanIds(clientId, userId) {
     const ids = new Set(db.prepare('SELECT id FROM work_plans WHERE client_id = ? AND owner_user_id = ?').all(clientId, userId).map((r) => r.id));
@@ -19992,7 +20049,7 @@ module.exports = {
     getUserGrants,
     setUserGrants,
     getUserGrantChangeLog,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
     MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices,
     THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,

@@ -9868,3 +9868,12 @@ input[type="color"].cli-company{ opacity: 0.55; }
 .wp-mine-warn{ border-color: var(--color-report-calc-text); }
 .wp-tab-list, .wp-tab-mine{ flex: 0 0 auto; } /* las dos pestañas fijas no se encogen: en celular la fila de pestañas se desliza de lado */
 @media (max-width: 640px){ .wp-mine-row{ grid-template-columns: auto minmax(0, 1fr); } .wp-mine-side{ grid-column: 1 / -1; flex-direction: row; justify-content: flex-end; align-items: center; } }
+
+/* Planes de trabajo, pieza 3b: pestaña «Mi equipo» (lo que les toca a las personas a mi cargo, solo lectura) */
+.wp-team-head{ display: flex; align-items: center; gap: 0.5rem; }
+.wp-team-head small{ margin-left: 0.3rem; font-size: 0.72rem; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--color-text-secondary); }
+.wp-team-head small.wp-team-late{ color: var(--color-report-calc-text); font-weight: 600; }
+.wp-avatar-sm{ width: 1.5rem; height: 1.5rem; font-size: 0.62rem; }
+.wp-team-person{ max-width: 15rem; padding: 0.35rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); color: var(--color-text-primary); font-family: inherit; font-size: 0.78rem; }
+.wp-tab-team{ flex: 0 0 auto; }
+@media (max-width: 640px){ .wp-team-person{ max-width: 100%; flex: 1 1 100%; } }
