@@ -1983,6 +1983,43 @@ function autoAbbrLadder(full) {
     for (let n = words.length - 1; n >= 1; n -= 1) push(words.slice(0, n));
     return ladder;
 }
+// «Mi App» (TI › Configuración Compañía) se llama «Mi App + nombre corto del cliente» en la barra, en la ruta y en la pestaña (pedido de Daniel, 2026-11-18). El nombre corto sale de GET /api/business/mi-app/name,
+// se pide una sola vez por sesión (se recuerda 10 minutos en este navegador, por cliente) y solo si la persona tiene la pantalla en su barra. Se cambia labelKey/labelParams del nodo (no un texto fijo) para que siga el idioma.
+const MI_APP_NODE_ID = 'cat-operaciones-ti-cc-mi-app';
+const MI_APP_NAME_TTL_MS = 10 * 60 * 1000;
+function miAppNameCacheKey() { return currentUser && currentUser.clientId ? `sgnMiAppName:${currentUser.clientId}` : ''; }
+function readMiAppNameCache() {
+    const key = miAppNameCacheKey();
+    if (!key) return null;
+    try {
+        const saved = JSON.parse(sessionStorage.getItem(key) || 'null');
+        return saved && typeof saved.name === 'string' && Date.now() - saved.at < MI_APP_NAME_TTL_MS ? saved.name : null;
+    } catch { return null; }
+}
+function labelMiAppNode(data, name) {
+    if (!data || !name) return false;
+    let found = false;
+    const walk = (value) => {
+        if (!value || typeof value !== 'object') return;
+        if (Array.isArray(value)) { value.forEach(walk); return; }
+        if (value.id === MI_APP_NODE_ID) { value.labelKey = 'menu.ccMiAppNamed'; value.labelParams = { name }; found = true; }
+        Object.values(value).forEach(walk);
+    };
+    walk(data);
+    return found;
+}
+async function syncMiAppLabel() {
+    const key = miAppNameCacheKey();
+    if (!key || readMiAppNameCache() !== null) return;
+    if (!document.querySelector('#Sidebar a[href="OpTIMiApp.html"]')) return; // sin la pantalla en su barra no hay etiqueta que poner
+    let name = '';
+    try {
+        const res = await fetch('/api/business/mi-app/name', { credentials: 'include' });
+        if (res.ok) name = String((await res.json()).name || '');
+    } catch { return; }
+    try { sessionStorage.setItem(key, JSON.stringify({ name, at: Date.now() })); } catch { /* sin almacenamiento: se pide de nuevo la próxima vez */ }
+    if (labelMiAppNode(menuData, name)) { renderFilteredMenu(); renderBreadcrumbBar(); }
+}
 function applySubmenuAbbreviations() {
     // los nombres sin escalera propia que no caben reciben la automática (se guarda para que el redibujo al cambiar el ancho la siga usando)
     document.querySelectorAll('.sub-menu-link > span:first-of-type:not([data-abbr-ladder]), .menu-link > span:first-of-type:not([data-abbr-ladder])').forEach((span) => {
@@ -13714,6 +13751,7 @@ async function initDashboardInner({ activePage } = {}) {
     menuData = await menuPromise;
     areaOnlyPages = computeAreaOnlyPages(menuData);
     menuData = buildSidebarData(menuData, role, activePage);
+    if (role !== 'admin') labelMiAppNode(menuData, readMiAppNameCache());
     // loadBusinessProfile() above already rendered the "Datos de Usuario del
     // Negocio" summary once, but at that point menuData was still null —
     // any department-level grant's resolveGrantLabel() call degraded to
@@ -13758,6 +13796,7 @@ async function initDashboardInner({ activePage } = {}) {
     syncTopBarButtonVisibility();
     syncSaasNavIconVisibility();
     syncSettingsSubmenuVisibility();
+    if (role !== 'admin') syncMiAppLabel();
     // Restore the saved style now that clientBranding (needed for
     // Institutional's real colors) has loaded — every other page load was
     // resetting back to Light since nothing re-applied the choice.

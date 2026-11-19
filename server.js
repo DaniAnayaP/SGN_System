@@ -2145,6 +2145,15 @@ function miAppSendToSgn(req, text) {
     } catch (err) { console.error('Mi App: no se pudo avisar a SGN en la campana', err && err.message); }
     return created;
 }
+// Solo el nombre corto de su app, para la etiqueta de la barra lateral («Mi App + nombre corto del cliente»): Dashboard.js lo pide una vez por sesión y lo recuerda unos minutos.
+app.get('/api/business/mi-app/name', requireAuth, (req, res) => {
+    if (!miAppGate(req, res, false)) return;
+    const config = getClientLogin(req.user.clientId);
+    if (!config) return res.status(404).json({ message: 'SGN todavía no te ha creado un inicio personalizado.', code: 'NO_CONFIG' });
+    const company = getClientLoginCompany(req.user.clientId);
+    res.set('Cache-Control', 'private, max-age=60');
+    res.json({ name: config.draft.identity.shortName || (company && company.suggestedShortName) || '' });
+});
 // «Pedir cambio a SGN»: lo que el cliente no puede cambiar solo (la clave y la identidad de la app). Llega a SGN como una solicitud de tipo «otra cosa» en Expansiones, con su aviso en la campana.
 app.post('/api/business/mi-app/change-request', requireAuth, (req, res) => {
     if (!miAppGate(req, res, true)) return;
