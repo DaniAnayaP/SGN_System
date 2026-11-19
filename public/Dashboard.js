@@ -926,6 +926,7 @@ const SAAS_SCREEN_GRANT_PATHS = {
     'admin-soporte-saas': 'saas-support',
     'admin-expansiones-saas': 'saas-expansions',
     'admin-capacitacion-saas': 'saas-training',
+    'admin-implementaciones-saas': 'saas-implementations',
     'admin-limits-audit': 'saas-limits-audit',
     'admin-system-reset': 'saas-system-reset',
     'admin-access-relations': 'saas-access-relations',
@@ -966,6 +967,7 @@ const SAAS_TABLE_ICON_SCREENS = {
     'soporte-saas': { screenItemId: 'saas-support', apartadoId: 'tabla' },
     'expansiones-saas': { screenItemId: 'saas-expansions', apartadoId: 'tabla' },
     'capacitacion-saas': { screenItemId: 'saas-training', apartadoId: 'tabla' },
+    'implementaciones-saas': { screenItemId: 'saas-implementations', apartadoId: 'tabla' },
     'admin-nuestros-respaldos': { screenItemId: 'saas-backups', apartadoId: 'tabla' },
     'admin-material-apoyo': { screenItemId: 'saas-material-apoyo', apartadoId: 'tabla' },
 };
@@ -1023,6 +1025,7 @@ const CUSTOMER_SERVICE_SAAS_ORDER_IDS = {
     'admin-soporte-saas': 'saas-support',
     'admin-expansiones-saas': 'saas-expansions',
     'admin-capacitacion-saas': 'saas-training',
+    'admin-implementaciones-saas': 'saas-implementations',
 };
 const SAAS_CONFIG_SAAS_ORDER_IDS = {
     'admin-saas-master-status': 'saas-master-tree',
@@ -1114,6 +1117,8 @@ function buildSidebarData(data, role, activePage) {
         { id: 'admin-expansiones-saas', labelKey: 'menu.saasExpansions', href: 'Admin-Expansiones.html', icon: 'bx-trending-up', saasItemId: 'saas-expansions' },
         // Sesiones de capacitación: el implementador registra las de todas las compañías y marca quién asistió.
         { id: 'admin-capacitacion-saas', labelKey: 'menu.saasTraining', href: 'Admin-Capacitacion.html', icon: 'bx-chalkboard', saasItemId: 'saas-training' },
+        // Implementaciones: el implementador inicia la implementación de cada compañía, fija fechas por nivel y marca lo terminado.
+        { id: 'admin-implementaciones-saas', labelKey: 'menu.saasImplementations', href: 'Admin-Implementaciones.html', icon: 'bx-rocket', saasItemId: 'saas-implementations' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
     const customerServiceSubmenuOrdered = applySaasSidebarOrder(customerServiceSubmenu, 'customerService', CUSTOMER_SERVICE_SAAS_ORDER_IDS);
     const saasConfigSubmenu = [
@@ -1315,7 +1320,8 @@ const AREAS_BY_DEPARTMENT = {
     ],
     'information-technology': [
         { key: 'it-area-operations', labelKey: 'menu.area.itOperations', icon: 'bx-chip' },
-        { key: 'it-area-company-config', labelKey: 'menu.area.itCompanyConfig', icon: 'bx-cog' }
+        { key: 'it-area-company-config', labelKey: 'menu.area.itCompanyConfig', icon: 'bx-cog' },
+        { key: 'it-area-implementation', labelKey: 'menu.area.itImplementation', icon: 'bx-rocket' }
     ]
 };
 
@@ -13851,6 +13857,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-ti-cc-config-botones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-config-botones' },
     'cat-operaciones-ti-cc-expansiones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-expansiones' },
     'cat-operaciones-ti-cc-sesiones-capacitacion': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-sesiones-capacitacion' },
+    'cat-operaciones-ti-impl-cronograma': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-cronograma' },
     'cat-gestion-ti-soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     // Punto Venta: Ventas (Operaciones) y Transacciones (Gestión), por ahora vacías
     'cat-operaciones-pv-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-operaciones/cat-operaciones-pv-ventas' },

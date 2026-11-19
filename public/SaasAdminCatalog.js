@@ -156,6 +156,16 @@ window.SAAS_ADMIN_CATALOG = [
                         ['Programar sesión', 'Editar sesión', 'Registrar asistencia', 'Cancelar sesión']),
                 ],
             },
+            {
+                // Implementaciones (Servicio a Cliente): el implementador inicia la implementación de cada compañía, fija las fechas de sus niveles y marca lo terminado (Admin-Implementaciones.html). El ORDEN de columnas y botones no
+                // debe cambiar una vez guardado: server.js lee los botones por su posición (SAAS_IMPL_LEAVES). Lo nuevo va al final.
+                itemId: 'saas-implementations', labelKey: 'menu.saasImplementations', href: 'Admin-Implementaciones.html',
+                apartados: [
+                    tablaApartado('tabla',
+                        ['Cliente', 'Estatus', 'Implementador', 'Inicio', 'Fin', 'Nivel actual', 'Avance'],
+                        ['Iniciar implementación', 'Fijar implementador y fechas', 'Marcar nivel', 'Reabrir nivel']),
+                ],
+            },
         ],
     },
     {

@@ -5893,6 +5893,76 @@
         }
       ]
     },
+    "information-technology/it-area-implementation": {
+      "cat-operaciones": [
+        {
+          "id": "cat-operaciones-ti-impl-cronograma",
+          "labelKey": "menu.implCronograma",
+          "href": "OpTIImplCronograma.html",
+          "icon": "bx-calendar-event"
+        },
+        {
+          "id": "cat-operaciones-ti-impl-contracted",
+          "labelKey": "menu.implLevel_contracted",
+          "href": "#",
+          "icon": "bx-purchase-tag-alt"
+        },
+        {
+          "id": "cat-operaciones-ti-impl-design",
+          "labelKey": "menu.implLevel_design",
+          "href": "#",
+          "icon": "bx-palette"
+        },
+        {
+          "id": "cat-operaciones-ti-impl-structure",
+          "labelKey": "menu.implLevel_structure",
+          "href": "#",
+          "icon": "bx-buildings"
+        },
+        {
+          "id": "cat-operaciones-ti-impl-orgchart",
+          "labelKey": "menu.implLevel_orgchart",
+          "href": "#",
+          "icon": "bx-sitemap"
+        },
+        {
+          "id": "cat-operaciones-ti-impl-layout",
+          "labelKey": "menu.implLevel_layout",
+          "href": "#",
+          "icon": "bx-map-alt"
+        },
+        {
+          "id": "cat-operaciones-ti-impl-codes",
+          "labelKey": "menu.implLevel_codes",
+          "href": "#",
+          "icon": "bx-barcode"
+        },
+        {
+          "id": "cat-operaciones-ti-impl-access",
+          "labelKey": "menu.implLevel_access",
+          "href": "#",
+          "icon": "bx-lock-open-alt"
+        },
+        {
+          "id": "cat-operaciones-ti-impl-training",
+          "labelKey": "menu.implLevel_training",
+          "href": "#",
+          "icon": "bx-chalkboard"
+        },
+        {
+          "id": "cat-operaciones-ti-impl-api",
+          "labelKey": "menu.implLevel_api",
+          "href": "#",
+          "icon": "bx-plug"
+        },
+        {
+          "id": "cat-operaciones-ti-impl-startup",
+          "labelKey": "menu.implLevel_startup",
+          "href": "#",
+          "icon": "bx-rocket"
+        }
+      ]
+    },
     "information-technology/it-area-company-config": {
       "cat-operaciones": [
         {
@@ -6425,7 +6495,8 @@
     ],
     "information-technology": [
       { "id": "it-area-operations", "labelKey": "menu.area.itOperations" },
-      { "id": "it-area-company-config", "labelKey": "menu.area.itCompanyConfig" }
+      { "id": "it-area-company-config", "labelKey": "menu.area.itCompanyConfig" },
+      { "id": "it-area-implementation", "labelKey": "menu.area.itImplementation" }
     ]
   },
   "footer": []

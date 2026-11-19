@@ -1,0 +1,304 @@
+// ---------------------------------------------------------------------------
+// Servicio a Cliente › Implementaciones (lado SaaS): el implementador lleva la implementación de cada compañía. Una fila por compañía (que no esté inactiva) con quién la implementa, de cuándo a cuándo va su cronograma, el nivel que sigue y su
+// avance. Pestañas: Sin iniciar, En curso, Terminadas y Todas. «Iniciar implementación» crea los 10 niveles en orden y elige al implementador; «Cronograma» abre los niveles para fijar las fechas de cada uno y marcar lo terminado (el siguiente
+// nivel se abre al completar el anterior; los opcionales, como la API, pueden quedar «No aplica» sin bloquear). Cada botón se da en el árbol de accesos de la cuenta (Equipo SaaS); «implementador» = cualquier cuenta con esta pantalla.
+// La compañía lo consulta en TI › Implementación Inicial › Cronograma. Las filas salen del servidor (GET /api/admin/implementations). Trae las columnas de Control Interno.
+// ---------------------------------------------------------------------------
+
+// Envuelto en una función: Dashboard.js ya declara globales como t, y chocarían con los de esta pantalla.
+(function () {
+const TABLE_KEY = 'implementaciones-saas';
+const API = '/api/admin/implementations';
+const SYSTEM_COLUMN_KEYS = [
+    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
+    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
+    'colSysAnio', 'colSysSemana', 'colSysHora',
+];
+const SEARCH_COLUMNS = ['client', 'status', 'implementer', 'level'];
+const t = (key, params) => {
+    let text = Dashboard.t(key);
+    Object.entries(params || {}).forEach(([name, value]) => { text = text.split(`{${name}}`).join(String(value)); });
+    return text;
+};
+const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const locale = () => (localStorage.getItem('lang') === 'en' ? 'en-US' : 'es-MX');
+const dayOf = (ymd) => { const [y, m, d] = String(ymd).split('-').map(Number); return new Date(y, m - 1, d); };
+const shortDate = (ymd) => (ymd ? dayOf(ymd).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const levelName = (key) => { const name = t(`main.implLevelName_${key}`); return name.startsWith('main.') ? key : name; };
+const state = { rows: [], counts: { none: 0, active: 0, closed: 0, all: 0 }, can: {}, implementers: [], tab: null };
+
+const statusChip = (status) => `<span class="exp-chip exp-chip-${{ none: 'cancelled', active: 'negotiating', closed: 'approved' }[status] || 'cancelled'}">${esc(t(`main.implRowStatus_${status}`))}</span>`;
+const levelText = (r) => (r.currentKey ? levelName(r.currentKey) : (r.started ? t('main.implState_done') : ''));
+
+(async function init() {
+    try {
+        const role = await Dashboard.initDashboard({ activePage: 'admin-implementaciones-saas' });
+        if (!role) return;
+        await load();
+        document.querySelector('.ss-tabs').addEventListener('click', (event) => {
+            const btn = event.target.closest('[data-ss-tab]');
+            if (!btn) return;
+            state.tab = btn.dataset.ssTab;
+            renderTabs();
+            renderRows();
+        });
+        document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyFilters);
+        document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyFilters);
+        setInterval(() => { if (!document.hidden && !document.querySelector('.exp-overlay')) load().catch(() => {}); }, 60000);
+    } catch (err) {
+        console.error('Implementaciones (SaaS) failed to initialize:', err);
+    }
+})();
+
+async function load() {
+    const res = await fetch(API, { credentials: 'include' });
+    const body = await res.json().catch(() => ({}));
+    const errEl = document.getElementById('ss-error');
+    if (!res.ok) { errEl.textContent = body.message || Dashboard.t('admin.saveError'); errEl.hidden = false; return; }
+    errEl.hidden = true;
+    state.rows = body.rows; state.counts = body.counts; state.can = body.can || {}; state.implementers = body.implementers || [];
+    // la primera vez se abre donde hay trabajo: las que van en curso, o las que faltan por iniciar
+    if (!state.tab) state.tab = state.counts.active ? 'active' : (state.counts.none ? 'none' : 'all');
+    renderTabs();
+    renderRows();
+}
+function renderTabs() {
+    document.querySelectorAll('[data-ss-tab]').forEach((btn) => {
+        const on = btn.dataset.ssTab === state.tab;
+        btn.classList.toggle('on', on);
+        btn.setAttribute('aria-selected', String(on));
+    });
+    ['none', 'active', 'closed', 'all'].forEach((k) => { document.getElementById(`ss-count-${k}`).textContent = String(state.counts[k] || 0); });
+}
+const visible = () => state.rows.filter((r) => state.tab === 'all' || r.status === state.tab);
+
+function cell(col, value, extraClass) {
+    const td = document.createElement('td');
+    td.dataset.col = col;
+    td.textContent = value === null || value === undefined || value === '' ? '—' : String(value);
+    if (extraClass) td.className = extraClass;
+    return td;
+}
+// Las 13 columnas de Control Interno: la empresa de la compañía, el área, el módulo, la pantalla y el momento en que se inició la implementación (o se dio de alta la compañía).
+function systemCells(r) {
+    const d = new Date(`${String(r.createdAt).replace(' ', 'T')}Z`);
+    const pad = (n) => String(n).padStart(2, '0');
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const days = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+    const start = new Date(d.getFullYear(), 0, 1);
+    const week = Math.ceil((Math.floor((d - start) / 86400000) + start.getDay() + 1) / 7);
+    const values = {
+        colSysEmpresa: r.client, colSysArea: 'Implementación Inicial', colSysModulo: 'Tecnologías de la Información', colSysPantalla: t('menu.saasImplementations'), colSysCentroCostos: '',
+        colSysFecha: `${pad(d.getDate())}/${months[d.getMonth()]}/${d.getFullYear()}`, colSysDiaNum: pad(d.getDate()), colSysDiaTexto: days[d.getDay()], colSysMesNum: pad(d.getMonth() + 1), colSysMesTexto: months[d.getMonth()],
+        colSysAnio: String(d.getFullYear()), colSysSemana: `Sem${week}_${d.getFullYear()}`, colSysHora: `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,
+    };
+    return SYSTEM_COLUMN_KEYS.map((key) => cell(key, values[key], 'col-system'));
+}
+function actionsCell(r) {
+    const td = document.createElement('td');
+    td.dataset.col = 'actions';
+    td.className = 'admin-table-actions';
+    const add = (label, kind) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-secondary sc-mini';
+        btn.dataset.implAct = kind;
+        btn.dataset.implClient = String(r.clientId);
+        btn.textContent = label;
+        td.appendChild(btn);
+    };
+    if (r.actions.start) add(t('admin.saasImplStart'), 'start');
+    if (r.actions.open) add(t('admin.saasImplOpen'), 'open');
+    const history = document.createElement('button');
+    history.type = 'button';
+    history.className = 'admin-icon-btn';
+    history.setAttribute('data-help-key', 'changeHistory');
+    history.setAttribute('aria-label', t('main.solHistory'));
+    history.title = t('main.solHistory');
+    history.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
+    history.addEventListener('click', () => Dashboard.openChangeHistoryWithRows(t('main.changeHistoryTitleRecord'), Dashboard.saasTableChangesLoader(TABLE_KEY, r.clientId)));
+    td.appendChild(history);
+    return td;
+}
+function buildRow(r) {
+    const tr = document.createElement('tr');
+    tr.dataset.recordId = String(r.clientId);
+    const status = document.createElement('td');
+    status.dataset.col = 'status';
+    status.innerHTML = `${statusChip(r.status)}${r.late ? ` <span class="exp-chip exp-chip-pending">${esc(t('main.implState_late'))}</span>` : ''}`;
+    tr.append(
+        ...systemCells(r),
+        cell('client', r.client), status, cell('implementer', r.implementer), cell('start', shortDate(r.startDate)), cell('end', shortDate(r.endDate)), cell('level', levelText(r)),
+        cell('progress', r.started ? `${r.progress}% · ${t('main.implProgressOf', { done: r.done, total: r.total })}` : ''), actionsCell(r),
+    );
+    return tr;
+}
+function getTbody() { return document.querySelector(`[data-table-id="${TABLE_KEY}"] table.data-table`).tBodies[0]; }
+function ensureEmptyState(tbody) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.className = 'data-table-empty-cell';
+    td.colSpan = document.querySelectorAll('table.data-table thead th').length;
+    const inner = document.createElement('div');
+    inner.className = 'data-table-empty-inner';
+    inner.textContent = Dashboard.t('main.emptyStateText');
+    td.appendChild(inner);
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+}
+function renderRows() {
+    const tbody = getTbody();
+    tbody.innerHTML = '';
+    const list = visible();
+    if (!list.length) { ensureEmptyState(tbody); return; }
+    const fragment = document.createDocumentFragment();
+    list.forEach((r) => fragment.appendChild(buildRow(r)));
+    tbody.appendChild(fragment);
+    applyFilters();
+}
+function applyFilters() {
+    const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
+    getTbody().querySelectorAll('tr').forEach((tr) => {
+        if (tr.querySelector('td.data-table-empty-cell')) return;
+        if (!text) { tr.hidden = false; return; }
+        const haystack = SEARCH_COLUMNS.map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '').join(' ');
+        tr.hidden = !SearchSyntax.matches('contains', text, haystack);
+    });
+}
+Dashboard.registerSaasTableHistory(TABLE_KEY, 'main.changeHistoryTitle', Dashboard.saasTableChangesLoader(TABLE_KEY));
+
+// ---- ventanas ----------------------------------------------------------------------------------------------------------------------------------------
+function makeModal(html) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    overlay.innerHTML = `<div class="modal-panel exp-panel impl-panel" role="dialog" aria-modal="true">${html}</div>`;
+    document.body.appendChild(overlay);
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
+    return { overlay, close, $: (sel) => overlay.querySelector(sel) };
+}
+async function call(method, path, body) {
+    const res = await fetch(path, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: method === 'GET' ? undefined : JSON.stringify(body || {}) });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) { const err = new Error(out.message || 'failed'); err.body = out; err.status = res.status; throw err; }
+    return out;
+}
+function explain(err) {
+    const code = err.body && err.body.code;
+    const key = `admin.saasImplErr_${code}`;
+    const text = Dashboard.t(key);
+    return text !== key ? text : t('admin.saasImplErr_default');
+}
+const implementerOptions = (selectedId) => `<option value="">${esc(t('admin.saasImplUnassigned'))}</option>${state.implementers.map((u) => `<option value="${u.id}"${u.id === selectedId ? ' selected' : ''}>${esc(u.name || u.username)}</option>`).join('')}`;
+
+// «Iniciar implementación»: se crean los 10 niveles en orden y se elige quién implementa.
+function openStart(row) {
+    const modal = makeModal(`<h3>${esc(t('admin.saasImplStartTitle', { client: row.client }))}</h3>
+        <div class="admin-field" data-help-key="saasImplStart"><label for="impl-implementer">${esc(t('admin.saasImplField'))}</label><select id="impl-implementer">${implementerOptions(null)}</select></div>
+        <p class="admin-error" id="impl-error" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" id="impl-ok">${esc(t('admin.saasImplConfirmStart'))}</button><button type="button" class="btn btn-secondary" id="impl-x">${esc(t('admin.saasImplClose'))}</button></div>`);
+    modal.$('#impl-x').addEventListener('click', modal.close);
+    modal.$('#impl-ok').addEventListener('click', async () => {
+        const errorEl = modal.$('#impl-error');
+        modal.$('#impl-ok').disabled = true;
+        try {
+            await call('POST', `${API}/${row.clientId}/start`, { implementerUserId: Number(modal.$('#impl-implementer').value) || null });
+            modal.close();
+            Dashboard.showToast(t('admin.saasImplDone'), 'success');
+            await load();
+        } catch (err) {
+            errorEl.textContent = explain(err);
+            errorEl.hidden = false;
+            modal.$('#impl-ok').disabled = false;
+            if (err.body && err.body.code === 'EXISTS') load().catch(() => {});
+        }
+    });
+}
+
+// «Cronograma»: los 10 niveles con sus fechas (se editan aquí) y lo que se puede hacer con cada uno según el orden.
+async function openDetail(row) {
+    const modal = makeModal(`<h3>${esc(t('admin.saasImplDetailTitle', { client: row.client }))}</h3><div id="impl-body"><p class="exp-note">…</p></div>`);
+    let detail = null;
+    const draft = {}; // fechas escritas que todavía no se guardan: sobreviven a volver a dibujar
+    const body = () => modal.$('#impl-body');
+    const showError = (text) => { const el = modal.$('#impl-error'); if (el) { el.textContent = text; el.hidden = !text; } };
+    const draw = () => {
+        const impl = detail.implementation;
+        const open = impl.status === 'active';
+        const canDates = open && detail.can.edit;
+        const rows = impl.levels.map((l) => {
+            const d = draft[l.key] || { start: l.startDate, end: l.endDate };
+            const actions = [
+                l.actions.done ? `<button type="button" class="btn btn-secondary sc-mini" data-lv="${l.key}" data-do="done">${esc(t('admin.saasImplMarkDone'))}</button>` : '',
+                l.actions.na ? `<button type="button" class="btn btn-secondary sc-mini" data-lv="${l.key}" data-do="na">${esc(t('admin.saasImplMarkNa'))}</button>` : '',
+                l.actions.reopen ? `<button type="button" class="btn btn-secondary sc-mini" data-lv="${l.key}" data-do="reopen">${esc(t('admin.saasImplReopen'))}</button>` : '',
+            ].join('');
+            const stateChip = `<span class="exp-chip exp-chip-${{ done: 'approved', current: 'negotiating', locked: 'cancelled', na: 'cancelled' }[l.state]}">${esc(t(`main.implState_${l.state}`))}</span>${l.late ? ` <span class="exp-chip exp-chip-pending">${esc(t('main.implState_late'))}</span>` : ''}`;
+            return `<tr><td><b>${l.position}</b> · ${esc(levelName(l.key))}</td>
+                <td><input type="date" data-date="start" data-lv="${l.key}" value="${esc(d.start)}" aria-label="${esc(t('admin.saasImplStartDate'))}"${canDates ? '' : ' disabled'}></td>
+                <td><input type="date" data-date="end" data-lv="${l.key}" value="${esc(d.end)}" aria-label="${esc(t('admin.saasImplEndDate'))}"${canDates ? '' : ' disabled'}></td>
+                <td>${stateChip}</td><td class="impl-acts">${actions}</td></tr>`;
+        }).join('');
+        body().innerHTML = `<div class="admin-field impl-implementer" data-help-key="saasImplStart"><label for="impl-implementer">${esc(t('admin.saasImplField'))}</label>
+            <div class="impl-inline"><select id="impl-implementer"${open && detail.can.edit ? '' : ' disabled'}>${implementerOptions(impl.implementerUserId)}</select>
+            ${open && detail.can.edit ? `<button type="button" class="btn btn-secondary sc-mini" id="impl-save-implementer">${esc(t('admin.saasImplSaveImplementer'))}</button>` : ''}</div></div>
+            <div class="impl-table-wrap" data-help-key="saasImplDates"><table class="impl-table"><thead><tr><th>${esc(t('admin.saasImplLevel'))}</th><th>${esc(t('admin.saasImplStartDate'))}</th><th>${esc(t('admin.saasImplEndDate'))}</th><th data-help-key="saasImplMark">${esc(t('admin.saasImplState'))}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+            <p class="admin-error" id="impl-error" hidden></p>
+            <div class="admin-form-actions">${canDates ? `<button type="button" class="btn" id="impl-save-dates">${esc(t('admin.saasImplSaveDates'))}</button>` : ''}<button type="button" class="btn btn-secondary" id="impl-x">${esc(t('admin.saasImplClose'))}</button></div>`;
+        modal.$('#impl-x').addEventListener('click', modal.close);
+    };
+    const reload = async () => { detail = await call('GET', `${API}/${row.clientId}`); draw(); };
+    const guard = async (fn) => {
+        try { await fn(); } catch (err) {
+            showError(explain(err));
+            if (err.body && ['ORDER', 'ORDER_LATER', 'ALREADY', 'CLOSED'].includes(err.body.code)) { await reload().catch(() => {}); showError(explain(err)); }
+        }
+    };
+    try { await reload(); } catch (err) { body().innerHTML = `<p class="admin-error">${esc(explain(err))}</p>`; return; }
+    modal.overlay.addEventListener('input', (event) => {
+        const el = event.target;
+        if (!el.dataset || !el.dataset.date) return;
+        const key = el.dataset.lv;
+        const level = detail.implementation.levels.find((l) => l.key === key);
+        draft[key] = draft[key] || { start: level.startDate, end: level.endDate };
+        draft[key][el.dataset.date] = el.value;
+    });
+    modal.overlay.addEventListener('click', (event) => {
+        const btn = event.target.closest('button');
+        if (!btn) return;
+        if (btn.dataset.do) {
+            guard(async () => {
+                detail = await call('POST', `${API}/${row.clientId}/levels/${btn.dataset.lv}/${btn.dataset.do}`, {});
+                draw();
+                await load();
+            });
+        } else if (btn.id === 'impl-save-implementer') {
+            guard(async () => {
+                detail = await call('PUT', `${API}/${row.clientId}/implementer`, { implementerUserId: Number(modal.$('#impl-implementer').value) || null });
+                draw();
+                Dashboard.showToast(t('admin.saasImplDone'), 'success');
+                await load();
+            });
+        } else if (btn.id === 'impl-save-dates') {
+            guard(async () => {
+                const levels = detail.implementation.levels.map((l) => { const d = draft[l.key] || { start: l.startDate, end: l.endDate }; return { key: l.key, startDate: d.start, endDate: d.end }; });
+                detail = await call('PUT', `${API}/${row.clientId}/dates`, { levels });
+                Object.keys(draft).forEach((k) => delete draft[k]);
+                draw();
+                Dashboard.showToast(t('admin.saasImplDone'), 'success');
+                await load();
+            });
+        }
+    });
+}
+document.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-impl-act]');
+    if (!btn) return;
+    const row = state.rows.find((x) => x.clientId === Number(btn.dataset.implClient));
+    if (!row) return;
+    if (btn.dataset.implAct === 'start') openStart(row);
+    else openDetail(row);
+});
+})();

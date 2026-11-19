@@ -580,6 +580,7 @@ const {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
+    IMPLEMENTATION_LEVELS, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,
@@ -1651,6 +1652,125 @@ app.post('/api/admin/training-sessions/:id/cancel', requireAuth, requireAdmin, (
     trainLog(req, saved, 'update', 'main.colCapEstatus', TRAIN_STATUS_ES.scheduled, `${TRAIN_STATUS_ES.cancelled} · ${note}`);
     trainNotifyClient(req, saved, 'cancelled');
     res.json({ session: saasTrainPublic(req, saved) });
+});
+
+// --- Implementación Inicial (TI › Implementación Inicial, solo consulta; la lleva el implementador en Servicio a Cliente › Implementaciones) ---------------------------------------------------
+// Al contratar, SGN se implementa por NIVELES EN ORDEN y con cronograma. El implementador (SaaS) inicia la implementación de una compañía, elige quién la implementa, pone las fechas de cada nivel y marca lo terminado (el siguiente nivel
+// se abre al completar el anterior; los opcionales, como la API, pueden quedar «No aplica» sin bloquear). El cliente consulta el cronograma. «Implementador» = cualquier cuenta de SaaS con esta pantalla en su árbol de accesos.
+// Posición de cada botón (a) en SaasAdminCatalog.js: no cambiar el orden.
+const SAAS_IMPL_ITEM = 'saas-implementations';
+const SAAS_IMPL_LEAVES = { start: 'tabla::a0', edit: 'tabla::a1', mark: 'tabla::a2', reopen: 'tabla::a3' };
+const IMPL_LEVEL_ES = { contracted: 'Contratado', design: 'Diseño', structure: 'Estructura de Compañía', orgchart: 'Organigrama', layout: 'Layout de sitios', codes: 'Códigos y catálogos', access: 'Asignación de accesos', training: 'Capacitación', api: 'Conectividad API', startup: 'Arranque' };
+const IMPL_STATUS_ES = { pending: 'Pendiente', done: 'Completo', na: 'No aplica' };
+const IMPL_ERRORS = {
+    NOT_STARTED: [404, 'Esa compañía todavía no inicia su implementación.'], EXISTS: [409, 'Esa compañía ya tiene su implementación iniciada.'], CLOSED: [409, 'La implementación ya está finalizada.'],
+    LEVEL: [400, 'Ese nivel no existe.'], ORDER: [409, 'Antes hay que completar los niveles anteriores.'], ORDER_LATER: [409, 'Hay niveles posteriores ya completos: reábrelos primero.'], ALREADY: [409, 'El nivel ya está en ese estado.'],
+    NOT_OPTIONAL: [409, 'Solo un nivel opcional puede quedar «No aplica».'], ACTION: [400, 'Esa acción no existe.'], IMPLEMENTER: [400, 'Elige a una persona de SaaS que implemente.'], CLIENT: [400, 'Elige la compañía.'],
+    DATES_PAIR: [400, 'Cada nivel lleva sus dos fechas, inicio y fin, o ninguna.'], DATE: [400, 'Una fecha no es válida.'], DATES_ORDER: [400, 'El fin de un nivel no puede ir antes de su inicio.'],
+};
+const implFail = (res, result) => { const [status, message] = IMPL_ERRORS[result.error] || [400, 'No se pudo hacer.']; return res.status(status).json({ message, code: result.error, key: result.key }); };
+const saasImplHasScreen = (req) => !!req.user.isSaasSuperAdmin || getSaasUserGrants(req.user.sub).some((g) => g.itemId === SAAS_IMPL_ITEM);
+const saasImplCan = (req, key) => !!req.user.isSaasSuperAdmin || hasSaasGrant(getSaasUserGrants(req.user.sub), SAAS_IMPL_ITEM, SAAS_IMPL_LEAVES[key]);
+const implLevelEs = (impl, key) => { const l = impl.levels.find((x) => x.key === key); return `Nivel ${l ? l.position : '?'} · ${IMPL_LEVEL_ES[key] || key}`; };
+const implDatesEs = (level) => (level.startDate ? `${level.startDate} → ${level.endDate}` : 'Sin fechas');
+// La implementación con lo que ESTA cuenta puede hacer en cada nivel (completar, «No aplica» o reabrir) según el orden y sus botones.
+function saasImplDetail(req, clientId) {
+    const impl = getImplementation(clientId);
+    const client = getClientById(clientId);
+    const can = Object.fromEntries(Object.keys(SAAS_IMPL_LEAVES).map((k) => [k, saasImplCan(req, k)]));
+    if (impl) {
+        const open = impl.status === 'active';
+        impl.levels.forEach((l) => {
+            l.actions = {
+                done: open && can.mark && l.status === 'pending' && !impl.levels.some((x) => x.position < l.position && x.status === 'pending'),
+                na: open && can.mark && l.optional && l.status === 'pending',
+                reopen: open && can.reopen && l.status !== 'pending' && !impl.levels.some((x) => x.position > l.position && x.status === 'done'),
+            };
+        });
+    }
+    return { client: { id: clientId, name: client ? client.company_name : '' }, implementation: impl, can, implementers: can.start || can.edit ? listImplementerCandidates(SAAS_IMPL_ITEM) : [] };
+}
+function implLog(req, clientId, action, fieldKey, oldText, newText) {
+    const client = getClientById(clientId);
+    logSaasTableChange({ tableKey: 'implementaciones-saas', recordId: clientId, recordLabel: client ? client.company_name : String(clientId), action, fieldKey, oldValue: oldText, newValue: newText, changedBy: changedByLabel(req) });
+}
+function implGate(req, res, key) {
+    if (!saasImplHasScreen(req)) { res.status(403).json({ message: 'No tienes permiso para ver las implementaciones.' }); return null; }
+    if (key && !saasImplCan(req, key)) { res.status(403).json({ message: 'No tienes permiso para hacer esto.', code: 'FORBIDDEN' }); return null; }
+    const clientId = Number(req.params.clientId);
+    const client = Number.isInteger(clientId) ? getClientById(clientId) : null;
+    if (!client) { res.status(404).json({ message: 'Esa compañía no existe.' }); return null; }
+    return client;
+}
+app.get('/api/business/implementation', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const client = getClientById(req.user.clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({ clientName: client ? client.company_name : '', implementation: getImplementation(req.user.clientId) });
+});
+app.get('/api/admin/implementations', requireAuth, requireAdmin, (req, res) => {
+    if (!saasImplHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver las implementaciones.' });
+    const rows = listImplementationsSummary();
+    const can = Object.fromEntries(Object.keys(SAAS_IMPL_LEAVES).map((k) => [k, saasImplCan(req, k)]));
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        rows: rows.map((r) => ({ ...r, actions: { start: !r.started && can.start, open: r.started } })), can,
+        counts: { none: rows.filter((r) => r.status === 'none').length, active: rows.filter((r) => r.status === 'active').length, closed: rows.filter((r) => r.status === 'closed').length, all: rows.length },
+        implementers: can.start || can.edit ? listImplementerCandidates(SAAS_IMPL_ITEM) : [],
+    });
+});
+app.get('/api/admin/implementations/:clientId', requireAuth, requireAdmin, (req, res) => {
+    const client = implGate(req, res);
+    if (!client) return;
+    res.set('Cache-Control', 'no-store');
+    res.json(saasImplDetail(req, client.id));
+});
+app.post('/api/admin/implementations/:clientId/start', requireAuth, requireAdmin, (req, res) => {
+    const client = implGate(req, res, 'start');
+    if (!client) return;
+    if (client.status === 'inactivo') return implFail(res, { error: 'CLIENT' });
+    const wanted = (req.body || {}).implementerUserId;
+    const implementerUserId = wanted ? Number(wanted) : null;
+    if (implementerUserId && !listImplementerCandidates(SAAS_IMPL_ITEM).some((u) => u.id === implementerUserId)) return implFail(res, { error: 'IMPLEMENTER' });
+    const result = startImplementation(client.id, { implementerUserId, startedBy: changedByLabel(req) });
+    if (result.error) return implFail(res, result);
+    implLog(req, client.id, 'create', '', '', '');
+    if (result.implementation.implementer) implLog(req, client.id, 'update', 'main.implHistImplementer', '', result.implementation.implementer);
+    res.status(201).json(saasImplDetail(req, client.id));
+});
+app.put('/api/admin/implementations/:clientId/implementer', requireAuth, requireAdmin, (req, res) => {
+    const client = implGate(req, res, 'edit');
+    if (!client) return;
+    const wanted = (req.body || {}).implementerUserId;
+    const implementerUserId = wanted ? Number(wanted) : null;
+    if (implementerUserId && !listImplementerCandidates(SAAS_IMPL_ITEM).some((u) => u.id === implementerUserId)) return implFail(res, { error: 'IMPLEMENTER' });
+    const result = setImplementationImplementer(client.id, implementerUserId, changedByLabel(req));
+    if (result.error) return implFail(res, result);
+    if (result.before.implementer !== result.implementation.implementer) implLog(req, client.id, 'update', 'main.implHistImplementer', result.before.implementer, result.implementation.implementer);
+    res.json(saasImplDetail(req, client.id));
+});
+app.put('/api/admin/implementations/:clientId/dates', requireAuth, requireAdmin, (req, res) => {
+    const client = implGate(req, res, 'edit');
+    if (!client) return;
+    const levels = Array.isArray((req.body || {}).levels) ? req.body.levels : null;
+    if (!levels) return res.status(400).json({ message: 'Faltan las fechas de los niveles.', code: 'LEVEL' });
+    const result = setImplementationDates(client.id, levels, changedByLabel(req));
+    if (result.error) return implFail(res, result);
+    result.changed.forEach((key) => {
+        const before = result.before.levels.find((l) => l.key === key);
+        const after = result.implementation.levels.find((l) => l.key === key);
+        implLog(req, client.id, 'update', 'main.implHistDates', `${implLevelEs(result.before, key)}: ${implDatesEs(before)}`, `${implLevelEs(result.before, key)}: ${implDatesEs(after)}`);
+    });
+    res.json(saasImplDetail(req, client.id));
+});
+app.post('/api/admin/implementations/:clientId/levels/:key/:action', requireAuth, requireAdmin, (req, res) => {
+    const action = String(req.params.action);
+    const client = implGate(req, res, action === 'reopen' ? 'reopen' : 'mark');
+    if (!client) return;
+    const result = markImplementationLevel(client.id, String(req.params.key), action, changedByLabel(req));
+    if (result.error) return implFail(res, result);
+    implLog(req, client.id, 'update', 'main.implHistStatus', `${implLevelEs(result.implementation, req.params.key)}: ${IMPL_STATUS_ES[result.before]}`, `${implLevelEs(result.implementation, req.params.key)}: ${IMPL_STATUS_ES[result.status]}`);
+    res.json(saasImplDetail(req, client.id));
 });
 
 // --- SaaS admin: clients + per-client module entitlements ("Contrataciones") -
@@ -2938,7 +3058,7 @@ const SAAS_APP_STATUSES = ['active', 'inactive', 'development'];
 
 // Historial de cambios de las tablas de SaaS sin tabla propia (saas_table_changes):
 // Nuestras Apps, Nuestros Respaldos y Material de Apoyo. Con ?recordId=, solo esa fila.
-const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo', 'relacion-accesos', 'expansiones-saas', 'capacitacion-saas'];
+const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo', 'relacion-accesos', 'expansiones-saas', 'capacitacion-saas', 'implementaciones-saas'];
 function logSaasChange(req, tableKey, recordId, recordLabel, fieldKey, oldValue, newValue, action = 'update') {
     logSaasTableChange({ tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy: changedByLabel(req) });
 }

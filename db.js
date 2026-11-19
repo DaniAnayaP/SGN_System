@@ -11718,6 +11718,10 @@ const SAAS_TABLE_COLUMN_LEAVES = {
         screenItemId: 'saas-expansions', apartadoId: 'tabla',
         columns: ['folio', 'client', 'what', 'status', 'estimated', 'final', 'note'],
     },
+    'implementaciones-saas': {
+        screenItemId: 'saas-implementations', apartadoId: 'tabla',
+        columns: ['client', 'status', 'implementer', 'start', 'end', 'level', 'progress'],
+    },
     'capacitacion-saas': {
         screenItemId: 'saas-training', apartadoId: 'tabla',
         columns: ['folio', 'client', 'module', 'topic', 'when', 'duration', 'modality', 'trainer', 'status', 'attendees', 'notes'],
@@ -15066,6 +15070,201 @@ function publishTrainingNotice({ recipientIds, event, session, actorUserId, acto
     return ids;
 }
 
+// --- Implementación Inicial (TI › Implementación Inicial; la lleva el implementador de SaaS desde Servicio a Cliente › Implementaciones) ------------------------------------------------
+// Al contratar SGN, TODO lo que hay que dejar listo se trabaja por NIVELES EN ORDEN y con cronograma (Daniel, 2026-11-19): 1 Contratado, 2 Diseño, 3 Estructura de Compañía, 4 Organigrama, 5 Layout de sitios, 6 Códigos y catálogos,
+// 7 Asignación de accesos, 8 Capacitación, 9 Conectividad API (opcional: «No aplica» no bloquea) y 10 Arranque. El implementador (SaaS) inicia la implementación, pone las fechas de cada nivel y marca lo terminado; el siguiente nivel
+// se abre cuando el anterior queda completo; el cliente consulta el cronograma. La lista de niveles es DATOS: IMPLEMENTATION_LEVELS solo es la plantilla con la que arranca cada implementación; cada una guarda sus propios renglones
+// (implementation_levels), así que se pueden cambiar sin tocar a las que ya van. El nombre de cada nivel sale del textos (i18n) por su clave. Piezas siguientes: renglones de cada nivel con sus pantallas, y el cierre con doble confirmación.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS implementations (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id           INTEGER NOT NULL UNIQUE REFERENCES clients(id) ON DELETE CASCADE,
+        status              TEXT NOT NULL DEFAULT 'active',
+        implementer_user_id INTEGER,
+        implementer_name    TEXT NOT NULL DEFAULT '',
+        started_by          TEXT NOT NULL DEFAULT '',
+        started_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS implementation_levels (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        implementation_id INTEGER NOT NULL REFERENCES implementations(id) ON DELETE CASCADE,
+        position          INTEGER NOT NULL,
+        level_key         TEXT NOT NULL,
+        optional          INTEGER NOT NULL DEFAULT 0,
+        start_date        TEXT NOT NULL DEFAULT '',
+        end_date          TEXT NOT NULL DEFAULT '',
+        status            TEXT NOT NULL DEFAULT 'pending',
+        done_at           TEXT,
+        done_by           TEXT NOT NULL DEFAULT '',
+        UNIQUE (implementation_id, level_key)
+    );
+    CREATE TABLE IF NOT EXISTS implementation_events (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        implementation_id INTEGER NOT NULL REFERENCES implementations(id) ON DELETE CASCADE,
+        level_key         TEXT NOT NULL DEFAULT '',
+        event             TEXT NOT NULL,
+        detail            TEXT NOT NULL DEFAULT '',
+        by_label          TEXT NOT NULL DEFAULT '',
+        at                TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_implementation_events_impl ON implementation_events (implementation_id);
+`);
+const IMPLEMENTATION_LEVELS = [
+    { key: 'contracted', optional: 0 }, { key: 'design', optional: 0 }, { key: 'structure', optional: 0 }, { key: 'orgchart', optional: 0 }, { key: 'layout', optional: 0 },
+    { key: 'codes', optional: 0 }, { key: 'access', optional: 0 }, { key: 'training', optional: 0 }, { key: 'api', optional: 1 }, { key: 'startup', optional: 0 },
+];
+const IMPLEMENTATION_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const isRealDateOnly = (value) => {
+    if (!IMPLEMENTATION_DATE_RE.test(value)) return false;
+    const d = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value && Number(value.slice(0, 4)) >= 2020 && Number(value.slice(0, 4)) <= 2100;
+};
+// El lunes de la semana de una fecha (YYYY-MM-DD): el cronograma se dibuja por semanas.
+function mondayOfDateOnly(value) {
+    const d = new Date(`${value}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    return d;
+}
+const weekIndex = (fromMonday, value) => Math.round((mondayOfDateOnly(value).getTime() - fromMonday.getTime()) / (7 * 86400000)) + 1;
+// «Hoy» como fecha en la zona horaria de la compañía.
+function todayInClientZone(clientId) {
+    const client = getClientById(clientId);
+    let timeZone = (client && client.time_zone) || DEFAULT_CLIENT_TIME_ZONE;
+    if (!isValidTimeZone(timeZone)) timeZone = DEFAULT_CLIENT_TIME_ZONE;
+    return new Date().toLocaleDateString('en-CA', { timeZone });
+}
+// La implementación de una compañía lista para dibujar: cada nivel con su estado (done | na | current | locked), si va atrasado, sus semanas en el cronograma y el avance general.
+function getImplementation(clientId) {
+    const row = db.prepare('SELECT * FROM implementations WHERE client_id = ?').get(clientId);
+    if (!row) return null;
+    const rows = db.prepare('SELECT * FROM implementation_levels WHERE implementation_id = ? ORDER BY position').all(row.id);
+    const today = todayInClientZone(clientId);
+    const firstPending = rows.find((l) => l.status === 'pending');
+    const starts = rows.map((l) => l.start_date).filter(Boolean).sort();
+    const ends = rows.map((l) => l.end_date).filter(Boolean).sort();
+    const startDate = starts[0] || '';
+    const endDate = ends[ends.length - 1] || '';
+    const startMonday = startDate ? mondayOfDateOnly(startDate) : null;
+    const levels = rows.map((l) => ({
+        key: l.level_key, position: l.position, optional: !!l.optional, startDate: l.start_date, endDate: l.end_date, status: l.status, doneAt: l.done_at, doneBy: l.done_by,
+        state: l.status === 'done' ? 'done' : (l.status === 'na' ? 'na' : (firstPending && firstPending.id === l.id ? 'current' : 'locked')),
+        late: l.status === 'pending' && !!l.end_date && l.end_date < today,
+        fromWeek: startMonday && l.start_date ? weekIndex(startMonday, l.start_date) : null,
+        toWeek: startMonday && l.end_date ? weekIndex(startMonday, l.end_date) : null,
+    }));
+    const applicable = levels.filter((l) => l.status !== 'na');
+    const weekCount = startMonday && endDate ? weekIndex(startMonday, endDate) : 0;
+    let currentWeek = null;
+    if (startMonday && weekCount) currentWeek = Math.min(Math.max(weekIndex(startMonday, today), 0), weekCount + 1);
+    return {
+        id: row.id, clientId, status: row.status, implementerUserId: row.implementer_user_id, implementer: row.implementer_name, startedBy: row.started_by, startedAt: row.started_at, today,
+        startDate, endDate, weekCount, currentWeek,
+        currentKey: firstPending ? firstPending.level_key : '', done: applicable.filter((l) => l.status === 'done').length, total: applicable.length,
+        progress: applicable.length ? Math.round((100 * applicable.filter((l) => l.status === 'done').length) / applicable.length) : 0,
+        levels,
+    };
+}
+function logImplementationEvent(implementationId, levelKey, event, detail, byLabel) {
+    db.prepare('INSERT INTO implementation_events (implementation_id, level_key, event, detail, by_label) VALUES (?, ?, ?, ?, ?)').run(implementationId, levelKey || '', event, String(detail || '').slice(0, 300), byLabel || '');
+}
+// Un renglón por compañía que no esté inactiva, con su avance (o «sin iniciar»): lo que ve el implementador en su pantalla.
+function listImplementationsSummary() {
+    return listClients().filter((c) => c.status !== 'inactivo').map((c) => {
+        const impl = getImplementation(c.id);
+        return {
+            clientId: c.id, client: c.company_name, createdAt: impl ? impl.startedAt : c.created_at, started: !!impl, status: impl ? impl.status : 'none', implementer: impl ? impl.implementer : '',
+            startDate: impl ? impl.startDate : '', endDate: impl ? impl.endDate : '', currentKey: impl ? impl.currentKey : '', progress: impl ? impl.progress : 0, done: impl ? impl.done : 0, total: impl ? impl.total : 0,
+            late: impl ? impl.levels.some((l) => l.late) : false,
+        };
+    });
+}
+// Las cuentas de SaaS que pueden ser «el implementador»: las que tienen la pantalla Implementaciones (y el administrador principal).
+function listImplementerCandidates(itemId) {
+    const ids = listSaasUserIdsForScreen(itemId);
+    if (!ids.length) return [];
+    return db.prepare(`SELECT id, name, username FROM users WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY name COLLATE NOCASE`).all(...ids);
+}
+function startImplementation(clientId, { implementerUserId, startedBy }) {
+    return db.transaction(() => {
+        if (db.prepare('SELECT 1 FROM implementations WHERE client_id = ?').get(clientId)) return { error: 'EXISTS' };
+        const implementer = implementerUserId ? db.prepare('SELECT id, name FROM users WHERE id = ?').get(implementerUserId) : null;
+        const id = db.prepare('INSERT INTO implementations (client_id, implementer_user_id, implementer_name, started_by) VALUES (?, ?, ?, ?)').run(clientId, implementer ? implementer.id : null, implementer ? implementer.name : '', startedBy || '').lastInsertRowid;
+        const insert = db.prepare('INSERT INTO implementation_levels (implementation_id, position, level_key, optional) VALUES (?, ?, ?, ?)');
+        IMPLEMENTATION_LEVELS.forEach((l, i) => insert.run(id, i + 1, l.key, l.optional));
+        logImplementationEvent(id, '', 'started', implementer ? implementer.name : '', startedBy);
+        return { implementation: getImplementation(clientId) };
+    })();
+}
+function setImplementationImplementer(clientId, implementerUserId, byLabel) {
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    const user = implementerUserId ? db.prepare('SELECT id, name FROM users WHERE id = ?').get(implementerUserId) : null;
+    if (implementerUserId && !user) return { error: 'IMPLEMENTER' };
+    db.transaction(() => {
+        db.prepare("UPDATE implementations SET implementer_user_id = ?, implementer_name = ?, updated_at = datetime('now') WHERE id = ?").run(user ? user.id : null, user ? user.name : '', impl.id);
+        logImplementationEvent(impl.id, '', 'implementer', user ? user.name : '', byLabel);
+    })();
+    return { before: impl, implementation: getImplementation(clientId) };
+}
+// Las fechas de todos los niveles de una vez: [{ key, startDate, endDate }]; una fecha vacía quita las dos de ese nivel. Cada nivel lleva sus dos fechas o ninguna, y el fin no va antes del inicio.
+function setImplementationDates(clientId, updates, byLabel) {
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
+    const byKey = new Map(impl.levels.map((l) => [l.key, l]));
+    const clean = [];
+    for (const u of updates || []) {
+        if (!u || !byKey.has(u.key)) return { error: 'LEVEL' };
+        const start = String(u.startDate || '').trim();
+        const end = String(u.endDate || '').trim();
+        if ((start && !end) || (!start && end)) return { error: 'DATES_PAIR', key: u.key };
+        if (start && (!isRealDateOnly(start) || !isRealDateOnly(end))) return { error: 'DATE', key: u.key };
+        if (start && end < start) return { error: 'DATES_ORDER', key: u.key };
+        clean.push({ key: u.key, start, end });
+    }
+    const changed = clean.filter((u) => u.start !== byKey.get(u.key).startDate || u.end !== byKey.get(u.key).endDate);
+    db.transaction(() => {
+        const update = db.prepare('UPDATE implementation_levels SET start_date = ?, end_date = ? WHERE implementation_id = ? AND level_key = ?');
+        changed.forEach((u) => {
+            update.run(u.start, u.end, impl.id, u.key);
+            logImplementationEvent(impl.id, u.key, 'dates', u.start ? `${u.start} → ${u.end}` : '', byLabel);
+        });
+        if (changed.length) db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
+    })();
+    return { before: impl, changed: changed.map((u) => u.key), implementation: getImplementation(clientId) };
+}
+// Marcar un nivel: 'done' (solo si todos los anteriores ya están completos o «No aplica»), 'na' (solo los niveles opcionales, como la API) o 'reopen' (solo si ningún nivel posterior está completo).
+function markImplementationLevel(clientId, levelKey, action, byLabel) {
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
+    const level = impl.levels.find((l) => l.key === levelKey);
+    if (!level) return { error: 'LEVEL' };
+    const before = level.status;
+    let next;
+    if (action === 'done') {
+        if (level.status !== 'pending') return { error: 'ALREADY' };
+        if (impl.levels.some((l) => l.position < level.position && l.status === 'pending')) return { error: 'ORDER' };
+        next = 'done';
+    } else if (action === 'na') {
+        if (!level.optional) return { error: 'NOT_OPTIONAL' };
+        if (level.status !== 'pending') return { error: 'ALREADY' };
+        next = 'na';
+    } else if (action === 'reopen') {
+        if (level.status === 'pending') return { error: 'ALREADY' };
+        if (impl.levels.some((l) => l.position > level.position && l.status === 'done')) return { error: 'ORDER_LATER' };
+        next = 'pending';
+    } else return { error: 'ACTION' };
+    db.transaction(() => {
+        db.prepare('UPDATE implementation_levels SET status = ?, done_at = ?, done_by = ? WHERE implementation_id = ? AND level_key = ?')
+            .run(next, next === 'pending' ? null : new Date().toISOString().slice(0, 19).replace('T', ' '), next === 'pending' ? '' : (byLabel || ''), impl.id, levelKey);
+        logImplementationEvent(impl.id, levelKey, next === 'pending' ? 'reopened' : (next === 'done' ? 'done' : 'na'), '', byLabel);
+        db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
+    })();
+    return { before, status: next, implementation: getImplementation(clientId) };
+}
+
 // --- Query helpers: permission grants (módulo / apartado / pantalla) ---------
 // (Perfiles/profiles removed -- Roles is now Puesto de Trabajo-based, see
 // job_position_grants/getJobPositionGrants above.)
@@ -17809,6 +18008,7 @@ module.exports = {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
+    IMPLEMENTATION_LEVELS, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,

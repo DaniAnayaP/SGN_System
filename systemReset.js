@@ -56,6 +56,9 @@ const TABLES = {
     expansion_request_events: { action: WIPE, group: 'captures' },
     training_sessions: { action: WIPE, group: 'captures' }, // TI › Configuración Compañía › Sesiones de capacitación (las registra el implementador)
     training_session_attendees: { action: WIPE, group: 'captures' },
+    implementations: { action: WIPE, group: 'captures' }, // TI › Implementación Inicial (la lleva el implementador de SaaS)
+    implementation_levels: { action: WIPE, group: 'captures' },
+    implementation_events: { action: WIPE, group: 'captures' },
     sku_requests: { action: WIPE, group: 'captures' },
     sku_request_events: { action: WIPE, group: 'captures' },
     fixed_assets: { action: WIPE, group: 'captures' }, // Alta Activos (2026-11-12)
