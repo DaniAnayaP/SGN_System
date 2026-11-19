@@ -19,6 +19,7 @@
         },
         { "id": "dashboard", "labelKey": "menu.dashboard", "icon": "bx-bar-chart-alt-2", "href": "Inicio-en.html" },
         { "id": "planes-trabajo", "labelKey": "menu.workPlans", "icon": "bx-calendar-check", "href": "PlanesTrabajo.html", "permissionOnly": true },
+        { "id": "equipo-trabajo", "labelKey": "menu.teamWork", "icon": "bx-group", "href": "EquipoTrabajo.html", "permissionOnly": true },
         { "id": "btn-marcadores", "labelKey": "main.bookmarks", "icon": "bx-bookmarks", "href": "#", "permissionOnly": true },
         {
           "id": "btn-configuracion", "labelKey": "main.settings", "icon": "bx-cog", "href": "#", "permissionOnly": true,

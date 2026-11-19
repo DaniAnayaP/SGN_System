@@ -3868,6 +3868,8 @@ const TABLE_GRANT_PATHS = {
     'tipos-cliente': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-cliente' },
     // Planes de trabajo: pantalla GENERAL (sección main, junto a Inicio, Panel y Tablero), sin submenú: se entra con la hoja main/planes-trabajo
     'work_plans': { sectionId: 'main', itemId: 'planes-trabajo', submenuPrefix: '' },
+    // Administración de Equipo de Trabajo: pantalla GENERAL (sección main), sin submenú: se entra con la hoja main/equipo-trabajo
+    'team_activities': { sectionId: 'main', itemId: 'equipo-trabajo', submenuPrefix: '' },
 };
 
 // menu.json is the single source of truth for where a column actually
@@ -16724,6 +16726,347 @@ function importWorkPlanItems(clientId, userId, forTestAccount, planId, rows, { c
     })();
     return { ...out, created: planned.length, changes: [{ action: 'create', recordLabel: `Carga desde Excel: ${planned.length} renglones` }] };
 }
+// ---- Administración de Equipo de Trabajo (Daniel, 2026-11-19, «Sí a las recomendaciones») · PIEZA 1: el tablero y las actividades ----
+// Una actividad (fija, eventual o periódica; con marca urgente) se define al crearla: cómo se hace (presencial, remoto o mixta), en qué sitios (centros de costos), de qué área y departamento y para cuándo. Se asigna ahí mismo a UNA O MÁS personas (de tu
+// equipo o de cualquier otra parte de la compañía) o queda «por asignar». Cada persona lleva SU propio estado (por confirmar → confirmada → en curso ⇄ en pausa → en validación → hecha); la columna del tablero se calcula de todas (teamActivityState).
+// Todo movimiento queda en team_activity_events (quién y cuándo; nadie lo edita): es la línea del tiempo. Piezas siguientes: «La tomo», pases con aprobación del jefe directo y avisos de campana (2), línea del tiempo y registro (3), foto y sitio del día (4), liga con
+// Planes de trabajo (5), periódicas automáticas (6) y la App (7).
+const TEAM_KINDS = ['fija', 'eventual', 'periodica'];
+const TEAM_REALIZATIONS = ['presencial', 'remoto', 'mixta'];
+const TEAM_LIMITS = { title: 160, description: 1000, reason: 300, area: 60, people: 20, sites: 10, activities: 5000, seats: 20 };
+db.exec(`
+    CREATE TABLE IF NOT EXISTS team_activities (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id          INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data       INTEGER NOT NULL DEFAULT 0,
+        title              TEXT NOT NULL,
+        description        TEXT NOT NULL DEFAULT '',
+        kind               TEXT NOT NULL DEFAULT 'eventual',
+        urgent             INTEGER NOT NULL DEFAULT 0,
+        realization        TEXT NOT NULL DEFAULT 'presencial',
+        site_ids           TEXT NOT NULL DEFAULT '[]',
+        area               TEXT NOT NULL DEFAULT '',
+        department         TEXT NOT NULL DEFAULT '',
+        due_date           TEXT,
+        seats_needed       INTEGER NOT NULL DEFAULT 1,
+        claim_scope        TEXT NOT NULL DEFAULT '',
+        status             TEXT NOT NULL DEFAULT 'active',
+        cancel_reason      TEXT NOT NULL DEFAULT '',
+        created_by_user_id INTEGER,
+        created_by_label   TEXT NOT NULL DEFAULT '',
+        created_at         TEXT NOT NULL,
+        updated_at         TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_team_activities_client ON team_activities (client_id, is_test_data, status);
+    CREATE TABLE IF NOT EXISTS team_activity_assignees (
+        id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+        activity_id           INTEGER NOT NULL REFERENCES team_activities(id) ON DELETE CASCADE,
+        user_id               INTEGER NOT NULL,
+        status                TEXT NOT NULL DEFAULT 'assigned',
+        is_principal          INTEGER NOT NULL DEFAULT 0,
+        pause_reason          TEXT NOT NULL DEFAULT '',
+        assigned_by_user_id   INTEGER,
+        assigned_at           TEXT NOT NULL,
+        confirmed_at          TEXT,
+        started_at            TEXT,
+        paused_at             TEXT,
+        review_at             TEXT,
+        done_at               TEXT,
+        validated_by_user_id  INTEGER,
+        UNIQUE (activity_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_team_assignees_user ON team_activity_assignees (user_id, status);
+    CREATE TABLE IF NOT EXISTS team_activity_events (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        activity_id    INTEGER NOT NULL REFERENCES team_activities(id) ON DELETE CASCADE,
+        user_id        INTEGER,
+        actor_user_id  INTEGER,
+        actor_label    TEXT NOT NULL DEFAULT '',
+        event          TEXT NOT NULL,
+        detail         TEXT NOT NULL DEFAULT '',
+        created_at     TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_team_events_activity ON team_activity_events (activity_id, id);
+`);
+const teamNow = () => new Date().toISOString().replace('T', ' ').replace('Z', '');
+// En qué columna del tablero está una actividad, según lo que lleva cada persona: sin personas = por asignar; con responsable principal, lo que ella termina vale por todas.
+function teamActivityState(assignees, cancelled) {
+    if (cancelled) return 'cancelled';
+    if (!assignees.length) return 'unassigned';
+    const basis = assignees.filter((a) => a.isPrincipal);
+    const finish = basis.length ? basis : assignees;
+    if (finish.every((a) => a.status === 'done')) return 'done';
+    if (finish.every((a) => a.status === 'review' || a.status === 'done')) return 'review';
+    const st = assignees.map((a) => a.status);
+    if (st.includes('in_progress')) return 'in_progress';
+    if (st.includes('paused')) return 'paused';
+    if (st.includes('review') || st.includes('done')) return 'in_progress';
+    return 'assigned';
+}
+// Quién mira: el administrador del cliente ve todo; los demás, lo que crearon, lo que tienen y lo de las personas a su cargo.
+function teamViewer(clientId, userId, isAdmin) {
+    return { userId, isAdmin: !!isAdmin, reports: new Set(workPlanDirectReports(clientId, userId).map((r) => r.userId)) };
+}
+function teamNames(clientId) {
+    const out = new Map();
+    db.prepare('SELECT id, name, username FROM users WHERE client_id = ?').all(clientId).forEach((u) => out.set(u.id, implementationLine(u.name) || u.username));
+    return out;
+}
+function teamSiteMap(clientId, forTest) {
+    const out = new Map();
+    listCostCenters(clientId, forTest).forEach((c) => out.set(c.id, { id: c.id, code: c.code, name: c.name, siteCode: c.site_code || '' }));
+    return out;
+}
+function teamMapAssignee(a, names, viewer) {
+    return {
+        userId: a.user_id, name: names.get(a.user_id) || '', status: a.status, isPrincipal: !!a.is_principal, pauseReason: a.pause_reason, assignedAt: a.assigned_at, confirmedAt: a.confirmed_at, startedAt: a.started_at,
+        pausedAt: a.paused_at, reviewAt: a.review_at, doneAt: a.done_at, isMe: a.user_id === viewer.userId, isMine: viewer.reports.has(a.user_id),
+    };
+}
+// Lo que esta persona puede hacer con la actividad (el servidor decide; la pantalla solo dibuja los botones).
+function teamActivityCan(clientId, row, assignees, viewer) {
+    const creator = row.created_by_user_id === viewer.userId;
+    const bossOfAny = assignees.some((a) => viewer.reports.has(a.userId));
+    const open = row.status === 'active';
+    const mine = assignees.find((a) => a.userId === viewer.userId);
+    const reviewers = assignees.filter((a) => a.status === 'review' && (viewer.isAdmin || creator || viewer.reports.has(a.userId)));
+    return {
+        edit: open && (viewer.isAdmin || creator), cancel: open && (viewer.isAdmin || creator) && !(assignees.length && assignees.every((a) => a.status === 'done')),
+        assign: open && (viewer.isAdmin || creator || bossOfAny), unassign: open && (viewer.isAdmin || creator || bossOfAny),
+        confirm: open && !!mine && mine.status === 'assigned', start: open && !!mine && (mine.status === 'assigned' || mine.status === 'confirmed'),
+        pause: open && !!mine && mine.status === 'in_progress', resume: open && !!mine && mine.status === 'paused', submit: open && !!mine && mine.status === 'in_progress',
+        validate: open && reviewers.length > 0, returnIt: open && reviewers.length > 0, reviewUserIds: reviewers.map((a) => a.userId),
+    };
+}
+function teamMapActivity(row, assigneeRows, names, sites, viewer, clientId) {
+    const assignees = assigneeRows.map((a) => teamMapAssignee(a, names, viewer));
+    let siteIds = [];
+    try { siteIds = JSON.parse(row.site_ids); } catch (err) { siteIds = []; }
+    const out = {
+        id: row.id, title: row.title, description: row.description, kind: row.kind, urgent: !!row.urgent, realization: row.realization, area: row.area, department: row.department, dueDate: row.due_date || '',
+        seatsNeeded: row.seats_needed, claimScope: row.claim_scope, sites: siteIds.map((id) => sites.get(id)).filter(Boolean), status: teamActivityState(assignees, row.status === 'cancelled'), cancelReason: row.cancel_reason,
+        createdBy: { id: row.created_by_user_id, name: names.get(row.created_by_user_id) || row.created_by_label }, createdAt: row.created_at, updatedAt: row.updated_at, assignees,
+    };
+    out.can = teamActivityCan(clientId, row, assignees, viewer);
+    out.myStatus = (assignees.find((a) => a.userId === viewer.userId) || {}).status || '';
+    return out;
+}
+const teamSees = (row, assignees, viewer) => viewer.isAdmin || row.created_by_user_id === viewer.userId || assignees.some((a) => a.user_id === viewer.userId || viewer.reports.has(a.user_id));
+// La lista del tablero: lo que esta persona puede ver (sin las canceladas y sin las terminadas hace más de 90 días; el registro de la pieza 3 trae lo viejo), con los catálogos para los filtros y para crear.
+function listTeamActivities(clientId, userId, forTest, isAdmin) {
+    const viewer = teamViewer(clientId, userId, isAdmin);
+    const names = teamNames(clientId);
+    const sites = teamSiteMap(clientId, forTest);
+    const rows = db.prepare("SELECT * FROM team_activities WHERE client_id = ? AND is_test_data = ? AND status = 'active' ORDER BY id DESC LIMIT ?").all(clientId, forTest ? 1 : 0, TEAM_LIMITS.activities);
+    const byActivity = new Map();
+    if (rows.length) {
+        db.prepare(`SELECT * FROM team_activity_assignees WHERE activity_id IN (${rows.map(() => '?').join(',')}) ORDER BY id`).all(...rows.map((r) => r.id)).forEach((a) => { if (!byActivity.has(a.activity_id)) byActivity.set(a.activity_id, []); byActivity.get(a.activity_id).push(a); });
+    }
+    const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().replace('T', ' ');
+    const activities = [];
+    rows.forEach((r) => {
+        const as = byActivity.get(r.id) || [];
+        if (!teamSees(r, as, viewer)) return;
+        if (as.length && as.every((a) => a.status === 'done') && as.every((a) => (a.done_at || '') < cutoff)) return;
+        activities.push(teamMapActivity(r, as, names, sites, viewer, clientId));
+    });
+    const reports = new Set(viewer.reports);
+    const people = listActiveUsersBrief(clientId, forTest).map((u) => ({ id: u.id, name: implementationLine(u.name) || u.username, mine: reports.has(u.id) }));
+    const departments = listContractedDepartmentKeys(clientId).map((key) => ({ key, labelKey: (MODULE_CATALOG.find((m) => m.key === key) || {}).labelKey || '' }));
+    return { activities, people, sites: [...sites.values()], departments, me: { id: userId, name: names.get(userId) || '', isAdmin: !!isAdmin, hasTeam: reports.size > 0 } };
+}
+function teamActivityRowFor(clientId, forTest, id) {
+    const n = Number(id);
+    return Number.isInteger(n) ? db.prepare('SELECT * FROM team_activities WHERE id = ? AND client_id = ? AND is_test_data = ?').get(n, clientId, forTest ? 1 : 0) : null;
+}
+function teamDetail(clientId, userId, forTest, isAdmin, row, withEvents) {
+    const viewer = teamViewer(clientId, userId, isAdmin);
+    const names = teamNames(clientId);
+    const as = db.prepare('SELECT * FROM team_activity_assignees WHERE activity_id = ? ORDER BY id').all(row.id);
+    const out = teamMapActivity(row, as, names, teamSiteMap(clientId, forTest), viewer, clientId);
+    if (withEvents) {
+        out.events = db.prepare('SELECT * FROM team_activity_events WHERE activity_id = ? ORDER BY id').all(row.id).map((e) => ({
+            id: e.id, event: e.event, userId: e.user_id, userName: e.user_id == null ? '' : (names.get(e.user_id) || ''), actorName: e.actor_label || names.get(e.actor_user_id) || '', detail: e.detail, createdAt: e.created_at,
+        }));
+    }
+    return out;
+}
+function getTeamActivity(clientId, userId, forTest, isAdmin, id) {
+    const row = teamActivityRowFor(clientId, forTest, id);
+    if (!row) return { error: 'TEAM_NOT_FOUND' };
+    const viewer = teamViewer(clientId, userId, isAdmin);
+    const as = db.prepare('SELECT * FROM team_activity_assignees WHERE activity_id = ?').all(row.id);
+    if (!teamSees(row, as, viewer)) return { error: 'TEAM_NOT_FOUND' };
+    return { activity: teamDetail(clientId, userId, forTest, isAdmin, row, true) };
+}
+const teamEvent = (activityId, userId, actorUserId, actorLabel, event, detail) => db.prepare('INSERT INTO team_activity_events (activity_id, user_id, actor_user_id, actor_label, event, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(activityId, userId == null ? null : userId, actorUserId, actorLabel || '', event, String(detail || '').slice(0, 400), teamNow());
+// Lo que viene del formulario de crear o cambiar → datos limpios: { value } o { error, field }.
+function cleanTeamActivityFields(clientId, forTest, body, partial) {
+    const b = body && typeof body === 'object' ? body : {};
+    const has = (k) => Object.prototype.hasOwnProperty.call(b, k);
+    const out = {};
+    if (!partial || has('title')) {
+        const title = typeof b.title === 'string' ? implementationLine(b.title) : '';
+        if (!title) return { error: 'TEAM_TITLE_REQUIRED', field: 'title' };
+        if (workPlanLen(title) > TEAM_LIMITS.title) return { error: 'TEAM_TITLE_TOO_LONG', field: 'title' };
+        out.title = title;
+    }
+    if (!partial || has('description')) { const d = cleanWorkPlanLongText(b.description, TEAM_LIMITS.description); if (d.error) return { error: 'TEAM_TEXT_TOO_LONG', field: 'description' }; out.description = d.value; }
+    if (!partial || has('kind')) { const kind = b.kind === undefined || b.kind === '' ? 'eventual' : b.kind; if (!TEAM_KINDS.includes(kind)) return { error: 'TEAM_KIND_INVALID', field: 'kind' }; out.kind = kind; }
+    if (!partial || has('urgent')) out.urgent = b.urgent === true || b.urgent === 1 || b.urgent === '1' ? 1 : 0;
+    if (!partial || has('realization')) { const r = b.realization === undefined || b.realization === '' ? 'presencial' : b.realization; if (!TEAM_REALIZATIONS.includes(r)) return { error: 'TEAM_REALIZATION_INVALID', field: 'realization' }; out.realization = r; }
+    if (!partial || has('siteIds')) {
+        const raw = Array.isArray(b.siteIds) ? b.siteIds : [];
+        const valid = teamSiteMap(clientId, forTest);
+        const ids = [...new Set(raw.map(Number))];
+        if (ids.length > TEAM_LIMITS.sites || ids.some((id) => !valid.has(id))) return { error: 'TEAM_SITE_INVALID', field: 'siteIds' };
+        out.site_ids = JSON.stringify(ids);
+    }
+    if (!partial || has('area')) { const area = typeof b.area === 'string' ? implementationLine(b.area) : ''; if (workPlanLen(area) > TEAM_LIMITS.area) return { error: 'TEAM_TEXT_TOO_LONG', field: 'area' }; out.area = area; }
+    if (!partial || has('department')) {
+        const department = typeof b.department === 'string' ? b.department.trim() : '';
+        if (department && !listContractedDepartmentKeys(clientId).includes(department)) return { error: 'TEAM_DEPARTMENT_INVALID', field: 'department' };
+        out.department = department;
+    }
+    if (!partial || has('dueDate')) { const due = typeof b.dueDate === 'string' ? b.dueDate.trim() : ''; if (due && !isRealDateOnly(due)) return { error: 'TEAM_DATE_INVALID', field: 'dueDate' }; out.due_date = due || null; }
+    if (!partial || has('seatsNeeded')) { const n = b.seatsNeeded === undefined || b.seatsNeeded === '' ? 1 : Number(b.seatsNeeded); if (!Number.isInteger(n) || n < 1 || n > TEAM_LIMITS.seats) return { error: 'TEAM_SEATS_INVALID', field: 'seatsNeeded' }; out.seats_needed = n; }
+    return { value: out };
+}
+// Las personas que se pueden asignar: usuarios activos de la compañía (una cuenta de prueba solo ve cuentas de prueba, igual que en Planes).
+function cleanTeamPeople(clientId, forTest, userIds) {
+    const raw = Array.isArray(userIds) ? userIds.map(Number) : [];
+    const ids = [...new Set(raw)];
+    if (ids.length > TEAM_LIMITS.people) return { error: 'TEAM_PEOPLE_LIMIT' };
+    const valid = new Set(listActiveUsersBrief(clientId, forTest).map((u) => u.id));
+    if (ids.some((id) => !Number.isInteger(id) || !valid.has(id))) return { error: 'TEAM_PERSON_INVALID' };
+    return { ids };
+}
+function createTeamActivity(clientId, userId, forTest, isAdmin, body, byLabel) {
+    const fields = cleanTeamActivityFields(clientId, forTest, body, false);
+    if (fields.error) return fields;
+    const people = cleanTeamPeople(clientId, forTest, body && body.userIds);
+    if (people.error) return people;
+    const principal = body && body.principalUserId != null && body.principalUserId !== '' ? Number(body.principalUserId) : null;
+    if (principal != null && !people.ids.includes(principal)) return { error: 'TEAM_PERSON_INVALID' };
+    const v = fields.value;
+    const now = teamNow();
+    let id = 0;
+    db.transaction(() => {
+        id = Number(db.prepare(`INSERT INTO team_activities (client_id, is_test_data, title, description, kind, urgent, realization, site_ids, area, department, due_date, seats_needed, created_by_user_id, created_by_label, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(clientId, forTest ? 1 : 0, v.title, v.description, v.kind, v.urgent, v.realization, v.site_ids, v.area, v.department, v.due_date, v.seats_needed, userId, byLabel || '', now, now).lastInsertRowid);
+        teamEvent(id, null, userId, byLabel, 'created', v.title);
+        people.ids.forEach((uid) => {
+            db.prepare('INSERT INTO team_activity_assignees (activity_id, user_id, status, is_principal, assigned_by_user_id, assigned_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, uid, 'assigned', uid === principal ? 1 : 0, userId, now);
+            teamEvent(id, uid, userId, byLabel, 'assigned', '');
+        });
+    })();
+    return { activity: teamDetail(clientId, userId, forTest, isAdmin, teamActivityRowFor(clientId, forTest, id), true) };
+}
+// Todos los movimientos de una actividad. action: edit | assign | unassign | cancel | confirm | start | pause | resume | submit | validate | return. Cada uno revisa quién puede (teamActivityCan) y deja su evento.
+function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action, body, byLabel) {
+    const found = getTeamActivity(clientId, userId, forTest, isAdmin, activityId);
+    if (found.error) return found;
+    const row = teamActivityRowFor(clientId, forTest, activityId);
+    const detail = found.activity;
+    const can = detail.can;
+    const b = body && typeof body === 'object' ? body : {};
+    const now = teamNow();
+    const mineRow = db.prepare('SELECT * FROM team_activity_assignees WHERE activity_id = ? AND user_id = ?').get(row.id, userId);
+    const touch = () => db.prepare('UPDATE team_activities SET updated_at = ? WHERE id = ?').run(now, row.id);
+    const reasonOf = () => { const r = typeof b.reason === 'string' ? workPlanText(b.reason) : ''; return r; };
+    if (row.status !== 'active') return { error: 'TEAM_CANCELLED' };
+    const done = (extra) => ({ activity: teamDetail(clientId, userId, forTest, isAdmin, teamActivityRowFor(clientId, forTest, row.id), true), ...(extra || {}) });
+    if (action === 'edit') {
+        if (!can.edit) return { error: 'TEAM_NOT_ALLOWED' };
+        const fields = cleanTeamActivityFields(clientId, forTest, b, true);
+        if (fields.error) return fields;
+        const keys = Object.keys(fields.value);
+        if (!keys.length) return done();
+        db.transaction(() => { db.prepare(`UPDATE team_activities SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`).run(...keys.map((k) => fields.value[k]), now, row.id); teamEvent(row.id, null, userId, byLabel, 'edited', keys.join(', ')); })();
+        return done();
+    }
+    if (action === 'cancel') {
+        if (!can.cancel) return { error: 'TEAM_NOT_ALLOWED' };
+        const reason = reasonOf();
+        if (!reason) return { error: 'TEAM_REASON_REQUIRED' };
+        if (workPlanLen(reason) > TEAM_LIMITS.reason) return { error: 'TEAM_TEXT_TOO_LONG' };
+        db.transaction(() => { db.prepare("UPDATE team_activities SET status = 'cancelled', cancel_reason = ?, updated_at = ? WHERE id = ?").run(reason, now, row.id); teamEvent(row.id, null, userId, byLabel, 'cancelled', reason); })();
+        return done();
+    }
+    if (action === 'assign') {
+        if (!can.assign) return { error: 'TEAM_NOT_ALLOWED' };
+        const people = cleanTeamPeople(clientId, forTest, b.userIds);
+        if (people.error) return people;
+        const current = new Set(detail.assignees.map((a) => a.userId));
+        const fresh = people.ids.filter((id) => !current.has(id));
+        if (!fresh.length) return { error: 'TEAM_PEOPLE_EXIST' };
+        if (current.size + fresh.length > TEAM_LIMITS.people) return { error: 'TEAM_PEOPLE_LIMIT' };
+        const principal = b.principalUserId != null && b.principalUserId !== '' ? Number(b.principalUserId) : null;
+        if (principal != null && !fresh.includes(principal) && !current.has(principal)) return { error: 'TEAM_PERSON_INVALID' };
+        db.transaction(() => {
+            fresh.forEach((uid) => { db.prepare('INSERT INTO team_activity_assignees (activity_id, user_id, status, is_principal, assigned_by_user_id, assigned_at) VALUES (?, ?, ?, 0, ?, ?)').run(row.id, uid, 'assigned', userId, now); teamEvent(row.id, uid, userId, byLabel, 'assigned', ''); });
+            if (principal != null) { db.prepare('UPDATE team_activity_assignees SET is_principal = CASE WHEN user_id = ? THEN 1 ELSE 0 END WHERE activity_id = ?').run(principal, row.id); }
+            touch();
+        })();
+        return done();
+    }
+    if (action === 'unassign') {
+        if (!can.unassign) return { error: 'TEAM_NOT_ALLOWED' };
+        const uid = Number(b.userId);
+        const target = detail.assignees.find((a) => a.userId === uid);
+        if (!target) return { error: 'TEAM_PERSON_INVALID' };
+        if (!['assigned', 'confirmed'].includes(target.status)) return { error: 'TEAM_STATE' };
+        db.transaction(() => { db.prepare('DELETE FROM team_activity_assignees WHERE activity_id = ? AND user_id = ?').run(row.id, uid); teamEvent(row.id, uid, userId, byLabel, 'unassigned', ''); touch(); })();
+        return done();
+    }
+    if (['confirm', 'start', 'pause', 'resume', 'submit'].includes(action)) {
+        if (!mineRow) return { error: 'TEAM_NOT_ALLOWED' };
+        const st = mineRow.status;
+        const set = (cols, event, text) => db.transaction(() => {
+            const keys = Object.keys(cols);
+            db.prepare(`UPDATE team_activity_assignees SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(...keys.map((k) => cols[k]), mineRow.id);
+            if (Array.isArray(event)) event.forEach(([e, t2]) => teamEvent(row.id, userId, userId, byLabel, e, t2)); else teamEvent(row.id, userId, userId, byLabel, event, text);
+            touch();
+        })();
+        if (action === 'confirm') { if (st !== 'assigned') return { error: 'TEAM_STATE' }; set({ status: 'confirmed', confirmed_at: now }, 'confirmed', ''); return done(); }
+        if (action === 'start') {
+            if (st !== 'assigned' && st !== 'confirmed') return { error: 'TEAM_STATE' };
+            set(st === 'assigned' ? { status: 'in_progress', confirmed_at: now, started_at: now } : { status: 'in_progress', started_at: now }, st === 'assigned' ? [['confirmed', ''], ['started', '']] : 'started', '');
+            return done();
+        }
+        if (action === 'pause') {
+            if (st !== 'in_progress') return { error: 'TEAM_STATE' };
+            const reason = reasonOf();
+            if (!reason) return { error: 'TEAM_REASON_REQUIRED' };
+            if (workPlanLen(reason) > TEAM_LIMITS.reason) return { error: 'TEAM_TEXT_TOO_LONG' };
+            set({ status: 'paused', paused_at: now, pause_reason: reason }, 'paused', reason);
+            return done();
+        }
+        if (action === 'resume') { if (st !== 'paused') return { error: 'TEAM_STATE' }; set({ status: 'in_progress', pause_reason: '' }, 'resumed', ''); return done(); }
+        if (st !== 'in_progress') return { error: 'TEAM_STATE' };
+        set({ status: 'review', review_at: now }, 'submitted', '');
+        return done();
+    }
+    if (action === 'validate' || action === 'return') {
+        if (!can.validate) return { error: 'TEAM_NOT_ALLOWED' };
+        const wanted = b.userId != null && b.userId !== '' ? [Number(b.userId)] : can.reviewUserIds;
+        const targets = wanted.filter((id) => can.reviewUserIds.includes(id));
+        if (!targets.length) return { error: 'TEAM_STATE' };
+        const reason = reasonOf();
+        if (action === 'return' && !reason) return { error: 'TEAM_REASON_REQUIRED' };
+        if (workPlanLen(reason) > TEAM_LIMITS.reason) return { error: 'TEAM_TEXT_TOO_LONG' };
+        db.transaction(() => {
+            targets.forEach((uid) => {
+                if (action === 'validate') db.prepare("UPDATE team_activity_assignees SET status = 'done', done_at = ?, validated_by_user_id = ? WHERE activity_id = ? AND user_id = ?").run(now, userId, row.id, uid);
+                else db.prepare("UPDATE team_activity_assignees SET status = 'in_progress', review_at = NULL WHERE activity_id = ? AND user_id = ?").run(row.id, uid);
+                teamEvent(row.id, uid, userId, byLabel, action === 'validate' ? 'validated' : 'returned', reason);
+            });
+            touch();
+        })();
+        return done();
+    }
+    return { error: 'TEAM_ACTION_INVALID' };
+}
 // El texto de quien es responsable o ejecuta (el nombre actual de la persona ligada, o el texto libre).
 function workPlanPersonShown(clientId, forTestAccount, person) {
     if (person.userId != null) return (listWorkPlanPeople(clientId, forTestAccount).find((p) => p.id === person.userId) || { name: person.name }).name;
@@ -20447,7 +20790,7 @@ module.exports = {
     getUserGrants,
     setUserGrants,
     getUserGrantChangeLog,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, createTeamActivity, teamActivityAct, TEAM_LIMITS, teamActivityState, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
     MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices,
     THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,

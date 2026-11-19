@@ -155,7 +155,7 @@
     // for how that nested content shifts down with it. Same itemId/leaf keys
     // as before, only where they render moves, so no already-saved grant/
     // status is lost.
-    const NAV_ICON_ITEM_IDS = ['btn-mensajes', 'btn-chatbot', 'btn-notificaciones', 'planes-trabajo', 'btn-marcadores', 'btn-configuracion', 'btn-datos-usuario', 'btn-datos-usuario-negocio'];
+    const NAV_ICON_ITEM_IDS = ['btn-mensajes', 'btn-chatbot', 'btn-notificaciones', 'planes-trabajo', 'equipo-trabajo', 'btn-marcadores', 'btn-configuracion', 'btn-datos-usuario', 'btn-datos-usuario-negocio'];
 
     // Reorders `list` (in place) to match `orderIds` as closely as
     // possible: anything named in orderIds comes first, in that order;

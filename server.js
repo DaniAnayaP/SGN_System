@@ -616,7 +616,7 @@ const {
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, createTeamActivity, teamActivityAct, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -2299,6 +2299,59 @@ app.post('/api/business/work-plans/:id/items/:itemId/move', requireAuth, (req, r
     () => moveWorkPlanItem(req.user.clientId, req.user.sub, req.params.id, req.params.itemId, (req.body || {}).direction), 200, (r) => ({ ok: true, moved: r.moved, plan: r.plan })));
 app.delete('/api/business/work-plans/:id/items/:itemId', requireAuth, (req, res) => workPlanRun(req, res,
     () => removeWorkPlanItem(req.user.clientId, req.user.sub, req.params.id, req.params.itemId), 200, (r) => ({ ok: true, removedCount: r.removedCount, plan: r.plan })));
+// ---- Administración de Equipo de Trabajo (Daniel, 2026-11-19) · PIEZA 1 ----
+// Pantalla general (sección main, junto a Planes de trabajo): entra quien tiene la hoja main/equipo-trabajo en su árbol (el administrador del cliente, siempre) y su Estatus habilitado. Las cuentas de SaaS (sin compañía) no la tienen.
+// Cada persona ve lo que creó, lo que tiene y lo de las personas a su cargo; el administrador, todo. Quien puede qué lo decide db.js (teamActivityCan) y viaja en `can`. Cada movimiento queda en team_activity_events.
+const TEAM_HTTP = { TEAM_NOT_FOUND: 404, TEAM_NOT_ALLOWED: 403, TEAM_FORBIDDEN: 403, TEAM_STATE: 409, TEAM_CANCELLED: 409, TEAM_PEOPLE_EXIST: 409, TEAM_PEOPLE_LIMIT: 409 };
+const TEAM_MESSAGES = {
+    TEAM_NOT_FOUND: 'Esa actividad no existe.', TEAM_NOT_ALLOWED: 'No puedes hacer eso con esta actividad.', TEAM_FORBIDDEN: 'No tienes permiso para usar la Administración de Equipo de Trabajo.',
+    TEAM_STATE: 'La actividad ya no está en ese paso.', TEAM_CANCELLED: 'La actividad está cancelada.', TEAM_REASON_REQUIRED: 'Escribe el motivo.', TEAM_TITLE_REQUIRED: 'Escribe qué hay que hacer.',
+    TEAM_TITLE_TOO_LONG: 'El nombre de la actividad es demasiado largo.', TEAM_TEXT_TOO_LONG: 'El texto es demasiado largo.', TEAM_KIND_INVALID: 'El tipo debe ser fija, eventual o periódica.',
+    TEAM_REALIZATION_INVALID: 'La realización debe ser presencial, remoto o mixta.', TEAM_SITE_INVALID: 'Uno de los sitios no es válido.', TEAM_DEPARTMENT_INVALID: 'Ese departamento no está habilitado en la compañía.',
+    TEAM_DATE_INVALID: 'La fecha no es válida.', TEAM_SEATS_INVALID: 'Las personas que se necesitan van de 1 a 20.', TEAM_PERSON_INVALID: 'Una de las personas no es válida: elige a alguien activo de tu compañía.',
+    TEAM_PEOPLE_EXIST: 'Esas personas ya están en la actividad.', TEAM_PEOPLE_LIMIT: 'Una actividad no puede tener más de 20 personas.', TEAM_ACTION_INVALID: 'Esa acción no existe.',
+};
+function teamFail(res, result) {
+    const code = result.error;
+    const message = TEAM_MESSAGES[code] || 'No se pudo completar lo pedido.';
+    return res.status(TEAM_HTTP[code] || 400).json({ error: message, message, code, field: result.field });
+}
+function teamGate(req, res) {
+    if (req.user.clientId && isMainScreenStatusVisible(req.user.clientId, req.user.sub, 'equipo-trabajo')
+        && (req.user.isClientAdmin || isTupleGranted(getUserEffectiveGrants(req.user.sub), 'main', 'equipo-trabajo', null))) return true;
+    teamFail(res, { error: 'TEAM_FORBIDDEN' });
+    return false;
+}
+app.get('/api/business/team-activities', requireAuth, (req, res) => {
+    if (!teamGate(req, res)) return;
+    res.set('Cache-Control', 'no-store');
+    res.json(listTeamActivities(req.user.clientId, req.user.sub, !!req.user.isTestAccount, !!req.user.isClientAdmin));
+});
+app.post('/api/business/team-activities', requireAuth, (req, res) => {
+    if (!teamGate(req, res)) return;
+    const result = createTeamActivity(req.user.clientId, req.user.sub, !!req.user.isTestAccount, !!req.user.isClientAdmin, req.body, changedByLabel(req));
+    if (result.error) return teamFail(res, result);
+    res.set('Cache-Control', 'no-store');
+    res.status(201).json(result);
+});
+app.get('/api/business/team-activities/:id', requireAuth, (req, res) => {
+    if (!teamGate(req, res)) return;
+    const result = getTeamActivity(req.user.clientId, req.user.sub, !!req.user.isTestAccount, !!req.user.isClientAdmin, req.params.id);
+    if (result.error) return teamFail(res, result);
+    res.set('Cache-Control', 'no-store');
+    res.json(result);
+});
+function teamAct(action) {
+    return (req, res) => {
+        if (!teamGate(req, res)) return;
+        const result = teamActivityAct(req.user.clientId, req.user.sub, !!req.user.isTestAccount, !!req.user.isClientAdmin, req.params.id, action, req.body, changedByLabel(req));
+        if (result.error) return teamFail(res, result);
+        res.set('Cache-Control', 'no-store');
+        res.json(result);
+    };
+}
+app.patch('/api/business/team-activities/:id', requireAuth, teamAct('edit'));
+['assign', 'unassign', 'cancel', 'confirm', 'start', 'pause', 'resume', 'submit', 'validate', 'return'].forEach((action) => app.post(`/api/business/team-activities/:id/${action}`, requireAuth, teamAct(action)));
 // ---- Hilos de comentarios genéricos (pieza 2b) ----
 // Un hilo es (tipo, id). Cada tipo se registra con UNA entrada en THREAD_TYPES: { guard?, notFound?, resolve(req, id) }. `guard` es la guarda de la pantalla dueña del tipo (responde ella misma); `resolve` devuelve null (no existe o no tiene acceso: 404) o
 // { label (título para mostrar), canRead, canPost, postError (código HTTP-4xx propio de la pantalla cuando no se puede comentar ahora), participants: [{id, name}] (las personas mencionables = las que hoy tienen acceso, de la misma compañía), canMention, planId? }.

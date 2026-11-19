@@ -68,6 +68,9 @@ const TABLES = {
     work_plan_template_items: { action: WIPE, group: 'captures' }, // y los renglones de cada molde
     work_plan_members: { action: WIPE, group: 'captures' }, // con quién se comparte cada plan y su rol (2a)
     work_plan_user_prefs: { action: WIPE, group: 'captures' }, // fijado propio y «ya lo vi» de quien no es dueño del plan (2a)
+    team_activities: { action: WIPE, group: 'captures' }, // Administración de Equipo de Trabajo: las actividades (2026-11-19)
+    team_activity_assignees: { action: WIPE, group: 'captures' }, // y quién las tiene y en qué va cada persona
+    team_activity_events: { action: WIPE, group: 'captures' }, // y todo movimiento (la línea del tiempo)
     thread_comments: { action: WIPE, group: 'captures' }, // Hilos de comentarios genéricos (renglones y planes de trabajo, y los que vengan): inmutables, solo se van con la compañía (2b)
     thread_comment_mentions: { action: WIPE, group: 'captures' }, // a quién menciona cada comentario
     thread_reads: { action: WIPE, group: 'captures' }, // hasta qué comentario leyó cada persona en cada hilo

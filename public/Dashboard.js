@@ -9856,6 +9856,32 @@ function placeWorkPlansButton() {
     });
 }
 
+// Administración de Equipo de Trabajo: otro icono general de la barra de arriba, pegado después de Planes de trabajo (mismo trato: nace escondido, se muestra con la hoja main/equipo-trabajo y su Estatus; SaaS no lo ve).
+document.querySelectorAll('.top-bar-actions').forEach((container) => {
+    if (container.querySelector('#team-work-btn')) return;
+    const teamWorkBtn = document.createElement('button');
+    teamWorkBtn.type = 'button';
+    teamWorkBtn.id = 'team-work-btn';
+    teamWorkBtn.className = 'top-bar-btn-hidden';
+    teamWorkBtn.setAttribute('data-i18n-aria', 'menu.teamWork');
+    teamWorkBtn.setAttribute('data-help-key', 'teamWorkButton');
+    teamWorkBtn.setAttribute('aria-label', 'Team Work Management');
+    teamWorkBtn.innerHTML = '<i class="bx bx-group" aria-hidden="true"></i>';
+    if (document.body.dataset.activePage === 'equipo-trabajo') teamWorkBtn.setAttribute('aria-current', 'page');
+    teamWorkBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (document.body.dataset.activePage !== 'equipo-trabajo') location.href = 'EquipoTrabajo.html';
+    });
+    container.appendChild(teamWorkBtn);
+    placeTeamWorkButton();
+});
+function placeTeamWorkButton() {
+    document.querySelectorAll('#team-work-btn').forEach((btn) => {
+        const plans = btn.closest('.top-bar-actions')?.querySelector('#work-plans-btn');
+        if (plans && plans.nextElementSibling !== btn) plans.insertAdjacentElement('afterend', btn);
+    });
+}
+
 // --- Mensajes (pieza 2c): el botón de la barra de arriba abre el panel (Messages.js, que se carga la primera vez que se toca) y lleva el globito de lo que no se ha leído (mensajes de chat, comentarios
 // de planes y planes recién compartidos). El globito se pide cada minuto solo si el botón se ve (contrato + hoja del árbol) y la pestaña está a la vista.
 let messagesModulePromise = null;
@@ -12843,6 +12869,7 @@ const TOP_BAR_BUTTONS = [
     { moduleKey: 'btn-notificaciones', elementId: 'notifications-menu', check: () => hasMainButtonPermission('btn-notificaciones') },
     // Planes de trabajo no depende del contrato (como Inicio/Panel/Tablero): solo de su hoja del árbol y su Estatus
     { moduleKey: 'planes-trabajo', elementId: 'work-plans-btn', noContract: true, check: () => hasMainButtonPermission('planes-trabajo') },
+    { moduleKey: 'equipo-trabajo', elementId: 'team-work-btn', noContract: true, check: () => hasMainButtonPermission('equipo-trabajo') },
     { moduleKey: 'btn-marcadores', elementId: 'bookmarks-btn', check: () => hasMainButtonPermission('btn-marcadores') },
     { moduleKey: 'btn-configuracion', elementId: 'settings-menu', check: hasSettingsAccess },
     { moduleKey: 'btn-datos-usuario', elementId: 'user-info-menu', check: () => hasMainButtonPermission('btn-datos-usuario') },
@@ -12874,6 +12901,7 @@ function syncNotificationTabs() {
 }
 function syncTopBarButtonVisibility() {
     placeWorkPlansButton();
+    placeTeamWorkButton();
     syncNotificationTabs();
     if (currentRole === 'admin') return;
     TOP_BAR_BUTTONS.forEach(({ moduleKey, elementId, check, noContract }) => {
@@ -12911,7 +12939,7 @@ const SAAS_NAV_ICON_GATES = {
 };
 function syncSaasNavIconVisibility() {
     if (currentUser?.role !== 'admin') return;
-    document.querySelectorAll('#work-plans-btn').forEach((btn) => btn.classList.add('top-bar-btn-hidden'));
+    document.querySelectorAll('#work-plans-btn, #team-work-btn').forEach((btn) => btn.classList.add('top-bar-btn-hidden'));
     Object.entries(SAAS_NAV_ICON_GATES).forEach(([elementId, itemId]) => {
         const el = document.getElementById(elementId);
         if (!el) return;
@@ -14488,6 +14516,7 @@ function hasScreenAccess(activePage) {
     if (activePage === 'panel') return hasMainButtonPermission('panel');
     // Planes de trabajo (pantalla general, personal): con el permiso de su Estatus del árbol, como Panel.
     if (activePage === 'planes-trabajo') return hasMainButtonPermission('planes-trabajo');
+    if (activePage === 'equipo-trabajo') return hasMainButtonPermission('equipo-trabajo');
     // Soporte.html (la página completa de la pestaña Soporte de la campana): con el permiso de esa pestaña en el árbol (Notificaciones › Soporte).
     if (activePage === 'support') return currentRole === 'admin' ? false : (hasMainButtonPermission('btn-notificaciones') && hasNotificationTabPermission('soporte'));
     // La pantalla de UN caso de soporte (OpTISoporteCaso.html) la abre quien reportó el caso (desde «Soporte», sin ninguna hoja del árbol), el equipo y quien ve Soportes cerrados: el servidor decide quién abre cada caso.
