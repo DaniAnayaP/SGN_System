@@ -45,6 +45,7 @@ const FILES = [
     'AppTemperaturas.html', 'AppTemperaturas.js',
     'AppActividadesActivos.html', 'AppActividadesActivos.js', 'AssetSchedule.js',
     'AppCalibraciones.html', 'AppCalibraciones.js',
+    'AppPlanesTrabajo.html', 'AppPlanesTrabajo.js',
     'AppCapacidadAlmacenamiento.html', 'AppCapacidadAlmacenamiento.js',
     'AppLayout.html', 'AppLayout.js', 'LayoutCalc.js', 'LayoutScene3D.js', 'HelpMode.js',
     path.join('vendor', 'three', 'three.min.js'),

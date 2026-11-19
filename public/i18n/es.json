@@ -7848,6 +7848,10 @@
     "calFileAfterSignal": "El archivo no se envía sin señal: cuando haya conexión, abre el certificado y súbelo.",
     "calFileFailed": "El archivo no se pudo subir: ábrelo en el certificado y súbelo otra vez.",
     "calSavedOffline": "Sin señal: el cambio quedó en tu celular y se enviará solo.",
+    "wpappCached": "Sin señal: estas son tus actividades de la última vez que abriste la pantalla.",
+    "wpappNoData": "Sin señal y todavía no hay actividades guardadas en tu celular.",
+    "wpappSavedOffline": "Sin señal: el cambio quedó en tu celular y se enviará solo.",
+    "wpappShowing": "Se muestran {n} de {total}; usa el buscador o los filtros para ver el resto.",
     "calSavedNewOffline": "Sin señal: la calibración de {code} quedó en tu celular y se enviará sola.",
     "calQueuedNote": "Esta calibración está en tu celular y se enviará sola cuando haya señal; hasta entonces no se puede corregir.",
     "calQueuedEdits": "Tienes cambios guardados en tu celular: se enviarán solos cuando haya señal.",
@@ -7911,6 +7915,8 @@
     },
     "appLimTerminar": {
       "what": "Cierra la limpieza: pide la foto de después y guarda cuánto duró. Solo la puede terminar quien la empezó.",
+      "example": "terminas el anaquel, tomas la foto y queda guardada la duración."
+    },
     "appCalBuscar": {
       "what": "Busca en el código, número de serie, modelo y nombre del activo, el certificado, el laboratorio, las observaciones y las fechas. Usa $ para lo que va antes, @ para lo que va después y la coma para varias búsquedas.",
       "example": "Escribes H001, 4227 y ves los certificados de H001 y los que dicen 4227."
@@ -7923,6 +7929,34 @@
       "what": "Un activo puede tener varios certificados: el más reciente es el vigente y los demás quedan de historial. Este vínculo deja ver solo los de ese activo.",
       "example": "H001 · «2 certificados»."
     },
+    "appWpTabs": {
+      "what": "Cambia entre tus actividades («Mis actividades») y las de tu gente («Mi equipo», solo si tienes personas a tu cargo). Cada pestaña lleva cuántas faltan.",
+      "example": "Mi equipo · 4 → lo que les toca a las personas que te reportan."
+    },
+    "appWpFilter": {
+      "what": "Cambia qué actividades ves: las que faltan por hacer, solo las vencidas, las hechas o todas.",
+      "example": "Vencidas · 1 → solo lo que ya pasó de su fecha."
+    },
+    "appWpRole": {
+      "what": "Deja solo las actividades donde eres responsable (quien responde por ellas) o donde las ejecutas (quien hace el trabajo).",
+      "example": "Ejecuto → solo lo que tú haces."
+    },
+    "appWpPerson": {
+      "what": "Deja solo las actividades de una persona de tu equipo, o de todo el equipo.",
+      "example": "Marco Ríos · 3 → solo lo que le toca a Marco."
+    },
+    "appWpRow": {
+      "what": "Una actividad tuya: su nombre, el plan y la ruta donde está, tu papel, su estado y cuándo vence. Tócala para ver su detalle. Si el cambio quedó sin enviar dice «En tu celular».",
+      "example": "«Entregar solicitud» · Apertura de la bodega Norte › Permisos · Vence hoy."
+    },
+    "appWpTeamRow": {
+      "what": "Una actividad de alguien de tu equipo: el plan y la ruta, su papel en ella, su estado y cuándo vence. Es solo para consultar. Tócala para ver su detalle.",
+      "example": "«Armar expediente» · Marco responde por ella · Vence en 6 días."
+    },
+    "appWpActions": {
+      "what": "Cambia el estado de la actividad sin abrir el plan: en curso, hecha o pendiente. Solo salen si tu rol en ese plan lo permite. Sin señal el cambio queda en tu celular y se envía solo.",
+      "example": "Marcar hecha → pasa a «Hechas» y avanza el plan."
+    },
     "appCalNuevo": {
       "what": "Abre el formulario para registrar un certificado de calibración: eliges el activo, escribes lo que dice el certificado y, si quieres, agregas su foto o PDF. Un certificado nuevo del mismo activo pasa a ser el vigente y el anterior queda de historial. Sin señal se guarda en tu celular.",
       "example": "H001, certificado 4227-16787565, calibrado el 01 jun 2026, vence el 01 jun 2028."
@@ -7934,8 +7968,6 @@
     "appCalFile": {
       "what": "El certificado en PDF o foto (JPG o PNG, máximo 3 MB; una foto más pesada se reduce sola). Toca «Ver el certificado» para abrirlo; si no hay archivo, quien registra puede subirlo, y cambiar uno ya subido pide «Modificar» en esta columna. Subir el archivo necesita señal.",
       "example": "certificado-4227.pdf."
-    },
-      "example": "terminas el anaquel, tomas la foto y queda guardada la duración."
     },
     "appSegTabs": {
       "what": "Cambia entre los elementos de seguridad y las revisiones ya hechas.",

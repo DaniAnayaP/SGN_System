@@ -16070,7 +16070,7 @@ function listMyWorkPlanActivities(clientId, userId) {
             all.push({
                 planId: row.id, planTitle: row.title, planOrigin: access.origin, itemId: i.id, title: i.title, path, depth: i.depth, levelName: levels[i.depth - 1] || '', isLeaf: i.childCount === 0,
                 startDate: i.rangeStart, endDate: i.rangeEnd, status: i.effectiveStatus, progress: i.progress, role: resp && exec ? 'both' : (resp ? 'responsible' : 'executor'),
-                responsibleName: i.responsibleName || '', executorName: i.executorName || '', commentCount: i.commentCount, unreadCount: i.unreadCount, canStatus: !!(i.can && i.can.status), position: i.position,
+                responsibleName: i.responsibleName || '', executorName: i.executorName || '', commentCount: i.commentCount, unreadCount: i.unreadCount, canStatus: !!(i.can && i.can.status), note: i.note || '', position: i.position,
             });
         });
     });
@@ -16122,7 +16122,7 @@ function listTeamWorkPlanActivities(clientId, userId, today) {
                 all.push({
                     person: { userId: uid, name: names.get(uid) }, planId: row.id, planTitle: row.title, planOrigin: access.origin, itemId: i.id, title: i.title, path, depth: i.depth, levelName: levels[i.depth - 1] || '', isLeaf: i.childCount === 0,
                     startDate: i.rangeStart, endDate: i.rangeEnd, status: i.effectiveStatus, progress: i.progress, role: resp && exec ? 'both' : (resp ? 'responsible' : 'executor'),
-                    responsibleName: i.responsibleName || '', executorName: i.executorName || '', commentCount: i.commentCount, unreadCount: i.unreadCount,
+                    responsibleName: i.responsibleName || '', executorName: i.executorName || '', commentCount: i.commentCount, unreadCount: i.unreadCount, note: i.note || '',
                 });
             });
         });

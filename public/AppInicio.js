@@ -360,16 +360,18 @@ const TOP_BAR_MENU_ITEMS = [
     { moduleKey: 'btn-mensajes', elementId: 'home-menu-messages', check: () => hasMainButtonPermission('btn-mensajes') },
     { moduleKey: 'btn-chatbot', elementId: 'home-menu-chatbot', check: () => hasMainButtonPermission('btn-chatbot') },
     { moduleKey: 'btn-notificaciones', elementId: 'home-menu-notifications', check: () => hasMainButtonPermission('btn-notificaciones') },
+    // Planes de trabajo (después de Notificaciones, igual que el icono de la barra de arriba de la Web): no es un módulo contratado, solo la hoja del árbol; las cuentas de SaaS no tienen planes
+    { moduleKey: 'planes-trabajo', elementId: 'home-menu-work-plans', noContract: true, check: () => hasMainButtonPermission('planes-trabajo') && !!(sessionUser && sessionUser.clientId) },
     { moduleKey: 'btn-marcadores', elementId: 'home-menu-bookmarks', check: () => hasMainButtonPermission('btn-marcadores') },
     { moduleKey: 'btn-configuracion', elementId: 'home-menu-settings', check: hasSettingsAccess },
     { moduleKey: 'btn-datos-usuario', elementId: 'home-menu-user-info', check: () => hasMainButtonPermission('btn-datos-usuario') },
     { moduleKey: 'btn-datos-usuario-negocio', elementId: 'home-menu-business-profile', check: () => hasMainButtonPermission('btn-datos-usuario-negocio') },
 ];
 function syncTopBarMenuVisibility() {
-    TOP_BAR_MENU_ITEMS.forEach(({ moduleKey, elementId, check }) => {
+    TOP_BAR_MENU_ITEMS.forEach(({ moduleKey, elementId, check, noContract }) => {
         const el = document.getElementById(elementId);
         if (!el) return;
-        el.hidden = !(contractedModuleKeys.includes(moduleKey) && check());
+        el.hidden = !((noContract || contractedModuleKeys.includes(moduleKey)) && check());
     });
 }
 
@@ -1485,6 +1487,11 @@ document.getElementById('home-menu-notifications').addEventListener('click', asy
     closeHamburgerMenu();
     await loadNotificationsBadge();
     openNotificationsSheet();
+});
+
+document.getElementById('home-menu-work-plans').addEventListener('click', () => {
+    closeHamburgerMenu();
+    window.location.href = 'AppPlanesTrabajo.html';
 });
 
 // --- Mensajes (full-screen, honest empty state — no message backend yet) --
