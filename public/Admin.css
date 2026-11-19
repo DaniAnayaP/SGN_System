@@ -9506,3 +9506,7 @@ body.dark-mode .exp-chip-cancelled{ color: #b4bcc6; }
 .impl-tag-unused{ color: #5c6773; background: rgba(120, 130, 145, 0.14); border-color: rgba(120, 130, 145, 0.4); }
 body.dark-mode .impl-tag-used{ color: #5fd3bf; }
 body.dark-mode .impl-tag-unused{ color: #b4bcc6; }
+
+/* Implementación Inicial · nivel 8 «Capacitación»: cómo va cada módulo dentro del modal de SaaS */
+.impl-subtask-name{ display: flex; flex-direction: column; min-width: 0; }
+.impl-subtask-stats{ font-size: 0.68rem; opacity: 0.7; }

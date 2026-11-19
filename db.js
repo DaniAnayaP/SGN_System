@@ -15161,23 +15161,38 @@ function todayInClientZone(clientId) {
 // La implementación de una compañía lista para dibujar: cada nivel con su estado (done | na | current | locked), si va atrasado, sus semanas en el cronograma y el avance general.
 // Los renglones que le falten a una implementación (las que ya iban cuando se agregaron, o los que luego se sumen a la plantilla): se agregan sin tocar los que ya existen.
 function ensureImplementationTasks(implementationId, levelKeys) {
-    const expected = levelKeys.reduce((n, k) => n + (IMPLEMENTATION_TASKS[k] || []).length, 0);
+    const templated = levelKeys.filter((k) => (IMPLEMENTATION_TASKS[k] || []).length);
+    const expected = templated.reduce((n, k) => n + IMPLEMENTATION_TASKS[k].length, 0);
     if (!expected) return;
-    if (db.prepare('SELECT COUNT(*) AS n FROM implementation_tasks WHERE implementation_id = ?').get(implementationId).n >= expected) return;
+    if (db.prepare(`SELECT COUNT(*) AS n FROM implementation_tasks WHERE implementation_id = ? AND level_key IN (${templated.map(() => '?').join(',')})`).get(implementationId, ...templated).n >= expected) return;
     const insert = db.prepare('INSERT OR IGNORE INTO implementation_tasks (implementation_id, level_key, task_key, position) VALUES (?, ?, ?, ?)');
     db.transaction(() => levelKeys.forEach((k) => (IMPLEMENTATION_TASKS[k] || []).forEach((t, i) => insert.run(implementationId, k, t.key, i + 1))))();
+}
+// Nivel 8 «Capacitación»: un cumplimiento por cada módulo (departamento) que la compañía tiene habilitado. Sus renglones no vienen de la plantilla: se crean (o se omiten si ya no está contratado) según el contrato al leer.
+const IMPLEMENTATION_TRAINING_LEVEL = 'training';
+function ensureImplementationTrainingTasks(implementationId, departmentKeys) {
+    const have = new Set(db.prepare('SELECT task_key FROM implementation_tasks WHERE implementation_id = ? AND level_key = ?').all(implementationId, IMPLEMENTATION_TRAINING_LEVEL).map((r) => r.task_key));
+    const missing = departmentKeys.filter((k) => !have.has(k));
+    if (!missing.length) return;
+    const insert = db.prepare('INSERT OR IGNORE INTO implementation_tasks (implementation_id, level_key, task_key, position) VALUES (?, ?, ?, ?)');
+    db.transaction(() => missing.forEach((k) => insert.run(implementationId, IMPLEMENTATION_TRAINING_LEVEL, k, HR_DEPARTMENT_KEYS.indexOf(k) + 1)))();
 }
 function getImplementation(clientId) {
     const row = db.prepare('SELECT * FROM implementations WHERE client_id = ?').get(clientId);
     if (!row) return null;
     const rows = db.prepare('SELECT * FROM implementation_levels WHERE implementation_id = ? ORDER BY position').all(row.id);
     ensureImplementationTasks(row.id, rows.map((l) => l.level_key));
+    const contractedDepartments = rows.some((l) => l.level_key === IMPLEMENTATION_TRAINING_LEVEL) ? listContractedDepartmentKeys(clientId) : [];
+    if (contractedDepartments.length) ensureImplementationTrainingTasks(row.id, contractedDepartments);
     const taskRows = db.prepare('SELECT * FROM implementation_tasks WHERE implementation_id = ? ORDER BY level_key, position').all(row.id);
     const tasksByLevel = new Map();
     taskRows.forEach((t) => {
+        const training = t.level_key === IMPLEMENTATION_TRAINING_LEVEL;
+        if (training && !contractedDepartments.includes(t.task_key)) return; // un módulo que ya no está habilitado no cuenta
         const template = (IMPLEMENTATION_TASKS[t.level_key] || []).find((x) => x.key === t.task_key);
+        const module = training ? MODULE_CATALOG.find((m) => m.key === t.task_key) : null;
         if (!tasksByLevel.has(t.level_key)) tasksByLevel.set(t.level_key, []);
-        tasksByLevel.get(t.level_key).push({ key: t.task_key, position: t.position, status: t.status, doneAt: t.done_at, doneBy: t.done_by, href: template ? template.href : '' });
+        tasksByLevel.get(t.level_key).push({ key: t.task_key, position: t.position, status: t.status, doneAt: t.done_at, doneBy: t.done_by, href: template ? template.href : '', labelKey: module ? module.labelKey : '' });
     });
     const today = todayInClientZone(clientId);
     const firstPending = rows.find((l) => l.status === 'pending');
@@ -15317,6 +15332,30 @@ function markImplementationLevel(clientId, levelKey, action, byLabel) {
     })();
     return { before, status: next, implementation: getImplementation(clientId) };
 }
+// Cómo va la capacitación de cada módulo habilitado: cuántas personas lo usan (usuarios reales activos con algún permiso en ese departamento; el administrador del cliente usa todos los contratados), cuántas sesiones realizadas y
+// programadas tiene y cuántas de esas personas ya asistieron a una sesión realizada del módulo. Se calcula al leer (pide los permisos efectivos de cada persona: úsalo solo donde se muestra).
+function getImplementationTrainingStats(clientId) {
+    const departments = listContractedDepartmentKeys(clientId);
+    const users = db.prepare("SELECT id, is_client_admin AS isAdmin FROM users WHERE client_id = ? AND active != 0 AND COALESCE(is_test_account, 0) = 0").all(clientId);
+    const userDepartments = new Map(users.map((u) => [u.id, u.isAdmin ? new Set(departments) : new Set(getUserEffectiveGrants(u.id).map((g) => g.sectionId).filter((k) => departments.includes(k)))]));
+    const sessions = listTrainingSessions(clientId);
+    const stats = {};
+    departments.forEach((dept) => {
+        const members = users.filter((u) => userDepartments.get(u.id).has(dept));
+        const done = sessions.filter((x) => x.department === dept && x.status === 'done');
+        const attended = new Set(done.flatMap((x) => x.attendees.map((a) => a.userId)));
+        stats[dept] = {
+            users: members.length, sessionsDone: done.length, sessionsScheduled: sessions.filter((x) => x.department === dept && x.status === 'scheduled').length,
+            trained: members.filter((u) => attended.has(u.id)).length, attendees: attended.size,
+        };
+    });
+    return stats;
+}
+// ¿Ese módulo ya tiene al menos una sesión REALIZADA con asistentes? Es lo que se pide para marcar su capacitación como cumplida.
+function moduleHasTrainedSession(clientId, departmentKey) {
+    return !!db.prepare(`SELECT 1 FROM training_sessions s JOIN training_session_attendees a ON a.session_id = s.id WHERE s.client_id = ? AND s.department = ? AND s.status = 'done' LIMIT 1`).get(clientId, departmentKey);
+}
+
 // Marcar un RENGLÓN de un nivel: 'done' (listo), 'na' (No aplica) o 'reopen' (vuelve a pendiente). Solo se marcan los del nivel EN CURSO: uno bloqueado todavía no se abre y uno completo se reabre primero.
 function markImplementationTask(clientId, levelKey, taskKey, action, byLabel) {
     const impl = getImplementation(clientId);
@@ -15331,6 +15370,7 @@ function markImplementationTask(clientId, levelKey, taskKey, action, byLabel) {
     const next = { done: 'done', na: 'na', reopen: 'pending' }[action];
     if (!next) return { error: 'ACTION' };
     if (task.status === next) return { error: 'ALREADY' };
+    if (levelKey === IMPLEMENTATION_TRAINING_LEVEL && next === 'done' && !moduleHasTrainedSession(clientId, taskKey)) return { error: 'NO_SESSION' };
     const before = task.status;
     db.transaction(() => {
         db.prepare('UPDATE implementation_tasks SET status = ?, done_at = ?, done_by = ? WHERE implementation_id = ? AND level_key = ? AND task_key = ?')
@@ -18136,7 +18176,7 @@ module.exports = {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, markImplementationTask, getImplementationContracted, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,

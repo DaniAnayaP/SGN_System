@@ -231,15 +231,20 @@ async function openDetail(row) {
         if (!seeded) { if (impl.currentKey) expanded.add(impl.currentKey); seeded = true; }
         const open = impl.status === 'active';
         const canDates = open && detail.can.edit;
-        const taskName = (l, task) => { const name = t(`main.implTask_${l.key}_${task.key}`); return name.startsWith('main.') ? task.key : name; };
+        const taskName = (l, task) => { if (task.labelKey) return t(task.labelKey); const name = t(`main.implTask_${l.key}_${task.key}`); return name.startsWith('main.') ? task.key : name; };
         const taskRows = (l) => `<tr class="impl-task-row"><td colspan="5"><div class="impl-subtasks" data-help-key="saasImplTasks">${l.tasks.map((task) => {
             const acts = [
-                task.actions.done ? `<button type="button" class="btn btn-secondary sc-mini" data-lv="${l.key}" data-task="${task.key}" data-do="done">${esc(t('admin.saasImplTaskDone'))}</button>` : '',
+                task.actions.done ? `<button type="button" class="btn btn-secondary sc-mini" data-lv="${l.key}" data-task="${task.key}" data-do="done">${esc(t(l.key === 'training' ? 'admin.saasImplTrainDone' : 'admin.saasImplTaskDone'))}</button>` : '',
                 task.actions.na ? `<button type="button" class="btn btn-secondary sc-mini" data-lv="${l.key}" data-task="${task.key}" data-do="na">${esc(t('admin.saasImplTaskNa'))}</button>` : '',
                 task.actions.reopen ? `<button type="button" class="btn btn-secondary sc-mini" data-lv="${l.key}" data-task="${task.key}" data-do="reopen">${esc(t('admin.saasImplTaskReopen'))}</button>` : '',
             ].join('');
-            const tone = { pending: 'pending', done: 'approved', na: 'cancelled' }[task.status];
-            return `<div class="impl-subtask"><span class="exp-chip exp-chip-${tone}">${esc(t(`main.implTaskState_${task.status}`))}</span><span class="impl-subtask-name">${esc(taskName(l, task))}</span><span class="impl-acts">${acts}</span></div>`;
+            // Capacitación: el módulo está «En curso» si ya tiene sesiones realizadas; se muestra cómo va (personas, sesiones y capacitadas)
+            const training = l.key === 'training';
+            const trainState = task.status === 'done' ? 'done' : (task.status === 'na' ? 'na' : (task.stats && task.stats.sessionsDone > 0 ? 'in_progress' : 'pending'));
+            const tone = training ? { done: 'approved', in_progress: 'negotiating', pending: 'pending', na: 'cancelled' }[trainState] : { pending: 'pending', done: 'approved', na: 'cancelled' }[task.status];
+            const chipText = training ? t(`main.implTrainState_${trainState}`) : t(`main.implTaskState_${task.status}`);
+            const stats = training && task.stats ? `<small class="impl-subtask-stats">${esc(t('admin.saasImplTrainStats', { users: task.stats.users, sessions: task.stats.sessionsDone, trained: task.stats.trained }))}</small>` : '';
+            return `<div class="impl-subtask"><span class="exp-chip exp-chip-${tone}">${esc(chipText)}</span><span class="impl-subtask-name">${esc(taskName(l, task))}${stats}</span><span class="impl-acts">${acts}</span></div>`;
         }).join('')}</div></td></tr>`;
         const rows = impl.levels.map((l) => {
             const d = draft[l.key] || { start: l.startDate, end: l.endDate };
@@ -267,7 +272,7 @@ async function openDetail(row) {
     const guard = async (fn) => {
         try { await fn(); } catch (err) {
             showError(explain(err));
-            if (err.body && ['ORDER', 'ORDER_LATER', 'ALREADY', 'CLOSED', 'LOCKED', 'LEVEL_CLOSED', 'TASKS_PENDING'].includes(err.body.code)) { await reload().catch(() => {}); showError(explain(err)); }
+            if (err.body && ['ORDER', 'ORDER_LATER', 'ALREADY', 'CLOSED', 'LOCKED', 'LEVEL_CLOSED', 'TASKS_PENDING', 'NO_SESSION'].includes(err.body.code)) { await reload().catch(() => {}); showError(explain(err)); }
         }
     };
     try { await reload(); } catch (err) { body().innerHTML = `<p class="admin-error">${esc(explain(err))}</p>`; return; }

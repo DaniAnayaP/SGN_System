@@ -13867,6 +13867,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-ti-cc-sesiones-capacitacion': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-sesiones-capacitacion' },
     'cat-operaciones-ti-impl-cronograma': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-cronograma' },
     'cat-operaciones-ti-impl-contracted': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-contracted' },
+    'cat-operaciones-ti-impl-training': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-training' },
     'cat-operaciones-ti-impl-design': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-design' },
     'cat-operaciones-ti-impl-structure': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-structure' },
     'cat-operaciones-ti-impl-orgchart': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-orgchart' },

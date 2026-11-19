@@ -580,7 +580,7 @@ const {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, markImplementationTask, getImplementationContracted, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,
@@ -1668,6 +1668,7 @@ const IMPL_ERRORS = {
     NOT_STARTED: [404, 'Esa compañía todavía no inicia su implementación.'], EXISTS: [409, 'Esa compañía ya tiene su implementación iniciada.'], CLOSED: [409, 'La implementación ya está finalizada.'],
     LEVEL: [400, 'Ese nivel no existe.'], ORDER: [409, 'Antes hay que completar los niveles anteriores.'], ORDER_LATER: [409, 'Hay niveles posteriores ya completos: reábrelos primero.'], ALREADY: [409, 'El nivel ya está en ese estado.'],
     NOT_OPTIONAL: [409, 'Solo un nivel opcional puede quedar «No aplica».'], ACTION: [400, 'Esa acción no existe.'], IMPLEMENTER: [400, 'Elige a una persona de SaaS que implemente.'], CLIENT: [400, 'Elige la compañía.'],
+    NO_SESSION: [409, 'Antes registra una sesión realizada de ese módulo con sus asistentes (Servicio a Cliente › Sesiones de capacitación).'],
     TASKS_PENDING: [409, 'Faltan renglones por marcar en este nivel.'], LOCKED: [409, 'Ese nivel todavía no se abre: antes hay que completar el anterior.'],
     LEVEL_CLOSED: [409, 'El nivel ya está completo: reábrelo para cambiar sus renglones.'], TASK: [400, 'Ese renglón no existe.'],
     DATES_PAIR: [400, 'Cada nivel lleva sus dos fechas, inicio y fin, o ninguna.'], DATE: [400, 'Una fecha no es válida.'], DATES_ORDER: [400, 'El fin de un nivel no puede ir antes de su inicio.'],
@@ -1680,6 +1681,7 @@ const implDatesEs = (level) => (level.startDate ? `${level.startDate} → ${leve
 // La implementación con lo que ESTA cuenta puede hacer en cada nivel (completar, «No aplica» o reabrir) según el orden y sus botones.
 function saasImplDetail(req, clientId) {
     const impl = getImplementation(clientId);
+    let trainingStats = null;
     const client = getClientById(clientId);
     const can = Object.fromEntries(Object.keys(SAAS_IMPL_LEAVES).map((k) => [k, saasImplCan(req, k)]));
     if (impl) {
@@ -1693,6 +1695,10 @@ function saasImplDetail(req, clientId) {
             // los renglones se marcan solo en el nivel en curso (los de un nivel bloqueado o ya completo se ven pero no se tocan)
             const editable = open && can.mark && l.state === 'current';
             l.tasks.forEach((t) => { t.actions = { done: editable && t.status !== 'done', na: editable && t.status !== 'na', reopen: editable && t.status !== 'pending' }; });
+            if (l.key === 'training') {
+                trainingStats = trainingStats || getImplementationTrainingStats(clientId);
+                l.tasks.forEach((t) => { t.stats = trainingStats[t.key] || null; if (!t.stats || t.stats.sessionsDone < 1 || t.stats.attendees < 1) t.actions.done = false; });
+            }
         });
     }
     return { client: { id: clientId, name: client ? client.company_name : '' }, implementation: impl, can, implementers: can.start || can.edit ? listImplementerCandidates(SAAS_IMPL_ITEM) : [] };
@@ -1720,6 +1726,20 @@ app.get('/api/business/implementation/contracted', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     res.set('Cache-Control', 'no-store');
     res.json(getImplementationContracted(req.user.clientId));
+});
+// Nivel 8 «Capacitación»: un cumplimiento por cada módulo habilitado, con cuántas personas lo usan, sus sesiones y cuántas ya se capacitaron. El implementador marca cada módulo como cumplido (necesita al menos una sesión realizada con asistentes).
+app.get('/api/business/implementation/training', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const impl = getImplementation(req.user.clientId);
+    const level = impl && impl.levels.find((l) => l.key === 'training');
+    const stats = getImplementationTrainingStats(req.user.clientId);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        modules: ((level && level.tasks) || []).map((t) => {
+            const st = stats[t.key] || { users: 0, sessionsDone: 0, sessionsScheduled: 0, trained: 0, attendees: 0 };
+            return { key: t.key, labelKey: t.labelKey, status: t.status, doneAt: t.doneAt, doneBy: t.doneBy, ...st, state: t.status === 'done' ? 'done' : (t.status === 'na' ? 'na' : (st.sessionsDone > 0 ? 'in_progress' : 'pending')) };
+        }),
+    });
 });
 app.get('/api/admin/implementations', requireAuth, requireAdmin, (req, res) => {
     if (!saasImplHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver las implementaciones.' });
