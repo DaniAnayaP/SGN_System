@@ -9877,3 +9877,13 @@ input[type="color"].cli-company{ opacity: 0.55; }
 .wp-team-person{ max-width: 15rem; padding: 0.35rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); color: var(--color-text-primary); font-family: inherit; font-size: 0.78rem; }
 .wp-tab-team{ flex: 0 0 auto; }
 @media (max-width: 640px){ .wp-team-person{ max-width: 100%; flex: 1 1 100%; } }
+
+/* Planes de trabajo, pieza 3c: plantillas (privadas) */
+.wp-tpl-list{ list-style: none; margin: 0 0 0.6rem; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.wp-tpl-row{ display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; padding: 0.55rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); color: var(--color-text-primary); }
+.wp-tpl-main{ display: flex; flex-direction: column; min-width: 0; }
+.wp-tpl-main small{ color: var(--color-text-secondary); font-size: 0.72rem; overflow-wrap: anywhere; }
+.wp-tpl-btns{ display: inline-flex; gap: 0.3rem; flex: none; }
+.wp-tpl-input{ flex: 1 1 auto; min-width: 0; padding: 0.35rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-primary); font-family: inherit; font-size: 0.82rem; }
+.wp-lvl-row input:disabled{ opacity: 0.65; cursor: not-allowed; }
+@media (max-width: 640px){ .wp-tpl-row{ flex-wrap: wrap; } }

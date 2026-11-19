@@ -616,7 +616,7 @@ const {
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -1912,7 +1912,7 @@ app.get('/api/business/implementation/training', requireAuth, (req, res) => {
 // Cada cambio queda en el historial (table_key 'work_plans', record_id = id del plan, también para sus renglones y para quién se agrega o se quita); lo ve cualquiera con acceso al plan (ver las rutas de table-changes más abajo).
 const WORK_PLAN_HTTP = {
     WORK_PLAN_NOT_FOUND: 404, WORK_PLAN_ITEM_NOT_FOUND: 404, WORK_PLAN_MEMBER_NOT_FOUND: 404, WORK_PLAN_FORBIDDEN: 403, WORK_PLAN_NOT_ALLOWED: 403, WORK_PLAN_CLOSED: 409, WORK_PLAN_LEVELS_IN_USE: 409, WORK_PLAN_LIMIT_PLANS: 409, WORK_PLAN_LIMIT_ITEMS: 409,
-    WORK_PLAN_LIMIT_MEMBERS: 409, WORK_PLAN_NOT_EMPTY: 409, WORK_PLAN_EMPTY: 409, WORK_PLAN_HAS_WORK: 409, WORK_PLAN_NO_WORK: 409, WORK_PLAN_INACTIVE: 409, WORK_PLAN_CANCELLED: 409, WORK_PLAN_REASON_REQUIRED: 400, WORK_PLAN_MEMBER_EXISTS: 409, WORK_PLAN_MEMBER_INVALID: 400, WORK_PLAN_ROLE_INVALID: 400, WORK_PLAN_STATUS_INVALID: 400,
+    WORK_PLAN_LIMIT_MEMBERS: 409, WORK_PLAN_TEMPLATE_NOT_FOUND: 404, WORK_PLAN_TEMPLATE_LIMIT: 409, WORK_PLAN_TEMPLATE_EMPTY: 409, WORK_PLAN_NOT_EMPTY: 409, WORK_PLAN_EMPTY: 409, WORK_PLAN_HAS_WORK: 409, WORK_PLAN_NO_WORK: 409, WORK_PLAN_INACTIVE: 409, WORK_PLAN_CANCELLED: 409, WORK_PLAN_REASON_REQUIRED: 400, WORK_PLAN_MEMBER_EXISTS: 409, WORK_PLAN_MEMBER_INVALID: 400, WORK_PLAN_ROLE_INVALID: 400, WORK_PLAN_STATUS_INVALID: 400,
 };
 const WORK_PLAN_MESSAGES = {
     WORK_PLAN_NOT_FOUND: 'Ese plan no existe.', WORK_PLAN_ITEM_NOT_FOUND: 'Ese renglón no existe en este plan.', WORK_PLAN_FORBIDDEN: 'No tienes permiso para usar los planes de trabajo.',
@@ -1920,6 +1920,7 @@ const WORK_PLAN_MESSAGES = {
     WORK_PLAN_NOT_ALLOWED: 'Tu rol en este plan no permite hacer eso.', WORK_PLAN_MEMBER_NOT_FOUND: 'Esa persona no está en este plan.', WORK_PLAN_MEMBER_EXISTS: 'Esa persona ya está en este plan.',
     WORK_PLAN_MEMBER_INVALID: 'Esa persona no se puede agregar: elige a alguien activo de tu compañía que no sea la dueña del plan.', WORK_PLAN_ROLE_INVALID: 'El rol no es válido: Ver, Colaborar o Administrar.',
     WORK_PLAN_LIMIT_MEMBERS: `Un plan no se puede compartir con más de ${WORK_PLAN_LIMITS.membersPerPlan} personas.`,
+    WORK_PLAN_TEMPLATE_NOT_FOUND: 'Esa plantilla no existe.', WORK_PLAN_TEMPLATE_LIMIT: `Ya tienes ${WORK_PLAN_LIMITS.templatesPerUser} plantillas: elimina alguna para guardar otra.`, WORK_PLAN_TEMPLATE_EMPTY: 'Este plan no tiene renglones: no sirve de plantilla.',
     WORK_PLAN_NOT_EMPTY: 'Este plan ya tiene renglones: no se puede eliminar. Si todavía no se ha trabajado en él, inactívalo; si ya hay trabajo registrado, cancélalo.',
     WORK_PLAN_EMPTY: 'Este plan está vacío: solo se puede eliminar.',
     WORK_PLAN_HAS_WORK: 'Este plan ya tiene trabajo registrado: solo se puede cancelar.',
@@ -1947,6 +1948,7 @@ function workPlanGate(req, res) {
 }
 const workPlanPick = (body, keys) => { const b = body && typeof body === 'object' ? body : {}; const out = {}; keys.forEach((k) => { if (Object.prototype.hasOwnProperty.call(b, k)) out[k] = b[k]; }); return out; };
 const WORK_PLAN_KEYS = ['title', 'description', 'levelNames', 'pinned', 'status', 'bossCanView', 'reason'];
+const WORK_PLAN_CREATE_KEYS = ['title', 'description', 'levelNames', 'templateId'];
 const WORK_PLAN_ITEM_KEYS = ['parentId', 'title', 'responsibleUserId', 'responsibleName', 'executorUserId', 'executorName', 'startDate', 'endDate', 'note', 'status'];
 function workPlanLog(req, planId, changes) {
     (changes || []).forEach((c) => logTableChange({
@@ -1982,8 +1984,20 @@ app.get('/api/business/work-plans/team', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.json(listTeamWorkPlanActivities(req.user.clientId, req.user.sub, typeof req.query.today === 'string' ? req.query.today : undefined));
 });
+// Plantillas (pieza 3c): privadas de quien las guarda. Van ANTES de /:id.
+app.get('/api/business/work-plans/templates', requireAuth, (req, res) => {
+    if (!workPlanGate(req, res)) return;
+    res.set('Cache-Control', 'no-store');
+    res.json(listWorkPlanTemplates(req.user.clientId, req.user.sub));
+});
+app.post('/api/business/work-plans/templates', requireAuth, (req, res) => workPlanRun(req, res,
+    () => createWorkPlanTemplate(req.user.clientId, req.user.sub, workPlanPick(req.body, ['planId', 'name'])), 201, (r) => ({ template: r.template })));
+app.patch('/api/business/work-plans/templates/:id', requireAuth, (req, res) => workPlanRun(req, res,
+    () => renameWorkPlanTemplate(req.user.clientId, req.user.sub, req.params.id, (req.body || {}).name), 200, (r) => ({ template: r.template })));
+app.delete('/api/business/work-plans/templates/:id', requireAuth, (req, res) => workPlanRun(req, res,
+    () => deleteWorkPlanTemplate(req.user.clientId, req.user.sub, req.params.id), 200, () => ({ ok: true })));
 app.post('/api/business/work-plans', requireAuth, (req, res) => workPlanRun(req, res,
-    () => createWorkPlan(req.user.clientId, req.user.sub, workPlanPick(req.body, ['title', 'description', 'levelNames'])), 201, (r) => ({ plan: r.plan })));
+    () => createWorkPlan(req.user.clientId, req.user.sub, workPlanPick(req.body, WORK_PLAN_CREATE_KEYS), changedByLabel(req)), 201, (r) => ({ plan: r.plan })));
 app.get('/api/business/work-plans/:id', requireAuth, (req, res) => {
     if (!workPlanGate(req, res)) return;
     const result = getWorkPlanDetail(req.user.clientId, req.user.sub, req.user.isTestAccount, req.params.id);

@@ -47,6 +47,8 @@ let team = { members: [], activities: [], truncated: false }; // las personas a 
 let teamFilter = 'open';        // 'open' | 'late' | 'done' | 'all'
 let teamPerson = 'all';         // 'all' | id de una persona del equipo
 let teamQuery = '';
+let templates = [];            // mis plantillas (privadas): [{ id, name, levelNames, itemCount, fromPlanTitle }]
+let canCreateTemplate = true;
 let listFilter = 'all';         // 'all' (activos de cualquier origen) | 'own' | 'shared' (compartidos conmigo y del equipo) | 'closed'
 let listQuery = '';
 let form = null;                // el formulario en línea abierto (uno a la vez): { mode: 'add'|'edit', planId, parentId, id, depth, values, error, busy }
@@ -95,6 +97,11 @@ async function loadTeam() {
     const out = await api('GET', `/team?today=${todayYmd()}`);
     team = { members: out.members || [], activities: out.activities || [], truncated: !!out.truncated };
 }
+async function loadTemplates() {
+    const out = await api('GET', '/templates');
+    templates = out.templates || [];
+    canCreateTemplate = out.canCreate !== false;
+}
 async function loadPlan(id) {
     const out = await api('GET', `/${id}`);
     cache.set(id, out);
@@ -106,7 +113,7 @@ async function loadPlan(id) {
 }
 // Vuelve a leer la lista y, si hay uno abierto, ese plan (un plan que ya no existe se quita de las pestañas).
 async function refreshAll(planId, quiet) {
-    await Promise.all([loadList(), loadMine().catch((err) => console.error('Mis actividades:', err)), loadTeam().catch((err) => console.error('Mi equipo:', err))]);
+    await Promise.all([loadList(), loadMine().catch((err) => console.error('Mis actividades:', err)), loadTeam().catch((err) => console.error('Mi equipo:', err)), loadTemplates().catch((err) => console.error('Plantillas:', err))]);
     if (tabs.active === 'team' && !team.members.length) tabs.active = 'list';
     tabs.open = tabs.open.filter((id) => plans.some((p) => p.id === id));
     if (isPlanTab(tabs.active) && !tabs.open.includes(tabs.active)) tabs.active = 'list';
@@ -287,7 +294,8 @@ function renderList(partial) {
     const existing = root.querySelector('#wp-list-body');
     if (partial && existing && root.dataset.view === 'list') { existing.innerHTML = body; root.querySelector('.wp-filters').outerHTML = filters; return; }
     root.dataset.view = 'list';
-    root.innerHTML = `<div class="wp-toolbar">${filters}<div class="wp-toolbar-r">${search}${create}</div></div><div id="wp-list-body">${body}</div>`;
+    const tplBtn = templates.length ? `<button type="button" class="btn btn-secondary" data-wp-templates="1" data-help-key="wpTemplates"><i class="bx bx-copy-alt" aria-hidden="true"></i> ${esc(t('main.wpTemplatesBtn'))} · ${templates.length}</button>` : '';
+    root.innerHTML = `<div class="wp-toolbar">${filters}<div class="wp-toolbar-r">${search}${tplBtn}${create}</div></div><div id="wp-list-body">${body}</div>`;
 }
 
 // ---- un plan abierto ----------------------------------------------------------------------------------------------------------------------------------
@@ -314,7 +322,7 @@ function planActions(plan) {
     const can = plan.can || {};
     const closed = plan.status === 'closed';
     const live = isLive(plan);
-    const btn = (op, icon, labelKey, extra) => `<button type="button" class="btn btn-secondary wp-small${extra ? ` ${extra}` : ''}" data-wp-act="${op}" data-help-key="${{ pin: 'wpPin', history: 'wpHistory', comments: 'wpPlanComments', close: 'wpClose', reopen: 'wpClose', inactivate: 'wpInactivate', reactivate: 'wpInactivate', cancel: 'wpCancel', delete: 'wpDelete', 'edit-plan': 'wpEditPlan', share: 'wpShare', people: 'wpShare', leave: 'wpLeave' }[op] || 'wpPlanActions'}"><i class="bx ${icon}" aria-hidden="true"></i> ${esc(t(labelKey))}</button>`;
+    const btn = (op, icon, labelKey, extra) => `<button type="button" class="btn btn-secondary wp-small${extra ? ` ${extra}` : ''}" data-wp-act="${op}" data-help-key="${{ pin: 'wpPin', history: 'wpHistory', comments: 'wpPlanComments', close: 'wpClose', reopen: 'wpClose', inactivate: 'wpInactivate', reactivate: 'wpInactivate', cancel: 'wpCancel', delete: 'wpDelete', 'edit-plan': 'wpEditPlan', 'save-template': 'wpSaveTemplate', share: 'wpShare', people: 'wpShare', leave: 'wpLeave' }[op] || 'wpPlanActions'}"><i class="bx ${icon}" aria-hidden="true"></i> ${esc(t(labelKey))}</button>`;
     const out = [btn('pin', plan.pinned ? 'bxs-star' : 'bx-star', plan.pinned ? 'main.wpUnpin' : 'main.wpPin')];
     if (can.edit && live) out.push(btn('edit-plan', 'bx-edit-alt', 'main.wpEditPlan'));
     out.push(can.share && live ? btn('share', 'bx-share-alt', 'main.wpShare') : btn('people', 'bx-group', 'main.wpPeople'));
@@ -323,6 +331,7 @@ function planActions(plan) {
     if (can.reactivate) out.push(btn('reactivate', 'bx-play-circle', 'main.wpReactivatePlan'));
     if (can.cancel) out.push(btn('cancel', 'bx-block', 'main.wpCancelPlan', 'wp-danger'));
     if (can.delete) out.push(btn('delete', 'bx-trash', 'main.wpDeletePlan', 'wp-danger'));
+    if (originOf(plan) !== 'team' && plan.itemCount > 0) out.push(btn('save-template', 'bx-copy-alt', 'main.wpSaveTemplate'));
     out.push(btn('comments', 'bx-message-rounded-dots', 'main.wpPlanComments'));
     out.push(btn('history', 'bx-history', 'main.wpHistory'));
     if (can.leave) out.push(btn('leave', 'bx-log-out-circle', 'main.wpLeave'));
@@ -785,15 +794,17 @@ function openPlanModal(planId) {
     const plan = data ? data.plan : null;
     const usedDepth = data ? data.items.reduce((m, i) => Math.max(m, i.depth), 0) : 0;
     let names = plan ? [...plan.levelNames] : DEFAULT_LEVELS();
+    let locked = false; // con una plantilla elegida, los niveles son los de ella y no se tocan
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay exp-overlay';
-    const levelsHtml = () => names.map((name, i) => `<div class="wp-lvl-row"><span class="wp-lvl-n">${i + 1}</span><input type="text" name="level" maxlength="30" value="${esc(name)}" aria-label="${esc(t('main.wpLevelField', { n: i + 1 }))}" autocomplete="off"></div>`).join('');
+    const levelsHtml = () => names.map((name, i) => `<div class="wp-lvl-row"><span class="wp-lvl-n">${i + 1}</span><input type="text" name="level" maxlength="30" value="${esc(name)}" aria-label="${esc(t('main.wpLevelField', { n: i + 1 }))}" autocomplete="off"${locked ? ' disabled' : ''}></div>`).join('');
     const drawLevels = () => {
         overlay.querySelector('#wp-m-levels').innerHTML = levelsHtml();
-        overlay.querySelector('[data-wp-m="add-level"]').disabled = names.length >= MAX_LEVELS;
-        overlay.querySelector('[data-wp-m="del-level"]').disabled = names.length <= 1 || names.length <= usedDepth;
+        overlay.querySelector('[data-wp-m="add-level"]').disabled = locked || names.length >= MAX_LEVELS;
+        overlay.querySelector('[data-wp-m="del-level"]').disabled = locked || names.length <= 1 || names.length <= usedDepth;
     };
     overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal" role="dialog" aria-modal="true" aria-labelledby="wp-m-title" aria-label="${esc(t(plan ? 'main.wpModalEdit' : 'main.wpModalNew'))}" data-help-key="wpPlanForm"><h3 id="wp-m-title">${esc(t(plan ? 'main.wpModalEdit' : 'main.wpModalNew'))}</h3>
+        ${!plan && templates.length ? `<div class="admin-field"><label for="wp-m-tpl">${esc(t('main.wpStartFrom'))}</label><select id="wp-m-tpl" data-help-key="wpStartFrom"><option value="">${esc(t('main.wpStartBlank'))}</option>${templates.map((tp) => `<option value="${tp.id}">${esc(tp.name)} · ${esc(t(tp.itemCount === 1 ? 'main.wpTemplateItemsOne' : 'main.wpTemplateItems', { n: tp.itemCount }))}</option>`).join('')}</select></div>` : ''}
         <div class="admin-field"><label for="wp-m-name">${esc(t('main.wpFieldPlanTitle'))}</label><input id="wp-m-name" type="text" maxlength="120" autocomplete="off" value="${esc(plan ? plan.title : '')}"></div>
         <div class="admin-field"><label for="wp-m-desc">${esc(t('main.wpFieldPlanDesc'))}</label><textarea id="wp-m-desc" rows="2" maxlength="500">${esc(plan ? (plan.description || '') : '')}</textarea></div>
         <fieldset class="wp-lvl-set"><legend>${esc(t('main.wpLevelsLegend'))}</legend><p class="admin-hint">${esc(t('main.wpLevelsHint'))}</p><div id="wp-m-levels"></div>
@@ -807,6 +818,15 @@ function openPlanModal(planId) {
     document.addEventListener('keydown', onKey);
     overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) close(); });
     setTimeout(() => overlay.querySelector('#wp-m-name').focus(), 0);
+    const blankNames = [...names];
+    const tplSelect = overlay.querySelector('#wp-m-tpl');
+    if (tplSelect) tplSelect.addEventListener('change', () => {
+        const picked = templates.find((tp) => String(tp.id) === tplSelect.value);
+        if (!locked) blankNames.splice(0, blankNames.length, ...[...overlay.querySelectorAll('input[name="level"]')].map((el) => el.value.trim()));
+        locked = !!picked;
+        names = picked ? [...picked.levelNames] : [...blankNames];
+        drawLevels();
+    });
     const readNames = () => [...overlay.querySelectorAll('input[name="level"]')].map((el) => el.value.trim());
     overlay.addEventListener('click', async (event) => {
         const btn = event.target.closest('[data-wp-m]');
@@ -821,7 +841,8 @@ function openPlanModal(planId) {
         const description = overlay.querySelector('#wp-m-desc').value.trim();
         const levelNames = readNames();
         if (!title) { errorEl.textContent = t('main.wpErr_WORK_PLAN_TITLE_REQUIRED'); errorEl.hidden = false; return; }
-        if (levelNames.some((n) => !n)) { errorEl.textContent = t('main.wpErr_WORK_PLAN_LEVELS_INVALID'); errorEl.hidden = false; return; }
+        const templateId = tplSelect && tplSelect.value ? Number(tplSelect.value) : null;
+        if (!templateId && levelNames.some((n) => !n)) { errorEl.textContent = t('main.wpErr_WORK_PLAN_LEVELS_INVALID'); errorEl.hidden = false; return; }
         btn.disabled = true;
         try {
             if (plan) {
@@ -832,7 +853,7 @@ function openPlanModal(planId) {
                 Dashboard.showToast(t('main.wpSaved'), 'success');
                 render();
             } else {
-                const out = await api('POST', '', { title, description, levelNames });
+                const out = await api('POST', '', templateId ? { title, description, templateId } : { title, description, levelNames });
                 await loadList();
                 close();
                 Dashboard.showToast(t('main.wpCreatedToast'), 'success');
@@ -844,6 +865,94 @@ function openPlanModal(planId) {
             btn.disabled = false;
         }
     });
+}
+
+// ---- plantillas (pieza 3c) ------------------------------------------------------------------------------------------------------------------------------
+// Una plantilla es PRIVADA de quien la guarda y lleva solo los niveles y los nombres de los renglones (en su árbol): nada de responsables, fechas, estados ni notas. Se guarda desde un plan (menos los del equipo) y se usa en «Nuevo plan».
+function openSaveTemplateModal(planId) {
+    const data = cache.get(planId);
+    const plan = data && data.plan;
+    if (!plan) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal" role="dialog" aria-modal="true" aria-labelledby="wp-t-title" aria-label="${esc(t('main.wpSaveTemplate'))}" data-help-key="wpSaveTemplate"><h3 id="wp-t-title">${esc(t('main.wpSaveTemplate'))}</h3>
+        <div class="admin-field"><label for="wp-t-name">${esc(t('main.wpTemplateName'))}</label><input id="wp-t-name" type="text" maxlength="120" autocomplete="off" value="${esc(plan.title)}"></div>
+        <p class="admin-error" id="wp-t-error" role="alert" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" data-wp-t="save">${esc(t('main.wpSave'))}</button><button type="button" class="btn btn-secondary" data-wp-t="cancel">${esc(t('main.wpCancel'))}</button></div></div>`;
+    document.body.appendChild(overlay);
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) close(); });
+    const input = overlay.querySelector('#wp-t-name');
+    setTimeout(() => { input.focus(); input.select(); }, 0);
+    const save = async (btn) => {
+        const errorEl = overlay.querySelector('#wp-t-error');
+        const name = input.value.trim();
+        if (!name) { errorEl.textContent = t('main.wpErr_WORK_PLAN_TITLE_REQUIRED'); errorEl.hidden = false; return; }
+        btn.disabled = true;
+        try {
+            await api('POST', '/templates', { planId, name });
+            await loadTemplates();
+            close();
+            Dashboard.showToast(t('main.wpTemplateSaved'), 'success');
+        } catch (err) { errorEl.textContent = errText(err); errorEl.hidden = false; btn.disabled = false; }
+    };
+    input.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); save(overlay.querySelector('[data-wp-t="save"]')); } });
+    overlay.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-wp-t]');
+        if (!btn) return;
+        if (btn.dataset.wpT === 'cancel') close(); else if (btn.dataset.wpT === 'save') save(btn);
+    });
+}
+function openTemplatesModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    let editing = 0;
+    const rowHtml = (tp) => {
+        const meta = `${t(tp.itemCount === 1 ? 'main.wpTemplateItemsOne' : 'main.wpTemplateItems', { n: tp.itemCount })} · ${tp.levelNames.join(' › ')}${tp.fromPlanTitle ? ` · ${t('main.wpTemplateFrom', { plan: tp.fromPlanTitle })}` : ''}`;
+        if (editing === tp.id) {
+            return `<li class="wp-tpl-row" data-tpl="${tp.id}"><input type="text" class="wp-tpl-input" maxlength="120" value="${esc(tp.name)}" aria-label="${esc(t('main.wpTemplateName'))}" autocomplete="off"><span class="wp-tpl-btns"><button type="button" class="btn wp-small" data-wp-t="rename-save" data-id="${tp.id}">${esc(t('main.wpSave'))}</button><button type="button" class="btn btn-secondary wp-small" data-wp-t="rename-cancel">${esc(t('main.wpCancel'))}</button></span></li>`;
+        }
+        return `<li class="wp-tpl-row" data-tpl="${tp.id}" role="group" aria-label="${esc(tp.name)}" data-help-key="wpTemplateRow"><span class="wp-tpl-main"><b>${esc(tp.name)}</b><small>${esc(meta)}</small></span><span class="wp-tpl-btns"><button type="button" class="admin-icon-btn impl-act-btn" data-wp-t="rename" data-id="${tp.id}" aria-label="${esc(t('main.wpTemplateRename'))}" title="${esc(t('main.wpTemplateRename'))}"><i class="bx bx-edit-alt" aria-hidden="true"></i></button><button type="button" class="admin-icon-btn impl-act-btn admin-icon-btn-danger" data-wp-t="delete" data-id="${tp.id}" aria-label="${esc(t('main.wpTemplateDelete'))}" title="${esc(t('main.wpTemplateDelete'))}"><i class="bx bx-trash" aria-hidden="true"></i></button></span></li>`;
+    };
+    const draw = () => { overlay.querySelector('.wp-tpl-list').innerHTML = templates.map(rowHtml).join(''); };
+    overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal" role="dialog" aria-modal="true" aria-labelledby="wp-tl-title" aria-label="${esc(t('main.wpTemplatesBtn'))}" data-help-key="wpTemplates"><div class="wp-detail-head"><h3 id="wp-tl-title">${esc(t('main.wpTemplatesBtn'))}</h3><button type="button" class="admin-icon-btn" data-wp-t="close" aria-label="${esc(t('main.wpDetailClose'))}" title="${esc(t('main.wpDetailClose'))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>
+        <ul class="wp-tpl-list"></ul><p class="admin-error" id="wp-tl-error" role="alert" hidden></p></div>`;
+    document.body.appendChild(overlay);
+    draw();
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); if (tabs.active === 'list') renderList(); };
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) close(); });
+    const showError = (err) => { const el = overlay.querySelector('#wp-tl-error'); el.textContent = errText(err); el.hidden = false; };
+    overlay.addEventListener('click', async (event) => {
+        const btn = event.target.closest('[data-wp-t]');
+        if (!btn) return;
+        const op = btn.dataset.wpT;
+        const id = Number(btn.dataset.id);
+        overlay.querySelector('#wp-tl-error').hidden = true;
+        if (op === 'close') { close(); return; }
+        if (op === 'rename') { editing = id; draw(); const input = overlay.querySelector('.wp-tpl-input'); if (input) { input.focus(); input.select(); } return; }
+        if (op === 'rename-cancel') { editing = 0; draw(); return; }
+        if (op === 'rename-save') {
+            const name = overlay.querySelector('.wp-tpl-input').value.trim();
+            if (!name) { showError({ body: { code: 'WORK_PLAN_TITLE_REQUIRED' } }); return; }
+            try { await api('PATCH', `/templates/${id}`, { name }); editing = 0; await loadTemplates(); draw(); Dashboard.showToast(t('main.wpTemplateRenamed'), 'success'); } catch (err) { showError(err); }
+            return;
+        }
+        if (op === 'delete') {
+            const tp = templates.find((x) => x.id === id);
+            if (!tp || !(await Dashboard.confirm(t('main.wpTemplateDeleteConfirm', { name: tp.name })))) return;
+            try {
+                await api('DELETE', `/templates/${id}`);
+                await loadTemplates();
+                Dashboard.showToast(t('main.wpTemplateDeleted'), 'success');
+                if (!templates.length) close(); else draw();
+            } catch (err) { showError(err); }
+        }
+    });
+    overlay.addEventListener('keydown', (event) => { if (event.key === 'Enter' && event.target.classList.contains('wp-tpl-input')) { event.preventDefault(); overlay.querySelector('[data-wp-t="rename-save"]').click(); } });
 }
 
 // ---- detalle de un renglón y sus comentarios (hilos genéricos: Threads.js) ------------------------------------------------------------------------------
@@ -1010,6 +1119,7 @@ document.addEventListener('click', (event) => {
     const tab = el.closest('[data-wp-tab]');
     if (tab && $('wp-tabs').contains(tab)) { const id = tab.dataset.wpTab; activate(id === 'list' || id === 'mine' || id === 'team' ? id : Number(id)); return; }
     if (el.closest('[data-wp-new]')) { openPlanModal(null); return; }
+    if (el.closest('[data-wp-templates]')) { openTemplatesModal(); return; }
     const mineFilterBtn = el.closest('[data-wp-mine-filter]');
     if (mineFilterBtn) { mineFilter = mineFilterBtn.dataset.wpMineFilter; renderMine(true); return; }
     const mineRoleBtn = el.closest('[data-wp-mine-role]');
@@ -1052,6 +1162,7 @@ document.addEventListener('click', (event) => {
     else if (op === 'reactivate') simpleState(planId, 'active', 'main.wpReactivateConfirm', 'main.wpReactivatedToast');
     else if (op === 'cancel') openCancelModal(planId);
     else if (op === 'delete') deleteEmptyPlan(planId);
+    else if (op === 'save-template') openSaveTemplateModal(planId);
     else if (op === 'history') Dashboard.openChangeHistory('work_plans', planId);
     else if (op === 'comments') openPlanThread(planId);
     else if (op === 'share' || op === 'people') openShareModal(planId);
@@ -1092,7 +1203,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && !f
         if (!role) return;
         const saved = readJson(TABS_KEY, { open: [], active: 'list' });
         tabs = { open: Array.isArray(saved.open) ? saved.open.filter((id) => Number.isInteger(id)) : [], active: saved.active };
-        try { await loadList(); await Promise.all([loadMine().catch((err) => console.error('Mis actividades:', err)), loadTeam().catch((err) => console.error('Mi equipo:', err))]); } catch (err) { $('wp-error').textContent = t('main.wpLoadError'); $('wp-error').hidden = false; console.error('Planes de trabajo: failed to load', err); return; }
+        try { await loadList(); await Promise.all([loadMine().catch((err) => console.error('Mis actividades:', err)), loadTeam().catch((err) => console.error('Mi equipo:', err)), loadTemplates().catch((err) => console.error('Plantillas:', err))]); } catch (err) { $('wp-error').textContent = t('main.wpLoadError'); $('wp-error').hidden = false; console.error('Planes de trabajo: failed to load', err); return; }
         tabs.open = tabs.open.filter((id) => plans.some((p) => p.id === id));
         if (tabs.active !== 'mine' && tabs.active !== 'team' && !isPlanTab(tabs.active)) tabs.active = 'list';
         if (tabs.active === 'team' && !team.members.length) tabs.active = 'list';

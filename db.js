@@ -15675,7 +15675,7 @@ function removeImplementationActivity(clientId, activityId, byLabel) {
 // lectura; quien no tiene acceso sigue recibiendo «no existe». El acceso se decide en UN lugar (workPlanAccess) y de ahí salen los permisos de cada acción (workPlanPlanCan / workPlanItemRights). Las reglas de quién puede entrar a la pantalla las decide server.js.
 // El historial (data_table_changes) usa table_key 'work_plans' y record_id = id del PLAN, también para los cambios de sus renglones (cada fila lleva en record_label el renglón: «Actividad «Licencia sanitaria»»).
 const WORK_PLAN_TABLE = 'work_plans';
-const WORK_PLAN_LIMITS = { title: 120, description: 500, note: 1000, level: 30, levels: 50, responsible: 80, executor: 200, plansPerUser: 100, itemsPerPlan: 1000, membersPerPlan: 50, reason: 500, mineMax: 500 };
+const WORK_PLAN_LIMITS = { title: 120, description: 500, note: 1000, level: 30, levels: 50, responsible: 80, executor: 200, plansPerUser: 100, itemsPerPlan: 1000, membersPerPlan: 50, reason: 500, mineMax: 500, templatesPerUser: 50 };
 const WORK_PLAN_ROLES = ['view', 'collaborate', 'admin'];
 const WORK_PLAN_ROLE_ES = { view: 'Ver', collaborate: 'Colaborar', admin: 'Administrar' };
 const WORK_PLAN_DEFAULT_LEVELS = ['Nivel', 'Clasificación', 'Proceso', 'Actividad', 'Subactividad']; // los planes ya creados conservan los suyos
@@ -16137,6 +16137,91 @@ function listTeamWorkPlanActivities(clientId, userId, today) {
         || (a.person.name < b.person.name ? -1 : a.person.name > b.person.name ? 1 : 0) || a.itemId - b.itemId);
     return { members, activities: all.slice(0, WORK_PLAN_LIMITS.mineMax), truncated: all.length > WORK_PLAN_LIMITS.mineMax };
 }
+// ---- Plantillas de planes (pieza 3c) ----
+// Una plantilla es PRIVADA de quien la guarda (nadie más la ve ni la usa) y se saca de un plan al que esa persona tiene acceso (menos los del equipo, que son solo para mirar): guarda los niveles y los renglones con sus nombres, en su
+// árbol y su orden, y NADA más (ni responsables, ni fechas, ni estados, ni notas, ni comentarios): es el molde, no el trabajo. Al crear un plan desde ella (createWorkPlan con templateId) se copian de nuevo; después son independientes
+// (cambiar o borrar el plan o la plantilla no toca al otro). Cada persona puede tener hasta WORK_PLAN_LIMITS.templatesPerUser. A diferencia de un plan, una plantilla sí se puede eliminar (es una herramienta personal, no un registro de trabajo).
+db.exec(`
+    CREATE TABLE IF NOT EXISTS work_plan_templates (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id      INTEGER NOT NULL,
+        owner_user_id  INTEGER NOT NULL,
+        name           TEXT NOT NULL,
+        level_names    TEXT NOT NULL,
+        from_plan_title TEXT NOT NULL DEFAULT '',
+        created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_work_plan_templates_owner ON work_plan_templates (client_id, owner_user_id);
+    CREATE TABLE IF NOT EXISTS work_plan_template_items (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        template_id  INTEGER NOT NULL REFERENCES work_plan_templates(id) ON DELETE CASCADE,
+        parent_id    INTEGER REFERENCES work_plan_template_items(id) ON DELETE CASCADE,
+        depth        INTEGER NOT NULL,
+        position     INTEGER NOT NULL,
+        title        TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_work_plan_template_items_template ON work_plan_template_items (template_id, parent_id);
+`);
+const workPlanTemplateLevels = (row) => { try { const v = JSON.parse(row.level_names); return Array.isArray(v) && v.length ? v : [...WORK_PLAN_DEFAULT_LEVELS]; } catch (err) { return [...WORK_PLAN_DEFAULT_LEVELS]; } };
+// La plantilla de esa persona (de esa compañía); null si no existe o es de otra persona.
+function findWorkPlanTemplate(clientId, userId, templateId) {
+    const id = Number(templateId);
+    if (!Number.isInteger(id)) return null;
+    return db.prepare('SELECT * FROM work_plan_templates WHERE id = ? AND client_id = ? AND owner_user_id = ?').get(id, clientId, userId) || null;
+}
+const workPlanTemplateSummary = (row, itemCount) => ({
+    id: row.id, name: row.name, levelNames: workPlanTemplateLevels(row), itemCount, fromPlanTitle: row.from_plan_title || '', createdAt: row.created_at, updatedAt: row.updated_at,
+});
+// Copia los renglones de una plantilla a un plan nuevo (primero los de arriba, así cada uno encuentra a su padre) como pendientes, sin responsable ni fechas.
+function copyWorkPlanTemplateItems(templateId, planId, userId, byLabel, now) {
+    const rows = db.prepare('SELECT * FROM work_plan_template_items WHERE template_id = ? ORDER BY depth, position, id').all(templateId);
+    const map = new Map();
+    const insert = db.prepare('INSERT INTO work_plan_items (plan_id, parent_id, depth, position, title, created_by, created_by_user_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    rows.forEach((r) => { map.set(r.id, Number(insert.run(planId, r.parent_id == null ? null : map.get(r.parent_id), r.depth, r.position, r.title, byLabel || '', userId, now, now).lastInsertRowid)); });
+}
+// Las plantillas de esa persona: la más reciente primero.
+function listWorkPlanTemplates(clientId, userId) {
+    const rows = db.prepare('SELECT * FROM work_plan_templates WHERE client_id = ? AND owner_user_id = ? ORDER BY updated_at DESC, id DESC').all(clientId, userId);
+    const counts = new Map((rows.length ? db.prepare(`SELECT template_id AS id, COUNT(*) AS n FROM work_plan_template_items WHERE template_id IN (${rows.map(() => '?').join(',')}) GROUP BY template_id`).all(...rows.map((r) => r.id)) : []).map((c) => [c.id, c.n]));
+    return { templates: rows.map((r) => workPlanTemplateSummary(r, counts.get(r.id) || 0)), canCreate: rows.length < WORK_PLAN_LIMITS.templatesPerUser };
+}
+// Guarda un plan como plantilla. name vacío = el nombre del plan. Un plan sin renglones no sirve de molde; uno del equipo (solo para mirar) tampoco.
+function createWorkPlanTemplate(clientId, userId, { planId, name } = {}) {
+    const found = findWorkPlanFor(clientId, userId, planId);
+    if (!found) return { error: 'WORK_PLAN_NOT_FOUND' };
+    if (found.access.origin === 'team') return { error: 'WORK_PLAN_NOT_ALLOWED' };
+    const n = cleanWorkPlanTitle(name == null || String(name).trim() === '' ? found.row.title : name);
+    if (n.error) return n;
+    if (db.prepare('SELECT COUNT(*) AS c FROM work_plan_templates WHERE client_id = ? AND owner_user_id = ?').get(clientId, userId).c >= WORK_PLAN_LIMITS.templatesPerUser) return { error: 'WORK_PLAN_TEMPLATE_LIMIT' };
+    const items = db.prepare('SELECT * FROM work_plan_items WHERE plan_id = ? ORDER BY depth, position, id').all(found.row.id);
+    if (!items.length) return { error: 'WORK_PLAN_TEMPLATE_EMPTY' };
+    let id = 0;
+    db.transaction(() => {
+        const now = workPlanNow();
+        id = Number(db.prepare('INSERT INTO work_plan_templates (client_id, owner_user_id, name, level_names, from_plan_title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+            .run(clientId, userId, n.value, JSON.stringify(workPlanLevelsOf(found.row)), found.row.title, now, now).lastInsertRowid);
+        const map = new Map();
+        const insert = db.prepare('INSERT INTO work_plan_template_items (template_id, parent_id, depth, position, title) VALUES (?, ?, ?, ?, ?)');
+        items.forEach((i) => { map.set(i.id, Number(insert.run(id, i.parent_id == null ? null : map.get(i.parent_id), i.depth, i.position, i.title).lastInsertRowid)); });
+    })();
+    return { template: workPlanTemplateSummary(db.prepare('SELECT * FROM work_plan_templates WHERE id = ?').get(id), items.length) };
+}
+function renameWorkPlanTemplate(clientId, userId, templateId, name) {
+    const row = findWorkPlanTemplate(clientId, userId, templateId);
+    if (!row) return { error: 'WORK_PLAN_TEMPLATE_NOT_FOUND' };
+    const n = cleanWorkPlanTitle(name);
+    if (n.error) return n;
+    db.prepare('UPDATE work_plan_templates SET name = ?, updated_at = ? WHERE id = ?').run(n.value, workPlanNow(), row.id);
+    const count = db.prepare('SELECT COUNT(*) AS c FROM work_plan_template_items WHERE template_id = ?').get(row.id).c;
+    return { template: workPlanTemplateSummary(db.prepare('SELECT * FROM work_plan_templates WHERE id = ?').get(row.id), count) };
+}
+function deleteWorkPlanTemplate(clientId, userId, templateId) {
+    const row = findWorkPlanTemplate(clientId, userId, templateId);
+    if (!row) return { error: 'WORK_PLAN_TEMPLATE_NOT_FOUND' };
+    db.prepare('DELETE FROM work_plan_templates WHERE id = ?').run(row.id);
+    return { ok: true };
+}
 // Los ids de los planes a los que esa persona tiene acceso (propios, compartidos y de su equipo): el historial de un plan solo lo ven ellos (ver las rutas de table-changes en server.js).
 function listAccessibleWorkPlanIds(clientId, userId) {
     const ids = new Set(db.prepare('SELECT id FROM work_plans WHERE client_id = ? AND owner_user_id = ?').all(clientId, userId).map((r) => r.id));
@@ -16146,17 +16231,27 @@ function listAccessibleWorkPlanIds(clientId, userId) {
         .forEach((o) => db.prepare('SELECT id FROM work_plans WHERE client_id = ? AND owner_user_id = ? AND boss_can_view = 1').all(clientId, o.ownerId).forEach((r) => ids.add(r.id)));
     return ids;
 }
-function createWorkPlan(clientId, userId, { title, description, levelNames } = {}) {
+// templateId (pieza 3c): el plan nace con los niveles y los renglones (solo los nombres, en su orden) de una plantilla de quien lo crea; si viene, los niveles que se manden se ignoran. byLabel = quien aparece como autor de los renglones.
+function createWorkPlan(clientId, userId, { title, description, levelNames, templateId } = {}, byLabel = '') {
     const t = cleanWorkPlanTitle(title);
     if (t.error) return t;
     const d = cleanWorkPlanLongText(description, WORK_PLAN_LIMITS.description);
     if (d.error) return d;
-    const l = levelNames == null ? { value: [...WORK_PLAN_DEFAULT_LEVELS] } : cleanWorkPlanLevels(levelNames);
+    let template = null;
+    if (templateId != null && templateId !== '') {
+        template = findWorkPlanTemplate(clientId, userId, templateId);
+        if (!template) return { error: 'WORK_PLAN_TEMPLATE_NOT_FOUND' };
+    }
+    const l = template ? { value: workPlanTemplateLevels(template) } : (levelNames == null ? { value: [...WORK_PLAN_DEFAULT_LEVELS] } : cleanWorkPlanLevels(levelNames));
     if (l.error) return l;
     if (db.prepare('SELECT COUNT(*) AS n FROM work_plans WHERE client_id = ? AND owner_user_id = ?').get(clientId, userId).n >= WORK_PLAN_LIMITS.plansPerUser) return { error: 'WORK_PLAN_LIMIT_PLANS' };
     const now = workPlanNow();
-    const id = Number(db.prepare('INSERT INTO work_plans (client_id, owner_user_id, title, description, level_names, created_at, updated_at, last_activity_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(clientId, userId, t.value, d.value, JSON.stringify(l.value), now, now, now).lastInsertRowid);
+    let id = 0;
+    db.transaction(() => {
+        id = Number(db.prepare('INSERT INTO work_plans (client_id, owner_user_id, title, description, level_names, created_at, updated_at, last_activity_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(clientId, userId, t.value, d.value, JSON.stringify(l.value), now, now, now).lastInsertRowid);
+        if (template) copyWorkPlanTemplateItems(template.id, id, userId, byLabel, now);
+    })();
     const found = findWorkPlanFor(clientId, userId, id);
     return { planId: id, plan: workPlanSnapshot(found.row, userId, found.access).plan, changes: [{ action: 'create', recordLabel: workPlanLabel(t.value) }] };
 }
@@ -20049,7 +20144,7 @@ module.exports = {
     getUserGrants,
     setUserGrants,
     getUserGrantChangeLog,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
     MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices,
     THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,

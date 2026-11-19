@@ -63,6 +63,8 @@ const TABLES = {
     implementation_activities: { action: WIPE, group: 'captures' }, // las actividades que se agregan a cada nivel del Cronograma
     work_plans: { action: WIPE, group: 'captures' }, // Planes de trabajo: los planes privados de cada persona (2026-11-19)
     work_plan_items: { action: WIPE, group: 'captures' }, // y sus renglones (niveles, actividades y subactividades)
+    work_plan_templates: { action: WIPE, group: 'captures' }, // Planes de trabajo › Plantillas: los moldes privados de cada persona (3c)
+    work_plan_template_items: { action: WIPE, group: 'captures' }, // y los renglones de cada molde
     work_plan_members: { action: WIPE, group: 'captures' }, // con quién se comparte cada plan y su rol (2a)
     work_plan_user_prefs: { action: WIPE, group: 'captures' }, // fijado propio y «ya lo vi» de quien no es dueño del plan (2a)
     thread_comments: { action: WIPE, group: 'captures' }, // Hilos de comentarios genéricos (renglones y planes de trabajo, y los que vengan): inmutables, solo se van con la compañía (2b)
