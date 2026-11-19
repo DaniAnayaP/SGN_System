@@ -217,7 +217,11 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
 // fixed on the category-screen picker (see isPantallaAppVisible), just
 // never applied to these home-screen tiles too.
 function isAppScreenGrantedForTile(screen) {
-    if (isUnrestrictedClientAdmin()) return true;
+    if (isUnrestrictedClientAdmin()) {
+        // un botón de General (Mensajes, Notificaciones…) lo ve el administrador solo si su contrato se lo asigna (igual que la Web)
+        if (screen.sectionId === 'main' && screen.itemId && !screen.submenuPrefix) return hasMainButtonPermission(screen.itemId);
+        return true;
+    }
     if (!screen.sectionId || !screen.itemId) return false;
     if (!screen.submenuPrefix) {
         // A general-button "screen" (Mensajes, Notificaciones...) has no
@@ -330,7 +334,7 @@ wireMenuGroupToggle('home-menu-business-intelligence', 'home-business-intelligen
 // "unrestricted client admin sees everything" bypass as every other
 // permission check on this page.
 function hasSettingsSubPermission(submenuId) {
-    if (isUnrestrictedClientAdmin()) return true;
+    if (isUnrestrictedClientAdmin()) return adminMainCovers('btn-configuracion', submenuId);
     if (effectiveGrants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-configuracion' && !g.submenuId)) return true;
     return effectiveGrants.some((g) => g.submenuId === submenuId || (g.submenuId && g.submenuId.startsWith(`${submenuId}/`)));
 }
@@ -344,12 +348,12 @@ function hasSettingsSubPermission(submenuId) {
 // actually granted. 'home'/'panel'/'dashboard' aren't in MODULE_CATALOG, so
 // they're grant-only, no contract check.
 function hasMainButtonPermission(itemId) {
-    if (isUnrestrictedClientAdmin()) return true;
+    if (isUnrestrictedClientAdmin()) return adminMainCovers(itemId, null);
     return effectiveGrants.some((g) => g.sectionId === 'main' && g.itemId === itemId);
 }
 const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-tamano-sistema', 'btn-admin-negocio', 'btn-config-botones', 'btn-base-datos', 'btn-negocio-inteligente', 'btn-otros'];
 function hasSettingsAccess() {
-    if (isUnrestrictedClientAdmin()) return true;
+    if (isUnrestrictedClientAdmin()) return adminMainCovers('btn-configuracion', null) || adminButtonConfigHasShortcut();
     return effectiveGrants.some((g) => {
         if (g.sectionId !== 'main' || g.itemId !== 'btn-configuracion') return false;
         if (!g.submenuId) return true;
@@ -399,7 +403,7 @@ function syncSettingsMenuVisibility() {
     const biBtn = document.getElementById('home-menu-business-intelligence');
     const navigableAdminItems = (getAdminBusinessItem()?.submenu || []).filter((i) => !i.permissionOnly);
     if (adminBusinessBtn) adminBusinessBtn.hidden = !hasSettingsSubPermission('btn-admin-negocio') || !navigableAdminItems.length;
-    if (buttonConfigBtn) buttonConfigBtn.hidden = !hasSettingsSubPermission('btn-config-botones');
+    if (buttonConfigBtn) buttonConfigBtn.hidden = !(hasSettingsSubPermission('btn-config-botones') || adminButtonConfigHasShortcut());
     if (databaseBtn) {
         databaseBtn.hidden = !hasSettingsSubPermission('btn-base-datos');
         if (databaseBtn.hidden) {
@@ -1704,6 +1708,37 @@ function isUnrestrictedClientAdmin() {
     return isClientAdmin && effectiveGrants.length === 0;
 }
 
+// --- Lo que se le asignó al administrador del cliente (el contrato: plan + adicionales) -----------------------------------------------------------
+// Lo mismo que Dashboard.js (adminContractGrants / adminMainCovers / grantsCoverScreen): el administrador, que no tiene permisos propios, ve lo que su contrato le asigna y no todo. Lo manda
+// GET /api/me/business-profile (contractGrants, solo para él). Vacío = el cliente no tiene nada asignado en el árbol (los armados antes del árbol): ahí todo queda como siempre.
+// En General, solo cuenta lo asignado si el contrato trae ALGO de General; los centros de costos no se miden. «Administración del Negocio» también se mide (Daniel, 2026-11-19).
+let contractGrantsList = [];
+function adminContractGrants() {
+    if (!isUnrestrictedClientAdmin()) return null;
+    return contractGrantsList.length ? contractGrantsList : null;
+}
+function adminMainCovers(itemId, submenuId) {
+    const contract = adminContractGrants();
+    const main = contract ? contract.filter((g) => g.sectionId === 'main') : [];
+    if (!main.length) return true;
+    if (itemId === 'cc-list') return true;
+    return main.some((g) => !g.itemId || (g.itemId === itemId && (!submenuId || !g.submenuId || g.submenuId === submenuId || String(g.submenuId).startsWith(`${submenuId}/`))));
+}
+// Salir, Departamento, Área y C. Costos se guardan cada uno con su propia llave aunque se vean dentro de «Configuración botones»: ese renglón sale si el administrador tiene asignado alguno de ellos (con su módulo contratado) o Tamaño del Sistema.
+const ADMIN_BUTTON_CONFIG_IDS = ['btn-salir', 'btn-departamento', 'btn-area', 'btn-cc'];
+function adminButtonConfigHasShortcut() {
+    if (!isUnrestrictedClientAdmin()) return false;
+    return ADMIN_BUTTON_CONFIG_IDS.some((id) => adminMainCovers(id, null) && (id === 'btn-salir' || contractedModuleKeys.includes(id))) || adminMainCovers('btn-configuracion', 'btn-tamano-sistema');
+}
+function grantsCoverScreen(grants, sectionId, itemId, submenuId) {
+    return grants.some((g) => (
+        (g.sectionId === sectionId && g.itemId === itemId && g.submenuId === submenuId)
+        || (g.sectionId === sectionId && g.itemId === itemId && g.submenuId && g.submenuId.startsWith(`${submenuId}/`))
+        || (g.sectionId === sectionId && g.itemId === itemId && !g.submenuId)
+        || (g.sectionId === sectionId && !g.itemId && !g.submenuId)
+    ));
+}
+
 // availableDepartments already narrows to what THIS user has any grant in
 // (see initDeptAreaCc) -- the Área list under a picked department needs the
 // exact same narrowing (an área is itemId under that department's own
@@ -1713,11 +1748,21 @@ function isUnrestrictedClientAdmin() {
 // nobody had closed on either side yet.
 function availableAreasForDepartment(deptKey) {
     const areas = (deptKey && AREAS_BY_DEPARTMENT[deptKey]) || [];
-    if (isUnrestrictedClientAdmin()) return areas;
+    if (isUnrestrictedClientAdmin()) {
+        // el administrador solo ve las áreas donde se le asignó algo (o todo el departamento)
+        const contract = adminContractGrants();
+        if (!contract) return areas;
+        return areas.filter((a) => contract.some((g) => g.sectionId === deptKey && (!g.itemId || g.itemId === a.key)));
+    }
     return areas.filter((a) => effectiveGrants.some((g) => g.sectionId === deptKey && g.itemId === a.key));
 }
 function hasScreenGrant(sectionId, itemId, submenuId) {
-    if (isUnrestrictedClientAdmin()) return true;
+    if (isUnrestrictedClientAdmin()) {
+        const contract = adminContractGrants();
+        if (!contract) return true;
+        if (sectionId === 'main') return adminMainCovers(itemId, submenuId);
+        return grantsCoverScreen(contract, sectionId, itemId, submenuId);
+    }
     return effectiveGrants.some((g) => (
         (g.sectionId === sectionId && g.itemId === itemId && g.submenuId === submenuId)
         || (g.sectionId === sectionId && g.itemId === itemId && !g.submenuId)
@@ -2086,10 +2131,11 @@ function updateTabBarVisibility() {
 // tiles now that effectiveGrants is real). Pulled out of initDeptAreaCc so
 // the offline path below can run the exact same logic against cached
 // values instead of re-deriving a second, easily-drifting copy of it.
-function applyDeptAreaCcData(rawMenuData, rawContractedModuleKeys, rawEffectiveGrants, rawCostCenters) {
+function applyDeptAreaCcData(rawMenuData, rawContractedModuleKeys, rawEffectiveGrants, rawCostCenters, rawContractGrants) {
     menuData = rawMenuData;
     contractedModuleKeys = rawContractedModuleKeys || [];
     effectiveGrants = rawEffectiveGrants || [];
+    contractGrantsList = Array.isArray(rawContractGrants) ? rawContractGrants : [];
     availableDepartments = DEPARTMENTS.filter((d) => contractedModuleKeys.includes(d.key));
     // Narrow further to departments THIS user actually has any grant in
     // (Puesto de Trabajo defaults + Permisos Adicionales) -- same fix
@@ -2102,6 +2148,10 @@ function applyDeptAreaCcData(rawMenuData, rawContractedModuleKeys, rawEffectiveG
     if (!isUnrestrictedClientAdmin()) {
         const grantedSectionIds = new Set(effectiveGrants.map((g) => g.sectionId));
         availableDepartments = availableDepartments.filter((d) => grantedSectionIds.has(d.key));
+    } else {
+        // el administrador solo ve los departamentos donde su contrato le asignó algo
+        const contract = adminContractGrants();
+        if (contract) availableDepartments = availableDepartments.filter((d) => contract.some((g) => g.sectionId === d.key));
     }
     sidebarCostCenters = (rawCostCenters || []).filter((cc) => hasCostCenterPermission(cc.id));
 
@@ -2160,10 +2210,11 @@ async function initDeptAreaCc() {
         const modules = modulesRes.ok ? await modulesRes.json() : { moduleKeys: [] };
         const profileData = profileRes.ok ? await profileRes.json() : {};
         const rawEffectiveGrants = profileData.profile?.effectiveGrants || [];
+        const rawContractGrants = profileData.profile?.contractGrants || [];
         const ccData = ccRes.ok ? await ccRes.json() : { costCenters: [] };
-        applyDeptAreaCcData(rawMenuData, modules.moduleKeys, rawEffectiveGrants, ccData.costCenters);
+        applyDeptAreaCcData(rawMenuData, modules.moduleKeys, rawEffectiveGrants, ccData.costCenters, rawContractGrants);
         saveAppDataCache({
-            deptAreaCc: { menuData: rawMenuData, contractedModuleKeys: modules.moduleKeys, effectiveGrants: rawEffectiveGrants, costCenters: ccData.costCenters },
+            deptAreaCc: { menuData: rawMenuData, contractedModuleKeys: modules.moduleKeys, effectiveGrants: rawEffectiveGrants, costCenters: ccData.costCenters, contractGrants: rawContractGrants },
         });
     } catch (err) {
         console.error('AppInicio: failed to load department/area/cost-center data:', err);
@@ -2177,7 +2228,7 @@ async function initDeptAreaCc() {
         // un-gated markup default.
         const cached = loadAppDataCache().deptAreaCc;
         if (cached) {
-            applyDeptAreaCcData(cached.menuData, cached.contractedModuleKeys, cached.effectiveGrants, cached.costCenters);
+            applyDeptAreaCcData(cached.menuData, cached.contractedModuleKeys, cached.effectiveGrants, cached.costCenters, cached.contractGrants);
         }
     }
 }
