@@ -110,5 +110,10 @@
     }
     translateMine();
     new MutationObserver(translateMine).observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] });
+    // Instalada en la pantalla de inicio (opción C: «Agregar a la pantalla de inicio» desde esta dirección): quien ya tiene sesión entra directo a su sistema en lugar de ver el inicio otra vez.
+    const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+    if (standalone) {
+        fetch('/api/me', { credentials: 'include' }).then((res) => { if (res.ok) window.location.replace('/Inicio-en.html'); }).catch(() => { /* sin señal: se queda el inicio */ });
+    }
     page.classList.add('cl-ready');
 })();

@@ -106,6 +106,17 @@ function iconPreview(ed) {
         <div class="cli-iconit">${img(38)}<span>${esc(t('admin.saasCliIconAlert'))}</span></div></div>
         <button type="button" class="btn btn-secondary sc-mini" id="ma-icon-dl">${esc(t('admin.saasCliIconDownload'))}</button></div>`;
 }
+// Opción C (instalar desde la dirección del cliente): al PUBLICAR se dibuja el ícono en PNG de 512 y 192 px y se manda con la publicación (igual que en Admin-AppsClientes.js).
+async function renderIconPngs(ed) {
+    const uri = iconUri(ed);
+    const draw = (size) => new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => { const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; canvas.getContext('2d').drawImage(img, 0, 0, size, size); resolve(canvas.toDataURL('image/png')); };
+        img.onerror = () => reject(new Error('icon'));
+        img.src = uri;
+    });
+    try { return { s512: await draw(512), s192: await draw(192) }; } catch { return undefined; }
+}
 function downloadIcon() {
     const img = new Image();
     img.onload = () => {
@@ -282,7 +293,7 @@ async function saveDraft() {
 const doSave = () => guarded(async () => { await saveDraft(); Dashboard.showToast(t('main.maSaved'), 'success'); });
 const doPublish = () => guarded(async () => {
     if (JSON.stringify(state.work) !== state.savedJson) await saveDraft();
-    const detail = await call('POST', `${API}/publish`, {});
+    const detail = await call('POST', `${API}/publish`, { icon: await renderIconPngs(state) });
     adopt(detail, false);
     syncControls(); renderPreviews(); loadLink();
     Dashboard.showToast(t('main.maPublishedOk'), 'success');

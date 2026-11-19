@@ -215,6 +215,17 @@ function iconPreview(ed) {
         <div class="cli-iconit">${img(38)}<span>${esc(t('admin.saasCliIconAlert'))}</span></div></div>
         ${state.can.icon ? `<button type="button" class="btn btn-secondary sc-mini" id="cli-icon-dl">${esc(t('admin.saasCliIconDownload'))}</button>` : ''}</div>`;
 }
+// Opción C (instalar desde la dirección del cliente): al PUBLICAR se dibuja el ícono en PNG de 512 y 192 px y se manda con la publicación; el servidor lo entrega en el manifiesto de /c/<clave>. Si no se pudo dibujar, se publica sin ícono (sale el de SGN).
+async function renderIconPngs(ed) {
+    const uri = iconUri(ed);
+    const draw = (size) => new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => { const canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size; canvas.getContext('2d').drawImage(img, 0, 0, size, size); resolve(canvas.toDataURL('image/png')); };
+        img.onerror = () => reject(new Error('icon'));
+        img.src = uri;
+    });
+    try { return { s512: await draw(512), s192: await draw(192) }; } catch { return undefined; }
+}
 function downloadIcon() {
     const ed = state.editor;
     const img = new Image();
@@ -433,12 +444,13 @@ const doPublish = () => guarded(async () => {
     const ed = state.editor;
     if (JSON.stringify(ed.work) !== ed.savedJson) await saveDraft();
     let detail;
-    try { detail = await call('POST', `${API}/${ed.clientId}/publish`, {}); } catch (err) {
+    const icon = await renderIconPngs(ed);
+    try { detail = await call('POST', `${API}/${ed.clientId}/publish`, { icon }); } catch (err) {
         // El cliente ya cambió su «Mi App» después de lo inicial: publicar sobrescribe sus cambios, así que se pide confirmar.
         if (!(err.body && err.body.code === 'CLIENT_CHANGED')) throw err;
         const confirmFn = (window.Dashboard && window.Dashboard.confirm) || window.confirm;
         if (!(await confirmFn(t('admin.saasCliClientChangedConfirm', { by: err.body.changedBy || '—', date: stamp(err.body.changedAt) })))) return;
-        detail = await call('POST', `${API}/${ed.clientId}/publish`, { force: true });
+        detail = await call('POST', `${API}/${ed.clientId}/publish`, { force: true, icon });
     }
     adopt(detail, false);
     syncControls(); renderPreviews(); loadLink();

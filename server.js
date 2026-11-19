@@ -580,7 +580,7 @@ const {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, removeClientLogin, setClientLoginSlug,
+    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
@@ -1889,8 +1889,22 @@ const CL_ERRORS = {
     FORMAT: [400, 'La clave usa de 3 a 40 letras minúsculas sin acentos, números y guiones.'], RESERVED: [400, 'Esa clave está reservada por el sistema.'], TAKEN: [409, 'Esa clave ya la tiene otro cliente.'],
     COLOR: [400, 'Un color no es válido.'], IMAGE: [400, 'La imagen debe ser PNG, JPG, WEBP, GIF o SVG.'], IMAGE_SIZE: [400, 'La imagen es demasiado grande.'], BACKGROUND_TYPE: [400, 'Ese tipo de fondo no existe.'],
     SHORT_NAME: [400, 'El nombre abreviado lleva hasta 12 letras, números, espacios y . & \' + -'],
-    CLIENT_CHANGED: [409, 'El cliente cambió esta personalización después de lo inicial. Si publicas, se sobrescriben sus cambios.'], NO_INITIAL: [409, 'SGN todavía no ha publicado lo inicial de este cliente: no hay a dónde volver.'],
+    ICON: [400, 'La imagen del ícono no es válida.'], CLIENT_CHANGED: [409, 'El cliente cambió esta personalización después de lo inicial. Si publicas, se sobrescriben sus cambios.'], NO_INITIAL: [409, 'SGN todavía no ha publicado lo inicial de este cliente: no hay a dónde volver.'],
 };
+// Los PNG del ícono (192 y 512 px) que el navegador dibuja al publicar (opción C: instalar desde la dirección del cliente). Se revisa que sean PNG de verdad y del tamaño que dicen; { icon: texto JSON } ('' si no vino) o { error: true }.
+function clParseIcon(raw) {
+    if (raw === undefined || raw === null || raw === '') return { icon: '' };
+    if (typeof raw !== 'object') return { error: true };
+    const out = {};
+    for (const [key, size] of [['s512', 512], ['s192', 192]]) {
+        const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(raw[key] || ''));
+        if (!match || match[1].length > 400000) return { error: true };
+        const buf = Buffer.from(match[1], 'base64');
+        if (buf.length < 33 || buf.readUInt32BE(0) !== 0x89504e47 || buf.readUInt32BE(16) !== size || buf.readUInt32BE(20) !== size) return { error: true };
+        out[key] = raw[key];
+    }
+    return { icon: JSON.stringify(out) };
+}
 const clFail = (res, result) => { const [status, message] = CL_ERRORS[result.error] || [400, 'No se pudo hacer.']; return res.status(status).json({ message, code: result.error, field: result.field }); };
 const saasClHasScreen = (req) => !!req.user.isSaasSuperAdmin || getSaasUserGrants(req.user.sub).some((g) => g.itemId === SAAS_CL_ITEM);
 const saasClCan = (req, key) => !!req.user.isSaasSuperAdmin || hasSaasGrant(getSaasUserGrants(req.user.sub), SAAS_CL_ITEM, SAAS_CL_LEAVES[key]);
@@ -1977,7 +1991,9 @@ app.post('/api/admin/client-logins/:clientId/publish', requireAuth, requireAdmin
     const company = clGate(req, res, 'publish');
     if (!company) return;
     const force = !!(req.body && req.body.force);
-    const result = publishClientLogin(company.id, changedByLabel(req), { force });
+    const parsedIcon = clParseIcon(req.body && req.body.icon);
+    if (parsedIcon.error) return clFail(res, { error: 'ICON' });
+    const result = publishClientLogin(company.id, changedByLabel(req), { force, icon: parsedIcon.icon });
     if (result.error === 'CLIENT_CHANGED') return res.status(409).json({ message: CL_ERRORS.CLIENT_CHANGED[1], code: 'CLIENT_CHANGED', changedAt: result.at, changedBy: result.by });
     if (result.error) return clFail(res, result);
     const d = result.config.draft;
@@ -2043,7 +2059,9 @@ app.put('/api/business/mi-app/draft', requireAuth, (req, res) => {
 });
 app.post('/api/business/mi-app/publish', requireAuth, (req, res) => {
     if (!miAppGate(req, res, true)) return;
-    const result = publishClientLoginByClient(req.user.clientId, changedByLabel(req));
+    const parsedIcon = clParseIcon(req.body && req.body.icon);
+    if (parsedIcon.error) return clFail(res, { error: 'ICON' });
+    const result = publishClientLoginByClient(req.user.clientId, changedByLabel(req), { icon: parsedIcon.icon });
     if (result.error === 'NOT_FOUND') return res.status(404).json({ message: 'SGN todavía no te ha creado un inicio personalizado.', code: 'NO_CONFIG' });
     if (result.error) return clFail(res, result);
     const d = result.config.draft;
@@ -2123,7 +2141,7 @@ function clPublicView(slug, channel = 'web') {
     const type = live.background.type;
     const background = clBackgroundCss(type, color1, color2, imageUrl ? `url("${imageUrl}")` : '');
     return {
-        slug, name: company.name, logoData, imageData, logoUrl: logoData ? `/c/${slug}/img/logo?v=${version}` : '',
+        slug, name: company.name, shortName: live.identity.shortName || company.suggestedShortName || '', iconColor: live.identity.iconColor || primary, iconVersion: config.iconVersion || '', logoData, imageData, logoUrl: logoData ? `/c/${slug}/img/logo?v=${version}` : '',
         colors: { primary, button, page: clLighten(primary, 0.9), color1, color2 }, background, backgroundType: type, diagonal: !!live.background.diagonal,
         texts: { greeting: !!live.texts.greeting, welcome: live.texts.welcome, formTitle: live.texts.formTitle, appButton: live.texts.appButton },
         show: { forgot: !!live.show.forgot, register: !!live.show.register, social: !!live.show.social, language: !!live.show.language, appLink: !!live.show.appLink, welcomeScreen: !!live.show.welcomeScreen, faceId: !!live.show.faceId },
@@ -2165,15 +2183,45 @@ function clPageHtml(view) {
     const json = JSON.stringify(data).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
     const vars = `:root{--cl-primary:${view.colors.primary};--cl-button:${view.colors.button};--cl-page:${view.colors.page};--cl-bg:${view.background};}`;
     // Quien entra por primera vez con el aparato en español ve la página en español (después manda el idioma que elija).
-    const head = `<style id="cl-vars">${vars}</style><link rel="stylesheet" href="/ClientLogin.css"><script>try{if(!localStorage.getItem('lang')&&/^es/i.test(navigator.language||''))localStorage.setItem('lang','es');}catch(e){}window.SGN_CLIENT_LOGIN=${json};</script>`;
+    const iconV = view.iconVersion ? `?v=${view.iconVersion}` : '';
+    const install = `<meta name="apple-mobile-web-app-title" content="${clEscHtml(view.shortName || view.name)}"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">`;
+    const head = `${install}<style id="cl-vars">${vars}</style><link rel="stylesheet" href="/ClientLogin.css"><script>try{if(!localStorage.getItem('lang')&&/^es/i.test(navigator.language||''))localStorage.setItem('lang','es');}catch(e){}window.SGN_CLIENT_LOGIN=${json};</script>`;
     return clPageTemplate
         // (con función, no con texto: el nombre de la compañía puede traer «$&» u otros símbolos que replace() leería como instrucciones)
         .replace(/<title[^>]*>[^<]*<\/title>/, () => `<title>${clEscHtml(view.name)}</title>`)
         .replace(/<link rel="icon"[^>]*>/, (tag) => (view.logoUrl ? `<link rel="icon" href="${view.logoUrl}">` : tag))
+        .replace(/<link rel="manifest"[^>]*>/, () => `<link rel="manifest" href="/c/${view.slug}/manifest.webmanifest">`)
+        .replace(/<link rel="apple-touch-icon"[^>]*>/, () => `<link rel="apple-touch-icon" href="/c/${view.slug}/icon-192.png${iconV}">`)
+        .replace(/<meta name="theme-color"[^>]*>/, () => `<meta name="theme-color" content="${view.colors.primary}">`)
         .replace('</head>', () => `${head}</head>`)
         .replace('<body>', () => '<body class="cl-mode">')
         .replace('</body>', () => '<script src="/client-login.js" defer></script></body>');
 }
+// Opción C: instalar desde la dirección del cliente («Agregar a la pantalla de inicio» / «Instalar app») con SU ícono y su nombre corto, sin pasar por las tiendas. El manifiesto sale de lo PUBLICADO para computadora.
+app.get('/c/:slug/manifest.webmanifest', publicClientLoginLimiter, (req, res) => {
+    const view = clPublicView(req.params.slug);
+    if (!view) return res.status(404).end();
+    const v = view.iconVersion ? `?v=${view.iconVersion}` : '';
+    res.set({ 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.send(JSON.stringify({
+        id: `/c/${view.slug}`, name: view.name, short_name: view.shortName || Array.from(view.name).slice(0, 12).join(''), description: view.name,
+        start_url: `/c/${view.slug}`, scope: '/', display: 'standalone', background_color: view.colors.color1, theme_color: view.colors.primary,
+        icons: [
+            { src: `/c/${view.slug}/icon-192.png${v}`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: `/c/${view.slug}/icon-512.png${v}`, sizes: '512x512', type: 'image/png', purpose: 'any' },
+        ],
+    }));
+});
+// El ícono del cliente (PNG). Si todavía no tiene uno publicado (se arma al publicar), sale el de SGN en lugar de una imagen rota.
+app.get('/c/:slug/icon-:size(192|512).png', publicClientLoginLimiter, (req, res) => {
+    const view = clPublicView(req.params.slug);
+    if (!view) return res.status(404).end();
+    const config = getClientLoginBySlug(req.params.slug);
+    const png = config ? getClientLoginIconPng(config.clientId, Number(req.params.size)) : null;
+    res.set({ 'Cache-Control': 'public, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
+    if (!png) return res.sendFile(path.join(PUBLIC_DIR, 'icons', 'icon-512.png'));
+    res.type('image/png').send(png);
+});
 app.get('/c/:slug', publicClientLoginLimiter, (req, res) => {
     const view = clPublicView(req.params.slug);
     if (!view) return res.redirect(302, '/');

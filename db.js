@@ -15533,7 +15533,7 @@ db.exec(`
 // su último cambio (si SGN vuelve a publicar después, el sistema avisa antes de sobrescribirlo). «Volver a lo inicial» regresa a initial. La clave y la identidad de la app (nombre abreviado y color del ícono) las cambia solo SGN.
 {
     const cols = db.prepare('PRAGMA table_info(client_login_configs)').all().map((c) => c.name);
-    [['initial', "TEXT NOT NULL DEFAULT ''"], ['initial_at', 'TEXT'], ['initial_by', "TEXT NOT NULL DEFAULT ''"], ['client_changed_at', 'TEXT'], ['client_changed_by', "TEXT NOT NULL DEFAULT ''"]]
+    [['initial', "TEXT NOT NULL DEFAULT ''"], ['initial_at', 'TEXT'], ['initial_by', "TEXT NOT NULL DEFAULT ''"], ['client_changed_at', 'TEXT'], ['client_changed_by', "TEXT NOT NULL DEFAULT ''"], ['live_icon', "TEXT NOT NULL DEFAULT ''"], ['initial_icon', "TEXT NOT NULL DEFAULT ''"]]
         .forEach(([name, def]) => { if (!cols.includes(name)) db.exec(`ALTER TABLE client_login_configs ADD COLUMN ${name} ${def}`); });
 }
 // Palabras que no pueden ser la clave de un cliente: rutas y carpetas de la aplicación.
@@ -15644,7 +15644,18 @@ function deserializeClientLogin(row) {
         createdAt: row.created_at, updatedAt: row.updated_at, updatedBy: row.updated_by,
         web: loginChannelStatus(draft, live, 'web'), app: loginChannelStatus(draft, live, 'app'),
         initial, initialAt: row.initial_at || null, initialBy: row.initial_by || '', clientChangedAt: row.client_changed_at || null, clientChangedBy: row.client_changed_by || '',
+        hasIcon: !!row.live_icon, iconVersion: row.live_icon ? crypto.createHash('md5').update(row.live_icon).digest('hex').slice(0, 8) : '',
     };
+}
+// Opción C (instalar desde la dirección del cliente): el ícono PUBLICADO de la app, ya como PNG (192 y 512). Lo dibuja el navegador al publicar (ver iconSvg en Admin-AppsClientes.js y OpTIMiApp.js) y el servidor solo lo guarda y lo entrega.
+// Devuelve el PNG (Buffer) de ese tamaño o null si el cliente no tiene ícono publicado todavía.
+function getClientLoginIconPng(clientId, size) {
+    const row = db.prepare('SELECT live_icon FROM client_login_configs WHERE client_id = ?').get(clientId);
+    if (!row || !row.live_icon) return null;
+    let icons; try { icons = JSON.parse(row.live_icon); } catch { return null; }
+    const dataUrl = icons && icons[size === 192 ? 's192' : 's512'];
+    const match = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+    return match ? Buffer.from(match[1], 'base64') : null;
 }
 function getClientLogin(clientId) {
     return deserializeClientLogin(db.prepare('SELECT * FROM client_login_configs WHERE client_id = ?').get(clientId));
@@ -15685,23 +15696,23 @@ function saveClientLoginDraft(clientId, rawDraft, updatedBy) {
 }
 // Publicar = el borrador pasa a ser lo publicado. Pide al menos un canal encendido (si no, no hay nada que publicar).
 // SGN publica: lo que publica queda también como lo INICIAL del cliente. Si el cliente cambió algo después de lo inicial (client_changed_at) no se sobrescribe sin confirmar: { error: 'CLIENT_CHANGED', at, by } y se repite con force.
-function publishClientLogin(clientId, publishedBy, { force = false } = {}) {
+function publishClientLogin(clientId, publishedBy, { force = false, icon = '' } = {}) {
     const before = getClientLogin(clientId);
     if (!before) return { error: 'NOT_FOUND' };
     if (!before.draft.channels.web && !before.draft.channels.app) return { error: 'NO_CHANNEL' };
     if (before.clientChangedAt && !force) return { error: 'CLIENT_CHANGED', at: before.clientChangedAt, by: before.clientChangedBy };
     const snapshot = JSON.stringify(before.draft);
-    db.prepare("UPDATE client_login_configs SET live = ?, live_at = datetime('now'), live_by = ?, initial = ?, initial_at = datetime('now'), initial_by = ?, client_changed_at = NULL, client_changed_by = '', updated_at = datetime('now'), updated_by = ? WHERE client_id = ?")
-        .run(snapshot, publishedBy || '', snapshot, publishedBy || '', publishedBy || '', clientId);
+    db.prepare("UPDATE client_login_configs SET live = ?, live_at = datetime('now'), live_by = ?, initial = ?, initial_at = datetime('now'), initial_by = ?, live_icon = ?, initial_icon = ?, client_changed_at = NULL, client_changed_by = '', updated_at = datetime('now'), updated_by = ? WHERE client_id = ?")
+        .run(snapshot, publishedBy || '', snapshot, publishedBy || '', icon || '', icon || '', publishedBy || '', clientId);
     return { before, config: getClientLogin(clientId) };
 }
 // El cliente publica su cambio directo (sin aprobación de SGN): lo publicado es su borrador y queda marcado quién lo cambió y cuándo (lo inicial no se toca).
-function publishClientLoginByClient(clientId, changedBy) {
+function publishClientLoginByClient(clientId, changedBy, { icon = '' } = {}) {
     const before = getClientLogin(clientId);
     if (!before) return { error: 'NOT_FOUND' };
     if (!before.draft.channels.web && !before.draft.channels.app) return { error: 'NO_CHANNEL' };
-    db.prepare("UPDATE client_login_configs SET live = ?, live_at = datetime('now'), live_by = ?, client_changed_at = datetime('now'), client_changed_by = ?, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?")
-        .run(JSON.stringify(before.draft), changedBy || '', changedBy || '', changedBy || '', clientId);
+    db.prepare("UPDATE client_login_configs SET live = ?, live_at = datetime('now'), live_by = ?, live_icon = ?, client_changed_at = datetime('now'), client_changed_by = ?, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?")
+        .run(JSON.stringify(before.draft), changedBy || '', icon || '', changedBy || '', changedBy || '', clientId);
     return { before, config: getClientLogin(clientId) };
 }
 // «Volver a lo inicial»: el borrador y lo publicado vuelven a lo que SGN dejó armado (y el cliente ya no tiene cambios sobre lo inicial). Sin lo inicial (SGN nunca publicó) no hay a dónde volver.
@@ -15710,7 +15721,7 @@ function restoreClientLoginInitial(clientId, changedBy) {
     if (!before) return { error: 'NOT_FOUND' };
     if (!before.initial) return { error: 'NO_INITIAL' };
     const snapshot = JSON.stringify(before.initial);
-    db.prepare("UPDATE client_login_configs SET draft = ?, live = ?, live_at = datetime('now'), live_by = ?, client_changed_at = NULL, client_changed_by = '', updated_at = datetime('now'), updated_by = ? WHERE client_id = ?")
+    db.prepare("UPDATE client_login_configs SET draft = ?, live = ?, live_at = datetime('now'), live_by = ?, live_icon = initial_icon, client_changed_at = NULL, client_changed_by = '', updated_at = datetime('now'), updated_by = ? WHERE client_id = ?")
         .run(snapshot, snapshot, changedBy || '', changedBy || '', clientId);
     return { before, config: getClientLogin(clientId) };
 }
@@ -18496,7 +18507,7 @@ module.exports = {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, removeClientLogin, setClientLoginSlug,
+    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
