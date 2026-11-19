@@ -579,6 +579,7 @@ const {
     getUserDefaults,
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
+    EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
     setUserDefaults,
     getUserUiScale,
     setUserUiScale,
@@ -1385,7 +1386,94 @@ app.post('/api/business/expansions', requireAuth, (req, res) => {
     const base = { clientId: req.user.clientId, tableKey: EXP_TABLE, recordId: created.id, recordLabel: created.label, changedBy: changedByLabel(req) };
     logTableChange({ ...base, action: 'create', fieldKey: '', oldValue: '', newValue: '' });
     logTableChange({ ...base, action: 'update', fieldKey: 'main.colExpQue', oldValue: '', newValue: expSummaryEs(created.items) });
+    // aviso de la campana a SaaS: entró una solicitud nueva
+    try {
+        const client = getClientById(req.user.clientId);
+        publishExpansionNotice({ recipientIds: listSaasUserIdsForScreen(SAAS_EXP_ITEM), event: 'new', toSaas: true, request: { id: created.id, label: created.label, client: client ? client.company_name : '', summary: expSummaryEs(created.items), currency: created.currency }, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
+    } catch (err) { console.error('Expansiones: no se pudo avisar a SaaS en la campana', err && err.message); }
     res.status(201).json({ request: expMap(req, created) });
+});
+
+// --- Expansiones del lado SaaS (Servicio a Cliente › Expansiones) ---------------------------------------------------------------------------------------------------------------------
+// La bandeja con las solicitudes de TODOS los clientes. SaaS las mueve a mano (pedida → en negociación → aprobada → aplicada al contrato, o rechazada), fija el costo final al negociar (con descuentos) y deja notas que el cliente ve;
+// el cambio en el contrato (límites, módulos, costo) se hace aparte en Nuestros Clientes. Cada botón se da en el árbol de accesos de la cuenta (Equipo SaaS › Expansiones). Posición de cada botón (a) en SaasAdminCatalog.js: no cambiar el orden.
+const SAAS_EXP_ITEM = 'saas-expansions';
+const SAAS_EXP_LEAVES = { negotiate: 'tabla::a0', cost: 'tabla::a1', approve: 'tabla::a2', apply: 'tabla::a3', reject: 'tabla::a4' };
+const SAAS_EXP_MOVE_LEAF = { negotiating: 'negotiate', approved: 'approve', applied: 'apply', rejected: 'reject' };
+const EXP_STATUS_ES = { pending: 'Pedida', negotiating: 'En negociación', approved: 'Aprobada', applied: 'Aplicada al contrato', rejected: 'Rechazada' };
+const saasExpHasScreen = (req) => !!req.user.isSaasSuperAdmin || getSaasUserGrants(req.user.sub).some((g) => g.itemId === SAAS_EXP_ITEM);
+const saasExpCan = (req, key) => !!req.user.isSaasSuperAdmin || hasSaasGrant(getSaasUserGrants(req.user.sub), SAAS_EXP_ITEM, SAAS_EXP_LEAVES[key]);
+const expMoneyEs = (amount, currency) => `${currency || 'MXN'} $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function saasExpPublic(req, r) {
+    return {
+        ...r,
+        summary: expSummaryEs(r.items),
+        next: (EXPANSION_TRANSITIONS[r.status] || []).filter((to) => saasExpCan(req, SAAS_EXP_MOVE_LEAF[to])),
+        canCost: r.status === 'negotiating' && saasExpCan(req, 'cost'),
+    };
+}
+function saasExpGate(req, res) {
+    if (!saasExpHasScreen(req)) { res.status(403).json({ message: 'No tienes permiso para ver las expansiones.' }); return null; }
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getExpansionRequestAny(id) : null;
+    if (!rec) { res.status(404).json({ message: 'Esa solicitud no existe.' }); return null; }
+    return rec;
+}
+// A quién le avisa la campana cuando SaaS mueve una solicitud: a quien la pidió y a quienes en la empresa tienen la pantalla Expansiones (el administrador del cliente incluido).
+function expNotifyClient(req, rec, event, note) {
+    try {
+        const tuple = { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuId: 'cat-operaciones/cat-operaciones-ti-cc-expansiones' };
+        const recipients = new Set(listUserIdsWithScreenGrant(rec.clientId, rec.isTest, tuple, []));
+        if (rec.requestedByUserId) recipients.add(rec.requestedByUserId);
+        publishExpansionNotice({ recipientIds: [...recipients], event, toSaas: false, request: { id: rec.id, label: rec.label, client: rec.client, summary: expSummaryEs(rec.items), finalCost: rec.finalCost, currency: rec.currency }, note, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
+    } catch (err) { console.error('Expansiones: no se pudo avisar al cliente en la campana', err && err.message); }
+}
+function expLogMove(req, before, after, fieldKey, oldText, newText) {
+    const changedBy = changedByLabel(req);
+    logSaasTableChange({ tableKey: 'expansiones-saas', recordId: after.id, recordLabel: `${after.label} · ${after.client}`, action: 'update', fieldKey, oldValue: oldText, newValue: newText, changedBy });
+    // el cliente también lo ve en el historial de su pantalla
+    logTableChange({ clientId: after.clientId, tableKey: EXP_TABLE, recordId: after.id, recordLabel: after.label, action: 'update', fieldKey, oldValue: oldText, newValue: newText, changedBy: `SaaS · ${changedBy}` });
+}
+app.get('/api/admin/expansions', requireAuth, requireAdmin, (req, res) => {
+    if (!saasExpHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver las expansiones.' });
+    const requests = listAllExpansionRequests().map((r) => saasExpPublic(req, r));
+    const count = (list) => list.length;
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        requests,
+        counts: { open: count(requests.filter((r) => ['pending', 'negotiating', 'approved'].includes(r.status))), closed: count(requests.filter((r) => ['applied', 'rejected'].includes(r.status))), all: requests.length },
+        can: Object.fromEntries(Object.keys(SAAS_EXP_LEAVES).map((k) => [k, saasExpCan(req, k)])),
+    });
+});
+app.post('/api/admin/expansions/:id/move', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasExpGate(req, res);
+    if (!rec) return;
+    const body = req.body || {};
+    const to = String(body.to || '');
+    if (!(EXPANSION_TRANSITIONS[rec.status] || []).includes(to)) return res.status(409).json({ message: 'Esa solicitud no puede pasar a ese estatus.', code: 'STATE' });
+    if (!saasExpCan(req, SAAS_EXP_MOVE_LEAF[to])) return res.status(403).json({ message: 'No tienes permiso para hacer esto.', code: 'FORBIDDEN' });
+    const note = String(body.note || '').trim().slice(0, 600);
+    if (to === 'rejected' && !note) return res.status(400).json({ message: 'Escribe el motivo del rechazo.', code: 'NOTE' });
+    if (to === 'approved' && rec.finalCost === null) return res.status(400).json({ message: 'Fija primero el costo final.', code: 'COST_REQUIRED' });
+    const moved = moveExpansionRequest(rec.id, { status: to, note, byLabel: changedByLabel(req) });
+    expLogMove(req, rec, moved, 'main.colExpEstatus', EXP_STATUS_ES[rec.status], `${EXP_STATUS_ES[to]}${note ? ` · ${note}` : ''}`);
+    expNotifyClient(req, moved, to, note);
+    res.json({ request: saasExpPublic(req, moved) });
+});
+app.put('/api/admin/expansions/:id/cost', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasExpGate(req, res);
+    if (!rec) return;
+    if (rec.status !== 'negotiating') return res.status(409).json({ message: 'El costo final se fija mientras se negocia.', code: 'STATE' });
+    if (!saasExpCan(req, 'cost')) return res.status(403).json({ message: 'No tienes permiso para hacer esto.', code: 'FORBIDDEN' });
+    const body = req.body || {};
+    const finalCost = Number(body.finalCost);
+    if (body.finalCost === '' || body.finalCost === null || !Number.isFinite(finalCost) || finalCost < 0 || finalCost > 1e9) return res.status(400).json({ message: 'El costo final debe ser un número de 0 en adelante.', code: 'COST' });
+    const note = String(body.note || '').trim().slice(0, 600);
+    const rounded = Math.round(finalCost * 100) / 100;
+    const saved = setExpansionFinalCost(rec.id, { finalCost: rounded, note, byLabel: changedByLabel(req) });
+    expLogMove(req, rec, saved, 'main.colExpFinal', rec.finalCost === null ? 'Sin costo final' : expMoneyEs(rec.finalCost, rec.currency), `${expMoneyEs(rounded, rec.currency)}${note ? ` · ${note}` : ''}`);
+    expNotifyClient(req, saved, 'cost', note);
+    res.json({ request: saasExpPublic(req, saved) });
 });
 
 // --- SaaS admin: clients + per-client module entitlements ("Contrataciones") -
@@ -2673,7 +2761,7 @@ const SAAS_APP_STATUSES = ['active', 'inactive', 'development'];
 
 // Historial de cambios de las tablas de SaaS sin tabla propia (saas_table_changes):
 // Nuestras Apps, Nuestros Respaldos y Material de Apoyo. Con ?recordId=, solo esa fila.
-const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo', 'relacion-accesos'];
+const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo', 'relacion-accesos', 'expansiones-saas'];
 function logSaasChange(req, tableKey, recordId, recordLabel, fieldKey, oldValue, newValue, action = 'update') {
     logSaasTableChange({ tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy: changedByLabel(req) });
 }

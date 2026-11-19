@@ -924,6 +924,7 @@ const SAAS_SCREEN_GRANT_PATHS = {
     'admin-master-permissions': 'saas-master-permissions-tree',
     'admin-business-sectors': 'saas-business-sectors',
     'admin-soporte-saas': 'saas-support',
+    'admin-expansiones-saas': 'saas-expansions',
     'admin-limits-audit': 'saas-limits-audit',
     'admin-system-reset': 'saas-system-reset',
     'admin-access-relations': 'saas-access-relations',
@@ -962,6 +963,7 @@ const SAAS_TABLE_ICON_SCREENS = {
     'nuestras-apps': { screenItemId: 'saas-apps', apartadoId: 'catalogo' },
     'business-sectors': { screenItemId: 'saas-business-sectors', apartadoId: 'tabla' },
     'soporte-saas': { screenItemId: 'saas-support', apartadoId: 'tabla' },
+    'expansiones-saas': { screenItemId: 'saas-expansions', apartadoId: 'tabla' },
     'admin-nuestros-respaldos': { screenItemId: 'saas-backups', apartadoId: 'tabla' },
     'admin-material-apoyo': { screenItemId: 'saas-material-apoyo', apartadoId: 'tabla' },
 };
@@ -1017,6 +1019,7 @@ const CUSTOMER_SERVICE_SAAS_ORDER_IDS = {
     'admin-master-permissions': 'saas-master-permissions-tree',
     'admin-business-sectors': 'saas-business-sectors',
     'admin-soporte-saas': 'saas-support',
+    'admin-expansiones-saas': 'saas-expansions',
 };
 const SAAS_CONFIG_SAAS_ORDER_IDS = {
     'admin-saas-master-status': 'saas-master-tree',
@@ -1104,6 +1107,8 @@ function buildSidebarData(data, role, activePage) {
         },
         // Soporte: el Nivel 4 (el proveedor). Los casos de los clientes que llegaron hasta GEIPSA.
         { id: 'admin-soporte-saas', labelKey: 'menu.saasSupport', href: 'Admin-SoporteCasos.html', icon: 'bx-support', saasItemId: 'saas-support' },
+        // Expansiones: las solicitudes de ampliar el contrato de todos los clientes.
+        { id: 'admin-expansiones-saas', labelKey: 'menu.saasExpansions', href: 'Admin-Expansiones.html', icon: 'bx-trending-up', saasItemId: 'saas-expansions' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
     const customerServiceSubmenuOrdered = applySaasSidebarOrder(customerServiceSubmenu, 'customerService', CUSTOMER_SERVICE_SAAS_ORDER_IDS);
     const saasConfigSubmenu = [
@@ -10600,6 +10605,33 @@ function renderSkuRequestNoticeRow(item) {
     return row;
 }
 
+// Expansiones (kind 'expansion', ver publishExpansionNotice en db.js): a SaaS le avisa que entró una solicitud nueva y al cliente qué pasó con la suya (en negociación, costo final, aprobada, aplicada al contrato o rechazada).
+// Abre la pantalla que le toca a quien lo recibe: la bandeja de SaaS (toSaas) o «Expansiones» del cliente.
+function renderExpansionNoticeRow(item) {
+    const row = document.createElement('div');
+    row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
+    const tag = document.createElement('div');
+    tag.className = 'notifications-item-meta';
+    tag.style.fontWeight = '700';
+    tag.textContent = t(`main.noticeExp_${item.event}`);
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = `${item.label || ''}${item.toSaas && item.client ? ` · ${item.client}` : ''} · ${formatNotificationDate(item.createdAt)}`;
+    meta.title = timeStampTitle(item.createdAt);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    desc.textContent = [item.summary, item.event === 'cost' && item.finalCost != null ? `${t('main.colExpFinal')}: ${formatCurrency(item.finalCost, item.currency || 'MXN')}` : '', item.note].filter(Boolean).join(' · ') || '—';
+    const by = document.createElement('div');
+    by.className = 'notifications-item-meta';
+    by.textContent = t('main.noticeChangedBy', { name: item.actorLabel || '—' });
+    const link = document.createElement('a');
+    link.href = item.toSaas ? 'Admin-Expansiones.html' : 'OpTIExpansiones.html';
+    link.className = 'notifications-item-meta';
+    link.textContent = t('main.expView');
+    row.append(tag, meta, desc, by, link);
+    return row;
+}
+
 // Cambios de accesos (kind 'access-change', ver publishAccessChangeNotice en db.js): quién lo hizo, a quién, el detalle (dado / editado / quitado) y por qué te llegó.
 const ACCESS_LEVEL_LABEL_KEYS = {
     'solo-ver': 'main.permSoloVer', 'ver-y-operar': 'main.permVerYOperar', editar: 'main.permEditar', autorizar: 'main.permAutorizar', eliminar: 'main.permEliminar',
@@ -10893,6 +10925,7 @@ function renderTreeNoticeRow(item) {
     if (item.kind === 'access-denied') return renderAccessDeniedNoticeRow(item);
     if (item.kind === 'data-change') return renderDataChangeNoticeRow(item);
     if (item.kind === 'sku-request') return renderSkuRequestNoticeRow(item);
+    if (item.kind === 'expansion') return renderExpansionNoticeRow(item);
     if (item.kind === 'access-change') return renderAccessChangeNoticeRow(item);
     const row = document.createElement('div');
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
@@ -11320,7 +11353,7 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance' || item.kind === 'asset-alert' || item.kind === 'asset-activity' || item.kind === 'support' || item.kind === 'sku-request') row = renderTreeNoticeRow(item);
+            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance' || item.kind === 'asset-alert' || item.kind === 'asset-activity' || item.kind === 'support' || item.kind === 'sku-request' || item.kind === 'expansion') row = renderTreeNoticeRow(item);
             else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (item.kind === 'asset-auth') row = renderAssetAuthRow(item, activeNotificationTab);

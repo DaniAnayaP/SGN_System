@@ -136,6 +136,16 @@ window.SAAS_ADMIN_CATALOG = [
                         ['Tomar casos', 'Escribir en el chat', 'Notas internas', 'Cambiar estatus', 'Marcar resuelto', 'Devolver al nivel anterior', 'Calificar traspasos', 'Subir evidencias', 'Cerrar casos de clientes sin TI']),
                 ],
             },
+            {
+                // Expansiones (Servicio a Cliente): las solicitudes de ampliar el contrato de TODOS los clientes (Admin-Expansiones.html). El ORDEN de columnas y botones no debe cambiar una vez guardado: server.js los lee por su
+                // posición (SAAS_EXP_LEAVES). Lo nuevo va al final.
+                itemId: 'saas-expansions', labelKey: 'menu.saasExpansions', href: 'Admin-Expansiones.html',
+                apartados: [
+                    tablaApartado('tabla',
+                        ['Folio', 'Cliente', 'Qué se pide', 'Estatus', 'Costo estimado', 'Costo final', 'Nota de SaaS'],
+                        ['Pasar a negociación', 'Fijar costo final', 'Aprobar', 'Marcar aplicada al contrato', 'Rechazar']),
+                ],
+            },
         ],
     },
     {

@@ -11712,6 +11712,10 @@ const SAAS_TABLE_COLUMN_LEAVES = {
         screenItemId: 'saas-support', apartadoId: 'tabla',
         columns: ['folio', 'client', 'sector', 'type', 'from', 'reason', 'priority', 'status', 'assignee', 'evidence', 'chat'],
     },
+    'expansiones-saas': {
+        screenItemId: 'saas-expansions', apartadoId: 'tabla',
+        columns: ['folio', 'client', 'what', 'status', 'estimated', 'final', 'note'],
+    },
     'admin-nuestros-respaldos': {
         screenItemId: 'saas-backups', apartadoId: 'tabla',
         columns: ['colBackupFileName', 'colBackupScreen', 'colBackupType', 'colBackupRecordDate'],
@@ -14857,6 +14861,62 @@ function getExpansionRequest(id, clientId, forTestAccount = false) {
     if (!row) return null;
     return deserializeExpansionRequest(row, db.prepare('SELECT * FROM expansion_request_events WHERE request_id = ? ORDER BY id ASC').all(id));
 }
+// --- Expansiones del lado SaaS (Servicio a Cliente › Expansiones): la bandeja con las solicitudes de TODOS los clientes -------------------------------------------------------------------
+// De dónde a dónde se puede pasar una solicitud (SaaS las mueve a mano): pedida → en negociación → aprobada → aplicada al contrato; rechazada desde cualquiera de las tres primeras. Aprobar pide el costo final ya fijado.
+const EXPANSION_TRANSITIONS = { pending: ['negotiating', 'rejected'], negotiating: ['approved', 'rejected'], approved: ['applied', 'rejected'], applied: [], rejected: [] };
+function listAllExpansionRequests() {
+    const rows = db.prepare(`
+        SELECT r.*, c.company_name AS client_name, c.sector_negocio AS client_sector
+        FROM expansion_requests r JOIN clients c ON c.id = r.client_id
+        ORDER BY r.id DESC
+    `).all();
+    const byRequest = new Map();
+    if (rows.length) {
+        db.prepare(`SELECT * FROM expansion_request_events WHERE request_id IN (${rows.map(() => '?').join(',')}) ORDER BY id ASC`).all(...rows.map((r) => r.id))
+            .forEach((e) => { if (!byRequest.has(e.request_id)) byRequest.set(e.request_id, []); byRequest.get(e.request_id).push(e); });
+    }
+    return rows.map((row) => ({ ...deserializeExpansionRequest(row, byRequest.get(row.id)), clientId: row.client_id, client: row.client_name, sector: row.client_sector || '', isTest: !!row.is_test_data }));
+}
+function getExpansionRequestAny(id) {
+    return listAllExpansionRequests().find((r) => r.id === Number(id)) || null;
+}
+// Mueve la solicitud de estatus (ya validado): deja la nota de SaaS más reciente (la que ve el cliente), el costo final si viene, y su evento del seguimiento. Aplicada y rechazada cierran la solicitud.
+function moveExpansionRequest(id, { status, note, byLabel, finalCost }) {
+    db.transaction(() => {
+        const closes = status === 'applied' || status === 'rejected';
+        db.prepare(`
+            UPDATE expansion_requests SET status = @status, saas_note = CASE WHEN @note <> '' THEN @note ELSE saas_note END,
+                final_cost = CASE WHEN @hasCost = 1 THEN @finalCost ELSE final_cost END, updated_at = datetime('now'), closed_at = CASE WHEN @closes = 1 THEN datetime('now') ELSE closed_at END
+            WHERE id = @id
+        `).run({ id, status, note: String(note || '').slice(0, 600), hasCost: finalCost === undefined ? 0 : 1, finalCost: finalCost === undefined ? null : finalCost, closes: closes ? 1 : 0 });
+        db.prepare('INSERT INTO expansion_request_events (request_id, status, note, by_label) VALUES (?, ?, ?, ?)').run(id, status, String(note || '').slice(0, 600), byLabel || '');
+    })();
+    return getExpansionRequestAny(id);
+}
+// El costo final que SaaS fija al negociar (con descuentos): solo mientras se negocia. No cambia el estatus; deja su renglón en el seguimiento.
+function setExpansionFinalCost(id, { finalCost, note, byLabel }) {
+    db.transaction(() => {
+        db.prepare("UPDATE expansion_requests SET final_cost = @finalCost, saas_note = CASE WHEN @note <> '' THEN @note ELSE saas_note END, updated_at = datetime('now') WHERE id = @id")
+            .run({ id, finalCost, note: String(note || '').slice(0, 600) });
+        db.prepare("INSERT INTO expansion_request_events (request_id, status, note, by_label) VALUES (?, 'negotiating', ?, ?)").run(id, String(note || '').slice(0, 600), byLabel || '');
+    })();
+    return getExpansionRequestAny(id);
+}
+// Las cuentas de SaaS que ven esta pantalla (cualquier hoja suya) y el administrador principal.
+function listSaasUserIdsForScreen(itemId) {
+    const ids = new Set(listSaasSuperAdminIds());
+    db.prepare("SELECT DISTINCT u.id FROM users u JOIN saas_user_grants g ON g.user_id = u.id WHERE u.role = 'admin' AND u.client_id IS NULL AND u.active != 0 AND g.item_id = ?").all(itemId).forEach((r) => ids.add(r.id));
+    return [...ids];
+}
+// Aviso de la campana (kind 'expansion', scope 'data'; pestaña Avisos): a SaaS cuando entra una solicitud nueva y al cliente cuando SaaS la mueve. event = new | negotiating | cost | approved | applied | rejected; toSaas = el aviso es para SaaS.
+function publishExpansionNotice({ recipientIds, event, toSaas, request, note = '', actorUserId, actorLabel }) {
+    const ids = [...new Set((recipientIds || []).filter((id) => id != null && id !== actorUserId))];
+    if (!ids.length) return [];
+    const payload = JSON.stringify({ event, toSaas: !!toSaas, requestId: request.id, label: request.label || '', client: request.client || '', summary: String(request.summary || '').slice(0, 200), finalCost: request.finalCost == null ? null : request.finalCost, currency: request.currency || '', note: String(note || '').slice(0, 200) });
+    const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'expansion', 'data', ?, ?, ?)");
+    db.transaction(() => ids.forEach((id) => insert.run(id, payload, actorUserId == null ? null : actorUserId, actorLabel || '')))();
+    return ids;
+}
 // Crea la solicitud (los renglones ya vienen validados y con su estimado) con su primer evento «pending». El folio sigue por cliente.
 function createExpansionRequest({ clientId, forTestAccount = false, requestedBy, requestedByUserId, items, note, currency, estCost, estPending }) {
     return db.transaction(() => {
@@ -17612,6 +17672,7 @@ module.exports = {
     getUserDefaults,
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
+    EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
     setUserDefaults,
     getUserUiScale,
     setUserUiScale,
