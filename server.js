@@ -580,7 +580,7 @@ const {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    IMPLEMENTATION_LEVELS, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, markImplementationTask, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,
@@ -1662,10 +1662,14 @@ const SAAS_IMPL_ITEM = 'saas-implementations';
 const SAAS_IMPL_LEAVES = { start: 'tabla::a0', edit: 'tabla::a1', mark: 'tabla::a2', reopen: 'tabla::a3' };
 const IMPL_LEVEL_ES = { contracted: 'Contratado', design: 'Diseño', structure: 'Estructura de Compañía', orgchart: 'Organigrama', layout: 'Layout de sitios', codes: 'Códigos y catálogos', access: 'Asignación de accesos', training: 'Capacitación', api: 'Conectividad API', startup: 'Arranque' };
 const IMPL_STATUS_ES = { pending: 'Pendiente', done: 'Completo', na: 'No aplica' };
+const IMPL_TASK_STATUS_ES = { pending: 'Pendiente', done: 'Listo', na: 'No aplica' };
+const implTaskEs = (levelKey, taskKey) => { const t = (IMPLEMENTATION_TASKS[levelKey] || []).find((x) => x.key === taskKey); return t ? t.es : taskKey; };
 const IMPL_ERRORS = {
     NOT_STARTED: [404, 'Esa compañía todavía no inicia su implementación.'], EXISTS: [409, 'Esa compañía ya tiene su implementación iniciada.'], CLOSED: [409, 'La implementación ya está finalizada.'],
     LEVEL: [400, 'Ese nivel no existe.'], ORDER: [409, 'Antes hay que completar los niveles anteriores.'], ORDER_LATER: [409, 'Hay niveles posteriores ya completos: reábrelos primero.'], ALREADY: [409, 'El nivel ya está en ese estado.'],
     NOT_OPTIONAL: [409, 'Solo un nivel opcional puede quedar «No aplica».'], ACTION: [400, 'Esa acción no existe.'], IMPLEMENTER: [400, 'Elige a una persona de SaaS que implemente.'], CLIENT: [400, 'Elige la compañía.'],
+    TASKS_PENDING: [409, 'Faltan renglones por marcar en este nivel.'], LOCKED: [409, 'Ese nivel todavía no se abre: antes hay que completar el anterior.'],
+    LEVEL_CLOSED: [409, 'El nivel ya está completo: reábrelo para cambiar sus renglones.'], TASK: [400, 'Ese renglón no existe.'],
     DATES_PAIR: [400, 'Cada nivel lleva sus dos fechas, inicio y fin, o ninguna.'], DATE: [400, 'Una fecha no es válida.'], DATES_ORDER: [400, 'El fin de un nivel no puede ir antes de su inicio.'],
 };
 const implFail = (res, result) => { const [status, message] = IMPL_ERRORS[result.error] || [400, 'No se pudo hacer.']; return res.status(status).json({ message, code: result.error, key: result.key }); };
@@ -1682,10 +1686,13 @@ function saasImplDetail(req, clientId) {
         const open = impl.status === 'active';
         impl.levels.forEach((l) => {
             l.actions = {
-                done: open && can.mark && l.status === 'pending' && !impl.levels.some((x) => x.position < l.position && x.status === 'pending'),
+                done: open && can.mark && l.status === 'pending' && l.tasksPending === 0 && !impl.levels.some((x) => x.position < l.position && x.status === 'pending'),
                 na: open && can.mark && l.optional && l.status === 'pending',
                 reopen: open && can.reopen && l.status !== 'pending' && !impl.levels.some((x) => x.position > l.position && x.status === 'done'),
             };
+            // los renglones se marcan solo en el nivel en curso (los de un nivel bloqueado o ya completo se ven pero no se tocan)
+            const editable = open && can.mark && l.state === 'current';
+            l.tasks.forEach((t) => { t.actions = { done: editable && t.status !== 'done', na: editable && t.status !== 'na', reopen: editable && t.status !== 'pending' }; });
         });
     }
     return { client: { id: clientId, name: client ? client.company_name : '' }, implementation: impl, can, implementers: can.start || can.edit ? listImplementerCandidates(SAAS_IMPL_ITEM) : [] };
@@ -1761,6 +1768,17 @@ app.put('/api/admin/implementations/:clientId/dates', requireAuth, requireAdmin,
         const after = result.implementation.levels.find((l) => l.key === key);
         implLog(req, client.id, 'update', 'main.implHistDates', `${implLevelEs(result.before, key)}: ${implDatesEs(before)}`, `${implLevelEs(result.before, key)}: ${implDatesEs(after)}`);
     });
+    res.json(saasImplDetail(req, client.id));
+});
+// Marcar un renglón de un nivel (listo, «No aplica» o reabrirlo): mismo botón «Marcar nivel y renglones».
+app.post('/api/admin/implementations/:clientId/levels/:key/tasks/:task/:action', requireAuth, requireAdmin, (req, res) => {
+    const client = implGate(req, res, 'mark');
+    if (!client) return;
+    const levelKey = String(req.params.key);
+    const taskKey = String(req.params.task);
+    const result = markImplementationTask(client.id, levelKey, taskKey, String(req.params.action), changedByLabel(req));
+    if (result.error) return implFail(res, result);
+    implLog(req, client.id, 'update', 'main.implHistTask', `${implLevelEs(result.implementation, levelKey)} › ${implTaskEs(levelKey, taskKey)}: ${IMPL_TASK_STATUS_ES[result.before]}`, `${implLevelEs(result.implementation, levelKey)} › ${implTaskEs(levelKey, taskKey)}: ${IMPL_TASK_STATUS_ES[result.status]}`);
     res.json(saasImplDetail(req, client.id));
 });
 app.post('/api/admin/implementations/:clientId/levels/:key/:action', requireAuth, requireAdmin, (req, res) => {

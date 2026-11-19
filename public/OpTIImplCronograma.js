@@ -28,9 +28,11 @@ async function load() {
     if (!res.ok) throw new Error(body.message || 'request failed');
     return body;
 }
-function pill(state, late) {
-    const tone = { done: 'approved', current: 'negotiating', locked: 'cancelled', na: 'cancelled' }[state] || 'cancelled';
-    return `<span class="exp-chip exp-chip-${tone}">${esc(t(`main.implState_${state}`))}</span>${late ? ` <span class="exp-chip exp-chip-pending">${esc(t('main.implState_late'))}</span>` : ''}`;
+function pill(level) {
+    const tone = { done: 'approved', current: 'negotiating', locked: 'cancelled', na: 'cancelled' }[level.state] || 'cancelled';
+    // el nivel en curso muestra cuánto lleva por sus renglones («En curso · 75%»)
+    const label = level.state === 'current' && level.taskProgress !== null ? t('main.implStateProgress', { pct: level.taskProgress }) : t(`main.implState_${level.state}`);
+    return `<span class="exp-chip exp-chip-${tone}">${esc(label)}</span>${level.late ? ` <span class="exp-chip exp-chip-pending">${esc(t('main.implState_late'))}</span>` : ''}`;
 }
 function kpis(impl, clientName) {
     const weeks = impl.weekCount;
@@ -41,7 +43,7 @@ function kpis(impl, clientName) {
     else weekBox = `<b>${esc(t('main.implKpiWeek', { n: impl.currentWeek }))}</b><span>${esc(t('main.implKpiOfWeeks', { total: weeks }))}</span>`;
     const current = impl.levels.find((l) => l.key === impl.currentKey);
     const levelBox = current
-        ? `<b>${esc(t('main.implKpiLevel', { n: current.position }))}</b><span>${esc(levelName(current.key))} · ${esc(t('main.implKpiInProgress'))}</span>`
+        ? `<b>${esc(t('main.implKpiLevel', { n: current.position }))}</b><span>${esc(levelName(current.key))} · ${esc(current.taskProgress !== null ? t('main.implStateProgress', { pct: current.taskProgress }) : t('main.implKpiInProgress'))}</span>`
         : `<b>${esc(t('main.implState_done'))}</b><span>${esc(t('main.implKpiAllDone'))}</span>`;
     return `<div class="impl-kpis" data-help-key="implKpis"><div class="impl-kpi">${weekBox}</div><div class="impl-kpi"><b>${impl.progress}%</b><span>${esc(t('main.implKpiProgress'))} · ${esc(t('main.implProgressOf', { done: impl.done, total: impl.total }))}</span></div><div class="impl-kpi">${levelBox}</div></div>`;
 }
@@ -66,7 +68,7 @@ function gantt(impl) {
         }
         const dates = l.startDate ? `${shortDate(l.startDate)} – ${shortDate(l.endDate)}` : t('main.implNoLevelDates');
         const hint = l.state === 'locked' && current ? `<span class="impl-hint">${esc(t('main.implLocked', { n: current.position }))}</span>` : '';
-        html += `<div class="impl-st">${pill(l.state, l.late)}<span class="impl-dates">${esc(dates)}</span>${hint}</div>`;
+        html += `<div class="impl-st">${pill(l)}<span class="impl-dates">${esc(dates)}</span>${hint}</div>`;
     });
     return `${html}</div>`;
 }

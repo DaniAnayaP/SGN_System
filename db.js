@@ -15109,11 +15109,35 @@ db.exec(`
         at                TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_implementation_events_impl ON implementation_events (implementation_id);
+    CREATE TABLE IF NOT EXISTS implementation_tasks (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        implementation_id INTEGER NOT NULL REFERENCES implementations(id) ON DELETE CASCADE,
+        level_key         TEXT NOT NULL,
+        task_key          TEXT NOT NULL,
+        position          INTEGER NOT NULL,
+        status            TEXT NOT NULL DEFAULT 'pending',
+        done_at           TEXT,
+        done_by           TEXT NOT NULL DEFAULT '',
+        UNIQUE (implementation_id, level_key, task_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_implementation_tasks_impl ON implementation_tasks (implementation_id);
 `);
 const IMPLEMENTATION_LEVELS = [
     { key: 'contracted', optional: 0 }, { key: 'design', optional: 0 }, { key: 'structure', optional: 0 }, { key: 'orgchart', optional: 0 }, { key: 'layout', optional: 0 },
     { key: 'codes', optional: 0 }, { key: 'access', optional: 0 }, { key: 'training', optional: 0 }, { key: 'api', optional: 1 }, { key: 'startup', optional: 0 },
 ];
+// Los RENGLONES de cada nivel (lo que hay que dejar listo): cada uno abre la pantalla de siempre (href) y el implementador lo marca «listo» o «No aplica». Es la plantilla con la que arranca cada implementación; cada una guarda sus
+// renglones (implementation_tasks). `es` es el nombre para el historial; el que se ve sale del textos (main.implTask_<nivel>_<renglón>). Los niveles 1 (Contratado) y 8 (Capacitación) tienen su propia vista y no llevan renglones.
+const IMPLEMENTATION_TASKS = {
+    design: [{ key: 'style', es: 'Estilo', href: '' }, { key: 'language', es: 'Idioma', href: '' }, { key: 'typography', es: 'Tipografía y tamaño', href: 'OpTIConfigBotones.html' }, { key: 'logo', es: 'Logo y colores', href: 'Business-Config.html' }],
+    structure: [{ key: 'sites', es: 'Sitios', href: 'Business-SitiosContratados.html' }, { key: 'costcenters', es: 'Centros de costo', href: 'Business-CentrosCosto.html' }, { key: 'warehouses', es: 'Almacenes', href: 'CatCentroDistAlmacenes.html' }, { key: 'subwarehouses', es: 'Sub almacenes', href: 'CatCentroDistSubAlmacenes.html' }],
+    orgchart: [{ key: 'orgstructure', es: 'Estructura organizacional', href: 'Business-EstructuraOrganizacional.html' }, { key: 'positions', es: 'Puestos de trabajo', href: 'Business-PuestosTrabajo.html' }, { key: 'roles', es: 'Roles', href: 'Business-Roles.html' }, { key: 'hrstatus', es: 'Estatus de RH', href: 'Business-EstatusRH.html' }, { key: 'users', es: 'Usuarios', href: 'Business-Usuarios.html' }],
+    layout: [{ key: 'layouts', es: 'Layout de cada centro de costos', href: 'OpCentroDistLayout.html' }, { key: 'zones', es: 'Zonas, anaqueles y activos', href: 'OpCentroDistLayout.html' }, { key: 'qr', es: 'Códigos QR del Layout', href: 'OpCentroDistLayout.html' }],
+    codes: [{ key: 'categories', es: 'Categorías', href: 'CatCentroDistCategoriasInventario.html' }, { key: 'units', es: 'Unidad de medida', href: 'CatCentroDistUnidadMedida.html' }, { key: 'brands', es: 'Marcas', href: 'CatCentroDistMarcas.html' }, { key: 'enablement', es: 'Alta de códigos y su habilitación', href: 'OpTIHabilitacionCodigos.html' }, { key: 'relation', es: 'Relación de códigos con su lugar', href: 'OpCentroDistRelacionCodigo.html' }],
+    access: [{ key: 'roleaccess', es: 'Accesos por rol', href: 'Business-Roles.html' }, { key: 'extra', es: 'Permisos adicionales por persona', href: 'Business-Usuarios.html' }, { key: 'buttons', es: 'Botones del engrane y valores por defecto', href: 'OpTIConfigBotones.html' }],
+    api: [{ key: 'systems', es: 'Con qué otros sistemas se conecta', href: '' }, { key: 'keys', es: 'Llaves y pruebas de conexión', href: '' }],
+    startup: [{ key: 'realdata', es: 'Prueba con datos reales', href: '' }],
+};
 const IMPLEMENTATION_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const isRealDateOnly = (value) => {
     if (!IMPLEMENTATION_DATE_RE.test(value)) return false;
@@ -15135,10 +15159,26 @@ function todayInClientZone(clientId) {
     return new Date().toLocaleDateString('en-CA', { timeZone });
 }
 // La implementación de una compañía lista para dibujar: cada nivel con su estado (done | na | current | locked), si va atrasado, sus semanas en el cronograma y el avance general.
+// Los renglones que le falten a una implementación (las que ya iban cuando se agregaron, o los que luego se sumen a la plantilla): se agregan sin tocar los que ya existen.
+function ensureImplementationTasks(implementationId, levelKeys) {
+    const expected = levelKeys.reduce((n, k) => n + (IMPLEMENTATION_TASKS[k] || []).length, 0);
+    if (!expected) return;
+    if (db.prepare('SELECT COUNT(*) AS n FROM implementation_tasks WHERE implementation_id = ?').get(implementationId).n >= expected) return;
+    const insert = db.prepare('INSERT OR IGNORE INTO implementation_tasks (implementation_id, level_key, task_key, position) VALUES (?, ?, ?, ?)');
+    db.transaction(() => levelKeys.forEach((k) => (IMPLEMENTATION_TASKS[k] || []).forEach((t, i) => insert.run(implementationId, k, t.key, i + 1))))();
+}
 function getImplementation(clientId) {
     const row = db.prepare('SELECT * FROM implementations WHERE client_id = ?').get(clientId);
     if (!row) return null;
     const rows = db.prepare('SELECT * FROM implementation_levels WHERE implementation_id = ? ORDER BY position').all(row.id);
+    ensureImplementationTasks(row.id, rows.map((l) => l.level_key));
+    const taskRows = db.prepare('SELECT * FROM implementation_tasks WHERE implementation_id = ? ORDER BY level_key, position').all(row.id);
+    const tasksByLevel = new Map();
+    taskRows.forEach((t) => {
+        const template = (IMPLEMENTATION_TASKS[t.level_key] || []).find((x) => x.key === t.task_key);
+        if (!tasksByLevel.has(t.level_key)) tasksByLevel.set(t.level_key, []);
+        tasksByLevel.get(t.level_key).push({ key: t.task_key, position: t.position, status: t.status, doneAt: t.done_at, doneBy: t.done_by, href: template ? template.href : '' });
+    });
     const today = todayInClientZone(clientId);
     const firstPending = rows.find((l) => l.status === 'pending');
     const starts = rows.map((l) => l.start_date).filter(Boolean).sort();
@@ -15152,8 +15192,18 @@ function getImplementation(clientId) {
         late: l.status === 'pending' && !!l.end_date && l.end_date < today,
         fromWeek: startMonday && l.start_date ? weekIndex(startMonday, l.start_date) : null,
         toWeek: startMonday && l.end_date ? weekIndex(startMonday, l.end_date) : null,
+        tasks: tasksByLevel.get(l.level_key) || [],
     }));
+    // el avance de cada nivel por sus renglones (los «No aplica» no cuentan); un nivel puede completarse cuando ya no le queda ninguno pendiente
+    levels.forEach((l) => {
+        l.tasksTotal = l.tasks.filter((t) => t.status !== 'na').length;
+        l.tasksDone = l.tasks.filter((t) => t.status === 'done').length;
+        l.tasksPending = l.tasks.filter((t) => t.status === 'pending').length;
+        l.taskProgress = l.tasksTotal ? Math.round((100 * l.tasksDone) / l.tasksTotal) : null;
+    });
     const applicable = levels.filter((l) => l.status !== 'na');
+    const currentLevel = levels.find((l) => l.state === 'current');
+    const partial = currentLevel && currentLevel.tasksTotal ? Math.min(currentLevel.tasksDone / currentLevel.tasksTotal, 0.99) : 0;
     const weekCount = startMonday && endDate ? weekIndex(startMonday, endDate) : 0;
     let currentWeek = null;
     if (startMonday && weekCount) currentWeek = Math.min(Math.max(weekIndex(startMonday, today), 0), weekCount + 1);
@@ -15161,7 +15211,8 @@ function getImplementation(clientId) {
         id: row.id, clientId, status: row.status, implementerUserId: row.implementer_user_id, implementer: row.implementer_name, startedBy: row.started_by, startedAt: row.started_at, today,
         startDate, endDate, weekCount, currentWeek,
         currentKey: firstPending ? firstPending.level_key : '', done: applicable.filter((l) => l.status === 'done').length, total: applicable.length,
-        progress: applicable.length ? Math.round((100 * applicable.filter((l) => l.status === 'done').length) / applicable.length) : 0,
+        // el avance general cuenta los niveles completos y lo que va del nivel en curso (sin llegar al 100% de ese nivel hasta que se marque completo)
+        progress: applicable.length ? Math.floor(1e-9 + (100 * (applicable.filter((l) => l.status === 'done').length + partial)) / applicable.length) : 0,
         levels,
     };
 }
@@ -15192,6 +15243,7 @@ function startImplementation(clientId, { implementerUserId, startedBy }) {
         const id = db.prepare('INSERT INTO implementations (client_id, implementer_user_id, implementer_name, started_by) VALUES (?, ?, ?, ?)').run(clientId, implementer ? implementer.id : null, implementer ? implementer.name : '', startedBy || '').lastInsertRowid;
         const insert = db.prepare('INSERT INTO implementation_levels (implementation_id, position, level_key, optional) VALUES (?, ?, ?, ?)');
         IMPLEMENTATION_LEVELS.forEach((l, i) => insert.run(id, i + 1, l.key, l.optional));
+        ensureImplementationTasks(id, IMPLEMENTATION_LEVELS.map((l) => l.key));
         logImplementationEvent(id, '', 'started', implementer ? implementer.name : '', startedBy);
         return { implementation: getImplementation(clientId) };
     })();
@@ -15246,6 +15298,7 @@ function markImplementationLevel(clientId, levelKey, action, byLabel) {
     if (action === 'done') {
         if (level.status !== 'pending') return { error: 'ALREADY' };
         if (impl.levels.some((l) => l.position < level.position && l.status === 'pending')) return { error: 'ORDER' };
+        if (level.tasksPending > 0) return { error: 'TASKS_PENDING' };
         next = 'done';
     } else if (action === 'na') {
         if (!level.optional) return { error: 'NOT_OPTIONAL' };
@@ -15260,6 +15313,29 @@ function markImplementationLevel(clientId, levelKey, action, byLabel) {
         db.prepare('UPDATE implementation_levels SET status = ?, done_at = ?, done_by = ? WHERE implementation_id = ? AND level_key = ?')
             .run(next, next === 'pending' ? null : new Date().toISOString().slice(0, 19).replace('T', ' '), next === 'pending' ? '' : (byLabel || ''), impl.id, levelKey);
         logImplementationEvent(impl.id, levelKey, next === 'pending' ? 'reopened' : (next === 'done' ? 'done' : 'na'), '', byLabel);
+        db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
+    })();
+    return { before, status: next, implementation: getImplementation(clientId) };
+}
+// Marcar un RENGLÓN de un nivel: 'done' (listo), 'na' (No aplica) o 'reopen' (vuelve a pendiente). Solo se marcan los del nivel EN CURSO: uno bloqueado todavía no se abre y uno completo se reabre primero.
+function markImplementationTask(clientId, levelKey, taskKey, action, byLabel) {
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
+    const level = impl.levels.find((l) => l.key === levelKey);
+    if (!level) return { error: 'LEVEL' };
+    const task = level.tasks.find((t) => t.key === taskKey);
+    if (!task) return { error: 'TASK' };
+    if (level.state === 'locked') return { error: 'LOCKED' };
+    if (level.state !== 'current') return { error: 'LEVEL_CLOSED' };
+    const next = { done: 'done', na: 'na', reopen: 'pending' }[action];
+    if (!next) return { error: 'ACTION' };
+    if (task.status === next) return { error: 'ALREADY' };
+    const before = task.status;
+    db.transaction(() => {
+        db.prepare('UPDATE implementation_tasks SET status = ?, done_at = ?, done_by = ? WHERE implementation_id = ? AND level_key = ? AND task_key = ?')
+            .run(next, next === 'pending' ? null : new Date().toISOString().slice(0, 19).replace('T', ' '), next === 'pending' ? '' : (byLabel || ''), impl.id, levelKey, taskKey);
+        logImplementationEvent(impl.id, levelKey, next === 'pending' ? 'task_reopened' : (next === 'done' ? 'task_done' : 'task_na'), taskKey, byLabel);
         db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
     })();
     return { before, status: next, implementation: getImplementation(clientId) };
@@ -18008,7 +18084,7 @@ module.exports = {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    IMPLEMENTATION_LEVELS, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, markImplementationTask, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,

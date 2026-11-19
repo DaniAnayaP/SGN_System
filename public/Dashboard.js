@@ -2342,7 +2342,7 @@ function buildSidebarFlyoutPanel(title, subMenuEl, depth, anchorRect, gap, secti
             a.href = href;
             if (href === '#') a.addEventListener('click', (event) => event.preventDefault());
             else {
-                if (href.split('#')[0].split('?')[0].split('/').pop() === currentPage) li.classList.add('sidebar-flyout-current');
+                if (hrefMatchesPage(href.split('#')[0].split('/').pop(), currentPage)) li.classList.add('sidebar-flyout-current');
                 // La pantalla nueva carga con la barra abierta por defecto; esta marca hace que arranque cerrada, como la dejó quien eligió desde la lista.
                 a.addEventListener('click', (event) => {
                     if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0) return;
@@ -13019,6 +13019,14 @@ function normalizeHrefTarget(href) {
     if (!href || href === '#') return null;
     return href.split(/[?#]/)[0];
 }
+// ¿Este href es la página abierta? Se compara el archivo; si el href lleva ?consulta (varias entradas del menú comparten una página, como los niveles de Implementación Inicial),
+// también debe coincidir la de la dirección abierta.
+function hrefMatchesPage(href, targetFile, search) {
+    if (normalizeHrefTarget(href) !== targetFile) return false;
+    const query = String(href).split('#')[0].split('?')[1];
+    if (!query) return true;
+    return query === String(search === undefined ? window.location.search : search).replace(/^\?/, '');
+}
 
 function currentPageFile() {
     const path = window.location.pathname;
@@ -13032,7 +13040,7 @@ function findHrefTrail(items, targetFile, trail = []) {
     for (const item of items || []) {
         if (!item) continue;
         const nextTrail = [...trail, item];
-        if (normalizeHrefTarget(item.href) === targetFile) return nextTrail;
+        if (hrefMatchesPage(item.href, targetFile)) return nextTrail;
         if (item.submenu?.length) {
             const found = findHrefTrail(item.submenu, targetFile, nextTrail);
             if (found) return found;
@@ -13858,6 +13866,14 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-ti-cc-expansiones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-expansiones' },
     'cat-operaciones-ti-cc-sesiones-capacitacion': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-sesiones-capacitacion' },
     'cat-operaciones-ti-impl-cronograma': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-cronograma' },
+    'cat-operaciones-ti-impl-design': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-design' },
+    'cat-operaciones-ti-impl-structure': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-structure' },
+    'cat-operaciones-ti-impl-orgchart': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-orgchart' },
+    'cat-operaciones-ti-impl-layout': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-layout' },
+    'cat-operaciones-ti-impl-codes': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-codes' },
+    'cat-operaciones-ti-impl-access': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-access' },
+    'cat-operaciones-ti-impl-api': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-api' },
+    'cat-operaciones-ti-impl-startup': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-startup' },
     'cat-gestion-ti-soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     // Punto Venta: Ventas (Operaciones) y Transacciones (Gestión), por ahora vacías
     'cat-operaciones-pv-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-operaciones/cat-operaciones-pv-ventas' },

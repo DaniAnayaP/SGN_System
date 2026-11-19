@@ -163,7 +163,7 @@ window.SAAS_ADMIN_CATALOG = [
                 apartados: [
                     tablaApartado('tabla',
                         ['Cliente', 'Estatus', 'Implementador', 'Inicio', 'Fin', 'Nivel actual', 'Avance'],
-                        ['Iniciar implementación', 'Fijar implementador y fechas', 'Marcar nivel', 'Reabrir nivel']),
+                        ['Iniciar implementación', 'Fijar implementador y fechas', 'Marcar nivel y renglones', 'Reabrir nivel']),
                 ],
             },
         ],

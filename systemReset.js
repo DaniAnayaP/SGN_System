@@ -59,6 +59,7 @@ const TABLES = {
     implementations: { action: WIPE, group: 'captures' }, // TI › Implementación Inicial (la lleva el implementador de SaaS)
     implementation_levels: { action: WIPE, group: 'captures' },
     implementation_events: { action: WIPE, group: 'captures' },
+    implementation_tasks: { action: WIPE, group: 'captures' },
     sku_requests: { action: WIPE, group: 'captures' },
     sku_request_events: { action: WIPE, group: 'captures' },
     fixed_assets: { action: WIPE, group: 'captures' }, // Alta Activos (2026-11-12)

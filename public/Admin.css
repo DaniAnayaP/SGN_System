@@ -9461,3 +9461,25 @@ body.dark-mode .exp-chip-cancelled{ color: #b4bcc6; }
 .impl-table td{ padding: 0.4rem; border-top: 1px solid var(--color-border); vertical-align: middle; }
 .impl-table input[type="date"]{ width: 100%; min-width: 8.5rem; }
 .impl-acts{ display: flex; gap: 0.35rem; flex-wrap: wrap; }
+
+/* Implementación Inicial · renglones de un nivel (cliente: lista; SaaS: filas dentro del modal) */
+.impl-prog{ margin: 0 0 0.9rem; }
+.impl-prog-top{ display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.3rem; }
+.impl-prog-bar{ height: 0.55rem; border-radius: 0.4rem; background: var(--color-bg); box-shadow: inset 0 0 0 1px var(--color-border); overflow: hidden; }
+.impl-prog-bar i{ display: block; height: 100%; background: #3c82dc; }
+.impl-tasks{ border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); overflow: hidden; }
+.impl-task{ display: grid; grid-template-columns: 1.4rem minmax(0, 1fr) auto; gap: 0.7rem; align-items: center; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--color-border); font-size: 0.85rem; }
+.impl-task:last-child{ border-bottom: 0; }
+.impl-task b{ font-weight: 600; display: block; }
+.impl-task-meta{ display: block; font-size: 0.72rem; opacity: 0.7; margin-top: 0.1rem; }
+.impl-go{ font-weight: 600; font-size: 0.78rem; white-space: nowrap; color: var(--color-accent); text-decoration: none; }
+.impl-go:hover{ text-decoration: underline; }
+.impl-ck{ width: 1.1rem; height: 1.1rem; border-radius: 50%; border: 1.5px solid var(--color-border); display: inline-block; position: relative; background: var(--color-surface); }
+.impl-ck-done{ background: #28aa5a; border-color: #28aa5a; }
+.impl-ck-done::after{ content: ""; position: absolute; left: 0.3rem; top: 0.1rem; width: 0.28rem; height: 0.55rem; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.impl-ck-na{ background: repeating-linear-gradient(135deg, rgba(120, 130, 145, 0.35) 0 4px, transparent 4px 8px); border-color: rgba(120, 130, 145, 0.6); }
+.impl-toggle{ display: block; margin-top: 0.25rem; padding: 0; border: 0; background: none; color: var(--color-accent); font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+.impl-task-row td{ padding: 0 0.4rem 0.6rem; border-top: 0; }
+.impl-subtasks{ display: flex; flex-direction: column; gap: 0.3rem; padding: 0.5rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-bg); }
+.impl-subtask{ display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; gap: 0.6rem; align-items: center; font-size: 0.8rem; }
+@media (max-width: 640px){ .impl-subtask{ grid-template-columns: minmax(0, 1fr); } }

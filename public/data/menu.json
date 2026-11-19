@@ -5910,37 +5910,37 @@
         {
           "id": "cat-operaciones-ti-impl-design",
           "labelKey": "menu.implLevel_design",
-          "href": "#",
+          "href": "OpTIImplNivel.html?level=design",
           "icon": "bx-palette"
         },
         {
           "id": "cat-operaciones-ti-impl-structure",
           "labelKey": "menu.implLevel_structure",
-          "href": "#",
+          "href": "OpTIImplNivel.html?level=structure",
           "icon": "bx-buildings"
         },
         {
           "id": "cat-operaciones-ti-impl-orgchart",
           "labelKey": "menu.implLevel_orgchart",
-          "href": "#",
+          "href": "OpTIImplNivel.html?level=orgchart",
           "icon": "bx-sitemap"
         },
         {
           "id": "cat-operaciones-ti-impl-layout",
           "labelKey": "menu.implLevel_layout",
-          "href": "#",
+          "href": "OpTIImplNivel.html?level=layout",
           "icon": "bx-map-alt"
         },
         {
           "id": "cat-operaciones-ti-impl-codes",
           "labelKey": "menu.implLevel_codes",
-          "href": "#",
+          "href": "OpTIImplNivel.html?level=codes",
           "icon": "bx-barcode"
         },
         {
           "id": "cat-operaciones-ti-impl-access",
           "labelKey": "menu.implLevel_access",
-          "href": "#",
+          "href": "OpTIImplNivel.html?level=access",
           "icon": "bx-lock-open-alt"
         },
         {
@@ -5952,13 +5952,13 @@
         {
           "id": "cat-operaciones-ti-impl-api",
           "labelKey": "menu.implLevel_api",
-          "href": "#",
+          "href": "OpTIImplNivel.html?level=api",
           "icon": "bx-plug"
         },
         {
           "id": "cat-operaciones-ti-impl-startup",
           "labelKey": "menu.implLevel_startup",
-          "href": "#",
+          "href": "OpTIImplNivel.html?level=startup",
           "icon": "bx-rocket"
         }
       ]
