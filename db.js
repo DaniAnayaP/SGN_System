@@ -16588,6 +16588,142 @@ function addWorkPlanItem(clientId, userId, forTestAccount, planId, fields, byLab
     })();
     return workPlanItemResult(clientId, userId, row.id, id, { changes: [{ action: 'create', recordLabel: workPlanItemLabel(levels, depth, t.value) }] });
 }
+// ---- Cargar desde Excel (Daniel, 2026-11-19, «Sí a las recomendaciones») ----
+// Cada fila del archivo es un renglón: sus columnas de nivel dicen dónde va (el nombre completo en cada fila; lo de arriba que no exista se arma solo) y las demás lo describen. SOLO SE AGREGA: un renglón que ya existe (mismo nombre dentro del mismo
+// renglón de arriba) se salta, y nada se borra ni se cambia. Primero se hace la vista previa (commit = false: no escribe nada) y luego la carga (commit = true) de las filas correctas; las que traen error no se cargan. rows = lo que leyó el servidor
+// del archivo: [{ line, path: [nombres por nivel], responsible, executor, start: { ok, value | text }, end: {…}, status, note }]. Quien puede cargar es quien puede agregar renglones (dueña, quien colabora o administra); quien colabora solo en los dos
+// últimos niveles (como al agregar a mano). Cada fila vuelve con su estado (ok | warn | error | skip) y sus mensajes (códigos que la pantalla traduce).
+const WORK_PLAN_IMPORT_STATUS = new Map([['pendiente', 'pending'], ['en curso', 'in_progress'], ['hecha', 'done'], ['hecho', 'done'], ['pending', 'pending'], ['in progress', 'in_progress'], ['done', 'done']]);
+const workPlanFold = (text) => String(text == null ? '' : text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+function importWorkPlanItems(clientId, userId, forTestAccount, planId, rows, { commit = false, byLabel = '' } = {}) {
+    const found = findWorkPlanFor(clientId, userId, planId);
+    if (!found) return { error: 'WORK_PLAN_NOT_FOUND' };
+    const { row, access } = found;
+    if (!workPlanCanWrite(access)) return { error: 'WORK_PLAN_NOT_ALLOWED' };
+    { const lock = workPlanLockError(row); if (lock) return { error: lock }; }
+    const levels = workPlanLevelsOf(row);
+    const people = listWorkPlanPeople(clientId, forTestAccount);
+    const peopleByName = new Map();
+    people.forEach((p) => { const k = workPlanFold(p.name); if (!peopleByName.has(k)) peopleByName.set(k, []); peopleByName.get(k).push(p); });
+    // el árbol que ya existe: cada nodo con su lugar (padre + nombre sin acentos ni mayúsculas)
+    const existing = db.prepare('SELECT id, parent_id, depth, title, status FROM work_plan_items WHERE plan_id = ?').all(row.id);
+    const kids = new Map(); // ref del padre ('root' o 'e<id>' / 'n<n>') -> Map(nombre plegado -> nodo)
+    const kidsOf = (ref) => { if (!kids.has(ref)) kids.set(ref, new Map()); return kids.get(ref); };
+    const byId = new Map();
+    existing.forEach((r) => byId.set(r.id, { ref: `e${r.id}`, id: r.id, parentRef: r.parent_id == null ? 'root' : `e${r.parent_id}`, depth: r.depth, title: r.title, status: r.status, existing: true, hasChildren: false }));
+    byId.forEach((node) => { kidsOf(node.parentRef).set(workPlanFold(node.title), node); const parent = node.parentRef === 'root' ? null : byId.get(Number(node.parentRef.slice(1))); if (parent) parent.hasChildren = true; });
+    const planned = []; // los renglones nuevos, en orden de creación (los de arriba primero)
+    const results = [];
+    let seq = 0;
+    const person = (raw, max, res, codes) => {
+        const text = workPlanText(raw);
+        if (!text) return { userId: null, name: '' };
+        const matches = peopleByName.get(workPlanFold(text)) || [];
+        if (matches.length === 1) return { userId: matches[0].id, name: matches[0].name };
+        if (workPlanLen(text) > max) { res.messages.push({ code: codes.long, params: { max } }); res.state = 'error'; return { userId: null, name: text }; }
+        res.messages.push({ code: matches.length > 1 ? 'PERSON_AMBIGUOUS' : 'PERSON_TEXT', params: { who: text } });
+        return { userId: null, name: text };
+    };
+    rows.forEach((r) => {
+        const cells = (r.path || []).map((c) => implementationLine(c));
+        const res = { line: r.line, path: cells.filter(Boolean), pathText: cells.filter(Boolean).join(' › '), state: 'ok', messages: [], responsible: '', executor: '', start: '', end: '', status: 'pending', note: '' };
+        // lo que venía en la fila, tal cual (para bajar las filas con error y corregirlas)
+        res.raw = { path: (r.path || []).map((c) => String(c == null ? '' : c)), responsible: String(r.responsible || ''), executor: String(r.executor || ''), start: r.start ? (r.start.ok ? r.start.value : r.start.text) : '', end: r.end ? (r.end.ok ? r.end.value : r.end.text) : '', status: String(r.status || ''), note: String(r.note || '') };
+        results.push(res);
+        let k = 0;
+        cells.forEach((c, i) => { if (c) k = i + 1; });
+        const err = (code, params) => { res.state = 'error'; res.messages.push({ code, params: params || {} }); };
+        if (!k) { err('NO_NAME'); return; }
+        if (cells.slice(0, k).some((c) => !c)) { err('LEVEL_SKIPPED'); return; }
+        if (k > levels.length) { err('DEPTH'); return; }
+        for (const c of cells.slice(0, k)) if (workPlanLen(c) > WORK_PLAN_LIMITS.title) { err('TITLE_LONG', { max: WORK_PLAN_LIMITS.title }); return; }
+        // los datos del renglón
+        const resp = person(r.responsible, WORK_PLAN_LIMITS.responsible, res, { long: 'RESP_LONG' });
+        const exec = person(r.executor, WORK_PLAN_LIMITS.executor, res, { long: 'EXEC_LONG' });
+        res.responsible = resp.name; res.executor = exec.name;
+        const startBad = r.start && r.start.ok === false; const endBad = r.end && r.end.ok === false;
+        const start = r.start && r.start.ok ? r.start.value : ''; const end = r.end && r.end.ok ? r.end.value : '';
+        if (startBad || endBad || (start && !isRealDateOnly(start)) || (end && !isRealDateOnly(end))) err('DATES_BAD');
+        else if ((start && !end) || (!start && end)) err('DATES_PAIR');
+        else if (start && end && end < start) err('DATES_ORDER');
+        else { res.start = start; res.end = end; }
+        const statusRaw = workPlanFold(r.status);
+        if (statusRaw) { const mapped = WORK_PLAN_IMPORT_STATUS.get(statusRaw); if (!mapped) err('STATUS_BAD'); else res.status = mapped; }
+        const note = cleanWorkPlanLongText(r.note == null ? '' : String(r.note), WORK_PLAN_LIMITS.note);
+        if (note.error) err('NOTE_LONG', { max: WORK_PLAN_LIMITS.note }); else res.note = note.value;
+        if (res.state === 'error') return;
+        // dónde va: lo que ya existe se sigue; lo que falta se arma (si su rol lo permite)
+        let parentRef = 'root';
+        let missingFrom = 0;
+        const chain = [];
+        for (let d = 1; d <= k; d += 1) {
+            const node = missingFrom ? null : kidsOf(parentRef).get(workPlanFold(cells[d - 1]));
+            if (!node && !missingFrom) missingFrom = d;
+            chain.push(node || null);
+            if (node) parentRef = node.ref;
+        }
+        const target = chain[k - 1];
+        if (target) {
+            if (target.existing) { res.state = 'skip'; res.messages = [{ code: 'EXISTS', params: {} }]; return; }
+            if (target.explicit) { res.state = 'skip'; res.messages = [{ code: 'DUP_IN_FILE', params: {} }]; return; }
+            // un renglón de arriba que se armó solo porque una fila de abajo apareció antes: esta fila le pone sus datos
+            Object.assign(target, { explicit: true, line: r.line, res, fields: { resp, exec, start: res.start, end: res.end, status: res.status, note: res.note } });
+            return;
+        }
+        if (access.role === 'collaborate') {
+            for (let d = missingFrom; d <= k; d += 1) if (!workPlanCollaboratorDepthOk(levels.length, d)) { err('NOT_ALLOWED'); return; }
+        }
+        let created = 0;
+        let ref = parentRef;
+        for (let d = missingFrom; d <= k; d += 1) {
+            seq += 1;
+            const parentNode = ref === 'root' ? null : (ref.startsWith('e') ? byId.get(Number(ref.slice(1))) : planned.find((n) => n.ref === ref));
+            const node = { ref: `n${seq}`, id: null, parentRef: ref, depth: d, title: cells[d - 1], existing: false, hasChildren: false, explicit: d === k, line: r.line, res: d === k ? res : null, fields: d === k ? { resp, exec, start: res.start, end: res.end, status: res.status, note: res.note } : null };
+            if (parentNode) {
+                if (parentNode.existing && !parentNode.hasChildren && parentNode.status !== 'pending' && !parentNode.resetNoted) { parentNode.resetNoted = true; res.messages.push({ code: 'PARENT_RESET', params: { title: parentNode.title } }); }
+                parentNode.hasChildren = true;
+            }
+            kidsOf(ref).set(workPlanFold(node.title), node);
+            planned.push(node);
+            ref = node.ref;
+            created += d < k ? 1 : 0;
+        }
+        if (created) res.messages.push({ code: 'CREATES_PARENTS', params: { n: created } });
+    });
+    // el estado de un renglón que acabó con otros adentro se calcula solo
+    planned.forEach((n) => { if (n.explicit && n.hasChildren && n.fields && n.fields.status !== 'pending') { n.fields.status = 'pending'; n.res.messages.push({ code: 'STATUS_IGNORED', params: {} }); } });
+    results.forEach((res) => { if (res.state === 'ok' && res.messages.some((m) => m.code !== 'CREATES_PARENTS')) res.state = 'warn'; }); // «se arman renglones de arriba» solo informa
+    const count = (state) => results.filter((x) => x.state === state).length;
+    const total = existing.length + planned.length;
+    const blocked = total > WORK_PLAN_LIMITS.itemsPerPlan ? { code: 'LIMIT_ITEMS', over: total - WORK_PLAN_LIMITS.itemsPerPlan, max: WORK_PLAN_LIMITS.itemsPerPlan } : null;
+    const summary = { rows: results.length, ok: count('ok'), warn: count('warn'), error: count('error'), skip: count('skip'), willCreate: planned.length, implicit: planned.filter((n) => !n.explicit).length };
+    const out = { planId: row.id, rows: results, summary, blocked, levelNames: levels };
+    if (!commit) return out;
+    if (blocked) return { error: 'WORK_PLAN_LIMIT_ITEMS' };
+    if (!planned.length) return { ...out, created: 0, changes: [] };
+    const now = workPlanNow();
+    db.transaction(() => {
+        const nextPos = new Map();
+        const posFor = (parentId) => {
+            const key = parentId == null ? 'root' : parentId;
+            if (!nextPos.has(key)) nextPos.set(key, db.prepare('SELECT COALESCE(MAX(position), 0) AS p FROM work_plan_items WHERE plan_id = ? AND parent_id IS ?').get(row.id, parentId == null ? null : parentId).p);
+            nextPos.set(key, nextPos.get(key) + 1);
+            return nextPos.get(key);
+        };
+        const nodeByRef = new Map(planned.map((n) => [n.ref, n]));
+        planned.forEach((n) => {
+            const parentId = n.parentRef === 'root' ? null : (n.parentRef.startsWith('e') ? Number(n.parentRef.slice(1)) : nodeByRef.get(n.parentRef).id);
+            const f = n.fields || { resp: { userId: null, name: '' }, exec: { userId: null, name: '' }, start: '', end: '', status: 'pending', note: '' };
+            n.id = Number(db.prepare(`INSERT INTO work_plan_items (plan_id, parent_id, depth, position, title, responsible_user_id, responsible_name, executor_user_id, executor_name, start_date, end_date, note, created_by, created_by_user_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(row.id, parentId, n.depth, posFor(parentId), n.title, f.resp.userId, f.resp.name, f.exec.userId, f.exec.name, f.start || null, f.end || null, f.note || '', byLabel || '', userId, now, now).lastInsertRowid);
+            if (f.status !== 'pending' && !n.hasChildren) db.prepare('UPDATE work_plan_items SET status = ? WHERE id = ?').run(f.status, n.id);
+        });
+        // un renglón que ya existía y recibió su primer hijo deja de ser hoja: vuelve a «Pendiente» (igual que al agregar a mano)
+        byId.forEach((node) => { if (node.resetNoted) db.prepare("UPDATE work_plan_items SET status = 'pending' WHERE id = ?").run(node.id); });
+        touchWorkPlan(row.id);
+    })();
+    return { ...out, created: planned.length, changes: [{ action: 'create', recordLabel: `Carga desde Excel: ${planned.length} renglones` }] };
+}
 // El texto de quien es responsable o ejecuta (el nombre actual de la persona ligada, o el texto libre).
 function workPlanPersonShown(clientId, forTestAccount, person) {
     if (person.userId != null) return (listWorkPlanPeople(clientId, forTestAccount).find((p) => p.id === person.userId) || { name: person.name }).name;
@@ -20311,7 +20447,7 @@ module.exports = {
     getUserGrants,
     setUserGrants,
     getUserGrantChangeLog,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
     MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices,
     THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,

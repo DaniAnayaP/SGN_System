@@ -322,7 +322,7 @@ function planActions(plan) {
     const can = plan.can || {};
     const closed = plan.status === 'closed';
     const live = isLive(plan);
-    const btn = (op, icon, labelKey, extra) => `<button type="button" class="btn btn-secondary wp-small${extra ? ` ${extra}` : ''}" data-wp-act="${op}" data-help-key="${{ pin: 'wpPin', history: 'wpHistory', comments: 'wpPlanComments', close: 'wpClose', reopen: 'wpClose', inactivate: 'wpInactivate', reactivate: 'wpInactivate', cancel: 'wpCancel', delete: 'wpDelete', 'edit-plan': 'wpEditPlan', 'save-template': 'wpSaveTemplate', report: 'wpReport', share: 'wpShare', people: 'wpShare', leave: 'wpLeave' }[op] || 'wpPlanActions'}"><i class="bx ${icon}" aria-hidden="true"></i> ${esc(t(labelKey))}</button>`;
+    const btn = (op, icon, labelKey, extra) => `<button type="button" class="btn btn-secondary wp-small${extra ? ` ${extra}` : ''}" data-wp-act="${op}" data-help-key="${{ pin: 'wpPin', history: 'wpHistory', comments: 'wpPlanComments', close: 'wpClose', reopen: 'wpClose', inactivate: 'wpInactivate', reactivate: 'wpInactivate', cancel: 'wpCancel', delete: 'wpDelete', 'edit-plan': 'wpEditPlan', 'save-template': 'wpSaveTemplate', report: 'wpReport', import: 'wpImport', share: 'wpShare', people: 'wpShare', leave: 'wpLeave' }[op] || 'wpPlanActions'}"><i class="bx ${icon}" aria-hidden="true"></i> ${esc(t(labelKey))}</button>`;
     const out = [btn('pin', plan.pinned ? 'bxs-star' : 'bx-star', plan.pinned ? 'main.wpUnpin' : 'main.wpPin')];
     if (can.edit && live) out.push(btn('edit-plan', 'bx-edit-alt', 'main.wpEditPlan'));
     out.push(can.share && live ? btn('share', 'bx-share-alt', 'main.wpShare') : btn('people', 'bx-group', 'main.wpPeople'));
@@ -335,6 +335,7 @@ function planActions(plan) {
     out.push(btn('comments', 'bx-message-rounded-dots', 'main.wpPlanComments'));
     out.push(btn('history', 'bx-history', 'main.wpHistory'));
     if (plan.itemCount > 0) out.push(btn('report', 'bx-download', 'main.wpReportBtn'));
+    if (can.addAny && live) out.push(btn('import', 'bx-upload', 'main.wpImportBtn'));
     if (can.leave) out.push(btn('leave', 'bx-log-out-circle', 'main.wpLeave'));
     return `<div class="wp-actions">${out.join('')}</div>`;
 }
@@ -463,7 +464,7 @@ function gantt(plan, items, data) {
         if (index === formAfter) html += formRow();
     });
     const rootForm = formHere && form.mode === 'add' && !form.parentId;
-    if (!items.length && !rootForm) html += `<div class="impl-detail-row wp-gantt-empty"><p>${esc(t('main.wpNoItems'))}</p></div>`;
+    if (!items.length && !rootForm) html += `<div class="impl-detail-row wp-gantt-empty"><p>${esc(t('main.wpNoItems'))}</p>${plan.can && plan.can.addAny && isLive(plan) ? `<button type="button" class="btn btn-secondary wp-small" data-wp-act="import" data-help-key="wpImport"><i class="bx bx-upload" aria-hidden="true"></i> ${esc(t('main.wpImportBtn'))}</button>` : ''}</div>`;
     if (rootForm) html += formRow();
     else if (plan.can && plan.can.addRoot && isLive(plan)) html += `<div class="impl-detail-row"><div class="impl-add-wrap"><button type="button" class="impl-add" data-wp-act="add-root" data-help-key="wpAddItem"><span class="impl-plus" aria-hidden="true">+</span>${esc(t('main.wpAddRoot', { level: levelLabel(plan, 1) }))}</button></div></div>`;
     return `${html}</div>`;
@@ -952,6 +953,139 @@ async function openReportModal(planId) {
     setTimeout(() => { const first = overlay.querySelector('input[name="wp-rp-format"]'); if (first) first.focus(); }, 0);
 }
 
+// ---- cargar desde Excel (Daniel, 2026-11-19, «Sí a las recomendaciones») -------------------------------------------------------------------------------------
+// Dos pasos en una ventana: bajar la plantilla (con los niveles de ESTE plan) y subirla llena. Al subirla NO se carga nada: el servidor lee el archivo y devuelve una vista previa fila por fila (lista, con aviso, con error, o ya existe) y
+// con «Cargar las N correctas» se manda el mismo archivo otra vez para que se agreguen. Solo se agrega: nada se borra ni se cambia. Las filas con error se pueden bajar (con una columna «Problema») para corregirlas y volver a subir.
+const IMPORT_ROWS_SHOWN = 500;
+async function openImportModal(planId) {
+    const data = cache.get(planId);
+    const plan = data && data.plan;
+    if (!plan) return;
+    const lang = localStorage.getItem('lang') === 'en' ? 'en' : 'es';
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    document.body.appendChild(overlay);
+    const st = { step: 'start', file: null, buffer: null, preview: null, busy: false, error: '' };
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (event) => { if (event.key === 'Escape' && !st.busy) close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay && !st.busy) close(); });
+    const msgText = (m) => t(`main.wpImpMsg_${m.code}`, m.params || {});
+    const stateText = (state) => t(`main.wpImportState_${state}`);
+    const statusText = (key) => t(`main.wpStatus_${key}`);
+    const errBox = () => `<p class="admin-error" id="wp-i-error" role="alert"${st.error ? '' : ' hidden'}>${esc(st.error)}</p>`;
+    const startHtml = () => `<h3 id="wp-i-title">${esc(t('main.wpImportTitle'))}</h3><p class="admin-hint">${esc(plan.title)}</p>
+        <div class="wp-imp-step"><span class="wp-imp-n" aria-hidden="true">1</span><div><h4>${esc(t('main.wpImportStep1'))}</h4><button type="button" class="btn btn-secondary" data-wp-i="template"${st.busy ? ' disabled' : ''}><i class="bx bx-download" aria-hidden="true"></i> ${esc(t('main.wpImportTemplate'))}</button></div></div>
+        <div class="wp-imp-step"><span class="wp-imp-n" aria-hidden="true">2</span><div><h4>${esc(t('main.wpImportStep2'))}</h4>
+            <label class="wp-imp-drop" id="wp-i-drop" for="wp-i-file" data-help-key="wpImportDrop"><b>${esc(st.busy ? t('main.wpImportReading') : t('main.wpImportDrop'))}</b><span>${esc(t('main.wpImportDropOr'))}</span></label>
+            <input type="file" id="wp-i-file" class="wp-imp-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"${st.busy ? ' disabled' : ''}></div></div>
+        ${errBox()}<div class="admin-form-actions"><button type="button" class="btn btn-secondary" data-wp-i="cancel"${st.busy ? ' disabled' : ''}>${esc(t('main.wpCancel'))}</button></div>`;
+    const previewHtml = () => {
+        const pv = st.preview;
+        const sum = pv.summary;
+        const loadable = sum.ok + sum.warn;
+        const shown = pv.rows.slice(0, IMPORT_ROWS_SHOWN);
+        const rowHtml = (r) => `<tr class="wp-imp-row wp-imp-row-${r.state}"><td class="wp-imp-num">${r.line}</td><td>${esc(r.pathText)}</td><td>${esc(r.responsible)}</td><td>${esc(r.start ? PlanReport.dateText(r.start, lang) : '')}</td><td>${esc(r.end ? PlanReport.dateText(r.end, lang) : '')}</td><td>${esc(statusText(r.status))}</td><td><span class="wp-imp-pv wp-imp-pv-${r.state}">${esc(stateText(r.state))}</span> ${esc(r.messages.map(msgText).join(' '))}</td></tr>`;
+        const created = sum.willCreate ? `${t('main.wpImportCreates', { n: sum.willCreate })}${sum.implicit ? t('main.wpImportCreatesParents', { n: sum.implicit }) : ''}` : t('main.wpImportNothingNew');
+        return `<h3 id="wp-i-title">${esc(t('main.wpImportPreviewTitle', { file: st.file.name }))}</h3><p class="admin-hint">${esc(t('main.wpImportRowsRead', { n: sum.rows }))}</p>
+            <div class="wp-imp-sum" data-help-key="wpImportPreview"><span class="wp-imp-pv wp-imp-pv-ok">${esc(t('main.wpImportOk', { n: sum.ok }))}</span><span class="wp-imp-pv wp-imp-pv-warn">${esc(t('main.wpImportWarn', { n: sum.warn }))}</span><span class="wp-imp-pv wp-imp-pv-error">${esc(t('main.wpImportErr', { n: sum.error }))}</span><span class="wp-imp-pv wp-imp-pv-skip">${esc(t('main.wpImportSkip', { n: sum.skip }))}</span><span class="wp-imp-created">${esc(created)}</span></div>
+            ${pv.blocked ? `<p class="admin-error" role="alert">${esc(t('main.wpImportBlocked', { max: pv.blocked.max, over: pv.blocked.over }))}</p>` : ''}
+            <div class="wp-imp-table-wrap"><table class="wp-imp-table"><thead><tr><th>${esc(t('main.wpImportColRow'))}</th><th>${esc(t('main.wpImportColPath'))}</th><th>${esc(t('main.wpImportColResp'))}</th><th>${esc(t('main.wpImportColStart'))}</th><th>${esc(t('main.wpImportColEnd'))}</th><th>${esc(t('main.wpImportColStatus'))}</th><th>${esc(t('main.wpImportColResult'))}</th></tr></thead><tbody>${shown.map(rowHtml).join('')}</tbody></table></div>
+            ${pv.rows.length > shown.length ? `<p class="admin-hint">${esc(t('main.wpImportCap', { n: shown.length }))}</p>` : ''}
+            ${errBox()}<div class="admin-form-actions"><button type="button" class="btn" data-wp-i="load"${loadable && !pv.blocked && !st.busy ? '' : ' disabled'}><i class="bx bx-upload" aria-hidden="true"></i> ${esc(t(loadable === 1 ? 'main.wpImportLoadOne' : 'main.wpImportLoad', { n: loadable }))}</button>${sum.error ? `<button type="button" class="btn btn-secondary" data-wp-i="errors"${st.busy ? ' disabled' : ''}><i class="bx bx-download" aria-hidden="true"></i> ${esc(t('main.wpImportDownloadErrors'))}</button>` : ''}<button type="button" class="btn btn-secondary" data-wp-i="again"${st.busy ? ' disabled' : ''}>${esc(t('main.wpImportAnother'))}</button><button type="button" class="btn btn-secondary" data-wp-i="cancel"${st.busy ? ' disabled' : ''}>${esc(t('main.wpCancel'))}</button></div>`;
+    };
+    const paint = () => {
+        overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal wp-imp${st.step === 'preview' ? ' wp-imp-wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="wp-i-title" aria-label="${esc(t('main.wpImportTitle'))}" data-help-key="wpImport">${st.step === 'preview' ? previewHtml() : startHtml()}</div>`;
+    };
+    const showError = (text) => { st.error = text; const el = overlay.querySelector('#wp-i-error'); if (el) { el.textContent = text; el.hidden = !text; } };
+    const setBusy = (busy) => { st.busy = busy; paint(); if (st.error) showError(st.error); };
+    const sendFile = async (mode) => {
+        const res = await fetch(`${API}/${planId}/import?mode=${mode}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/octet-stream' }, body: st.buffer });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) { const err = new Error(out.error || out.message || 'failed'); err.body = out; err.status = res.status; throw err; }
+        return out;
+    };
+    const chooseFile = async (file) => {
+        if (!file) return;
+        st.error = '';
+        if (file.size > 5 * 1024 * 1024) { st.error = t('main.wpErr_IMPORT_TOO_BIG'); paint(); return; }
+        st.file = file;
+        setBusy(true);
+        try {
+            st.buffer = await file.arrayBuffer();
+            st.preview = await sendFile('preview');
+            st.step = 'preview';
+            st.busy = false;
+            paint();
+        } catch (err) {
+            if (err && err.body && STALE_CODES.includes(err.body.code)) { close(); failed(err, planId); return; }
+            st.error = errText(err);
+            st.busy = false;
+            paint();
+        }
+    };
+    const downloadTemplate = async () => {
+        try {
+            const res = await fetch(`${API}/${planId}/import-template?lang=${lang}`, { credentials: 'include' });
+            if (!res.ok) throw new Error('template failed');
+            saveFile(await res.blob(), `${lang === 'en' ? 'Template' : 'Plantilla'}-${PlanReport.slug(plan.title)}.xlsx`);
+        } catch (err) { console.error('Planes de trabajo: la plantilla no se pudo bajar', err); showError(t('main.wpImportTemplateError')); }
+    };
+    // las filas con error, con las mismas columnas de la plantilla y una columna «Problema» al final, para corregirlas y volver a subirlas
+    const downloadErrors = async () => {
+        const pv = st.preview;
+        const head = [...pv.levelNames, t('main.wpImportColResp'), t('main.wpImportColExec'), t('main.wpImportColStart'), t('main.wpImportColEnd'), t('main.wpImportColStatus'), t('main.wpImportColNote'), t('main.wpImportErrCol')];
+        const rows = pv.rows.filter((r) => r.state === 'error').map((r) => {
+            const levels = pv.levelNames.map((_, i) => (r.raw.path[i] || ''));
+            return [...levels, r.raw.responsible, r.raw.executor, r.raw.start, r.raw.end, r.raw.status, r.raw.note, r.messages.map(msgText).join(' ')];
+        });
+        try {
+            const filename = `${t('main.wpImportErrorsFile')}_${PlanReport.slug(plan.title)}_${todayYmd()}`;
+            const res = await fetch('/api/business/export/xlsx', { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: t('main.wpImportErrorsFile'), filename, columns: head.map((label) => ({ label })), rows }) });
+            if (!res.ok) throw new Error('export failed');
+            saveFile(await res.blob(), `${filename}.xlsx`);
+        } catch (err) { console.error('Planes de trabajo: las filas con error no se pudieron bajar', err); showError(t('main.wpRepError')); }
+    };
+    const load = async () => {
+        setBusy(true);
+        st.error = '';
+        try {
+            const out = await sendFile('commit');
+            await loadList();
+            await loadPlan(planId);
+            close();
+            render();
+            Dashboard.showToast(out.created ? t('main.wpImportDone', { n: out.created }) : t('main.wpImportDoneNone'), out.created ? 'success' : 'info');
+        } catch (err) {
+            if (err && err.body && STALE_CODES.includes(err.body.code)) { close(); failed(err, planId); return; }
+            st.error = errText(err);
+            st.busy = false;
+            paint();
+        }
+    };
+    overlay.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-wp-i]');
+        if (!btn || st.busy) return;
+        const op = btn.dataset.wpI;
+        if (op === 'cancel') close();
+        else if (op === 'template') downloadTemplate();
+        else if (op === 'again') { st.step = 'start'; st.preview = null; st.file = null; st.buffer = null; st.error = ''; paint(); }
+        else if (op === 'errors') downloadErrors();
+        else if (op === 'load') load();
+    });
+    overlay.addEventListener('change', (event) => { if (event.target.id === 'wp-i-file') chooseFile(event.target.files && event.target.files[0]); });
+    overlay.addEventListener('dragover', (event) => { if (event.target.closest && event.target.closest('#wp-i-drop')) { event.preventDefault(); event.target.closest('#wp-i-drop').classList.add('wp-imp-drop-over'); } });
+    overlay.addEventListener('dragleave', (event) => { const zone = event.target.closest && event.target.closest('#wp-i-drop'); if (zone) zone.classList.remove('wp-imp-drop-over'); });
+    overlay.addEventListener('drop', (event) => {
+        const zone = event.target.closest && event.target.closest('#wp-i-drop');
+        if (!zone) return;
+        event.preventDefault();
+        zone.classList.remove('wp-imp-drop-over');
+        chooseFile(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]);
+    });
+    paint();
+}
+
 // ---- plantillas (pieza 3c) ------------------------------------------------------------------------------------------------------------------------------
 // Una plantilla es PRIVADA de quien la guarda y lleva solo los niveles y los nombres de los renglones (en su árbol): nada de responsables, fechas, estados ni notas. Se guarda desde un plan (menos los del equipo) y se usa en «Nuevo plan».
 function openSaveTemplateModal(planId) {
@@ -1250,6 +1384,7 @@ document.addEventListener('click', (event) => {
     else if (op === 'save-template') openSaveTemplateModal(planId);
     else if (op === 'history') Dashboard.openChangeHistory('work_plans', planId);
     else if (op === 'report') openReportModal(planId);
+    else if (op === 'import') openImportModal(planId);
     else if (op === 'comments') openPlanThread(planId);
     else if (op === 'share' || op === 'people') openShareModal(planId);
     else if (op === 'leave') leavePlan(planId);

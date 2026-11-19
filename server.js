@@ -616,7 +616,7 @@ const {
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -1995,7 +1995,8 @@ const WORK_PLAN_MESSAGES = {
     WORK_PLAN_NOT_ALLOWED: 'Tu rol en este plan no permite hacer eso.', WORK_PLAN_MEMBER_NOT_FOUND: 'Esa persona no está en este plan.', WORK_PLAN_MEMBER_EXISTS: 'Esa persona ya está en este plan.',
     WORK_PLAN_MEMBER_INVALID: 'Esa persona no se puede agregar: elige a alguien activo de tu compañía que no sea la dueña del plan.', WORK_PLAN_ROLE_INVALID: 'El rol no es válido: Ver, Colaborar o Administrar.',
     WORK_PLAN_LIMIT_MEMBERS: `Un plan no se puede compartir con más de ${WORK_PLAN_LIMITS.membersPerPlan} personas.`,
-    WORK_PLAN_TEMPLATE_NOT_FOUND: 'Esa plantilla no existe.', WORK_PLAN_TEMPLATE_LIMIT: `Ya tienes ${WORK_PLAN_LIMITS.templatesPerUser} plantillas: elimina alguna para guardar otra.`, WORK_PLAN_TEMPLATE_EMPTY: 'Este plan no tiene renglones: no sirve de plantilla.',
+    WORK_PLAN_TEMPLATE_NOT_FOUND: 'Esa plantilla no existe.', IMPORT_FILE: 'No se pudo leer el archivo: sube la plantilla de Excel (.xlsx).', IMPORT_HEADERS: 'No encuentro las columnas de la plantilla: deja la fila de títulos como venía.',
+    IMPORT_LEVELS: 'El archivo trae más columnas de nivel que este plan.', IMPORT_TOO_BIG: 'El archivo trae demasiadas filas.', IMPORT_EMPTY: 'El archivo no trae renglones.', WORK_PLAN_TEMPLATE_LIMIT: `Ya tienes ${WORK_PLAN_LIMITS.templatesPerUser} plantillas: elimina alguna para guardar otra.`, WORK_PLAN_TEMPLATE_EMPTY: 'Este plan no tiene renglones: no sirve de plantilla.',
     WORK_PLAN_NOT_EMPTY: 'Este plan ya tiene renglones: no se puede eliminar. Si todavía no se ha trabajado en él, inactívalo; si ya hay trabajo registrado, cancélalo.',
     WORK_PLAN_EMPTY: 'Este plan está vacío: solo se puede eliminar.',
     WORK_PLAN_HAS_WORK: 'Este plan ya tiene trabajo registrado: solo se puede cancelar.',
@@ -2088,6 +2089,193 @@ app.get('/api/business/work-plans/:id/report-data', requireAuth, (req, res) => {
     if (result.error) return workPlanFail(res, result);
     res.set('Cache-Control', 'no-store');
     res.json(result);
+});
+// ---- Cargar desde Excel (Daniel, 2026-11-19, «Sí a las recomendaciones») ----
+// GET /:id/import-template baja la plantilla del plan (sus niveles como títulos, las personas de la compañía y los estados para elegir, una hoja de instrucciones). POST /:id/import?mode=preview|commit recibe el .xlsx tal cual (cuerpo
+// binario): la vista previa no escribe nada; la carga (mode=commit) vuelve a leer el mismo archivo y agrega las filas correctas (importWorkPlanItems en db.js: solo agrega, nunca borra ni cambia). Quien puede agregar renglones al plan puede cargar.
+const WP_IMPORT_MAX_ROWS = 2000;
+const wpFoldText = (value) => String(value == null ? '' : value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const WP_IMPORT_HEADERS = { responsible: ['responsable', 'responsible'], executor: ['ejecuta', 'executes', 'executor'], start: ['inicio', 'start'], end: ['fin', 'end'], status: ['estado', 'status'], note: ['nota', 'note'] };
+const WP_IMPORT_MONTHS = { ene: 1, jan: 1, feb: 2, mar: 3, abr: 4, apr: 4, may: 5, jun: 6, jul: 7, ago: 8, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dic: 12, dec: 12 };
+const wpImportRaw = express.raw({ type: () => true, limit: '5mb' });
+function wpCellRaw(cell) {
+    const v = cell.value;
+    if (v == null) return '';
+    if (v instanceof Date) return v;
+    if (typeof v === 'object') {
+        if (Array.isArray(v.richText)) return v.richText.map((part) => part.text).join('');
+        if (v.result !== undefined) return v.result instanceof Date ? v.result : (v.result == null ? '' : v.result);
+        if (v.text !== undefined) return String(v.text);
+        return '';
+    }
+    return v;
+}
+const wpCellText = (cell) => { const v = wpCellRaw(cell); return v instanceof Date ? '' : String(v).replace(/\s+/g, ' ').trim(); };
+const wpYmd = (y, m, d) => { const date = new Date(Date.UTC(y, m - 1, d)); return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` : null; };
+// Una fecha del archivo: una celda de fecha de Excel, un número de serie o un texto (2026-11-19, 19/11/2026, 19/nov/2026). { ok: true, value } (value '' si está vacía) o { ok: false, text }.
+function wpParseImportDate(raw) {
+    if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? { ok: false, text: '' } : { ok: true, value: wpYmd(raw.getUTCFullYear(), raw.getUTCMonth() + 1, raw.getUTCDate()) };
+    if (typeof raw === 'number') { const d = new Date(Date.UTC(1899, 11, 30) + Math.round(raw) * 86400000); return raw > 0 ? { ok: true, value: wpYmd(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()) } : { ok: false, text: String(raw) }; }
+    const text = String(raw == null ? '' : raw).trim();
+    if (!text) return { ok: true, value: '' };
+    const lower = text.toLowerCase();
+    let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(lower);
+    let y; let mo; let d;
+    if (m) { y = Number(m[1]); mo = Number(m[2]); d = Number(m[3]); }
+    else if ((m = /^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/.exec(lower))) { d = Number(m[1]); mo = Number(m[2]); y = Number(m[3]); }
+    else if ((m = /^(\d{1,2})[/\- ]([a-z]{3,4})\.?[/\- ](\d{4})$/.exec(lower)) && WP_IMPORT_MONTHS[m[2]]) { d = Number(m[1]); mo = WP_IMPORT_MONTHS[m[2]]; y = Number(m[3]); }
+    else return { ok: false, text };
+    const value = wpYmd(y, mo, d);
+    return value ? { ok: true, value } : { ok: false, text };
+}
+// Lee el archivo: { levelCols, rows } o { error } (código). Las columnas se encuentran por el título (en español o en inglés): las de nivel son todas las que están antes de «Responsable».
+async function readWorkPlanImportFile(buffer, levelCount) {
+    if (!Buffer.isBuffer(buffer) || !buffer.length) return { error: 'IMPORT_FILE' };
+    const workbook = new ExcelJS.Workbook();
+    try { await workbook.xlsx.load(buffer); } catch (err) { return { error: 'IMPORT_FILE' }; }
+    const sheet = workbook.worksheets[0];
+    if (!sheet) return { error: 'IMPORT_FILE' };
+    if (sheet.rowCount > 6000) return { error: 'IMPORT_TOO_BIG' };
+    // la fila de títulos es la primera (de las 10 de arriba) que trae alguna de las columnas conocidas; así también sirve el archivo de «filas con error» que baja la pantalla (trae una fila en blanco arriba)
+    let headerRow = 0;
+    let headers = [];
+    let colOf = {};
+    for (let r = 1; r <= Math.min(10, sheet.rowCount) && !headerRow; r += 1) {
+        const found = [];
+        sheet.getRow(r).eachCell({ includeEmpty: true }, (cell, col) => { found[col] = wpFoldText(wpCellText(cell)); });
+        const mapped = {};
+        Object.entries(WP_IMPORT_HEADERS).forEach(([key, names]) => { const at = found.findIndex((h, i) => i > 0 && names.includes(h)); if (at > 0) mapped[key] = at; });
+        if (Object.keys(mapped).length) { headerRow = r; headers = found; colOf = mapped; }
+    }
+    const dataCols = Object.values(colOf);
+    if (!headerRow || !dataCols.length) return { error: 'IMPORT_HEADERS' };
+    const levelCols = Math.min(...dataCols) - 1;
+    if (levelCols < 1) return { error: 'IMPORT_HEADERS' };
+    if (levelCols > levelCount) return { error: 'IMPORT_LEVELS' };
+    const rows = [];
+    for (let r = headerRow + 1; r <= sheet.rowCount; r += 1) {
+        const row = sheet.getRow(r);
+        const path = [];
+        for (let c = 1; c <= levelCols; c += 1) path.push(wpCellText(row.getCell(c)));
+        const get = (key) => (colOf[key] ? wpCellRaw(row.getCell(colOf[key])) : '');
+        const text = (key) => { const v = get(key); return v instanceof Date ? '' : String(v).trim(); };
+        const item = { line: r, path, responsible: text('responsible'), executor: text('executor'), start: wpParseImportDate(get('start')), end: wpParseImportDate(get('end')), status: text('status'), note: text('note') };
+        const empty = !path.some(Boolean) && !item.responsible && !item.executor && !item.start.value && item.start.ok && !item.end.value && item.end.ok && !item.status && !item.note;
+        if (empty) continue;
+        rows.push(item);
+        if (rows.length > WP_IMPORT_MAX_ROWS) return { error: 'IMPORT_TOO_BIG' };
+    }
+    if (!rows.length) return { error: 'IMPORT_EMPTY' };
+    return { levelCols, rows };
+}
+const WP_TEMPLATE_TEXT = {
+    es: {
+        sheets: ['Plantilla', 'Instrucciones', 'Ejemplo', 'Listas'], headers: ['Responsable', 'Ejecuta', 'Inicio', 'Fin', 'Estado', 'Nota'], statuses: ['Pendiente', 'En curso', 'Hecha'], people: 'Personas', states: 'Estados',
+        how: 'Cómo se llena', example: 'Ejemplo',
+        steps: [
+            'Cada fila es un renglón del plan.',
+            'Escribe el nombre en las columnas de nivel, de izquierda a derecha, hasta el nivel del renglón. Repite el nombre de lo de arriba en cada fila; lo que no exista se arma solo.',
+            'Responsable y Ejecuta: elige de la lista o escribe otro nombre (se guarda como texto).',
+            'Inicio y Fin: las dos fechas o ninguna (por ejemplo 19/nov/2026, 19/11/2026 o 2026-11-19). El fin no puede ser antes del inicio.',
+            'Estado: Pendiente, En curso o Hecha. En un renglón que tiene otros adentro el estado se calcula solo.',
+            'Un renglón que ya existe en el plan (mismo nombre dentro del mismo renglón de arriba) se salta: nada se borra ni se cambia.',
+            'No cambies la fila de títulos ni agregues columnas antes de «Responsable».',
+        ],
+    },
+    en: {
+        sheets: ['Template', 'Instructions', 'Example', 'Lists'], headers: ['Responsible', 'Executes', 'Start', 'End', 'Status', 'Note'], statuses: ['Pending', 'In progress', 'Done'], people: 'People', states: 'Statuses',
+        how: 'How to fill it in', example: 'Example',
+        steps: [
+            'Each row is an item of the plan.',
+            'Write the name in the level columns, left to right, down to the level of the item. Repeat the name of what is above on every row; whatever does not exist is created on its own.',
+            'Responsible and Executes: pick from the list or type another name (it is saved as text).',
+            'Start and End: both dates or none (for example 19/nov/2026, 19/11/2026 or 2026-11-19). The end cannot be before the start.',
+            'Status: Pending, In progress or Done. On an item that has others inside, the status is calculated on its own.',
+            'An item that already exists in the plan (same name inside the same item above) is skipped: nothing is deleted or changed.',
+            'Do not change the titles row or add columns before "Responsible".',
+        ],
+    },
+};
+async function buildWorkPlanTemplate(levelNames, people, lang) {
+    const L = WP_TEMPLATE_TEXT[lang === 'en' ? 'en' : 'es'];
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet(L.sheets[0]);
+    const howSheet = workbook.addWorksheet(L.sheets[1]);
+    const exSheet = workbook.addWorksheet(L.sheets[2]);
+    const listSheet = workbook.addWorksheet(L.sheets[3]);
+    const head = [...levelNames, ...L.headers];
+    const first = sheet.addRow(head);
+    first.font = { bold: true };
+    first.eachCell((cell, col) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: col <= levelNames.length ? 'FFE0E8F8' : 'FFE7EBF3' } }; cell.border = { bottom: { style: 'thin' } }; });
+    sheet.views = [{ state: 'frozen', ySplit: 1 }];
+    const n = levelNames.length;
+    levelNames.forEach((name, i) => { sheet.getColumn(i + 1).width = Math.min(32, Math.max(16, String(name).length + 6)); });
+    [[n + 1, 24], [n + 2, 24], [n + 3, 14], [n + 4, 14], [n + 5, 14], [n + 6, 40]].forEach(([col, width]) => { sheet.getColumn(col).width = width; });
+    sheet.getColumn(n + 3).numFmt = 'dd/mmm/yyyy';
+    sheet.getColumn(n + 4).numFmt = 'dd/mmm/yyyy';
+    // listas para elegir (las personas aceptan otro nombre; el estado, no)
+    listSheet.addRow([L.people, '', L.states]);
+    listSheet.getRow(1).font = { bold: true };
+    people.forEach((p, i) => { listSheet.getCell(i + 2, 1).value = p.name; });
+    L.statuses.forEach((name, i) => { listSheet.getCell(i + 2, 3).value = name; });
+    listSheet.getColumn(1).width = 30; listSheet.getColumn(3).width = 16;
+    const peopleRange = `'${L.sheets[3]}'!$A$2:$A$${Math.max(2, people.length + 1)}`;
+    for (let r = 2; r <= 1001; r += 1) {
+        if (people.length) {
+            [n + 1, n + 2].forEach((col) => { sheet.getCell(r, col).dataValidation = { type: 'list', allowBlank: true, formulae: [peopleRange], showErrorMessage: false }; });
+        }
+        sheet.getCell(r, n + 5).dataValidation = { type: 'list', allowBlank: true, formulae: [`"${L.statuses.join(',')}"`], showErrorMessage: true, errorStyle: 'stop', error: L.statuses.join(' / ') };
+    }
+    // instrucciones y un ejemplo (el ejemplo va aquí para que no se cargue sin querer)
+    howSheet.getColumn(1).width = 110;
+    howSheet.addRow([L.how]).font = { bold: true, size: 13 };
+    L.steps.forEach((step, i) => { const row = howSheet.addRow([`${i + 1}. ${step}`]); row.alignment = { wrapText: true, vertical: 'top' }; });
+    // el ejemplo, en su propia hoja y con las mismas columnas (así no se carga sin querer)
+    const exHead = exSheet.addRow(head);
+    exHead.font = { bold: true };
+    exHead.eachCell((cell, col) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: col <= n ? 'FFE0E8F8' : 'FFE7EBF3' } }; });
+    const exampleRows = [
+        [['Analisis'], ['Laura', '', '19/nov/2026', '30/nov/2026', L.statuses[0], '']],
+        [['Analisis', 'Categorias'], ['Laura', '', '20/nov/2026', '20/nov/2026', L.statuses[1], '']],
+        [['Analisis', 'Categorias', 'Revisión de contratos'], ['Marco', 'Sofía', '21/nov/2026', '25/nov/2026', L.statuses[1], '']],
+    ].slice(0, Math.max(1, Math.min(3, n)));
+    exampleRows.forEach(([path, data]) => { const levelsPart = []; for (let i = 0; i < n; i += 1) levelsPart.push(path[i] || ''); exSheet.addRow([...levelsPart, ...data]); });
+    head.forEach((_, i) => { exSheet.getColumn(i + 1).width = sheet.getColumn(i + 1).width || 16; });
+    return workbook;
+}
+// El plan para cargarle renglones: abierto por quien puede agregarlos; un plan que no está activo (finalizado, inactivo o cancelado) dice por qué no recibe cargas.
+function wpImportGate(req, res) {
+    if (!workPlanGate(req, res)) return null;
+    const detail = getWorkPlanDetail(req.user.clientId, req.user.sub, req.user.isTestAccount, req.params.id);
+    if (detail.error) { workPlanFail(res, detail); return null; }
+    const lock = { closed: 'WORK_PLAN_CLOSED', inactive: 'WORK_PLAN_INACTIVE', cancelled: 'WORK_PLAN_CANCELLED' }[detail.plan.status];
+    if (lock) { workPlanFail(res, { error: lock }); return null; }
+    if (!(detail.plan.can && detail.plan.can.addAny)) { workPlanFail(res, { error: 'WORK_PLAN_NOT_ALLOWED' }); return null; }
+    return detail;
+}
+app.get('/api/business/work-plans/:id/import-template', requireAuth, async (req, res) => {
+    const detail = wpImportGate(req, res);
+    if (!detail) return;
+    const lang = req.query.lang === 'en' ? 'en' : 'es';
+    const workbook = await buildWorkPlanTemplate(detail.plan.levelNames || [], listWorkPlanPeople(req.user.clientId, req.user.isTestAccount), lang);
+    const slug = String(detail.plan.title || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'Plan';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', buildContentDisposition(`${lang === 'en' ? 'Template' : 'Plantilla'}-${slug}.xlsx`));
+    res.set('Cache-Control', 'no-store');
+    await workbook.xlsx.write(res);
+    res.end();
+});
+app.post('/api/business/work-plans/:id/import', requireAuth, wpImportRaw, async (req, res) => {
+    const detail = wpImportGate(req, res);
+    if (!detail) return;
+    const parsed = await readWorkPlanImportFile(req.body, (detail.plan.levelNames || []).length);
+    if (parsed.error) return workPlanFail(res, parsed);
+    const commit = req.query.mode === 'commit';
+    const result = importWorkPlanItems(req.user.clientId, req.user.sub, req.user.isTestAccount, req.params.id, parsed.rows, { commit, byLabel: changedByLabel(req) });
+    if (result.error) return workPlanFail(res, result);
+    if (commit) workPlanLog(req, result.planId, result.changes);
+    res.set('Cache-Control', 'no-store');
+    res.json({ mode: commit ? 'commit' : 'preview', levelNames: result.levelNames, rows: result.rows, summary: result.summary, blocked: result.blocked, created: result.created || 0 });
 });
 app.patch('/api/business/work-plans/:id', requireAuth, (req, res) => workPlanRun(req, res,
     () => updateWorkPlan(req.user.clientId, req.user.sub, req.params.id, workPlanPick(req.body, WORK_PLAN_KEYS)), 200, (r) => ({ plan: r.plan })));
