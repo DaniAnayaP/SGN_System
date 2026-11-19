@@ -68,6 +68,7 @@ const TABLES = {
     thread_comments: { action: WIPE, group: 'captures' }, // Hilos de comentarios genéricos (renglones y planes de trabajo, y los que vengan): inmutables, solo se van con la compañía (2b)
     thread_comment_mentions: { action: WIPE, group: 'captures' }, // a quién menciona cada comentario
     thread_reads: { action: WIPE, group: 'captures' }, // hasta qué comentario leyó cada persona en cada hilo
+    chat_conversations: { action: WIPE, group: 'captures' }, // Mensajes: quiénes son las dos personas de cada chat 1 a 1 (los mensajes son thread_comments de tipo 'chat') (2c)
     client_login_configs: { action: WIPE, group: 'captures' }, // Apps Nuestros Clientes: el inicio de sesión personalizado de cada cliente
     sku_requests: { action: WIPE, group: 'captures' },
     sku_request_events: { action: WIPE, group: 'captures' },

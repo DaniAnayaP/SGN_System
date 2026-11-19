@@ -68,7 +68,7 @@ function mount(container, options) {
     function renderList() {
         if (!state.loaded) { listEl.innerHTML = `<p class="thr-note">${esc(t('main.thrLoading'))}</p>`; return; }
         if (state.error) { listEl.innerHTML = `<p class="thr-note thr-error">${esc(state.error)}</p>`; return; }
-        if (!comments.length) { listEl.innerHTML = `<p class="thr-note">${esc(t('main.thrEmpty'))}</p>`; return; }
+        if (!comments.length) { listEl.innerHTML = `<p class="thr-note">${esc(t(options.mentions === false ? 'main.thrChatEmpty' : 'main.thrEmpty'))}</p>`; return; }
         let html = '';
         comments.forEach((c) => {
             if (unreadFrom && c.id === unreadFrom) html += `<div class="thr-unread"><span>${esc(t('main.thrUnread'))}</span></div>`;
@@ -86,8 +86,8 @@ function mount(container, options) {
         const keep = composeEl.querySelector('textarea');
         if (keep) return; // ya está dibujado: no se pierde lo que se estaba escribiendo
         composeEl.innerHTML = `<div class="thr-sug" hidden role="listbox" aria-label="${esc(t('main.thrMentionHint'))}"></div>
-            <textarea class="thr-input" rows="2" maxlength="${MAX_BODY}" placeholder="${esc(t('main.thrPlaceholder'))}" aria-label="${esc(t('main.thrPlaceholder'))}" data-help-key="thrCompose"></textarea>
-            <div class="thr-actions"><span class="thr-hint">${esc(t('main.thrMentionHint'))}</span><button type="button" class="btn thr-send" data-thr="send" data-help-key="thrSend">${esc(t('main.thrSend'))}</button></div>
+            <textarea class="thr-input" rows="2" maxlength="${MAX_BODY}" placeholder="${esc(t(options.mentions === false ? 'main.thrChatPlaceholder' : 'main.thrPlaceholder'))}" aria-label="${esc(t(options.mentions === false ? 'main.thrChatPlaceholder' : 'main.thrPlaceholder'))}" data-help-key="thrCompose"></textarea>
+            <div class="thr-actions"><span class="thr-hint">${esc(t(options.mentions === false ? 'main.thrChatHint' : 'main.thrMentionHint'))}</span><button type="button" class="btn thr-send" data-thr="send" data-help-key="thrSend">${esc(t('main.thrSend'))}</button></div>
             <p class="admin-error thr-form-error" role="alert" hidden></p>`;
     }
     const showError = (text) => { const el = composeEl.querySelector('.thr-form-error'); if (el) { el.textContent = text; el.hidden = !text; } };
@@ -147,7 +147,7 @@ function mount(container, options) {
         if (!input || state.busy) return;
         const body = input.value.trim();
         if (!body) { showError(t('main.thrErr_THREAD_BODY_REQUIRED')); return; }
-        const mentions = [...mentioned.entries()].filter(([name]) => body.includes(`@${name}`)).map(([, userId]) => userId);
+        const mentions = options.mentions === false ? [] : [...mentioned.entries()].filter(([name]) => body.includes(`@${name}`)).map(([, userId]) => userId);
         state.busy = true;
         const btn = composeEl.querySelector('[data-thr="send"]');
         if (btn) btn.disabled = true;
@@ -180,6 +180,7 @@ function mount(container, options) {
         return m ? { query: m[2], start: upto.length - m[2].length - 1 } : null;
     }
     function updateSuggestions(input) {
+        if (options.mentions === false) { hideSuggestions(); return; }
         const found = mentionQuery(input);
         const box = composeEl.querySelector('.thr-sug');
         if (!found || !box) { hideSuggestions(); return; }

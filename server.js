@@ -615,7 +615,7 @@ const {
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -2008,14 +2008,31 @@ const THREAD_HTTP = { THREAD_TYPE_INVALID: 404, THREAD_NOT_FOUND: 404, THREAD_BO
 const THREAD_MESSAGES = {
     THREAD_TYPE_INVALID: 'Ese tipo de conversación no existe.', THREAD_NOT_FOUND: 'Esa conversación no existe.', THREAD_BODY_REQUIRED: 'Escribe el comentario.',
     THREAD_BODY_TOO_LONG: `El comentario no puede pasar de ${THREAD_LIMITS.body} letras.`, THREAD_MENTION_INVALID: `Solo se puede mencionar, sin repetir y hasta ${THREAD_LIMITS.mentions} personas, a quienes hoy tienen acceso a esto.`,
-    THREAD_LIMIT: `Esta conversación llegó al máximo de ${THREAD_LIMITS.commentsPerThread} comentarios.`,
+    THREAD_LIMIT: (r) => `Esta conversación llegó al máximo de ${(r && r.limit) || THREAD_LIMITS.commentsPerThread} mensajes.`,
 };
 function threadFail(res, result) {
     const code = result.error;
-    if (THREAD_HTTP[code]) { const message = THREAD_MESSAGES[code]; return res.status(THREAD_HTTP[code]).json({ error: message, message, code }); }
+    if (THREAD_HTTP[code]) { const raw = THREAD_MESSAGES[code]; const message = typeof raw === 'function' ? raw(result) : raw; return res.status(THREAD_HTTP[code]).json({ error: message, message, code }); }
+    if (MESSAGES_HTTP[code]) { const message = MESSAGES_MESSAGES[code]; return res.status(MESSAGES_HTTP[code]).json({ error: message, message, code }); }
     return workPlanFail(res, result);
 }
+// ---- Mensajes (pieza 2c): chats 1 a 1 como hilos de tipo 'chat', resumen del globito y avisos ----
+// Guarda de Mensajes: cuenta de compañía cuyo cliente tiene el módulo 'btn-mensajes' contratado, con el Estatus de main/btn-mensajes habilitado, y que es administradora del cliente o tiene la hoja main/btn-mensajes (el mismo criterio del botón de la barra
+// de arriba). Las cuentas de SaaS (sin compañía) no tienen Mensajes. Sin eso: 403 MESSAGES_FORBIDDEN.
+const MESSAGES_HTTP = { MESSAGES_FORBIDDEN: 403, MESSAGES_PERSON_INVALID: 400, MESSAGES_PERSON_INACTIVE: 409 };
+const MESSAGES_MESSAGES = {
+    MESSAGES_FORBIDDEN: 'No tienes permiso para usar Mensajes.',
+    MESSAGES_PERSON_INVALID: 'A esa persona no se le puede escribir: elige a alguien activo de tu compañía que también tenga Mensajes.',
+    MESSAGES_PERSON_INACTIVE: 'Esa persona ya no está activa: no se le pueden enviar mensajes.',
+};
+function messagesGate(req, res) {
+    if (req.user.clientId && messagesAccessChecker(req.user.clientId)(req.user.sub)) return true;
+    threadFail(res, { error: 'MESSAGES_FORBIDDEN' });
+    return false;
+}
 const THREAD_TYPES = {
+    // thread_id = id de la conversación; solo la ven sus dos personas
+    chat: { guard: messagesGate, notFound: 'THREAD_NOT_FOUND', resolve: (req, id) => resolveChatThread(req.user.clientId, req.user.sub, id) },
     // thread_id = id del renglón
     'work-plan-item': { guard: workPlanGate, notFound: 'WORK_PLAN_NOT_FOUND', resolve: (req, id) => resolveWorkPlanThread(req.user.clientId, req.user.sub, 'work-plan-item', id) },
     // thread_id = id del plan
@@ -2042,9 +2059,10 @@ app.post('/api/business/threads/:type/:id/comments', requireAuth, (req, res) => 
     const ctx = threadContext(req, res);
     if (!ctx) return;
     if (!ctx.subject.canPost) return threadFail(res, { error: ctx.subject.postError || 'THREAD_NOT_FOUND' });
-    const result = addThreadComment(req.user.clientId, req.user.sub, ctx.type, ctx.id, workPlanPick(req.body, ['body', 'mentions']), (ctx.subject.participants || []).map((p) => p.id));
+    const result = addThreadComment(req.user.clientId, req.user.sub, ctx.type, ctx.id, workPlanPick(req.body, ['body', 'mentions']), (ctx.subject.participants || []).map((p) => p.id), { maxComments: ctx.subject.maxComments });
     if (result.error) return threadFail(res, result);
     if (ctx.subject.planId) touchWorkPlan(ctx.subject.planId); // comentar es un movimiento del plan: sube en «último movimiento»
+    if (typeof ctx.subject.afterPost === 'function') ctx.subject.afterPost(); // lo propio de cada tipo (en los chats, last_message_at)
     res.set('Cache-Control', 'no-store');
     res.status(201).json(result);
 });
@@ -2053,6 +2071,34 @@ app.post('/api/business/threads/:type/:id/read', requireAuth, (req, res) => {
     if (!ctx) return;
     res.set('Cache-Control', 'no-store');
     res.json(markThreadRead(req.user.clientId, req.user.sub, ctx.type, ctx.id));
+});
+// Mensajes: personas a quienes se les puede escribir, mis chats, abrir un chat, el resumen del globito y los avisos. Todo con messagesGate (los mensajes mismos se leen y se escriben por /api/business/threads/chat/:id/comments).
+app.get('/api/business/messages/people', requireAuth, (req, res) => {
+    if (!messagesGate(req, res)) return;
+    res.set('Cache-Control', 'no-store');
+    res.json({ people: listMessagePeople(req.user.clientId, req.user.sub, typeof req.query.q === 'string' ? req.query.q : '') });
+});
+app.get('/api/business/messages/chats', requireAuth, (req, res) => {
+    if (!messagesGate(req, res)) return;
+    res.set('Cache-Control', 'no-store');
+    res.json({ chats: listChats(req.user.clientId, req.user.sub) });
+});
+app.post('/api/business/messages/chats', requireAuth, (req, res) => {
+    if (!messagesGate(req, res)) return;
+    const result = openChat(req.user.clientId, req.user.sub, (req.body || {}).userId);
+    if (result.error) return threadFail(res, result);
+    res.set('Cache-Control', 'no-store');
+    res.json({ chat: result.chat });
+});
+app.get('/api/business/messages/summary', requireAuth, (req, res) => {
+    if (!messagesGate(req, res)) return;
+    res.set('Cache-Control', 'no-store');
+    res.json(messagesSummary(req.user.clientId, req.user.sub));
+});
+app.get('/api/business/messages/notices', requireAuth, (req, res) => {
+    if (!messagesGate(req, res)) return;
+    res.set('Cache-Control', 'no-store');
+    res.json({ notices: listMessageNotices(req.user.clientId, req.user.sub, typeof req.query.today === 'string' ? req.query.today : '') });
 });
 // El historial de un plan lo ve cualquiera con acceso al plan (la dueña, las personas con quien se comparte y la jefa si la dueña lo encendió): los renglones de work_plans de planes a los que no se tiene acceso se quitan de cualquier lista de cambios.
 const workPlanChangeFilter = (req) => { const access = listAccessibleWorkPlanIds(req.user.clientId, req.user.sub); return (change) => change.table_key !== WORK_PLAN_TABLE || access.has(change.record_id); };

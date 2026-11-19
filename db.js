@@ -16506,7 +16506,8 @@ function listThreadComments(clientId, userId, type, id, { after, limit } = {}) {
     return { comments, lastReadId, unreadCount, hasMore };
 }
 // Agregar un comentario: texto obligatorio (≤ 2000), hasta 20 menciones sin repetir y todas de `participantIds` (las personas que hoy tienen acceso a lo comentado), hasta 2000 comentarios por hilo. Queda leído para quien comenta.
-function addThreadComment(clientId, userId, type, id, fields, participantIds) {
+function addThreadComment(clientId, userId, type, id, fields, participantIds, options) {
+    const maxComments = (options && options.maxComments) || THREAD_LIMITS.commentsPerThread;
     const f = fields && typeof fields === 'object' ? fields : {};
     const body = typeof f.body === 'string' ? threadText(f.body) : '';
     if (!body) return { error: 'THREAD_BODY_REQUIRED' };
@@ -16518,7 +16519,7 @@ function addThreadComment(clientId, userId, type, id, fields, participantIds) {
         const allowed = new Set(participantIds || []);
         if (mentions.some((m) => !Number.isInteger(m) || !allowed.has(m)) || new Set(mentions).size !== mentions.length) return { error: 'THREAD_MENTION_INVALID' };
     }
-    if (db.prepare('SELECT COUNT(*) AS n FROM thread_comments WHERE client_id = ? AND thread_type = ? AND thread_id = ?').get(clientId, type, id).n >= THREAD_LIMITS.commentsPerThread) return { error: 'THREAD_LIMIT' };
+    if (db.prepare('SELECT COUNT(*) AS n FROM thread_comments WHERE client_id = ? AND thread_type = ? AND thread_id = ?').get(clientId, type, id).n >= maxComments) return { error: 'THREAD_LIMIT', limit: maxComments };
     let commentId = 0;
     const now = workPlanNow();
     db.transaction(() => {
@@ -16595,7 +16596,7 @@ function workPlanItemCommentCounts(clientId, userId, planId) {
 }
 // Los hilos con comentarios SIN LEER de esa persona, solo de lo que hoy puede leer (planes propios, compartidos y de su equipo), del más reciente al más viejo. Lo usa el panel de Mensajes (2c).
 // [{ threadType, threadId, label, planId, planTitle, unreadCount, lastCommentAt, lastAuthorName, lastBody (≤ 160), mentionsMe }]; mentionsMe = alguno de los comentarios sin leer la menciona.
-function listUnreadCommentThreads(clientId, userId) {
+function listUnreadPlanCommentThreads(clientId, userId) {
     const entries = workPlanAccessibleEntries(clientId, userId);
     if (!entries.length) return [];
     const planIds = entries.map((e) => e.row.id);
@@ -16624,9 +16625,207 @@ function listUnreadCommentThreads(clientId, userId) {
         };
     }).sort((a, b) => (a.lastCommentAt < b.lastCommentAt ? 1 : a.lastCommentAt > b.lastCommentAt ? -1 : 0));
 }
-// Cuántos comentarios sin leer tiene esa persona en total (el globito del botón Mensajes).
-function countUnreadComments(clientId, userId) {
-    return listUnreadCommentThreads(clientId, userId).reduce((sum, t) => sum + t.unreadCount, 0);
+// Los hilos con comentarios o mensajes SIN LEER de esa persona: los de planes (solo lo que hoy puede leer) y los de sus chats (threadType 'chat', label = la otra persona, sin plan). opts { plans: false } o { chats: false } dejan solo una parte.
+function listUnreadCommentThreads(clientId, userId, opts) {
+    const o = opts || {};
+    const list = [...(o.plans === false ? [] : listUnreadPlanCommentThreads(clientId, userId)), ...(o.chats === false ? [] : listUnreadChatThreads(clientId, userId))];
+    return list.sort((a, b) => (a.lastCommentAt < b.lastCommentAt ? 1 : a.lastCommentAt > b.lastCommentAt ? -1 : 0));
+}
+// Cuántos comentarios y mensajes sin leer tiene esa persona en total (con las mismas opciones que listUnreadCommentThreads).
+function countUnreadComments(clientId, userId, opts) {
+    return listUnreadCommentThreads(clientId, userId, opts).reduce((sum, t) => sum + t.unreadCount, 0);
+}
+
+// --- Mensajes (pieza 2c): chats 1 a 1, resumen del globito y avisos ---------------------------------------------------------------------------------
+// Un chat entre dos personas de la misma compañía es un HILO genérico (tipo 'chat', thread_id = id de la conversación): los mensajes son comentarios inmutables que nunca se borran (thread_comments / thread_reads), igual que los de los planes.
+// chat_conversations solo dice quiénes son las dos personas y cuándo fue el último mensaje; sin llaves a users, para que nada se borre en cascada. Quien puede usar Mensajes: la compañía tiene el módulo 'btn-mensajes' contratado, su Estatus del Árbol
+// Maestro está habilitado y la persona es administradora del cliente o tiene la hoja main/btn-mensajes (el mismo criterio del botón de la barra de arriba).
+const MESSAGE_LIMITS = { messagesPerChat: 20000, people: 200, preview: 160, notices: 50, mentionText: 120, sharedDays: 45, dueDays: 2 };
+db.exec(`
+    CREATE TABLE IF NOT EXISTS chat_conversations (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        user_low_id     INTEGER NOT NULL,
+        user_high_id    INTEGER NOT NULL,
+        created_at      TEXT NOT NULL,
+        last_message_at TEXT,
+        UNIQUE (client_id, user_low_id, user_high_id),
+        CHECK (user_low_id < user_high_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_conversations_low ON chat_conversations (user_low_id);
+    CREATE INDEX IF NOT EXISTS idx_chat_conversations_high ON chat_conversations (user_high_id);
+`);
+// ¿Quién puede usar Mensajes hoy? Devuelve una función(userId) que contesta sí/no para personas de esa compañía; el contrato y el Estatus se leen una sola vez (sirve para una persona o para toda la lista).
+function messagesAccessChecker(clientId) {
+    const contracted = getClientModuleKeys(clientId).includes('btn-mensajes');
+    const status = resolveMasterNodeStatus('main', 'btn-mensajes', null, getLimitsContext(clientId).overrides);
+    return (userId) => {
+        if (!contracted) return false;
+        const account = db.prepare('SELECT is_test_account AS isTest, is_client_admin AS isAdmin FROM users WHERE id = ? AND client_id = ?').get(userId, clientId);
+        if (!account) return false;
+        if (!account.isTest && !new Set(getUserVisibleStatuses(userId)).has(status)) return false;
+        return !!account.isAdmin || isTupleGranted(getUserEffectiveGrants(userId), 'main', 'btn-mensajes', null);
+    };
+}
+const messagesFold = (text) => String(text == null ? '' : text).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const chatPair = (a, b) => (a < b ? [a, b] : [b, a]);
+// Las personas a quienes se les puede escribir: activas, de mi compañía, del mismo tipo de cuenta (real o de pruebas), sin mí, y que también tienen Mensajes (para que nadie le escriba a quien no puede leerlo). q filtra por nombre sin acentos ni mayúsculas.
+function listMessagePeople(clientId, userId, q) {
+    const me = db.prepare('SELECT COALESCE(is_test_account, 0) AS isTest FROM users WHERE id = ? AND client_id = ?').get(userId, clientId);
+    if (!me) return [];
+    const needle = messagesFold(q);
+    const rows = db.prepare('SELECT id, name, username FROM users WHERE client_id = ? AND active != 0 AND COALESCE(is_test_account, 0) = ? AND id != ?').all(clientId, me.isTest, userId)
+        .map((u) => ({ id: u.id, name: implementationLine(u.name) || u.username }))
+        .filter((u) => !needle || messagesFold(u.name).includes(needle))
+        .sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }) || a.id - b.id);
+    const can = messagesAccessChecker(clientId);
+    const out = [];
+    for (const u of rows) { if (out.length >= MESSAGE_LIMITS.people) break; if (can(u.id)) out.push(u); }
+    return out;
+}
+// Buscar o crear el chat con otra persona: { chat: { id, userId, userName } } o { error: 'MESSAGES_PERSON_INVALID' } (yo, otra compañía, inactiva, de otro tipo de cuenta o sin Mensajes). Es idempotente.
+function openChat(clientId, userId, otherId) {
+    const id = typeof otherId === 'number' || (typeof otherId === 'string' && /^\d+$/.test(otherId)) ? Number(otherId) : NaN;
+    if (!Number.isInteger(id) || id === userId || !listMessagePeopleHas(clientId, userId, id)) return { error: 'MESSAGES_PERSON_INVALID' };
+    const [low, high] = chatPair(userId, id);
+    db.prepare('INSERT OR IGNORE INTO chat_conversations (client_id, user_low_id, user_high_id, created_at) VALUES (?, ?, ?, ?)').run(clientId, low, high, workPlanNow());
+    const conv = db.prepare('SELECT id FROM chat_conversations WHERE client_id = ? AND user_low_id = ? AND user_high_id = ?').get(clientId, low, high);
+    return { chat: { id: conv.id, userId: id, userName: threadUserName(id, '') } };
+}
+// ¿Esa persona es alguien a quien yo le puedo escribir? (la misma regla que listMessagePeople, para una sola)
+function listMessagePeopleHas(clientId, userId, otherId) {
+    const me = db.prepare('SELECT COALESCE(is_test_account, 0) AS isTest FROM users WHERE id = ? AND client_id = ?').get(userId, clientId);
+    const other = db.prepare('SELECT active, COALESCE(is_test_account, 0) AS isTest FROM users WHERE id = ? AND client_id = ?').get(otherId, clientId);
+    return !!(me && other && other.active !== 0 && other.isTest === me.isTest && messagesAccessChecker(clientId)(otherId));
+}
+const chatOtherId = (conv, userId) => (conv.user_low_id === userId ? conv.user_high_id : conv.user_low_id);
+// El hilo de un chat visto por esa persona: null si la conversación no es suya (404). canRead siempre; canPost mientras la otra persona siga activa; sin menciones. Al comentar sube last_message_at.
+function resolveChatThread(clientId, userId, id) {
+    const chatId = Number(id);
+    if (!Number.isInteger(chatId)) return null;
+    const conv = db.prepare('SELECT * FROM chat_conversations WHERE id = ? AND client_id = ? AND (user_low_id = ? OR user_high_id = ?)').get(chatId, clientId, userId, userId);
+    if (!conv) return null;
+    const otherId = chatOtherId(conv, userId);
+    const other = db.prepare('SELECT active FROM users WHERE id = ?').get(otherId);
+    const active = !!other && other.active !== 0;
+    return {
+        label: threadUserName(otherId, ''), canRead: true, canPost: active, postError: active ? null : 'MESSAGES_PERSON_INACTIVE', canMention: false, participants: [], maxComments: MESSAGE_LIMITS.messagesPerChat,
+        afterPost: () => db.prepare('UPDATE chat_conversations SET last_message_at = ? WHERE id = ?').run(workPlanNow(), conv.id),
+    };
+}
+// Mis conversaciones con al menos un mensaje, de la más reciente a la más vieja: la otra persona, el último mensaje (≤ 160), si fue mío y cuántos mensajes de la otra persona me faltan por leer.
+function listChats(clientId, userId) {
+    const convs = db.prepare('SELECT * FROM chat_conversations WHERE client_id = ? AND (user_low_id = ? OR user_high_id = ?)').all(clientId, userId, userId);
+    if (!convs.length) return [];
+    const ids = convs.map((c) => c.id);
+    const marks = ids.map(() => '?').join(',');
+    const lasts = new Map(db.prepare(`SELECT c.* FROM thread_comments c JOIN (SELECT thread_id, MAX(id) AS mid FROM thread_comments WHERE client_id = ? AND thread_type = 'chat' AND thread_id IN (${marks}) GROUP BY thread_id) m ON c.id = m.mid`)
+        .all(clientId, ...ids).map((c) => [c.thread_id, c]));
+    const unread = new Map(db.prepare(`SELECT c.thread_id AS id, COUNT(*) AS n FROM thread_comments c LEFT JOIN thread_reads r ON r.user_id = ? AND r.thread_type = 'chat' AND r.thread_id = c.thread_id
+        WHERE c.client_id = ? AND c.thread_type = 'chat' AND c.thread_id IN (${marks}) AND c.author_user_id != ? AND c.id > COALESCE(r.last_read_comment_id, 0) GROUP BY c.thread_id`).all(userId, clientId, ...ids, userId).map((r) => [r.id, r.n]));
+    return convs.filter((c) => lasts.has(c.id)).map((c) => {
+        const last = lasts.get(c.id);
+        const otherId = chatOtherId(c, userId);
+        return { id: c.id, userId: otherId, userName: threadUserName(otherId, ''), lastBody: Array.from(last.body).slice(0, MESSAGE_LIMITS.preview).join(''), lastAt: last.created_at, lastMine: last.author_user_id === userId, unreadCount: unread.get(c.id) || 0, _lastId: last.id };
+    }).sort((a, b) => b._lastId - a._lastId).map(({ _lastId, ...chat }) => chat);
+}
+// Los mensajes de chat sin leer (total y en cuántas conversaciones).
+function chatUnreadSummary(clientId, userId) {
+    const rows = db.prepare(`SELECT c.thread_id AS id, COUNT(*) AS n FROM thread_comments c JOIN chat_conversations v ON v.id = c.thread_id AND v.client_id = c.client_id AND (v.user_low_id = ? OR v.user_high_id = ?)
+        LEFT JOIN thread_reads r ON r.user_id = ? AND r.thread_type = 'chat' AND r.thread_id = c.thread_id
+        WHERE c.client_id = ? AND c.thread_type = 'chat' AND c.author_user_id != ? AND c.id > COALESCE(r.last_read_comment_id, 0) GROUP BY c.thread_id`).all(userId, userId, userId, clientId, userId);
+    return { unreadMessages: rows.reduce((s, r) => s + r.n, 0), unreadChats: rows.length };
+}
+// Los hilos de CHAT con mensajes sin leer, con la misma forma que los de planes (listUnreadCommentThreads): label = nombre de la otra persona, sin plan.
+function listUnreadChatThreads(clientId, userId) {
+    const rows = db.prepare(`SELECT c.thread_id AS threadId, COUNT(*) AS unreadCount, MAX(c.id) AS lastId FROM thread_comments c JOIN chat_conversations v ON v.id = c.thread_id AND v.client_id = c.client_id AND (v.user_low_id = ? OR v.user_high_id = ?)
+        LEFT JOIN thread_reads r ON r.user_id = ? AND r.thread_type = 'chat' AND r.thread_id = c.thread_id
+        WHERE c.client_id = ? AND c.thread_type = 'chat' AND c.author_user_id != ? AND c.id > COALESCE(r.last_read_comment_id, 0) GROUP BY c.thread_id`).all(userId, userId, userId, clientId, userId);
+    if (!rows.length) return [];
+    const lasts = new Map(db.prepare(`SELECT * FROM thread_comments WHERE id IN (${rows.map(() => '?').join(',')})`).all(...rows.map((r) => r.lastId)).map((c) => [c.id, c]));
+    const convs = new Map(db.prepare(`SELECT * FROM chat_conversations WHERE id IN (${rows.map(() => '?').join(',')})`).all(...rows.map((r) => r.threadId)).map((c) => [c.id, c]));
+    return rows.map((g) => {
+        const last = lasts.get(g.lastId);
+        return {
+            threadType: 'chat', threadId: g.threadId, label: threadUserName(chatOtherId(convs.get(g.threadId), userId), ''), planId: null, planTitle: '', unreadCount: g.unreadCount,
+            lastCommentAt: last.created_at, lastAuthorName: threadUserName(last.author_user_id, last.author_name), lastBody: Array.from(last.body).slice(0, MESSAGE_LIMITS.preview).join(''), mentionsMe: false,
+        };
+    });
+}
+// Cuántos planes compartidos con esa persona o de su equipo todavía no ha abierto («Nuevo»).
+function countNewWorkPlans(clientId, userId) {
+    const ids = workPlanAccessibleEntries(clientId, userId).filter((e) => e.access.role !== 'owner').map((e) => e.row.id);
+    if (!ids.length) return 0;
+    const seen = new Set(db.prepare(`SELECT plan_id AS id FROM work_plan_user_prefs WHERE user_id = ? AND seen_at IS NOT NULL AND plan_id IN (${ids.map(() => '?').join(',')})`).all(userId, ...ids).map((r) => r.id));
+    return ids.filter((id) => !seen.has(id)).length;
+}
+// Lo del globito del botón Mensajes: mensajes de chat sin leer (y en cuántos chats), comentarios de planes sin leer y planes nuevos. Lo de planes solo cuenta para quien puede abrir la pantalla Planes de trabajo.
+function messagesSummary(clientId, userId) {
+    const chat = chatUnreadSummary(clientId, userId);
+    const hasPlans = workPlanScreenChecker(clientId)(userId);
+    const unreadComments = hasPlans ? countUnreadComments(clientId, userId, { chats: false }) : 0;
+    const newPlans = hasPlans ? countNewWorkPlans(clientId, userId) : 0;
+    return { unreadMessages: chat.unreadMessages, unreadChats: chat.unreadChats, unreadComments, newPlans, total: chat.unreadMessages + unreadComments + newPlans };
+}
+const noticeDay = (ymd, add) => { const [y, m, d] = ymd.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + add)).toISOString().slice(0, 10); };
+const noticeUtc = (ymd) => { const [y, m, d] = ymd.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+const noticeDays = (a, b) => Math.round((noticeUtc(a) - noticeUtc(b)) / 86400000);
+const noticeSlice = (text, max) => Array.from(String(text)).slice(0, max).join('');
+// Los avisos de Planes de trabajo de esa persona (solo si puede abrir la pantalla Planes de trabajo): planes que le compartieron (últimos 45 días o aún «Nuevos»), comentarios que la mencionan sin leer y hojas suyas (responsable o quien ejecuta)
+// de planes activos que vencen en 2 días o antes. today = la fecha de hoy de quien pregunta (YYYY-MM-DD); sin ella, la fecha UTC del servidor. Primero los que vencen (vencidos primero, del más viejo al más reciente), luego lo demás por fecha, del más reciente; máximo 50.
+function listMessageNotices(clientId, userId, today) {
+    if (!workPlanScreenChecker(clientId)(userId)) return [];
+    const day = typeof today === 'string' && isRealDateOnly(today) ? today : new Date().toISOString().slice(0, 10);
+    const entries = workPlanAccessibleEntries(clientId, userId);
+    const planIds = entries.map((e) => e.row.id);
+    const notices = [];
+    // (a) planes compartidos conmigo
+    const prefsSeen = new Set((planIds.length ? db.prepare(`SELECT plan_id AS id FROM work_plan_user_prefs WHERE user_id = ? AND seen_at IS NOT NULL AND plan_id IN (${planIds.map(() => '?').join(',')})`).all(userId, ...planIds) : []).map((r) => r.id));
+    const cutoff = new Date(Date.now() - MESSAGE_LIMITS.sharedDays * 86400000).toISOString().replace('T', ' ').replace('Z', '');
+    db.prepare('SELECT m.id AS memberId, m.role, m.added_by_user_id AS addedBy, m.added_at AS addedAt, p.id AS planId, p.title FROM work_plan_members m JOIN work_plans p ON p.id = m.plan_id WHERE p.client_id = ? AND m.user_id = ?').all(clientId, userId)
+        .forEach((m) => {
+            const isNew = !prefsSeen.has(m.planId);
+            if (!isNew && m.addedAt < cutoff) return;
+            const by = m.addedBy != null ? threadUserName(m.addedBy, '') : '';
+            notices.push({ key: `shared:${m.planId}:${m.memberId}`, kind: 'shared', title: by ? `${by} te compartió un plan` : 'Te compartieron un plan', text: `${m.title} · ${WORK_PLAN_ROLE_ES[m.role] || m.role}`, at: m.addedAt, planId: m.planId, itemId: null, unread: isNew, severity: 'info', params: { by, planTitle: m.title, role: m.role } });
+        });
+    // (b) comentarios que me mencionan y no he leído
+    if (planIds.length) {
+        const marks = planIds.map(() => '?').join(',');
+        const mentions = db.prepare(`SELECT c.* FROM thread_comments c JOIN thread_comment_mentions m ON m.comment_id = c.id AND m.user_id = ?
+            LEFT JOIN thread_reads r ON r.user_id = ? AND r.thread_type = c.thread_type AND r.thread_id = c.thread_id
+            WHERE c.client_id = ? AND c.author_user_id != ? AND c.id > COALESCE(r.last_read_comment_id, 0)
+              AND ((c.thread_type = 'work-plan' AND c.thread_id IN (${marks})) OR (c.thread_type = 'work-plan-item' AND c.thread_id IN (SELECT id FROM work_plan_items WHERE plan_id IN (${marks}))))
+            ORDER BY c.id DESC LIMIT ${MESSAGE_LIMITS.notices}`).all(userId, userId, clientId, userId, ...planIds, ...planIds);
+        const rowsById = new Map(entries.map((e) => [e.row.id, e.row]));
+        const itemIds = mentions.filter((c) => c.thread_type === 'work-plan-item').map((c) => c.thread_id);
+        const items = new Map((itemIds.length ? db.prepare(`SELECT * FROM work_plan_items WHERE id IN (${itemIds.map(() => '?').join(',')})`).all(...itemIds) : []).map((i) => [i.id, i]));
+        mentions.forEach((c) => {
+            const item = c.thread_type === 'work-plan-item' ? items.get(c.thread_id) : null;
+            const row = rowsById.get(item ? item.plan_id : c.thread_id);
+            if (!row) return;
+            const label = item ? workPlanItemLabel(workPlanLevelsOf(row), item.depth, item.title) : workPlanLabel(row.title);
+            const authorName = threadUserName(c.author_user_id, c.author_name) || '';
+            const snippet = noticeSlice(c.body, MESSAGE_LIMITS.mentionText);
+            // params: lo mismo en piezas sueltas, para que la pantalla arme el texto en el idioma de quien lo ve (title y text quedan en español como respaldo)
+            notices.push({ key: `mention:${c.id}`, kind: 'mention', title: `${authorName || 'Alguien'} te mencionó`, text: `${label} · ${snippet}`, at: c.created_at, planId: row.id, itemId: item ? item.id : null, unread: true, severity: 'info', params: { by: authorName, planTitle: row.title, itemTitle: item ? item.title : '', levelName: item ? (workPlanLevelsOf(row)[item.depth - 1] || '') : '', snippet } });
+        });
+    }
+    // (c) hojas mías que vencen pronto o ya vencieron
+    const due = [];
+    const activeIds = entries.filter((e) => e.row.status === 'active').map((e) => e.row.id);
+    if (activeIds.length) {
+        db.prepare(`SELECT i.id, i.title, i.end_date AS endDate, i.plan_id AS planId, p.title AS planTitle FROM work_plan_items i JOIN work_plans p ON p.id = i.plan_id
+            WHERE p.client_id = ? AND p.id IN (${activeIds.map(() => '?').join(',')}) AND i.status != 'done' AND i.end_date IS NOT NULL AND i.end_date <= ? AND (i.responsible_user_id = ? OR i.executor_user_id = ?)
+              AND NOT EXISTS (SELECT 1 FROM work_plan_items k WHERE k.parent_id = i.id) ORDER BY i.end_date ASC, i.id ASC`).all(clientId, ...activeIds, noticeDay(day, MESSAGE_LIMITS.dueDays), userId, userId)
+            .forEach((i) => {
+                const n = noticeDays(i.endDate, day);
+                const when = n === 0 ? 'vence hoy' : (n > 0 ? `vence en ${n} ${n === 1 ? 'día' : 'días'}` : `venció hace ${-n} ${n === -1 ? 'día' : 'días'}`);
+                due.push({ key: `due:${i.id}`, kind: 'due', title: i.title, text: `${i.planTitle} · ${when}`, at: i.endDate, planId: i.planId, itemId: i.id, unread: false, severity: n < 0 ? 'late' : 'warn', params: { planTitle: i.planTitle, days: n } });
+            });
+    }
+    notices.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+    return [...due, ...notices].slice(0, MESSAGE_LIMITS.notices);
 }
 
 // --- Implementación Inicial · nivel 1 «Contratado»: lo que la compañía contrató y lo que YA USA---------------------------------------------------------------------------------------------------
@@ -19753,5 +19952,6 @@ module.exports = {
     getUserGrantChangeLog,
     WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
+    MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices,
     THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,
 };

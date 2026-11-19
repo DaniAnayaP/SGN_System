@@ -9851,6 +9851,60 @@ function placeWorkPlansButton() {
     });
 }
 
+// --- Mensajes (pieza 2c): el botón de la barra de arriba abre el panel (Messages.js, que se carga la primera vez que se toca) y lleva el globito de lo que no se ha leído (mensajes de chat, comentarios
+// de planes y planes recién compartidos). El globito se pide cada minuto solo si el botón se ve (contrato + hoja del árbol) y la pestaña está a la vista.
+let messagesModulePromise = null;
+function loadScriptOnce(src) {
+    return new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+        const el = document.createElement('script');
+        el.src = src;
+        el.onload = () => resolve();
+        el.onerror = () => reject(new Error(`no se pudo cargar ${src}`));
+        document.head.appendChild(el);
+    });
+}
+function loadMessagesModule() {
+    if (window.Messages) return Promise.resolve(window.Messages);
+    if (!messagesModulePromise) messagesModulePromise = (window.Threads ? Promise.resolve() : loadScriptOnce('Threads.js')).then(() => loadScriptOnce('Messages.js')).then(() => window.Messages).catch((err) => { messagesModulePromise = null; throw err; });
+    return messagesModulePromise;
+}
+function setMessagesBadge(count) {
+    const btn = document.getElementById('messages-btn');
+    if (!btn) return;
+    let badge = btn.querySelector('.messages-badge');
+    if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'notifications-badge messages-badge';
+        btn.appendChild(badge);
+    }
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.hidden = !(count > 0);
+}
+async function refreshMessagesBadge() {
+    const btn = document.getElementById('messages-btn');
+    if (!btn || document.hidden || currentRole === 'admin' || btn.classList.contains('top-bar-btn-hidden')) return;
+    try {
+        const res = await fetch(`${API_BASE}/business/messages/summary`, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        setMessagesBadge(Number(data.total) || 0);
+    } catch { /* sin conexión: se vuelve a intentar en un minuto */ }
+}
+(function wireMessagesButton() {
+    const btn = document.getElementById('messages-btn');
+    if (!btn) return;
+    btn.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        closeAllTopBarDropdowns('topBarActions');
+        try { (await loadMessagesModule()).toggle(); } catch (err) { showToast(t('main.msgLoadError'), 'error'); }
+    });
+    registerTopBarDropdown(() => { if (window.Messages && window.Messages.isOpen()) window.Messages.close(); });
+    setInterval(refreshMessagesBadge, 60000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshMessagesBadge(); });
+    document.addEventListener('dashboard:language-changed', () => setTimeout(refreshMessagesBadge, 800), { once: true });
+})();
+
 // --- System-wide UI scale ("aumentar/disminuir el tamaño de todo el
 // sistema") — unlike lang/style/dataTableFontSize/etc., which are plain
 // localStorage keys shared by whoever is using this browser, this is
@@ -15057,6 +15111,7 @@ window.Dashboard = {
     initDataTableColumns,
     getVisibleTableSnapshot,
     showToast,
+    setMessagesBadge,
     addMenuResizeGrip,
     attachSearchOptions,
     udmChainHtml,
