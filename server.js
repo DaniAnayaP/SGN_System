@@ -580,6 +580,7 @@ const {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
+    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
@@ -1877,6 +1878,119 @@ app.post('/api/admin/implementations/:clientId/levels/:key/:action', requireAuth
     res.json(saasImplDetail(req, client.id));
 });
 
+// --- Apps Nuestros Clientes (SaaS): el inicio de sesión personalizado de cada cliente ---------------------------------------------------------------------------------------------------------------------
+// Una fila por cliente. El implementador la crea («Personalizar»), edita el borrador (marca, fondo, textos y qué se muestra; computadora y celular), lo publica y puede cambiar la clave del cliente o quitar la personalización. La clave sirve de
+// dirección (…/c/<clave>) y de código de empresa de la app. Cada botón se da en el árbol de accesos de la cuenta (Equipo SaaS); posición de cada botón (a) en SaasAdminCatalog.js: no cambiar el orden.
+// Pieza 1: la pantalla y sus datos. La dirección pública y la app del celular son las piezas siguientes.
+const SAAS_CL_ITEM = 'saas-client-logins';
+const SAAS_CL_LEAVES = { edit: 'tabla::a0', publish: 'tabla::a1', remove: 'tabla::a2', slug: 'tabla::a3' };
+const CL_ERRORS = {
+    NOT_FOUND: [404, 'Ese cliente todavía no tiene inicio personalizado.'], EXISTS: [409, 'Ese cliente ya tiene inicio personalizado.'], NO_CHANNEL: [409, 'Enciende computadora o celular antes de publicar.'],
+    FORMAT: [400, 'La clave usa de 3 a 40 letras minúsculas sin acentos, números y guiones.'], RESERVED: [400, 'Esa clave está reservada por el sistema.'], TAKEN: [409, 'Esa clave ya la tiene otro cliente.'],
+    COLOR: [400, 'Un color no es válido.'], IMAGE: [400, 'La imagen debe ser PNG, JPG, WEBP, GIF o SVG.'], IMAGE_SIZE: [400, 'La imagen es demasiado grande.'], BACKGROUND_TYPE: [400, 'Ese tipo de fondo no existe.'],
+};
+const clFail = (res, result) => { const [status, message] = CL_ERRORS[result.error] || [400, 'No se pudo hacer.']; return res.status(status).json({ message, code: result.error, field: result.field }); };
+const saasClHasScreen = (req) => !!req.user.isSaasSuperAdmin || getSaasUserGrants(req.user.sub).some((g) => g.itemId === SAAS_CL_ITEM);
+const saasClCan = (req, key) => !!req.user.isSaasSuperAdmin || hasSaasGrant(getSaasUserGrants(req.user.sub), SAAS_CL_ITEM, SAAS_CL_LEAVES[key]);
+const CL_FIELD_ES = {
+    'channels.web': 'Usar en computadora', 'channels.app': 'Usar en celular', 'brand.logo': 'Logo', 'brand.primary': 'Color principal', 'brand.button': 'Color del botón', 'background.type': 'Tipo de fondo',
+    'background.color1': 'Color de fondo 1', 'background.color2': 'Color de fondo 2', 'background.image': 'Imagen de fondo', 'background.diagonal': 'Franja diagonal', 'texts.greeting': 'Saludo automático',
+    'texts.welcome': 'Frase de bienvenida', 'texts.formTitle': 'Título del formulario', 'texts.appButton': 'Botón de entrada', 'show.welcomeScreen': 'Pantalla de bienvenida', 'show.faceId': 'Face ID o huella',
+    'show.appLink': 'Enlace para descargar la app', 'show.language': 'Selector de idioma', 'show.forgot': '«Olvidé mi contraseña»', 'show.register': 'Registro de usuarios nuevos', 'show.social': 'Inicio con redes sociales',
+};
+const CL_BACKGROUND_ES = { solid: 'Color liso', gradient: 'Degradado', image: 'Imagen', pattern: 'Patrón de la marca' };
+const clFlatten = (draft) => { const out = {}; Object.entries(draft).forEach(([group, values]) => Object.entries(values).forEach(([key, value]) => { out[`${group}.${key}`] = value; })); return out; };
+const clValueEs = (path, value) => {
+    if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+    if (path === 'background.type') return CL_BACKGROUND_ES[value] || value;
+    if (path === 'brand.logo' || path === 'background.image') return value ? 'Imagen cargada' : 'Sin imagen';
+    return value === '' ? '(el de la compañía)' : String(value);
+};
+function clLog(req, clientId, action, fieldKey, oldText, newText) {
+    const company = getClientLoginCompany(clientId);
+    logSaasTableChange({ tableKey: 'apps-clientes-saas', recordId: clientId, recordLabel: company ? company.name : String(clientId), action, fieldKey, oldValue: oldText, newValue: newText, changedBy: changedByLabel(req) });
+}
+// El detalle de UN cliente para el editor: su compañía (logo y colores para la vista previa), el borrador completo (con imágenes) y qué puede hacer esta cuenta.
+function saasClDetail(req, clientId) {
+    const config = getClientLogin(clientId);
+    return {
+        company: getClientLoginCompany(clientId),
+        config: config ? { slug: config.slug, address: `/c/${config.slug}`, draft: config.draft, dirty: config.dirty, web: config.web, app: config.app, published: !!config.live, liveAt: config.liveAt, liveBy: config.liveBy, updatedAt: config.updatedAt, updatedBy: config.updatedBy } : null,
+        defaults: defaultLoginDraft(),
+        reserved: LOGIN_RESERVED_SLUGS,
+        can: Object.fromEntries(Object.keys(SAAS_CL_LEAVES).map((k) => [k, saasClCan(req, k)])),
+    };
+}
+function clGate(req, res, key) {
+    if (!saasClHasScreen(req)) { res.status(403).json({ message: 'No tienes permiso para ver Apps Nuestros Clientes.' }); return null; }
+    if (key && !saasClCan(req, key)) { res.status(403).json({ message: 'No tienes permiso para hacer esto.', code: 'FORBIDDEN' }); return null; }
+    const clientId = Number(req.params.clientId);
+    const company = Number.isInteger(clientId) ? getClientLoginCompany(clientId) : null;
+    if (!company) { res.status(404).json({ message: 'Esa compañía no existe.' }); return null; }
+    return company;
+}
+app.get('/api/admin/client-logins', requireAuth, requireAdmin, (req, res) => {
+    if (!saasClHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver Apps Nuestros Clientes.' });
+    const rows = listClientLogins();
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        rows, can: Object.fromEntries(Object.keys(SAAS_CL_LEAVES).map((k) => [k, saasClCan(req, k)])),
+        counts: { all: rows.length, personalized: rows.filter((r) => r.hasConfig).length, published: rows.filter((r) => r.published).length },
+    });
+});
+app.get('/api/admin/client-logins/:clientId', requireAuth, requireAdmin, (req, res) => {
+    const company = clGate(req, res);
+    if (!company) return;
+    res.set('Cache-Control', 'no-store');
+    res.json(saasClDetail(req, company.id));
+});
+app.post('/api/admin/client-logins/:clientId', requireAuth, requireAdmin, (req, res) => {
+    const company = clGate(req, res, 'edit');
+    if (!company) return;
+    if (company.status === 'inactivo') return res.status(400).json({ message: 'Esa compañía está inactiva.', code: 'INACTIVE' });
+    const result = createClientLogin(company.id, changedByLabel(req));
+    if (result.error) return clFail(res, result);
+    clLog(req, company.id, 'create', '', '', '');
+    clLog(req, company.id, 'update', 'main.cliHistSlug', '', result.config.slug);
+    res.status(201).json(saasClDetail(req, company.id));
+});
+app.put('/api/admin/client-logins/:clientId/draft', requireAuth, requireAdmin, (req, res) => {
+    const company = clGate(req, res, 'edit');
+    if (!company) return;
+    const result = saveClientLoginDraft(company.id, (req.body || {}).draft, changedByLabel(req));
+    if (result.error) return clFail(res, result);
+    // un renglón del historial por cada dato que cambió (las imágenes solo dicen «cargada» o «sin imagen»)
+    const before = clFlatten(result.before.draft);
+    const after = clFlatten(result.config.draft);
+    Object.keys(after).filter((k) => JSON.stringify(before[k]) !== JSON.stringify(after[k])).forEach((k) => clLog(req, company.id, 'update', 'main.cliHistDraft', `${CL_FIELD_ES[k] || k}: ${clValueEs(k, before[k])}`, `${CL_FIELD_ES[k] || k}: ${clValueEs(k, after[k])}`));
+    res.json(saasClDetail(req, company.id));
+});
+app.post('/api/admin/client-logins/:clientId/publish', requireAuth, requireAdmin, (req, res) => {
+    const company = clGate(req, res, 'publish');
+    if (!company) return;
+    const result = publishClientLogin(company.id, changedByLabel(req));
+    if (result.error) return clFail(res, result);
+    const d = result.config.draft;
+    clLog(req, company.id, 'update', 'main.cliHistPublish', result.before.live ? 'Publicado' : 'Sin publicar', `Publicado (computadora: ${d.channels.web ? 'sí' : 'no'}, celular: ${d.channels.app ? 'sí' : 'no'})`);
+    res.json(saasClDetail(req, company.id));
+});
+app.put('/api/admin/client-logins/:clientId/slug', requireAuth, requireAdmin, (req, res) => {
+    const company = clGate(req, res, 'slug');
+    if (!company) return;
+    const result = setClientLoginSlug(company.id, (req.body || {}).slug, changedByLabel(req));
+    if (result.error) return clFail(res, result);
+    if (result.before.slug !== result.config.slug) clLog(req, company.id, 'update', 'main.cliHistSlug', result.before.slug, result.config.slug);
+    res.json(saasClDetail(req, company.id));
+});
+app.delete('/api/admin/client-logins/:clientId', requireAuth, requireAdmin, (req, res) => {
+    const company = clGate(req, res, 'remove');
+    if (!company) return;
+    const result = removeClientLogin(company.id);
+    if (result.error) return clFail(res, result);
+    clLog(req, company.id, 'delete', 'main.cliHistRemove', result.before.slug, '');
+    res.json(saasClDetail(req, company.id));
+});
+
 // --- SaaS admin: clients + per-client module entitlements ("Contrataciones") -
 // Every route below requires an authenticated admin (requireAuth first so
 // req.user exists, then requireAdmin checks the role in that token).
@@ -3162,7 +3276,7 @@ const SAAS_APP_STATUSES = ['active', 'inactive', 'development'];
 
 // Historial de cambios de las tablas de SaaS sin tabla propia (saas_table_changes):
 // Nuestras Apps, Nuestros Respaldos y Material de Apoyo. Con ?recordId=, solo esa fila.
-const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo', 'relacion-accesos', 'expansiones-saas', 'capacitacion-saas', 'implementaciones-saas'];
+const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo', 'relacion-accesos', 'expansiones-saas', 'capacitacion-saas', 'implementaciones-saas', 'apps-clientes-saas'];
 function logSaasChange(req, tableKey, recordId, recordLabel, fieldKey, oldValue, newValue, action = 'update') {
     logSaasTableChange({ tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy: changedByLabel(req) });
 }

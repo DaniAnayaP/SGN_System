@@ -927,6 +927,7 @@ const SAAS_SCREEN_GRANT_PATHS = {
     'admin-expansiones-saas': 'saas-expansions',
     'admin-capacitacion-saas': 'saas-training',
     'admin-implementaciones-saas': 'saas-implementations',
+    'admin-apps-clientes-saas': 'saas-client-logins',
     'admin-limits-audit': 'saas-limits-audit',
     'admin-system-reset': 'saas-system-reset',
     'admin-access-relations': 'saas-access-relations',
@@ -968,6 +969,7 @@ const SAAS_TABLE_ICON_SCREENS = {
     'expansiones-saas': { screenItemId: 'saas-expansions', apartadoId: 'tabla' },
     'capacitacion-saas': { screenItemId: 'saas-training', apartadoId: 'tabla' },
     'implementaciones-saas': { screenItemId: 'saas-implementations', apartadoId: 'tabla' },
+    'apps-clientes-saas': { screenItemId: 'saas-client-logins', apartadoId: 'tabla' },
     'admin-nuestros-respaldos': { screenItemId: 'saas-backups', apartadoId: 'tabla' },
     'admin-material-apoyo': { screenItemId: 'saas-material-apoyo', apartadoId: 'tabla' },
 };
@@ -1026,6 +1028,7 @@ const CUSTOMER_SERVICE_SAAS_ORDER_IDS = {
     'admin-expansiones-saas': 'saas-expansions',
     'admin-capacitacion-saas': 'saas-training',
     'admin-implementaciones-saas': 'saas-implementations',
+    'admin-apps-clientes-saas': 'saas-client-logins',
 };
 const SAAS_CONFIG_SAAS_ORDER_IDS = {
     'admin-saas-master-status': 'saas-master-tree',
@@ -1088,6 +1091,8 @@ function buildSidebarData(data, role, activePage) {
         { id: 'admin-clientes-registrados', labelKey: 'menu.clientesRegistrados', href: 'Admin-SaaS.html', icon: 'bx-group', saasItemId: 'saas-clients' },
         { id: 'admin-planes-registrados', labelKey: 'menu.plansRegistered', href: 'Admin-Planes.html', icon: 'bx-package', saasItemId: 'saas-plans' },
         { id: 'admin-nuestras-apps', labelKey: 'menu.ourApps', href: 'Admin-NuestrasApps.html', icon: 'bx-grid-alt', saasItemId: 'saas-apps' },
+        // Apps Nuestros Clientes: el inicio de sesión personalizado de cada cliente (computadora y celular).
+        { id: 'admin-apps-clientes-saas', labelKey: 'menu.saasClientLogins', href: 'Admin-AppsClientes.html', icon: 'bx-devices', saasItemId: 'saas-client-logins' },
         // Upstream of Nuestros Giros de Negocio -- a Giro's own default
         // access tree (sector_grants) will only be allowed to grant nodes
         // marked 'habilitado' here (deferred, not built yet), so it's

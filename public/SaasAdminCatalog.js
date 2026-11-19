@@ -166,6 +166,16 @@ window.SAAS_ADMIN_CATALOG = [
                         ['Iniciar implementación', 'Fijar implementador y fechas', 'Marcar nivel y renglones', 'Reabrir nivel', 'Confirmar finalización', 'Rechazar finalización']),
                 ],
             },
+            {
+                // Apps Nuestros Clientes (Servicio a Cliente): el inicio de sesión personalizado de cada cliente, para computadora y celular (Admin-AppsClientes.html). El ORDEN de columnas y botones no debe cambiar una vez guardado:
+                // server.js lee los botones por su posición (SAAS_CL_LEAVES). Lo nuevo va al final.
+                itemId: 'saas-client-logins', labelKey: 'menu.saasClientLogins', href: 'Admin-AppsClientes.html',
+                apartados: [
+                    tablaApartado('tabla',
+                        ['Cliente', 'Inicio en computadora', 'Inicio en celular', 'Clave del cliente', 'Estado'],
+                        ['Personalizar y guardar borrador', 'Publicar', 'Quitar personalización', 'Cambiar la clave del cliente']),
+                ],
+            },
         ],
     },
     {

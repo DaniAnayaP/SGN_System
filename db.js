@@ -11720,6 +11720,10 @@ const SAAS_TABLE_COLUMN_LEAVES = {
         screenItemId: 'saas-expansions', apartadoId: 'tabla',
         columns: ['folio', 'client', 'what', 'status', 'estimated', 'final', 'note'],
     },
+    'apps-clientes-saas': {
+        screenItemId: 'saas-client-logins', apartadoId: 'tabla',
+        columns: ['client', 'web', 'app', 'slug', 'status'],
+    },
     'implementaciones-saas': {
         screenItemId: 'saas-implementations', apartadoId: 'tabla',
         columns: ['client', 'status', 'implementer', 'start', 'end', 'level', 'progress'],
@@ -15505,6 +15509,172 @@ function getImplementationContracted(clientId) {
     };
 }
 
+// --- Apps Nuestros Clientes (SaaS): el inicio de sesión PERSONALIZADO de cada cliente (Daniel, 2026-11-18) ----------------------------------------------------------------------------------------------
+// Cada cliente puede tener su propio inicio para computadora y para el celular (marca, fondo, saludo, frase de bienvenida y qué se muestra). Decidido: en computadora, una dirección por cliente (…/c/<clave>); en el celular, una sola app que
+// pide el «código de empresa» la primera vez. La CLAVE del cliente (slug) sirve de las dos cosas. Una fila por cliente: `draft` es lo que se edita y `live` lo publicado (una foto del borrador al publicar; vacío = nada publicado, se usa el inicio de
+// siempre). Lo que esté vacío en el borrador (logo, colores) toma lo de Diseño de Compañía del cliente. El borrador guarda solo lo que se cambia; los defaults de cada texto los pone la pantalla. Piezas siguientes: la dirección pública
+// /c/<clave> en computadora y la app del celular.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS client_login_configs (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id  INTEGER NOT NULL UNIQUE REFERENCES clients(id) ON DELETE CASCADE,
+        slug       TEXT NOT NULL UNIQUE,
+        draft      TEXT NOT NULL DEFAULT '{}',
+        live       TEXT NOT NULL DEFAULT '',
+        live_at    TEXT,
+        live_by    TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_by TEXT NOT NULL DEFAULT ''
+    );
+`);
+// Palabras que no pueden ser la clave de un cliente: rutas y carpetas de la aplicación.
+const LOGIN_RESERVED_SLUGS = ['admin', 'api', 'c', 'app', 'apps', 'login', 'downloads', 'icons', 'fonts', 'vendor', 'i18n', 'data', 'imagenes', 'sw', 'static', 'public', 'www', 'help', 'soporte', 'sgn', 'geipsa', 'null', 'undefined'];
+const LOGIN_SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const LOGIN_BACKGROUND_TYPES = ['solid', 'gradient', 'image', 'pattern'];
+const LOGIN_MAX_LOGO_CHARS = 500 * 1024;
+const LOGIN_MAX_IMAGE_CHARS = 1000 * 1024;
+const LOGIN_IMAGE_RE = /^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
+const LOGIN_HEX_RE = /^#[0-9a-fA-F]{6}$/;
+function loginSlugify(name) {
+    let base = String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/g, '');
+    if (base.length < 3) base = `${base}${base ? '-' : ''}cliente`.slice(0, 40);
+    return base;
+}
+function loginSlugProblem(slug, exceptClientId) {
+    if (typeof slug !== 'string' || slug.length < 3 || slug.length > 40 || !LOGIN_SLUG_RE.test(slug)) return 'FORMAT';
+    if (LOGIN_RESERVED_SLUGS.includes(slug)) return 'RESERVED';
+    const taken = db.prepare('SELECT client_id FROM client_login_configs WHERE slug = ?').get(slug);
+    if (taken && taken.client_id !== exceptClientId) return 'TAKEN';
+    return '';
+}
+// La clave que se propone para un cliente nuevo: de su nombre, y con -2, -3… si ya está tomada.
+function loginSuggestSlug(clientId) {
+    const client = getClientById(clientId);
+    const base = loginSlugify(client ? client.company_name : 'cliente');
+    for (let n = 1; n < 500; n += 1) {
+        const candidate = n === 1 ? base : `${base.slice(0, 40 - String(n).length - 1)}-${n}`;
+        if (!loginSlugProblem(candidate, clientId)) return candidate;
+    }
+    return `${base.slice(0, 30)}-${Date.now() % 100000}`;
+}
+// El borrador de un cliente recién creado: ambos canales encendidos, nada cambiado (logo y colores vacíos = los de Diseño de Compañía).
+function defaultLoginDraft() {
+    return {
+        channels: { web: true, app: true },
+        brand: { logo: '', primary: '', button: '' },
+        background: { type: 'gradient', color1: '', color2: '', image: '', diagonal: true },
+        texts: { greeting: true, welcome: 'Te damos la bienvenida', formTitle: 'Iniciar sesión', appButton: 'Entrar' },
+        show: { welcomeScreen: true, faceId: true, appLink: true, language: true, forgot: true, register: false, social: false },
+    };
+}
+// Valida lo que llega del navegador y lo deja con la forma exacta del borrador (se descartan claves desconocidas). { draft } o { error, code, field }.
+function normalizeLoginDraft(raw) {
+    const def = defaultLoginDraft();
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const obj = (key) => (src[key] && typeof src[key] === 'object' ? src[key] : {});
+    const bool = (value, fallback) => (typeof value === 'boolean' ? value : fallback);
+    const text = (value, fallback, max) => (value === undefined ? fallback : String(value == null ? '' : value).trim().slice(0, max));
+    const color = (value, field) => { if (value === undefined || value === null || value === '') return ''; if (typeof value !== 'string' || !LOGIN_HEX_RE.test(value)) throw Object.assign(new Error('color'), { code: 'COLOR', field }); return value.toLowerCase(); };
+    const image = (value, max, field) => { if (value === undefined || value === null || value === '') return ''; if (typeof value !== 'string' || !LOGIN_IMAGE_RE.test(value)) throw Object.assign(new Error('image'), { code: 'IMAGE', field }); if (value.length > max) throw Object.assign(new Error('size'), { code: 'IMAGE_SIZE', field }); return value; };
+    try {
+        const channels = obj('channels'); const brand = obj('brand'); const bg = obj('background'); const texts = obj('texts'); const show = obj('show');
+        const type = bg.type === undefined ? def.background.type : bg.type;
+        if (!LOGIN_BACKGROUND_TYPES.includes(type)) throw Object.assign(new Error('type'), { code: 'BACKGROUND_TYPE', field: 'background.type' });
+        const draft = {
+            channels: { web: bool(channels.web, def.channels.web), app: bool(channels.app, def.channels.app) },
+            brand: { logo: image(brand.logo, LOGIN_MAX_LOGO_CHARS, 'brand.logo'), primary: color(brand.primary, 'brand.primary'), button: color(brand.button, 'brand.button') },
+            background: { type, color1: color(bg.color1, 'background.color1'), color2: color(bg.color2, 'background.color2'), image: image(bg.image, LOGIN_MAX_IMAGE_CHARS, 'background.image'), diagonal: bool(bg.diagonal, def.background.diagonal) },
+            texts: { greeting: bool(texts.greeting, def.texts.greeting), welcome: text(texts.welcome, def.texts.welcome, 80), formTitle: text(texts.formTitle, def.texts.formTitle, 40), appButton: text(texts.appButton, def.texts.appButton, 30) },
+            show: Object.fromEntries(Object.keys(def.show).map((k) => [k, bool(show[k], def.show[k])])),
+        };
+        return { draft };
+    } catch (err) {
+        if (err && err.code) return { error: err.code, field: err.field };
+        throw err;
+    }
+}
+function parseLoginJson(text) { try { return text ? JSON.parse(text) : null; } catch { return null; } }
+// El estado de cada canal (computadora o celular): default = se usa el inicio de siempre; draft = encendido en el borrador pero sin publicar; published = publicado y sin cambios; published_changes = publicado con cambios pendientes.
+function loginChannelStatus(draft, live, channel) {
+    const liveOn = !!(live && live.channels && live.channels[channel]);
+    const dirty = JSON.stringify(draft) !== JSON.stringify(live);
+    if (liveOn) return dirty ? 'published_changes' : 'published';
+    return draft.channels[channel] ? 'draft' : 'default';
+}
+function deserializeClientLogin(row) {
+    if (!row) return null;
+    const draft = normalizeLoginDraft(parseLoginJson(row.draft)).draft || defaultLoginDraft();
+    const liveRaw = parseLoginJson(row.live);
+    const live = liveRaw ? (normalizeLoginDraft(liveRaw).draft || null) : null;
+    return {
+        id: row.id, clientId: row.client_id, slug: row.slug, draft, live, dirty: JSON.stringify(draft) !== JSON.stringify(live), liveAt: row.live_at, liveBy: row.live_by,
+        createdAt: row.created_at, updatedAt: row.updated_at, updatedBy: row.updated_by,
+        web: loginChannelStatus(draft, live, 'web'), app: loginChannelStatus(draft, live, 'app'),
+    };
+}
+function getClientLogin(clientId) {
+    return deserializeClientLogin(db.prepare('SELECT * FROM client_login_configs WHERE client_id = ?').get(clientId));
+}
+function getClientLoginBySlug(slug) {
+    return deserializeClientLogin(db.prepare('SELECT * FROM client_login_configs WHERE slug = ?').get(String(slug || '')));
+}
+// Una fila por compañía que no esté inactiva (con o sin personalización): sin las imágenes, que solo se leen al editar.
+function listClientLogins() {
+    const configs = new Map(db.prepare('SELECT * FROM client_login_configs').all().map((r) => [r.client_id, deserializeClientLogin(r)]));
+    return listClients().filter((c) => c.status !== 'inactivo').map((c) => {
+        const cfg = configs.get(c.id);
+        return {
+            clientId: c.id, client: c.company_name, createdAt: cfg ? cfg.createdAt : c.created_at, hasConfig: !!cfg, slug: cfg ? cfg.slug : '',
+            web: cfg ? cfg.web : 'default', app: cfg ? cfg.app : 'default', published: !!(cfg && cfg.live), dirty: !!(cfg && cfg.dirty), updatedAt: cfg ? cfg.updatedAt : '', updatedBy: cfg ? cfg.updatedBy : '',
+        };
+    });
+}
+// Lo de la compañía que la vista previa usa cuando el borrador no cambia nada: su logo y sus colores de Diseño de Compañía.
+function getClientLoginCompany(clientId) {
+    const c = getClientById(clientId);
+    return c ? { id: c.id, name: c.company_name, logo: c.logo_data_url || '', primaryColor: c.primary_color || '', secondaryColor: c.secondary_color || '', status: c.status } : null;
+}
+function createClientLogin(clientId, updatedBy) {
+    if (getClientLogin(clientId)) return { error: 'EXISTS' };
+    const slug = loginSuggestSlug(clientId);
+    db.prepare('INSERT INTO client_login_configs (client_id, slug, draft, updated_by) VALUES (?, ?, ?, ?)').run(clientId, slug, JSON.stringify(defaultLoginDraft()), updatedBy || '');
+    return { config: getClientLogin(clientId) };
+}
+function saveClientLoginDraft(clientId, rawDraft, updatedBy) {
+    const before = getClientLogin(clientId);
+    if (!before) return { error: 'NOT_FOUND' };
+    const normalized = normalizeLoginDraft(rawDraft);
+    if (normalized.error) return normalized;
+    db.prepare("UPDATE client_login_configs SET draft = ?, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?").run(JSON.stringify(normalized.draft), updatedBy || '', clientId);
+    return { before, config: getClientLogin(clientId) };
+}
+// Publicar = el borrador pasa a ser lo publicado. Pide al menos un canal encendido (si no, no hay nada que publicar).
+function publishClientLogin(clientId, publishedBy) {
+    const before = getClientLogin(clientId);
+    if (!before) return { error: 'NOT_FOUND' };
+    if (!before.draft.channels.web && !before.draft.channels.app) return { error: 'NO_CHANNEL' };
+    db.prepare("UPDATE client_login_configs SET live = ?, live_at = datetime('now'), live_by = ?, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?").run(JSON.stringify(before.draft), publishedBy || '', publishedBy || '', clientId);
+    return { before, config: getClientLogin(clientId) };
+}
+// Quitar la personalización: se borra todo (borrador, publicado y clave) y el cliente vuelve al inicio de siempre. La clave queda libre.
+function removeClientLogin(clientId) {
+    const before = getClientLogin(clientId);
+    if (!before) return { error: 'NOT_FOUND' };
+    db.prepare('DELETE FROM client_login_configs WHERE client_id = ?').run(clientId);
+    return { before };
+}
+function setClientLoginSlug(clientId, slug, updatedBy) {
+    const before = getClientLogin(clientId);
+    if (!before) return { error: 'NOT_FOUND' };
+    const clean = String(slug || '').trim().toLowerCase();
+    const problem = loginSlugProblem(clean, clientId);
+    if (problem) return { error: problem };
+    if (clean === before.slug) return { before, config: before };
+    db.prepare("UPDATE client_login_configs SET slug = ?, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?").run(clean, updatedBy || '', clientId);
+    return { before, config: getClientLogin(clientId) };
+}
+
 // --- Query helpers: permission grants (módulo / apartado / pantalla) ---------
 // (Perfiles/profiles removed -- Roles is now Puesto de Trabajo-based, see
 // job_position_grants/getJobPositionGrants above.)
@@ -18248,6 +18418,7 @@ module.exports = {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
+    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
