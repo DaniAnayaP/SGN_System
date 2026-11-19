@@ -9698,6 +9698,7 @@ function applyStyle(style) {
         document.body.classList.remove('institutional-mode', 'dark-mode', 'futuristic-mode');
     }
     document.querySelectorAll('.style-option').forEach((b) => b.classList.toggle('active', b.dataset.style === style));
+    applyBrandLogos(currentStyleName());
 }
 
 document.querySelectorAll('.style-option').forEach((btn) => {
@@ -13241,6 +13242,30 @@ function svgifyLogo(rasterDataUrl) {
     return `data:image/svg+xml;base64,${btoa(svg)}`;
 }
 
+// El estilo que está puesto ahora (light | dark | institutional).
+function currentStyleName() {
+    if (document.body.classList.contains('institutional-mode')) return 'institutional';
+    if (document.body.classList.contains('dark-mode')) return 'dark';
+    return 'light';
+}
+// El logo de la barra lateral según el estilo (Daniel, 2026-11-19: cada compañía sube tres logos, Claro, Oscuro e Institucional). El Claro es el de siempre y el respaldo de los otros dos; cuando se usa de respaldo en un
+// estilo con otro fondo, va dentro de un círculo blanco para que no se pierda (un logo verde sobre la barra verde del estilo Institucional). .brand-light es el que se ve en Claro e Institucional y .brand-dark el de Oscuro.
+function applyBrandLogos(style, branding) {
+    const b = branding || clientBranding;
+    if (!b || !b.logoDataUrl) return;
+    const light = b.logoDataUrl;
+    const dark = b.logoDarkDataUrl || light;
+    const institutional = b.logoInstitutionalDataUrl || light;
+    document.querySelectorAll('.brand-light').forEach((img) => {
+        img.src = style === 'institutional' ? institutional : light;
+        img.classList.toggle('brand-logo-badge', style === 'institutional' && !b.logoInstitutionalDataUrl);
+    });
+    document.querySelectorAll('.brand-dark').forEach((img) => {
+        img.src = dark;
+        img.classList.toggle('brand-logo-badge', style === 'dark' && !b.logoDarkDataUrl);
+    });
+}
+
 function applyClientBranding(branding) {
     if (!branding) return;
     // Institutional is a FULL theme variant, same depth as light/dark (see
@@ -13264,9 +13289,7 @@ function applyClientBranding(branding) {
         root.setProperty('--institutional-tooltip-text', palette.tooltipText || '#FFFFFF');
     }
     if (branding.logoDataUrl) {
-        document.querySelectorAll('.brand-light, .brand-dark').forEach((img) => {
-            img.src = branding.logoDataUrl;
-        });
+        applyBrandLogos(currentStyleName(), branding);
         // Browser tab icon — same swap as the sidebar logo, so whichever
         // client is logged in sees their own branding there too instead of
         // SGN's. logoDataUrl is already circular-SVG from upload time (see

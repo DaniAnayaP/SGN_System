@@ -33,10 +33,7 @@ const visionField = document.getElementById('client-vision');
 const valuesField = document.getElementById('client-values');
 const historyField = document.getElementById('client-history');
 const equipmentRecommendationsField = document.getElementById('client-equipment-recommendations');
-const logoInput = document.getElementById('client-logo');
-const logoDataField = document.getElementById('client-logo-data');
-const logoPreview = document.getElementById('client-logo-preview');
-const logoClearBtn = document.getElementById('client-logo-clear');
+let brandLogos = null; // los tres logos del cliente (Claro, Oscuro, Institucional): ver BrandLogos.js; se arma en init() porque necesita los textos del idioma
 const rfcField = document.getElementById('client-rfc');
 const nicknameField = document.getElementById('client-nickname');
 const abbreviationField = document.getElementById('client-abbreviation');
@@ -117,35 +114,7 @@ function statusLabel(status) {
     return Dashboard.t(key);
 }
 
-function setLogoPreview(dataUrl) {
-    logoDataField.value = dataUrl || '';
-    if (dataUrl) {
-        logoPreview.src = dataUrl;
-        logoPreview.hidden = false;
-        logoClearBtn.hidden = false;
-    } else {
-        logoPreview.hidden = true;
-        logoClearBtn.hidden = true;
-    }
-}
-
-logoInput.addEventListener('change', () => {
-    const file = logoInput.files?.[0];
-    if (!file) return;
-    if (file.size > 350 * 1024) {
-        showError(Dashboard.t('admin.saveError'));
-        logoInput.value = '';
-        return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => setLogoPreview(Dashboard.svgifyLogo(reader.result));
-    reader.readAsDataURL(file);
-});
-
-logoClearBtn.addEventListener('click', () => {
-    logoInput.value = '';
-    setLogoPreview('');
-});
+const clientLogoValues = (client) => ({ logoDataUrl: client.logo_data_url, logoDarkDataUrl: client.logo_dark_data_url, logoInstitutionalDataUrl: client.logo_institutional_data_url });
 
 // Contrato PDF: a data: URL in the same row, bigger size cap (real PDFs, not
 // small branding images) and a different accepted MIME.
@@ -240,7 +209,7 @@ function resetForm() {
     form.reset();
     clientEditModal.hidden = true;
     idField.value = '';
-    setLogoPreview('');
+    brandLogos.clear();
     setContractPreview('', '');
     setContractWordPreview('', '');
     paletteWidget.setPalette(null);
@@ -610,7 +579,7 @@ function clientToPayload(client) {
     return {
         companyName: client.company_name, contactName: client.contact_name, email: client.email,
         phone: client.phone, plan: client.plan, status: client.status,
-        logoDataUrl: client.logo_data_url, seedColor: client.seed_color,
+        logoDataUrl: client.logo_data_url, logoDarkDataUrl: client.logo_dark_data_url, logoInstitutionalDataUrl: client.logo_institutional_data_url, seedColor: client.seed_color,
         colorPalette: client.color_palette ? JSON.parse(client.color_palette) : null,
         mission: client.mission, vision: client.vision, coreValues: client.core_values, history: client.history,
         equipmentRecommendations: client.equipment_recommendations,
@@ -723,7 +692,7 @@ function startEdit(client) {
     valuesField.value = client.core_values || '';
     historyField.value = client.history || '';
     equipmentRecommendationsField.value = client.equipment_recommendations || '';
-    setLogoPreview(client.logo_data_url || '');
+    brandLogos.setValues(clientLogoValues(client));
     rfcField.value = client.rfc || '';
     nicknameField.value = client.company_nickname || '';
     abbreviationField.value = client.company_abbreviation || '';
@@ -758,7 +727,7 @@ function startEdit(client) {
 function openCreateClientModal() {
     form.reset();
     idField.value = '';
-    setLogoPreview('');
+    brandLogos.clear();
     setContractPreview('', '');
     setContractWordPreview('', '');
     paletteWidget.setPalette(null);
@@ -891,7 +860,7 @@ form.addEventListener('submit', async (event) => {
         timeZone: timeZoneField.value,
         status: statusField.value,
         isTest: isTestField.checked,
-        logoDataUrl: logoDataField.value || null,
+        ...brandLogos.getValues(),
         seedColor: seed,
         colorPalette: currentPalette,
         mission: missionField.value.trim(),
@@ -1532,6 +1501,7 @@ function renderNewClientButton() {
         }
         paletteWidget = window.ColorPalette.create(paletteContainer);
         document.addEventListener('dashboard:language-changed', () => paletteWidget.refreshLabels());
+        brandLogos = window.BrandLogos.mount(document.getElementById('client-brand-logos'), { idPrefix: 'client-logo', onError: showError });
         renderNewClientButton();
         await Promise.all([loadClients(), loadPlans(), loadSectors(), loadModuleCatalog()]);
     } catch (err) {

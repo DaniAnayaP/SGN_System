@@ -799,6 +799,14 @@ if (!clientColumns.some((c) => c.name === 'admin_user_id')) {
 if (!clientColumns.some((c) => c.name === 'logo_data_url')) {
     db.exec('ALTER TABLE clients ADD COLUMN logo_data_url TEXT');
 }
+// Tres logos por compañía, uno por estilo del sistema (Daniel, 2026-11-19): logo_data_url es el CLARO (el de siempre, y el respaldo de los otros dos); logo_dark_data_url el del estilo Oscuro y
+// logo_institutional_data_url el del Institucional (el que cae sobre el color de la compañía). Vacío = se usa el Claro.
+if (!clientColumns.some((c) => c.name === 'logo_dark_data_url')) {
+    db.exec('ALTER TABLE clients ADD COLUMN logo_dark_data_url TEXT');
+}
+if (!clientColumns.some((c) => c.name === 'logo_institutional_data_url')) {
+    db.exec('ALTER TABLE clients ADD COLUMN logo_institutional_data_url TEXT');
+}
 if (!clientColumns.some((c) => c.name === 'primary_color')) {
     db.exec('ALTER TABLE clients ADD COLUMN primary_color TEXT');
 }
@@ -3144,7 +3152,7 @@ function getClientBranding(id) {
         .prepare(`
             SELECT company_name AS companyName, company_abbreviation AS companyAbbreviation,
                    company_nickname AS companyNickname,
-                   logo_data_url AS logoDataUrl,
+                   logo_data_url AS logoDataUrl, logo_dark_data_url AS logoDarkDataUrl, logo_institutional_data_url AS logoInstitutionalDataUrl,
                    primary_color AS primaryColor, secondary_color AS secondaryColor,
                    seed_color AS seedColor, color_palette AS colorPaletteRaw
             FROM clients WHERE id = ?
@@ -3170,7 +3178,7 @@ function getClientProfile(id) {
 }
 
 function createClient({
-    companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
+    companyName, contactName, email, phone, plan, status, logoDataUrl, logoDarkDataUrl, logoInstitutionalDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
     mission, vision, coreValues, history,
     rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
     contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
@@ -3182,7 +3190,7 @@ function createClient({
         return db
             .prepare(`
                 INSERT INTO clients (
-                    company_name, contact_name, email, phone, plan, status, logo_data_url, primary_color, secondary_color, seed_color, color_palette,
+                    company_name, contact_name, email, phone, plan, status, logo_data_url, logo_dark_data_url, logo_institutional_data_url, primary_color, secondary_color, seed_color, color_palette,
                     mission, vision, core_values, history,
                     rfc, company_nickname, company_abbreviation, owner_name, billing_email, razon_social, big_date_number, account_number,
                     contract_start_date, contract_registered_date, contract_end_date, contract_file_data_url, contract_file_name,
@@ -3190,7 +3198,7 @@ function createClient({
                     contracted_cost, monthly_payment, initial_payment, sector_negocio, is_test, equipment_recommendations, time_zone
                 )
                 VALUES (
-                    @companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette,
+                    @companyName, @contactName, @email, @phone, @plan, @status, @logoDataUrl, @logoDarkDataUrl, @logoInstitutionalDataUrl, @primaryColor, @secondaryColor, @seedColor, @colorPalette,
                     @mission, @vision, @coreValues, @history,
                     @rfc, @companyNickname, @companyAbbreviation, @ownerName, @billingEmail, @razonSocial, @bigDateNumber, @accountNumber,
                     @contractStartDate, @contractRegisteredDate, @contractEndDate, @contractFileDataUrl, @contractFileName,
@@ -3200,7 +3208,7 @@ function createClient({
             `)
             .run({
                 companyName, contactName, email, phone: phone || '', plan: plan || '', status: status || 'prospecto',
-                logoDataUrl: logoDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
+                logoDataUrl: logoDataUrl || null, logoDarkDataUrl: logoDarkDataUrl || null, logoInstitutionalDataUrl: logoInstitutionalDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
                 seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
                 mission: mission || '', vision: vision || '', coreValues: coreValues || '', history: history || '',
                 rfc: rfc || '', companyNickname: companyNickname || '', companyAbbreviation: companyAbbreviation || '',
@@ -3233,7 +3241,7 @@ function createClient({
 // freezing whatever historical value the column already had instead of
 // zeroing it out on every save.
 function updateClient(id, {
-    companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
+    companyName, contactName, email, phone, plan, status, logoDataUrl, logoDarkDataUrl, logoInstitutionalDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
     mission, vision, coreValues, history,
     rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
     contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
@@ -3246,6 +3254,8 @@ function updateClient(id, {
         SET company_name = @companyName, contact_name = @contactName, email = @email,
             phone = @phone, plan = @plan, status = @status,
             logo_data_url = @logoDataUrl, primary_color = @primaryColor, secondary_color = @secondaryColor,
+            logo_dark_data_url = CASE WHEN @setLogoDark = 1 THEN @logoDarkDataUrl ELSE logo_dark_data_url END,
+            logo_institutional_data_url = CASE WHEN @setLogoInstitutional = 1 THEN @logoInstitutionalDataUrl ELSE logo_institutional_data_url END,
             seed_color = @seedColor, color_palette = @colorPalette,
             mission = @mission, vision = @vision, core_values = @coreValues, history = @history,
             rfc = @rfc, company_nickname = @companyNickname, company_abbreviation = @companyAbbreviation,
@@ -3259,7 +3269,8 @@ function updateClient(id, {
         WHERE id = @id
     `).run({
         id, companyName, contactName, email, phone: phone || '', plan: plan || '', status,
-        logoDataUrl: logoDataUrl || null, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
+        logoDataUrl: logoDataUrl || null, logoDarkDataUrl: logoDarkDataUrl || null, logoInstitutionalDataUrl: logoInstitutionalDataUrl || null,
+        setLogoDark: logoDarkDataUrl === undefined ? 0 : 1, setLogoInstitutional: logoInstitutionalDataUrl === undefined ? 0 : 1, primaryColor: primaryColor || null, secondaryColor: secondaryColor || null,
         seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
         mission: mission || '', vision: vision || '', coreValues: coreValues || '', history: history || '',
         rfc: rfc || '', companyNickname: companyNickname || '', companyAbbreviation: companyAbbreviation || '',
@@ -4232,12 +4243,17 @@ function markAccessDeniedAlertsSeen(clientId, userId) {
 
 // Self-service version for the client's own admin (Business-Config page):
 // only branding fields, never company_name/status/plan/etc.
-function updateClientBranding(clientId, { logoDataUrl, seedColor, colorPalette }) {
+function updateClientBranding(clientId, { logoDataUrl, logoDarkDataUrl, logoInstitutionalDataUrl, seedColor, colorPalette }) {
     db.prepare(`
-        UPDATE clients SET logo_data_url = @logoDataUrl, seed_color = @seedColor, color_palette = @colorPalette
+        UPDATE clients SET logo_data_url = @logoDataUrl,
+            logo_dark_data_url = CASE WHEN @setLogoDark = 1 THEN @logoDarkDataUrl ELSE logo_dark_data_url END,
+            logo_institutional_data_url = CASE WHEN @setLogoInstitutional = 1 THEN @logoInstitutionalDataUrl ELSE logo_institutional_data_url END,
+            seed_color = @seedColor, color_palette = @colorPalette
         WHERE id = @id
     `).run({
         id: clientId, logoDataUrl: logoDataUrl || null,
+        logoDarkDataUrl: logoDarkDataUrl || null, logoInstitutionalDataUrl: logoInstitutionalDataUrl || null,
+        setLogoDark: logoDarkDataUrl === undefined ? 0 : 1, setLogoInstitutional: logoInstitutionalDataUrl === undefined ? 0 : 1,
         seedColor: seedColor || null, colorPalette: colorPalette ? JSON.stringify(colorPalette) : null,
     });
     return getClientBranding(clientId);

@@ -641,15 +641,7 @@
                 </div>
 
                 <div class="admin-branding-fields admin-branding-fields-logo-only">
-                    <div class="admin-field admin-logo-field">
-                        <label for="client-logo" data-i18n="admin.logo">Logo</label>
-                        <div class="admin-logo-row">
-                            <img id="client-logo-preview" class="admin-logo-preview" alt="" hidden>
-                            <input id="client-logo" name="logo" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
-                            <button type="button" class="btn btn-secondary admin-logo-clear" id="client-logo-clear" data-i18n="admin.removeLogo" hidden>Remove</button>
-                        </div>
-                        <input type="hidden" id="client-logo-data" name="logoDataUrl" value="">
-                    </div>
+                    <div id="client-brand-logos" class="admin-logo-field-wide"></div>
                     <div class="admin-field admin-logo-field">
                         <label for="client-contract" data-i18n="admin.contractFile">Contract (PDF, signed)</label>
                         <div class="admin-logo-row">
@@ -865,6 +857,7 @@
     <script src="AppConfig.js"></script>
     <script src="ColorDialog.js"></script>
     <script src="ColorPalette.js"></script>
+    <script src="BrandLogos.js"></script>
     <script src="PermissionTree.js"></script>
     <script src="AccessRules.js"></script>
     <script src="PermissionCostTree.js"></script>

@@ -611,6 +611,12 @@
     "companyName": "Nombre de la empresa",
     "logo": "Logo",
     "removeLogo": "Quitar",
+    "logoLight": "Logo para el estilo Claro",
+    "logoLightHint": "Se ve con el estilo Claro (fondo blanco). Es el logo principal: los otros dos lo usan si no subes uno propio.",
+    "logoDark": "Logo para el estilo Oscuro",
+    "logoDarkHint": "Se ve con el estilo Oscuro (fondo oscuro): sube uno claro o en blanco. Si no lo subes, se usa el Claro dentro de un círculo blanco.",
+    "logoInstitutional": "Logo para el estilo Institucional",
+    "logoInstitutionalHint": "Se ve con el estilo Institucional, sobre el color de la compañía: sube uno que contraste (por ejemplo en blanco). Si no lo subes, se usa el Claro dentro de un círculo blanco.",
     "primaryColor": "Color primario",
     "secondaryColor": "Color secundario",
     "paletteSeedLabel": "Color representativo del cliente",
@@ -8524,6 +8530,8 @@
       "what": "Aquí subes el logo de tu empresa, para que aparezca en el sistema en vez del logo genérico.",
       "example": "subes el logo de tu restaurante para que se vea en la parte de arriba del sistema, en vez del logo de GEIPSA."
     },
+    "brandLogoUpload": { "what": "Sube el logo de este estilo (PNG, JPG, SVG o WEBP, hasta unos 350 KB). La compañía tiene tres: Claro (fondo blanco), Oscuro (fondo oscuro) e Institucional (sobre el color de la compañía); el sistema muestra el de cada estilo cuando alguien lo cambia. Un logo vectorial (SVG) con fondo transparente es lo mejor: se ve nítido y no se recorta. Si falta el Oscuro o el Institucional se usa el Claro dentro de un círculo blanco.", "example": "Logo Claro: la K verde. Logo Institucional: la K en blanco, para que se vea sobre la barra verde." },
+    "brandLogoRemove": { "what": "Quita este logo. Si era el Oscuro o el Institucional, el sistema vuelve a usar el Claro (dentro de un círculo blanco) en ese estilo.", "example": "Quitar el logo Institucional." },
     "businessLogoRemove": {
       "what": "Quita el logo que subiste y regresa al logo genérico.",
       "example": "subiste un logo por error, lo quitas con este botón sin tener que buscar el archivo correcto todavía."

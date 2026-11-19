@@ -5,17 +5,7 @@
 // Dashboard.js; palette math/UI comes from ColorPalette.js.
 // ---------------------------------------------------------------------------
 
-const logoInput = document.getElementById('config-logo');
-const logoDataField = document.getElementById('config-logo-data');
-const logoPreview = document.getElementById('config-logo-preview');
-const logoClearBtn = document.getElementById('config-logo-clear');
-// data-i18n-aria (not a direct Dashboard.t() call) -- this runs at top-level
-// script time, before the async i18n fetch resolves (same reasoning
-// Dashboard.js's own #help-mode-toggle injection documents).
-logoInput.setAttribute('data-i18n-aria', 'admin.logo');
-logoInput.setAttribute('aria-label', 'Logo');
-logoInput.setAttribute('data-help-key', 'businessLogoUpload');
-logoClearBtn.setAttribute('data-help-key', 'businessLogoRemove');
+let brandLogos = null; // los tres logos de la compañía (Claro, Oscuro, Institucional): ver BrandLogos.js; se arma en init() porque necesita los textos del idioma
 const paletteContainer = document.getElementById('config-color-palette');
 let paletteWidget; // created after Dashboard.initDashboard() so i18n labels are ready — see init() below
 const errorBanner = document.getElementById('config-error');
@@ -31,43 +21,13 @@ function clearError() {
     errorBanner.textContent = '';
 }
 
-function setLogoPreview(dataUrl) {
-    logoDataField.value = dataUrl || '';
-    if (dataUrl) {
-        logoPreview.src = dataUrl;
-        logoPreview.hidden = false;
-        logoClearBtn.hidden = false;
-    } else {
-        logoPreview.hidden = true;
-        logoClearBtn.hidden = true;
-    }
-}
-
-logoInput.addEventListener('change', () => {
-    const file = logoInput.files?.[0];
-    if (!file) return;
-    if (file.size > 350 * 1024) {
-        showError(Dashboard.t('admin.saveError'));
-        logoInput.value = '';
-        return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => setLogoPreview(Dashboard.svgifyLogo(reader.result));
-    reader.readAsDataURL(file);
-});
-
-logoClearBtn.addEventListener('click', () => {
-    logoInput.value = '';
-    setLogoPreview('');
-});
-
 async function loadCurrentBranding() {
     try {
         const res = await fetch('/api/business/branding', { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         const branding = data.branding || {};
-        setLogoPreview(branding.logoDataUrl || '');
+        brandLogos.setValues(branding);
         const palette = branding.colorPalette ? { ...branding.colorPalette, seed: branding.seedColor } : null;
         paletteWidget.setPalette(palette);
     } catch {
@@ -86,7 +46,7 @@ saveBtn.addEventListener('click', async () => {
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({
-                logoDataUrl: logoDataField.value || null,
+                ...brandLogos.getValues(),
                 seedColor: seed,
                 colorPalette: currentPalette,
             }),
@@ -114,6 +74,7 @@ saveBtn.addEventListener('click', async () => {
         }
         paletteWidget = window.ColorPalette.create(paletteContainer);
         document.addEventListener('dashboard:language-changed', () => paletteWidget.refreshLabels());
+        brandLogos = window.BrandLogos.mount(document.getElementById('config-brand-logos'), { idPrefix: 'config-logo', onError: showError });
         await loadCurrentBranding();
     } catch (err) {
         console.error('Business (Config) failed to initialize:', err);

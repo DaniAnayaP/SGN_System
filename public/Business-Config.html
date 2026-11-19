@@ -368,15 +368,7 @@
             <p class="admin-subtitle" data-i18n="business.configSubtitle">Adjust your company's logo and institutional colors — this is what your team sees when they pick "Institutional" style.</p>
 
             <div class="admin-branding-fields admin-branding-fields-logo-only">
-                <div class="admin-field admin-logo-field">
-                    <label for="config-logo" data-i18n="admin.logo">Logo</label>
-                    <div class="admin-logo-row">
-                        <img id="config-logo-preview" class="admin-logo-preview" alt="" hidden>
-                        <input id="config-logo" name="logo" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
-                        <button type="button" class="btn btn-secondary admin-logo-clear" id="config-logo-clear" data-i18n="admin.removeLogo" hidden>Remove</button>
-                    </div>
-                    <input type="hidden" id="config-logo-data" value="">
-                </div>
+                <div id="config-brand-logos" class="admin-logo-field-wide"></div>
             </div>
 
             <div id="config-color-palette"></div>
@@ -446,6 +438,7 @@
     <script src="Dashboard.js"></script>
     <script src="ColorDialog.js"></script>
     <script src="ColorPalette.js"></script>
+    <script src="BrandLogos.js"></script>
     <script src="Business-Config.js"></script>
 </body>
 </html>

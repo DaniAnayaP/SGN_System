@@ -2708,7 +2708,7 @@ function validateColorPalette(colorPalette) {
 
 function validateClientBody(body) {
     const {
-        companyName, contactName, email, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
+        companyName, contactName, email, status, logoDataUrl, logoDarkDataUrl, logoInstitutionalDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
         billingEmail, contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractWordDataUrl,
         rfc, companyAbbreviation, monthlyPayment, initialPayment, timeZone,
     } = body || {};
@@ -2730,7 +2730,7 @@ function validateClientBody(body) {
     if (billingEmail && !/^\S+@\S+\.\S+$/.test(billingEmail)) {
         return 'billingEmail must be a valid email address.';
     }
-    return validateLogo(logoDataUrl) || validateSeedColor(seedColor) || validateColorPalette(colorPalette)
+    return validateLogo(logoDataUrl) || validateLogo(logoDarkDataUrl) || validateLogo(logoInstitutionalDataUrl) || validateSeedColor(seedColor) || validateColorPalette(colorPalette)
         || validateContractFile(contractFileDataUrl)
         || validateContractWordFile(contractWordDataUrl)
         || validateRfc(rfc)
@@ -2883,7 +2883,7 @@ try {
 // drift out of sync with each other on which fields get passed through.
 function extractClientFields(body) {
     const {
-        companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
+        companyName, contactName, email, phone, plan, status, logoDataUrl, logoDarkDataUrl, logoInstitutionalDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
         mission, vision, coreValues, history,
         rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
         contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
@@ -2891,7 +2891,7 @@ function extractClientFields(body) {
         monthlyPayment, initialPayment, sectorNegocio, isTest, equipmentRecommendations, timeZone,
     } = body;
     return {
-        companyName, contactName, email, phone, plan, status, logoDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
+        companyName, contactName, email, phone, plan, status, logoDataUrl, logoDarkDataUrl, logoInstitutionalDataUrl, primaryColor, secondaryColor, seedColor, colorPalette,
         mission, vision, coreValues, history,
         rfc, companyNickname, companyAbbreviation, ownerName, billingEmail, razonSocial,
         contractStartDate, contractRegisteredDate, contractEndDate, contractFileDataUrl, contractFileName,
@@ -5693,10 +5693,10 @@ app.get('/api/business/branding', requireAuth, (req, res) => {
 // (logo + institutional palette), and only for their own client_id — never
 // company_name/status/plan, which stay GEIPSA-controlled (see Admin-SaaS).
 app.put('/api/business/branding', requireAuth, requireClientAdmin, (req, res) => {
-    const { logoDataUrl, seedColor, colorPalette } = req.body || {};
-    const error = validateLogo(logoDataUrl) || validateSeedColor(seedColor) || validateColorPalette(colorPalette);
+    const { logoDataUrl, logoDarkDataUrl, logoInstitutionalDataUrl, seedColor, colorPalette } = req.body || {};
+    const error = validateLogo(logoDataUrl) || validateLogo(logoDarkDataUrl) || validateLogo(logoInstitutionalDataUrl) || validateSeedColor(seedColor) || validateColorPalette(colorPalette);
     if (error) return res.status(400).json({ message: error });
-    const branding = updateClientBranding(req.user.clientId, { logoDataUrl, seedColor, colorPalette });
+    const branding = updateClientBranding(req.user.clientId, { logoDataUrl, logoDarkDataUrl, logoInstitutionalDataUrl, seedColor, colorPalette });
     res.json({ branding });
 });
 

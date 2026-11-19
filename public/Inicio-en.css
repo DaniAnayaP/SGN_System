@@ -2179,6 +2179,18 @@
         font-style: italic;
     }
 
+    /* Un logo de respaldo (el Claro) en un estilo con otro fondo va dentro de un círculo blanco para que no se pierda */
+    .brand img.brand-logo-badge{
+        width: 2.2rem;
+        height: 2.2rem;
+        background-color: #FFFFFF;
+        border-radius: 50%;
+        padding: 0.4rem;
+        box-sizing: border-box;
+        object-fit: contain;
+        flex: none;
+    }
+
     /* Dark mode */
     .brand-dark{
         display: none;

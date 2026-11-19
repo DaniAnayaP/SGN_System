@@ -611,6 +611,12 @@
     "companyName": "Company name",
     "logo": "Logo",
     "removeLogo": "Remove",
+    "logoLight": "Logo for the Light style",
+    "logoLightHint": "Shown with the Light style (white background). It is the main logo: the other two use it if you do not upload their own.",
+    "logoDark": "Logo for the Dark style",
+    "logoDarkHint": "Shown with the Dark style (dark background): upload a light or white one. If you do not, the Light one is used inside a white circle.",
+    "logoInstitutional": "Logo for the Institutional style",
+    "logoInstitutionalHint": "Shown with the Institutional style, over the company color: upload one that contrasts (for example white). If you do not, the Light one is used inside a white circle.",
     "primaryColor": "Primary color",
     "secondaryColor": "Secondary color",
     "paletteSeedLabel": "Client's representative color",
@@ -8525,6 +8531,8 @@
       "what": "This is where you upload your company's own logo, so it shows up in the system instead of the generic one.",
       "example": "you upload your restaurant's logo so it shows at the top of the system instead of GEIPSA's."
     },
+    "brandLogoUpload": { "what": "Upload the logo for this style (PNG, JPG, SVG or WEBP, up to about 350 KB). The company has three: Light (white background), Dark (dark background) and Institutional (over the company color); the system shows the one for each style when someone changes it. A vector (SVG) logo with a transparent background is best: it stays sharp and is not cropped. If the Dark or Institutional one is missing the Light one is used inside a white circle.", "example": "Light logo: the green K. Institutional logo: the white K, so it shows over the green bar." },
+    "brandLogoRemove": { "what": "Removes this logo. If it was the Dark or Institutional one, the system goes back to using the Light one (inside a white circle) in that style.", "example": "Remove the Institutional logo." },
     "businessLogoRemove": {
       "what": "Removes the logo you uploaded and goes back to the generic one.",
       "example": "you uploaded the wrong logo by mistake, and remove it here without having to find the right file yet."

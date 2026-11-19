@@ -9832,3 +9832,13 @@ input[type="color"].cli-company{ opacity: 0.55; }
 .thr-sug[hidden]{ display: none; }
 .thr-sug-item{ text-align: left; padding: 0.4rem 0.7rem; border: 0; background: transparent; color: var(--color-text-primary); font-family: inherit; font-size: 0.8rem; cursor: pointer; }
 .thr-sug-item:hover, .thr-sug-item.active{ background: var(--color-bg); }
+/* Los tres logos de la compañía (Claro, Oscuro, Institucional): cada vista previa sobre el fondo de su estilo */
+.admin-logo-field-wide{ grid-column: 1 / -1; }
+.brand-logos{ display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; }
+.brand-logo-card{ display: flex; flex-direction: column; gap: 0.35rem; margin: 0; }
+.brand-logo-stage{ flex: none; width: 3.2rem; height: 3.2rem; border-radius: 0.5rem; display: grid; place-items: center; box-shadow: 0 0 0 1px var(--color-border); overflow: hidden; }
+.brand-logo-stage-light{ background: #FFFFFF; }
+.brand-logo-stage-dark{ background: #1D2230; }
+.brand-logo-stage-institutional{ background: var(--institutional-accent, #3F435D); }
+.brand-logo-preview{ max-width: 80%; max-height: 80%; object-fit: contain; }
+.brand-logo-hint{ font-size: 0.72rem; color: var(--color-text-secondary); }
