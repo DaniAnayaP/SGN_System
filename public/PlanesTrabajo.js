@@ -322,7 +322,7 @@ function planActions(plan) {
     const can = plan.can || {};
     const closed = plan.status === 'closed';
     const live = isLive(plan);
-    const btn = (op, icon, labelKey, extra) => `<button type="button" class="btn btn-secondary wp-small${extra ? ` ${extra}` : ''}" data-wp-act="${op}" data-help-key="${{ pin: 'wpPin', history: 'wpHistory', comments: 'wpPlanComments', close: 'wpClose', reopen: 'wpClose', inactivate: 'wpInactivate', reactivate: 'wpInactivate', cancel: 'wpCancel', delete: 'wpDelete', 'edit-plan': 'wpEditPlan', 'save-template': 'wpSaveTemplate', share: 'wpShare', people: 'wpShare', leave: 'wpLeave' }[op] || 'wpPlanActions'}"><i class="bx ${icon}" aria-hidden="true"></i> ${esc(t(labelKey))}</button>`;
+    const btn = (op, icon, labelKey, extra) => `<button type="button" class="btn btn-secondary wp-small${extra ? ` ${extra}` : ''}" data-wp-act="${op}" data-help-key="${{ pin: 'wpPin', history: 'wpHistory', comments: 'wpPlanComments', close: 'wpClose', reopen: 'wpClose', inactivate: 'wpInactivate', reactivate: 'wpInactivate', cancel: 'wpCancel', delete: 'wpDelete', 'edit-plan': 'wpEditPlan', 'save-template': 'wpSaveTemplate', report: 'wpReport', share: 'wpShare', people: 'wpShare', leave: 'wpLeave' }[op] || 'wpPlanActions'}"><i class="bx ${icon}" aria-hidden="true"></i> ${esc(t(labelKey))}</button>`;
     const out = [btn('pin', plan.pinned ? 'bxs-star' : 'bx-star', plan.pinned ? 'main.wpUnpin' : 'main.wpPin')];
     if (can.edit && live) out.push(btn('edit-plan', 'bx-edit-alt', 'main.wpEditPlan'));
     out.push(can.share && live ? btn('share', 'bx-share-alt', 'main.wpShare') : btn('people', 'bx-group', 'main.wpPeople'));
@@ -334,6 +334,7 @@ function planActions(plan) {
     if (originOf(plan) !== 'team' && plan.itemCount > 0) out.push(btn('save-template', 'bx-copy-alt', 'main.wpSaveTemplate'));
     out.push(btn('comments', 'bx-message-rounded-dots', 'main.wpPlanComments'));
     out.push(btn('history', 'bx-history', 'main.wpHistory'));
+    if (plan.itemCount > 0) out.push(btn('report', 'bx-download', 'main.wpReportBtn'));
     if (can.leave) out.push(btn('leave', 'bx-log-out-circle', 'main.wpLeave'));
     return `<div class="wp-actions">${out.join('')}</div>`;
 }
@@ -867,6 +868,90 @@ function openPlanModal(planId) {
     });
 }
 
+// ---- descargar reporte (Daniel, 2026-11-19) ----------------------------------------------------------------------------------------------------------------
+// El archivo lo arma PlanReport.js con el plan ya abierto (más quién descarga y, si se pide, los comentarios, que se piden al servidor) y la ruta de exportar de siempre (/api/business/export/xlsx|pdf) lo vuelve Excel o PDF.
+// Quien ve el plan puede descargarlo; lo que baja es lo mismo que ya ve en pantalla.
+function saveFile(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+async function openReportModal(planId) {
+    const data = cache.get(planId);
+    const plan = data && data.plan;
+    if (!plan || !window.PlanReport) return;
+    const items = data.items || [];
+    let meId = null;
+    try { meId = ((await api('GET', `/${planId}/report-data`)).me || {}).id; } catch (err) { Dashboard.showToast(errText(err), 'error'); return; }
+    const counts = window.PlanReport.countByWhich(items, meId);
+    const lang = localStorage.getItem('lang') === 'en' ? 'en' : 'es';
+    const today = todayYmd();
+    const baseName = `${window.PlanReport.slug(plan.title)}_${today}`;
+    const whichRow = (key) => `<label class="wp-rep-opt"><input type="radio" name="wp-rp-which" value="${key}"${key === 'all' ? ' checked' : ''}${counts[key] ? '' : ' disabled'}><span>${esc(t(`main.wpRepWhich_${key}`, { n: counts[key] }))}</span></label>`;
+    const colChip = (key) => `<label class="wp-rep-chip"><input type="checkbox" name="wp-rp-col" value="${key}"${window.PlanReport.DEFAULT_COLUMNS.includes(key) ? ' checked' : ''}><span>${esc(t(`main.wpRepCol_${key}`))}</span></label>`;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal wp-rep" role="dialog" aria-modal="true" aria-labelledby="wp-rp-title" aria-label="${esc(t('main.wpRepTitle'))}" data-help-key="wpReport"><h3 id="wp-rp-title">${esc(t('main.wpRepTitle'))}</h3>
+        <p class="admin-hint">${esc(plan.title)} · ${esc(t(items.length === 1 ? 'main.wpRepItemsOne' : 'main.wpRepItems', { n: items.length }))}</p>
+        <fieldset class="wp-rep-set"><legend>${esc(t('main.wpRepFormat'))}</legend><div class="wp-rep-seg" role="radiogroup" aria-label="${esc(t('main.wpRepFormat'))}">
+            <label><input type="radio" name="wp-rp-format" value="xlsx" checked><span>${esc(t('main.wpRepFormatXlsx'))}</span></label>
+            <label><input type="radio" name="wp-rp-format" value="pdf"><span>${esc(t('main.wpRepFormatPdf'))}</span></label></div></fieldset>
+        <fieldset class="wp-rep-set" data-help-key="wpReportSheets"><legend>${esc(t('main.wpRepSheets'))}</legend>
+            <label class="wp-rep-opt"><input type="checkbox" checked disabled><span>${esc(t('main.wpRepSheetSummary'))}</span></label>
+            <label class="wp-rep-opt"><input type="checkbox" checked disabled><span>${esc(t('main.wpRepSheetActivities'))}</span></label>
+            <label class="wp-rep-opt"><input type="checkbox" id="wp-rp-comments"><span>${esc(t('main.wpRepSheetComments'))}</span></label></fieldset>
+        <fieldset class="wp-rep-set" data-help-key="wpReportWhich"><legend>${esc(t('main.wpRepWhich'))}</legend>${['all', 'open', 'done', 'mine'].map(whichRow).join('')}</fieldset>
+        <fieldset class="wp-rep-set" data-help-key="wpReportColumns"><legend>${esc(t('main.wpRepColumns'))}</legend><div class="wp-rep-chips">${window.PlanReport.COLUMNS.map(colChip).join('')}</div></fieldset>
+        <div class="admin-field"><span class="wp-rep-legend">${esc(t('main.wpRepFileName'))}</span><div class="wp-rep-fname" id="wp-rp-fname">${esc(baseName)}.xlsx</div></div>
+        <p class="admin-error" id="wp-rp-error" role="alert" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" data-wp-r="go"><i class="bx bx-download" aria-hidden="true"></i> ${esc(t('main.wpRepGo'))}</button><button type="button" class="btn btn-secondary" data-wp-r="cancel">${esc(t('main.wpCancel'))}</button></div></div>`;
+    document.body.appendChild(overlay);
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) close(); });
+    overlay.addEventListener('change', (event) => {
+        if (event.target.name === 'wp-rp-format') overlay.querySelector('#wp-rp-fname').textContent = `${baseName}.${event.target.value}`;
+    });
+    const go = async (btn) => {
+        const errorEl = overlay.querySelector('#wp-rp-error');
+        const fail = (message) => { errorEl.textContent = message; errorEl.hidden = false; btn.disabled = false; };
+        errorEl.hidden = true;
+        const format = overlay.querySelector('input[name="wp-rp-format"]:checked').value;
+        const which = overlay.querySelector('input[name="wp-rp-which"]:checked').value;
+        const wantComments = overlay.querySelector('#wp-rp-comments').checked;
+        const columns = [...overlay.querySelectorAll('input[name="wp-rp-col"]:checked')].map((input) => input.value);
+        if (!columns.length) { fail(t('main.wpRepNeedCol')); return; }
+        if (!counts[which]) { fail(t('main.wpRepNone')); return; }
+        btn.disabled = true;
+        try {
+            const comments = wantComments ? ((await api('GET', `/${planId}/report-data?comments=1`)).comments || []) : [];
+            const report = window.PlanReport.buildReport({ plan, items, options: { which, columns, comments: wantComments }, meId, comments, t, lang, today, weekLabel: weekText(plan.startDate, plan.endDate) });
+            const first = report.sections[0];
+            const body = { title: plan.title, filename: report.filename, header: report.header, columns: first.columns, rows: first.rows, sections: report.sections, wrap: true };
+            const res = await fetch(`/api/business/export/${format}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (!res.ok) throw new Error(`export ${format} failed`);
+            saveFile(await res.blob(), `${report.filename}.${format}`);
+            close();
+            Dashboard.showToast(t('main.wpRepDone'), 'success');
+        } catch (err) {
+            console.error('Planes de trabajo: el reporte no se pudo preparar', err);
+            fail(t('main.wpRepError'));
+        }
+    };
+    overlay.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-wp-r]');
+        if (!btn) return;
+        if (btn.dataset.wpR === 'cancel') close(); else if (btn.dataset.wpR === 'go') go(btn);
+    });
+    setTimeout(() => { const first = overlay.querySelector('input[name="wp-rp-format"]'); if (first) first.focus(); }, 0);
+}
+
 // ---- plantillas (pieza 3c) ------------------------------------------------------------------------------------------------------------------------------
 // Una plantilla es PRIVADA de quien la guarda y lleva solo los niveles y los nombres de los renglones (en su árbol): nada de responsables, fechas, estados ni notas. Se guarda desde un plan (menos los del equipo) y se usa en «Nuevo plan».
 function openSaveTemplateModal(planId) {
@@ -1164,6 +1249,7 @@ document.addEventListener('click', (event) => {
     else if (op === 'delete') deleteEmptyPlan(planId);
     else if (op === 'save-template') openSaveTemplateModal(planId);
     else if (op === 'history') Dashboard.openChangeHistory('work_plans', planId);
+    else if (op === 'report') openReportModal(planId);
     else if (op === 'comments') openPlanThread(planId);
     else if (op === 'share' || op === 'people') openShareModal(planId);
     else if (op === 'leave') leavePlan(planId);

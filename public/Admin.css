@@ -9899,3 +9899,20 @@ input[type="color"].cli-company{ opacity: 0.55; }
 .impl-thread{ margin-top: 0.4rem; max-width: 46rem; }
 .impl-thread .thr-list{ max-height: 18rem; }
 .impl-comments-unread{ color: var(--color-report-calc-text); font-weight: 700; }
+.wp-rep .wp-rep-set{ border: 0; margin: 0 0 0.9rem; padding: 0; min-width: 0; }
+.wp-rep legend, .wp-rep-legend{ display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-secondary); padding: 0; margin-bottom: 0.35rem; }
+.wp-rep-seg{ display: inline-flex; border: 1px solid var(--color-border); border-radius: 0.6rem; overflow: hidden; }
+.wp-rep-seg label{ position: relative; display: block; padding: 0.45rem 1rem; cursor: pointer; border-right: 1px solid var(--color-border); font-size: 0.82rem; font-weight: 600; }
+.wp-rep-seg label:last-child{ border-right: 0; }
+.wp-rep-seg input{ position: absolute; opacity: 0; pointer-events: none; }
+.wp-rep-seg label:has(input:checked){ background: var(--color-accent); color: var(--color-accent-text); }
+.wp-rep-seg label:has(input:focus-visible){ outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.wp-rep-opt{ display: flex; gap: 0.5rem; align-items: center; font-size: 0.84rem; padding: 0.15rem 0; }
+.wp-rep-opt input{ accent-color: var(--color-accent); }
+.wp-rep-chips{ display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.wp-rep-chip{ position: relative; display: inline-flex; align-items: center; border: 1px solid var(--color-border); border-radius: 1rem; padding: 0.15rem 0.7rem; font-size: 0.74rem; cursor: pointer; }
+.wp-rep-chip input{ position: absolute; opacity: 0; pointer-events: none; }
+.wp-rep-chip:has(input:checked){ background: color-mix(in srgb, var(--color-accent) 16%, transparent); border-color: transparent; font-weight: 700; }
+.wp-rep-chip:has(input:checked)::before{ content: "✓"; margin-right: 0.3rem; font-size: 0.7rem; }
+.wp-rep-chip:has(input:focus-visible){ outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.wp-rep-fname{ font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.78rem; border: 1px solid var(--color-border); border-radius: 0.5rem; padding: 0.4rem 0.6rem; overflow-wrap: anywhere; background: var(--color-bg); }

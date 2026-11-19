@@ -16430,6 +16430,25 @@ function getWorkPlanDetail(clientId, userId, forTestAccount, planId) {
         canEdit: can.addAny || snap.items.some((i) => i.can.edit || i.can.status || i.can.move || i.can.remove),
     };
 }
+// Para el reporte que se descarga de un plan: quién pregunta (el filtro «las mías») y, si se pide, TODOS los comentarios del plan y de sus renglones (los más viejos primero, hasta 5000) con su autor y su hora en UTC.
+// Solo lo que esa persona ya puede ver del plan (el mismo acceso que abrirlo); itemId es null en un comentario del plan completo.
+function getWorkPlanReportData(clientId, userId, planId, withComments) {
+    const found = findWorkPlanFor(clientId, userId, planId);
+    if (!found) return { error: 'WORK_PLAN_NOT_FOUND' };
+    const { row } = found;
+    const out = { planId: row.id, me: { id: userId }, comments: [] };
+    if (withComments) {
+        const itemIds = db.prepare('SELECT id FROM work_plan_items WHERE plan_id = ?').all(row.id).map((r) => r.id);
+        const marks = itemIds.map(() => '?').join(',');
+        const rows = db.prepare(`SELECT id, thread_type, thread_id, author_user_id, author_name, body, created_at FROM thread_comments WHERE client_id = ? AND ((thread_type = 'work-plan' AND thread_id = ?)${itemIds.length ? ` OR (thread_type = 'work-plan-item' AND thread_id IN (${marks}))` : ''}) ORDER BY id ASC LIMIT 5000`).all(clientId, row.id, ...itemIds);
+        const names = new Map();
+        out.comments = rows.map((r) => {
+            if (!names.has(r.author_user_id)) names.set(r.author_user_id, threadUserName(r.author_user_id, r.author_name));
+            return { id: r.id, itemId: r.thread_type === 'work-plan-item' ? r.thread_id : null, authorName: names.get(r.author_user_id), body: r.body, createdAt: r.created_at };
+        });
+    }
+    return out;
+}
 // Cambiar título, descripción, nombres de los niveles, estado ('active' | 'closed' = finalizar | 'inactive' | 'cancelled' + reason), fijado (pinned: la preferencia de cada quien) o el interruptor de la jefa directa (bossCanView: solo la dueña).
 // Estados: activo → finalizado (y de vuelta al reabrir); activo con renglones y SIN trabajo → inactivo (y de vuelta al reactivar); activo CON trabajo → cancelado (pide motivo, definitivo). Un plan que no está activo solo admite lo que lo
 // devuelve a activo (reabrir/reactivar) y fijar. Fijar no es un movimiento del plan: no cambia su fecha de cambio ni su último movimiento, y no queda en el historial.
@@ -20292,7 +20311,7 @@ module.exports = {
     getUserGrants,
     setUserGrants,
     getUserGrantChangeLog,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
     MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices,
     THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,
