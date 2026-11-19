@@ -15181,7 +15181,23 @@ db.exec(`
         updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_implementation_activities_impl ON implementation_activities (implementation_id);
+    -- Cronograma con actividades, pieza 2: las NOTAS de cada nivel (un acuerdo o un dato que no debe perderse; varias por nivel; quien la escribió la puede corregir).
+    CREATE TABLE IF NOT EXISTS implementation_notes (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        implementation_id   INTEGER NOT NULL REFERENCES implementations(id) ON DELETE CASCADE,
+        level_key           TEXT NOT NULL,
+        body                TEXT NOT NULL,
+        created_by          TEXT NOT NULL DEFAULT '',
+        created_by_user_id  INTEGER,
+        created_side        TEXT NOT NULL DEFAULT 'client',
+        edited              INTEGER NOT NULL DEFAULT 0,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_implementation_notes_impl ON implementation_notes (implementation_id);
 `);
+// Los COMENTARIOS de cada nivel son un hilo genérico (thread_comments) de este tipo, con thread_id = el id de implementation_levels de ESA compañía (pieza 2 del Cronograma).
+const IMPLEMENTATION_LEVEL_THREAD = 'implementation-level';
 // El cierre (pieza 3): lo confirman AMBOS, el cliente y SaaS, cuando todos los niveles están completos (o «No aplica»); la segunda confirmación finaliza la implementación. Un rechazo pide motivo y borra las confirmaciones.
 ['client_confirmed_at TEXT', "client_confirmed_by TEXT NOT NULL DEFAULT ''", 'saas_confirmed_at TEXT', "saas_confirmed_by TEXT NOT NULL DEFAULT ''", 'closed_at TEXT',
     "rejection_side TEXT NOT NULL DEFAULT ''", "rejection_note TEXT NOT NULL DEFAULT ''", "rejection_by TEXT NOT NULL DEFAULT ''", 'rejection_at TEXT',
@@ -15284,7 +15300,7 @@ function getImplementation(clientId) {
     const endDate = ends[ends.length - 1] || '';
     const startMonday = startDate ? mondayOfDateOnly(startDate) : null;
     const levels = rows.map((l) => ({
-        key: l.level_key, position: l.position, optional: !!l.optional, startDate: l.start_date, endDate: l.end_date, status: l.status, doneAt: l.done_at, doneBy: l.done_by,
+        levelId: l.id, key: l.level_key, position: l.position, optional: !!l.optional, startDate: l.start_date, endDate: l.end_date, status: l.status, doneAt: l.done_at, doneBy: l.done_by,
         state: l.status === 'done' ? 'done' : (l.status === 'na' ? 'na' : (firstPending && firstPending.id === l.id ? 'current' : 'locked')),
         late: l.status === 'pending' && !!l.end_date && l.end_date < today,
         fromWeek: startMonday && l.start_date ? weekIndex(startMonday, l.start_date) : null,
@@ -15306,6 +15322,18 @@ function getImplementation(clientId) {
         l.activitiesTotal = l.activities.length;
         l.activitiesDone = l.activities.filter((a) => a.status === 'done').length;
         l.activitiesPending = l.activitiesTotal - l.activitiesDone;
+    });
+    // las notas de cada nivel y cuántos comentarios lleva su conversación (el hilo mismo se pide por separado; no cuentan en el avance ni bloquean nada)
+    const noteRows = db.prepare('SELECT * FROM implementation_notes WHERE implementation_id = ? ORDER BY id').all(row.id);
+    const commentCounts = new Map();
+    try {
+        db.prepare(`SELECT thread_id AS id, COUNT(*) AS n FROM thread_comments WHERE client_id = ? AND thread_type = ? AND thread_id IN (${rows.map(() => '?').join(',')}) GROUP BY thread_id`)
+            .all(clientId, IMPLEMENTATION_LEVEL_THREAD, ...rows.map((l) => l.id)).forEach((c) => commentCounts.set(c.id, c.n));
+    } catch (err) { /* la tabla de los hilos todavía no existe: sin comentarios */ }
+    levels.forEach((l) => {
+        l.notes = noteRows.filter((n) => n.level_key === l.key).map(implementationNoteView);
+        l.notesTotal = l.notes.length;
+        l.commentsTotal = commentCounts.get(l.levelId) || 0;
     });
     const applicable = levels.filter((l) => l.status !== 'na');
     const currentLevel = levels.find((l) => l.state === 'current');
@@ -15662,6 +15690,82 @@ function removeImplementationActivity(clientId, activityId, byLabel) {
         db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
     })();
     return { before: impl, activityId: activity.id, levelKey: level.key, implementation: getImplementation(clientId) };
+}
+
+// --- Implementación Inicial · NOTAS de cada nivel (Cronograma con actividades, pieza 2) ---------------------------------------------------------------------------------------------------------
+// Una nota es un texto fijo del nivel (un acuerdo o un dato que no debe perderse), varias por nivel, con su autor y su fecha; quien la escribió la puede corregir (edited) o quitar. Mismas reglas de datos que las actividades (implementación
+// iniciada y no finalizada); quién puede hacer qué lo decide server.js (igual que con las actividades) y cada cambio queda en implementation_events. Los COMENTARIOS del nivel NO viven aquí: son el hilo 'implementation-level' (thread_comments).
+const IMPLEMENTATION_NOTE_MAX = 1000;
+function implementationNoteView(n) {
+    return { id: n.id, body: n.body, createdBy: n.created_by, createdAt: n.created_at, updatedAt: n.updated_at, createdSide: n.created_side, createdByUserId: n.created_by_user_id, edited: !!n.edited };
+}
+// El texto de una nota (varias líneas, sin caracteres de control): { value } o { error } (NOTE_REQUIRED = vacío o no es texto, NOTE_TOO_LONG = más de 1000 letras).
+function cleanImplementationNote(value) {
+    if (typeof value !== 'string') return { error: 'NOTE_REQUIRED' };
+    const text = workPlanText(value);
+    if (!text) return { error: 'NOTE_REQUIRED' };
+    if (workPlanLen(text) > IMPLEMENTATION_NOTE_MAX) return { error: 'NOTE_TOO_LONG' };
+    return { value: text };
+}
+const implementationNoteGist = (text) => Array.from(text.replace(/\s+/g, ' ')).slice(0, 100).join('');
+function addImplementationNote(clientId, levelKey, { body, byLabel, byUserId, side }) {
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
+    if (!impl.levels.some((l) => l.key === levelKey)) return { error: 'LEVEL' };
+    if (side !== 'client' && side !== 'saas') return { error: 'SIDE' };
+    const clean = cleanImplementationNote(body);
+    if (clean.error) return clean;
+    let id = 0;
+    db.transaction(() => {
+        id = Number(db.prepare('INSERT INTO implementation_notes (implementation_id, level_key, body, created_by, created_by_user_id, created_side) VALUES (?, ?, ?, ?, ?, ?)')
+            .run(impl.id, levelKey, clean.value, byLabel || '', byUserId == null ? null : byUserId, side).lastInsertRowid);
+        logImplementationEvent(impl.id, levelKey, 'note_added', implementationNoteGist(clean.value), byLabel);
+        db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
+    })();
+    return { before: impl, noteId: id, levelKey, implementation: getImplementation(clientId) };
+}
+// La nota (y su nivel) de ESA compañía: una de otra compañía o que no existe da null.
+function findImplementationNote(impl, noteId) {
+    for (const level of impl.levels) {
+        const note = level.notes.find((n) => n.id === noteId);
+        if (note) return { level, note };
+    }
+    return null;
+}
+// Corregir el texto de una nota. Sin cambios no registra nada (changed = false).
+function updateImplementationNote(clientId, noteId, body, byLabel) {
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
+    const found = findImplementationNote(impl, Number(noteId));
+    if (!found) return { error: 'NOTE_NOT_FOUND' };
+    const clean = cleanImplementationNote(body);
+    if (clean.error) return clean;
+    const { level, note } = found;
+    const changed = clean.value !== note.body;
+    if (changed) {
+        db.transaction(() => {
+            db.prepare("UPDATE implementation_notes SET body = ?, edited = 1, updated_at = datetime('now') WHERE id = ? AND implementation_id = ?").run(clean.value, note.id, impl.id);
+            logImplementationEvent(impl.id, level.key, 'note_edited', implementationNoteGist(clean.value), byLabel);
+            db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
+        })();
+    }
+    return { before: impl, noteId: note.id, levelKey: level.key, changed, implementation: changed ? getImplementation(clientId) : impl };
+}
+function removeImplementationNote(clientId, noteId, byLabel) {
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
+    const found = findImplementationNote(impl, Number(noteId));
+    if (!found) return { error: 'NOTE_NOT_FOUND' };
+    const { level, note } = found;
+    db.transaction(() => {
+        db.prepare('DELETE FROM implementation_notes WHERE id = ? AND implementation_id = ?').run(note.id, impl.id);
+        logImplementationEvent(impl.id, level.key, 'note_removed', implementationNoteGist(note.body), byLabel);
+        db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
+    })();
+    return { before: impl, noteId: note.id, levelKey: level.key, implementation: getImplementation(clientId) };
 }
 
 // --- Planes de trabajo (pieza 1: el plan PRIVADO de su dueño) ---------------------------------------------------------------------------------
@@ -20133,7 +20237,7 @@ module.exports = {
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
     LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask,
-    addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, addImplementationNote, updateImplementationNote, removeImplementationNote, findImplementationNote, logImplementationEvent, IMPLEMENTATION_LEVEL_THREAD, IMPLEMENTATION_NOTE_MAX, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,

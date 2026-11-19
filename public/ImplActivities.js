@@ -17,13 +17,22 @@ const shortDate = (ymd) => (ymd ? dayOf(ymd).toLocaleDateString(locale(), { day:
 // «2026-03-18 15:04:05» (UTC) → el día en la hora de quien lo ve.
 const stampDay = (at) => { const d = new Date(`${String(at).replace(' ', 'T')}Z`); return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' }); };
 
-// ctx = lo que pone cada página: { levelsBase, activitiesBase (rutas), getData() → { implementation, people }, onChange(json), rerender(), reload() }
+// ctx = lo que pone cada página: { levelsBase, activitiesBase, notesBase (rutas), threadOptions(level) (cómo se llega al hilo de comentarios de un nivel), getData() → { implementation, people }, onChange(json), rerender(), reload() }
 let ctx = null;
 // El formulario abierto (uno a la vez): { levelKey, id (null = actividad nueva), values, error, busy }
 let form = null;
-const configure = (options) => { ctx = options; };
-const isEditing = () => !!form;
-const closeForm = () => { form = null; };
+// Las notas y los comentarios de cada nivel (pieza 2): el formulario de nota abierto (uno a la vez: { levelKey, id (null = nueva), body, error, busy }) y los niveles con su hilo de comentarios abierto.
+// Cada hilo es un Threads.mount que vive en su propio contenedor: al volver a dibujar la pantalla ese contenedor se cambia de lugar (no se vuelve a montar), así no se pierde lo que se está escribiendo ni el lugar de la conversación.
+let noteForm = null;
+const openThreads = new Set();
+const threadHosts = new Map(); // levelKey → { host, controller }
+function destroyThreads(except) {
+    threadHosts.forEach((entry, key) => { if (!except || !except.has(key)) { try { entry.controller.destroy(); } catch (err) { /* ya no estaba */ } threadHosts.delete(key); } });
+}
+const configure = (options) => { destroyThreads(); openThreads.clear(); noteForm = null; ctx = options; };
+const threadDraft = () => [...threadHosts.values()].some(({ host }) => { const ta = host.querySelector('textarea'); return ta && (ta.value.trim() || document.activeElement === ta); });
+const isEditing = () => !!form || !!noteForm || threadDraft();
+const closeForm = () => { form = null; noteForm = null; };
 
 // ---- llamadas ------------------------------------------------------------------------------------------------------------------------------------------
 async function call(method, path, body) {
@@ -37,6 +46,9 @@ const request = (op, p) => ({
     update: () => call('PATCH', `${ctx.activitiesBase}/${p.id}`, p.fields),
     status: () => call('POST', `${ctx.activitiesBase}/${p.id}/status`, { status: p.status }),
     remove: () => call('DELETE', `${ctx.activitiesBase}/${p.id}`),
+    noteAdd: () => call('POST', `${ctx.levelsBase}/${encodeURIComponent(p.levelKey)}/notes`, { body: p.body }),
+    noteUpdate: () => call('PATCH', `${ctx.notesBase}/${p.id}`, { body: p.body }),
+    noteRemove: () => call('DELETE', `${ctx.notesBase}/${p.id}`),
 }[op])();
 // El texto de un error del servidor en el idioma de la pantalla (por su código).
 function errorText(err) {
@@ -46,9 +58,9 @@ function errorText(err) {
     return text !== key ? text : t('main.implActErr_default');
 }
 // Estos errores quieren decir que lo que se ve ya no es lo que hay: se vuelve a leer.
-const STALE_CODES = ['NOT_FOUND', 'CLOSED', 'FORBIDDEN', 'LOCKED', 'LEVEL_NA', 'ALREADY'];
+const STALE_CODES = ['NOT_FOUND', 'NOTE_NOT_FOUND', 'CLOSED', 'FORBIDDEN', 'LOCKED', 'LEVEL_NA', 'ALREADY'];
 function fail(err) {
-    if (err && err.body && STALE_CODES.includes(err.body.code)) { form = null; Promise.resolve(ctx.reload()).catch(() => {}); }
+    if (err && err.body && STALE_CODES.includes(err.body.code)) { form = null; noteForm = null; Promise.resolve(ctx.reload()).catch(() => {}); }
     Dashboard.showToast(errorText(err), 'error');
 }
 
@@ -64,10 +76,12 @@ const statusChip = (a) => `<span class="exp-chip exp-chip-${STATUS_TONE[a.status
 const outsideTag = (a) => (a.outsidePlan ? `<span class="impl-tag" title="${esc(t('main.implActOutside'))}">${esc(t('main.implActOutside'))}</span>` : '');
 // Los contadores del nivel: cuántas actividades lleva y, si hay pendientes, un aviso discreto.
 function counters(level) {
-    if (!level.activitiesTotal) return '';
-    const chips = [`<span class="impl-cnt">${esc(t('main.implActCount', { n: level.activitiesTotal }))}</span>`];
+    const chips = [];
+    if (level.activitiesTotal) chips.push(`<span class="impl-cnt">${esc(t('main.implActCount', { n: level.activitiesTotal }))}</span>`);
     if (level.activitiesPending) chips.push(`<span class="impl-cnt impl-cnt-hot">${esc(level.activitiesPending === 1 ? t('main.implActPendingOne') : t('main.implActPendingMany', { n: level.activitiesPending }))}</span>`);
-    return `<span class="impl-cnts" data-help-key="implActToggle">${chips.join('')}</span>`;
+    if (level.notesTotal) chips.push(`<span class="impl-cnt">${esc(t(level.notesTotal === 1 ? 'main.implNoteCountOne' : 'main.implNoteCount', { n: level.notesTotal }))}</span>`);
+    if (level.commentsTotal) chips.push(`<span class="impl-cnt">${esc(t(level.commentsTotal === 1 ? 'main.implCommentCountOne' : 'main.implCommentCount', { n: level.commentsTotal }))}</span>`);
+    return chips.length ? `<span class="impl-cnts" data-help-key="implActToggle">${chips.join('')}</span>` : '';
 }
 // Los iconos de lo que se puede hacer con una actividad (según los `actions` que manda el servidor).
 function actionButtons(a) {
@@ -117,6 +131,107 @@ function block(level) {
     const add = !open && level.can && level.can.add ? addButton(level) : '';
     const html = `${rows}${formFor(level)}${add}`;
     return html ? `<div class="impl-acts-block" data-help-key="implActRow"><h5 class="impl-acts-h">${esc(t('main.implActLabel'))}</h5>${html}</div>` : '';
+}
+
+// ---- notas y comentarios de un nivel (pieza 2) -----------------------------------------------------------------------------------------------------------
+// NOTAS: texto fijo del nivel para dejar un acuerdo o un dato que no debe perderse; quien la escribió la corrige (o la quita) y queda con su autor y su fecha. COMENTARIOS: la conversación del nivel (Threads.js), que no se edita ni se borra.
+const noteIconBtn = (op, id, icon, labelKey) => `<button type="button" class="admin-icon-btn impl-act-btn${op === 'remove' ? ' admin-icon-btn-danger' : ''}" data-impl-note="${op}" data-id="${id}" aria-label="${esc(t(labelKey))}" title="${esc(t(labelKey))}"><i class="bx ${icon}" aria-hidden="true"></i></button>`;
+function noteRow(n) {
+    const acts = n.actions || {};
+    const btns = [acts.edit ? noteIconBtn('edit', n.id, 'bx-edit-alt', 'main.implNoteEdit') : '', acts.remove ? noteIconBtn('remove', n.id, 'bx-trash', 'main.implNoteRemove') : ''].join('');
+    const meta = t('main.implNoteBy', { by: n.createdBy || '—', date: stampDay(n.createdAt) }) + (n.edited ? ` · ${t('main.implNoteEdited', { date: stampDay(n.updatedAt) })}` : '');
+    return `<div class="impl-note" data-impl-note-row="${n.id}"><p class="impl-note-body">${esc(n.body)}</p><div class="impl-note-meta"><span>${esc(meta)}</span>${btns ? `<span class="impl-act-btns" data-help-key="implNoteActions">${btns}</span>` : ''}</div></div>`;
+}
+function noteFormFor(level) {
+    if (!noteForm || noteForm.levelKey !== level.key) return '';
+    return `<form class="impl-form impl-note-form" data-impl-note-form="${esc(level.key)}" novalidate data-help-key="implNoteAdd">
+        <h4>${esc(noteForm.id ? t('main.implNoteFormEdit') : t('main.implNoteFormNew', { n: level.position }))}</h4>
+        <div class="admin-field"><label for="impl-nf-body">${esc(t('main.implNoteField'))}</label><textarea id="impl-nf-body" name="body" rows="3" maxlength="1000" required>${esc(noteForm.body)}</textarea></div>
+        <p class="admin-error impl-form-error" role="alert"${noteForm.error ? '' : ' hidden'}>${esc(noteForm.error)}</p>
+        <div class="admin-form-actions"><button type="submit" class="btn"${noteForm.busy ? ' disabled' : ''}>${esc(t('main.implActSave'))}</button><button type="button" class="btn btn-secondary" data-impl-note="cancel">${esc(t('main.implActCancel'))}</button></div>
+    </form>`;
+}
+function notesBlock(level) {
+    const notes = level.notes || [];
+    const open = noteForm && noteForm.levelKey === level.key;
+    const add = !open && level.can && level.can.add ? `<button type="button" class="impl-add" data-impl-note="add" data-level="${esc(level.key)}" data-help-key="implNoteAdd"><span class="impl-plus" aria-hidden="true">+</span>${esc(t('main.implNoteAdd'))}</button>` : '';
+    const html = `${notes.map(noteRow).join('')}${noteFormFor(level)}${add}`;
+    return html ? `<div class="impl-acts-block impl-notes-block" data-help-key="implNotes"><h5 class="impl-acts-h">${esc(t('main.implNoteLabel'))}</h5>${html}</div>` : '';
+}
+// El botón «Comentarios · N» abre o cierra la conversación del nivel; el hilo se monta en afterRender.
+function commentsBlock(level) {
+    const open = openThreads.has(level.key);
+    const n = level.commentsTotal || 0;
+    if (!n && !open && !(level.can && level.can.comment)) return '';
+    const label = t(n === 1 ? 'main.implCommentsToggleOne' : 'main.implCommentsToggle', { n });
+    return `<div class="impl-acts-block impl-comments-block"><h5 class="impl-acts-h">${esc(t('main.implCommentsLabel'))}</h5><button type="button" class="impl-add impl-comments-toggle" data-impl-comments="${esc(level.key)}" aria-expanded="${open}" data-help-key="implComments"><i class="bx bx-message-rounded-dots" aria-hidden="true"></i> ${esc(label)}</button>${open ? `<div class="impl-thread" data-impl-thread="${esc(level.key)}"></div>` : ''}</div>`;
+}
+// Se llama después de cada dibujo de la pantalla: monta los hilos abiertos en su lugar y suelta los que ya no se ven. La pantalla de SaaS pasa su ventana; la del cliente, su contenedor.
+function afterRender(rootEl) {
+    if (!ctx || !rootEl) return;
+    const keep = new Set();
+    openThreads.forEach((key) => {
+        const slot = rootEl.querySelector(`[data-impl-thread="${(window.CSS && CSS.escape) ? CSS.escape(key) : key}"]`);
+        if (!slot) return;
+        keep.add(key);
+        const existing = threadHosts.get(key);
+        if (existing) { slot.replaceWith(existing.host); return; }
+        const level = (((ctx.getData().implementation) || {}).levels || []).find((l) => l.key === key);
+        if (!level || !window.Threads) return;
+        const host = document.createElement('div');
+        host.className = 'impl-thread';
+        host.setAttribute('data-impl-thread', key);
+        slot.replaceWith(host);
+        const controller = window.Threads.mount(host, { mentions: false, comments: true, ...(ctx.threadOptions ? ctx.threadOptions(level) : {}),
+            onChange: (info) => { if (info && info.posted) { const l = (((ctx.getData().implementation) || {}).levels || []).find((x) => x.key === key); if (l) { l.commentsTotal = (l.commentsTotal || 0) + 1; ctx.rerender(); } } } });
+        threadHosts.set(key, { host, controller });
+    });
+    destroyThreads(keep);
+}
+function findNote(id) {
+    const impl = ctx.getData().implementation;
+    for (const level of (impl && impl.levels) || []) {
+        const note = (level.notes || []).find((n) => n.id === id);
+        if (note) return { level, note };
+    }
+    return null;
+}
+function openNoteForm(levelKey, note) {
+    noteForm = { levelKey, id: note ? note.id : null, body: note ? note.body : '', error: '', busy: false };
+    ctx.rerender();
+    setTimeout(() => { const el = document.getElementById('impl-nf-body'); if (el) el.focus(); }, 0);
+}
+async function removeNote(id) {
+    const found = findNote(id);
+    if (!found) return;
+    if (!(await Dashboard.confirm(t('main.implNoteRemoveConfirm')))) return;
+    try {
+        const json = await request('noteRemove', { id });
+        if (noteForm && noteForm.id === id) noteForm = null;
+        Dashboard.showToast(t('main.implNoteRemoved'), 'success');
+        ctx.onChange(json);
+    } catch (err) { fail(err); }
+}
+async function submitNote(rootEl, formEl) {
+    if (!noteForm || noteForm.busy) return;
+    noteForm.body = formEl.elements.body.value;
+    const showError = (text) => { noteForm.error = text; const el = formEl.querySelector('.impl-form-error'); if (el) { el.textContent = text; el.hidden = !text; } const submit = formEl.querySelector('button[type="submit"]'); if (submit) submit.disabled = false; };
+    if (!noteForm.body.trim()) { showError(t('main.implActErr_NOTE_REQUIRED')); return; }
+    noteForm.busy = true;
+    noteForm.error = '';
+    const submit = formEl.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = true;
+    try {
+        const json = noteForm.id ? await request('noteUpdate', { id: noteForm.id, body: noteForm.body }) : await request('noteAdd', { levelKey: noteForm.levelKey, body: noteForm.body });
+        noteForm = null;
+        Dashboard.showToast(t('main.implNoteSaved'), 'success');
+        ctx.onChange(json);
+    } catch (err) {
+        if (noteForm) noteForm.busy = false;
+        if (err && err.body && STALE_CODES.includes(err.body.code)) fail(err);
+        else if (noteForm) showError(errorText(err));
+        else Dashboard.showToast(errorText(err), 'error');
+    }
 }
 
 // ---- acciones ------------------------------------------------------------------------------------------------------------------------------------------
@@ -190,11 +305,28 @@ function bind(root) {
     if (root.dataset.implActBound) return;
     root.dataset.implActBound = '1';
     root.addEventListener('click', (event) => {
+        const noteBtn = event.target.closest('[data-impl-note]');
+        if (noteBtn && root.contains(noteBtn) && ctx) {
+            const op = noteBtn.dataset.implNote;
+            const id = Number(noteBtn.dataset.id);
+            if (op === 'add') { form = null; openNoteForm(noteBtn.dataset.level, null); }
+            else if (op === 'cancel') { noteForm = null; ctx.rerender(); }
+            else if (op === 'edit') { const found = findNote(id); if (found) { form = null; openNoteForm(found.level.key, found.note); } }
+            else if (op === 'remove') removeNote(id);
+            return;
+        }
+        const commentsBtn = event.target.closest('[data-impl-comments]');
+        if (commentsBtn && root.contains(commentsBtn) && ctx) {
+            const key = commentsBtn.dataset.implComments;
+            if (openThreads.has(key)) openThreads.delete(key); else openThreads.add(key);
+            ctx.rerender();
+            return;
+        }
         const btn = event.target.closest('[data-impl-act]');
         if (!btn || !root.contains(btn) || !ctx) return;
         const op = btn.dataset.implAct;
         const id = Number(btn.dataset.id);
-        if (op === 'add') openForm(btn.dataset.level, null);
+        if (op === 'add') { noteForm = null; openForm(btn.dataset.level, null); }
         else if (op === 'cancel') { form = null; ctx.rerender(); }
         else if (op === 'edit') { const found = findActivity(id); if (found) openForm(found.level.key, found.activity); }
         else if (op === 'status') changeStatus(id, btn.dataset.status);
@@ -202,10 +334,13 @@ function bind(root) {
     });
     root.addEventListener('input', (event) => {
         const input = event.target;
+        if (noteForm && input.name === 'body' && input.closest('[data-impl-note-form]')) { noteForm.body = input.value; return; }
         if (!form || !input.name || !input.closest('[data-impl-form]')) return;
         form.values[input.name] = input.value;
     });
     root.addEventListener('submit', (event) => {
+        const noteEl = event.target.closest('[data-impl-note-form]');
+        if (noteEl && ctx) { event.preventDefault(); submitNote(root, noteEl); return; }
         const formEl = event.target.closest('[data-impl-form]');
         if (!formEl || !ctx) return;
         event.preventDefault();
@@ -213,5 +348,5 @@ function bind(root) {
     });
 }
 
-window.ImplActivities = { configure, bind, isEditing, closeForm, formFor, block, counters, nameBlock, stateBlock, addButton, systemTag, dot, statusChip, datesText };
+window.ImplActivities = { configure, bind, isEditing, closeForm, formFor, block, counters, nameBlock, stateBlock, addButton, systemTag, dot, statusChip, datesText, notesBlock, commentsBlock, afterRender };
 })();

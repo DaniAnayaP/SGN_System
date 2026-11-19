@@ -61,6 +61,7 @@ const TABLES = {
     implementation_events: { action: WIPE, group: 'captures' },
     implementation_tasks: { action: WIPE, group: 'captures' },
     implementation_activities: { action: WIPE, group: 'captures' }, // las actividades que se agregan a cada nivel del Cronograma
+    implementation_notes: { action: WIPE, group: 'captures' }, // las notas de cada nivel del Cronograma (pieza 2; los comentarios son thread_comments)
     work_plans: { action: WIPE, group: 'captures' }, // Planes de trabajo: los planes privados de cada persona (2026-11-19)
     work_plan_items: { action: WIPE, group: 'captures' }, // y sus renglones (niveles, actividades y subactividades)
     work_plan_templates: { action: WIPE, group: 'captures' }, // Planes de trabajo › Plantillas: los moldes privados de cada persona (3c)

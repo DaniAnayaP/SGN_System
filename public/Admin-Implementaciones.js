@@ -245,7 +245,8 @@ async function openDetail(row) {
     // las actividades de cada nivel (agregar, cambiar, estado y quitar) las maneja ImplActivities; aquí solo se le dice a qué rutas llamar y qué hacer con la respuesta (el mismo detalle de GET /:clientId)
     ImplActivities.closeForm();
     ImplActivities.configure({
-        levelsBase: `${API}/${row.clientId}/levels`, activitiesBase: `${API}/${row.clientId}/activities`,
+        levelsBase: `${API}/${row.clientId}/levels`, activitiesBase: `${API}/${row.clientId}/activities`, notesBase: `${API}/${row.clientId}/notes`,
+        threadOptions: (level) => ({ commentsUrl: `${API}/${row.clientId}/levels/${level.key}/comments`, readUrl: `${API}/${row.clientId}/levels/${level.key}/comments/read` }),
         getData: () => detail,
         onChange: async (json) => { detail = json; draw(); await load().catch(() => {}); },
         rerender: () => draw(),
@@ -272,7 +273,7 @@ async function openDetail(row) {
             const chipText = training ? t(`main.implTrainState_${trainState}`) : t(`main.implTaskState_${task.status}`);
             const stats = training && task.stats ? `<small class="impl-subtask-stats">${esc(t('admin.saasImplTrainStats', { users: task.stats.users, sessions: task.stats.sessionsDone, trained: task.stats.trained }))}</small>` : '';
             return `<div class="impl-subtask"><span class="exp-chip exp-chip-${tone}">${esc(chipText)}</span><span class="impl-subtask-name">${esc(taskName(l, task))}${stats}</span><span class="impl-acts">${acts}</span></div>`;
-        }).join('')}</div>` : ''}${ImplActivities.block(l)}</td></tr>`;
+        }).join('')}</div>` : ''}${ImplActivities.block(l)}${ImplActivities.notesBlock(l)}${ImplActivities.commentsBlock(l)}</td></tr>`;
         // el cierre: lo confirman las dos partes con todos los niveles completos; la segunda confirmación finaliza la implementación
         const f = impl.finish;
         const sideName = (side) => t(side === 'client' ? 'main.implSideClient' : 'main.implSideSaas');
@@ -304,8 +305,8 @@ async function openDetail(row) {
             ].join('');
             const stateChip = `<span class="exp-chip exp-chip-${{ done: 'approved', current: 'negotiating', locked: 'cancelled', na: 'cancelled' }[l.state]}">${esc(t(`main.implState_${l.state}`))}</span>${l.late ? ` <span class="exp-chip exp-chip-pending">${esc(t('main.implState_late'))}</span>` : ''}`;
             // los renglones del sistema y las actividades agregadas se abren con el mismo botón (si el nivel tiene algo que mostrar o se le puede agregar)
-            const hasDetail = l.tasks.length > 0 || l.activities.length > 0 || !!(l.can && l.can.add);
-            const toggleText = [l.tasks.length ? `${t('admin.saasImplTasks')} (${l.tasksDone}/${l.tasksTotal})` : '', `${t('main.implActLabel')} (${l.activitiesTotal})`].filter(Boolean).join(' · ');
+            const hasDetail = l.tasks.length > 0 || l.activities.length > 0 || (l.notes || []).length > 0 || (l.commentsTotal || 0) > 0 || !!(l.can && (l.can.add || l.can.comment));
+            const toggleText = [l.tasks.length ? `${t('admin.saasImplTasks')} (${l.tasksDone}/${l.tasksTotal})` : '', `${t('main.implActLabel')} (${l.activitiesTotal})`, `${t('main.implNoteLabel')} (${l.notesTotal || 0})`, `${t('main.implCommentsLabel')} (${l.commentsTotal || 0})`].filter(Boolean).join(' · ');
             const toggle = hasDetail ? `<button type="button" class="impl-toggle" data-toggle="${l.key}" aria-expanded="${expanded.has(l.key)}">${expanded.has(l.key) ? '▾' : '▸'} ${esc(toggleText)}</button>` : '';
             return `<tr><td><b>${l.position}</b> · ${esc(levelName(l.key))}${ImplActivities.counters(l)}${toggle}</td>
                 <td><input type="date" data-date="start" data-lv="${l.key}" value="${esc(d.start)}" aria-label="${esc(t('admin.saasImplStartDate'))}"${canDates ? '' : ' disabled'}></td>
@@ -320,6 +321,7 @@ async function openDetail(row) {
             <p class="admin-error" id="impl-error" hidden></p>
             <div class="admin-form-actions">${canDates ? `<button type="button" class="btn" id="impl-save-dates">${esc(t('admin.saasImplSaveDates'))}</button>` : ''}<button type="button" class="btn btn-secondary" id="impl-x">${esc(t('admin.saasImplClose'))}</button></div>`;
         modal.$('#impl-x').addEventListener('click', modal.close);
+        ImplActivities.afterRender(modal.overlay);
     };
     const reload = async () => { detail = await call('GET', `${API}/${row.clientId}`); draw(); };
     const guard = async (fn) => {

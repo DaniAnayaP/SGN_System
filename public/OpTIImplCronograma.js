@@ -29,7 +29,7 @@ const readOpen = () => { try { const saved = JSON.parse(localStorage.getItem(OPE
 const saveOpen = (map) => { try { localStorage.setItem(OPEN_STORAGE_KEY, JSON.stringify(map)); } catch (err) { /* sin almacenamiento: se queda solo en esta visita */ } };
 const openMap = readOpen();
 // un nivel con algo que mostrar: pasos del sistema, actividades o poder agregar una
-const hasDetail = (l) => l.tasks.length > 0 || l.activities.length > 0 || !!(l.can && l.can.add);
+const hasDetail = (l) => l.tasks.length > 0 || l.activities.length > 0 || (l.notes || []).length > 0 || (l.commentsTotal || 0) > 0 || !!(l.can && (l.can.add || l.can.comment));
 const isOpen = (l) => hasDetail(l) && (Object.prototype.hasOwnProperty.call(openMap, l.key) ? !!openMap[l.key] : l.state === 'current');
 const taskName = (levelKey, task) => { if (task.labelKey) return t(task.labelKey); const name = t(`main.implTask_${levelKey}_${task.key}`); return name.startsWith('main.') ? task.key : name; };
 
@@ -114,6 +114,9 @@ function detailRows(l, weeks, now) {
     const form = ImplActivities.formFor(l);
     if (form) html += `<div class="impl-detail-row"><div class="impl-form-wrap">${form}</div></div>`;
     else if (l.can && l.can.add) html += `<div class="impl-detail-row"><div class="impl-add-wrap">${ImplActivities.addButton(l)}</div></div>`;
+    // las notas y los comentarios del nivel (pieza 2)
+    const extra = `${ImplActivities.notesBlock(l)}${ImplActivities.commentsBlock(l)}`;
+    if (extra) html += `<div class="impl-detail-row"><div class="impl-notes-wrap">${extra}</div></div>`;
     return html;
 }
 // Sin implementación iniciada: los niveles de la plantilla en gris («Sin iniciar»), sin fechas, barras ni flecha, y sin poder agregar nada hasta que el implementador la inicie.
@@ -165,10 +168,12 @@ function render() {
         <div class="impl-frame" data-help-key="implGantt">${gantt(impl)}</div>${finishPanel(impl)}`;
     const framed = root.querySelector('.impl-frame');
     if (framed && scrolled) framed.scrollLeft = scrolled;
+    ImplActivities.afterRender(root);
 }
 // Las actividades de cada nivel (agregar, cambiar, estado y quitar) las maneja ImplActivities; aquí solo se le dice a qué rutas llamar y qué hacer con la respuesta (la misma forma que GET /api/business/implementation).
 ImplActivities.configure({
-    levelsBase: `${API}/levels`, activitiesBase: `${API}/activities`,
+    levelsBase: `${API}/levels`, activitiesBase: `${API}/activities`, notesBase: `${API}/notes`,
+    threadOptions: (level) => ({ type: 'implementation-level', id: level.levelId }),
     getData: () => state,
     onChange: (json) => { state = json; $('impl-error').hidden = true; render(); },
     rerender: () => { if (state) render(); },

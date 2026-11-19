@@ -584,7 +584,7 @@ const {
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
     LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask,
-    addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, addImplementationNote, updateImplementationNote, removeImplementationNote, findImplementationNote, logImplementationEvent, IMPLEMENTATION_LEVEL_THREAD, IMPLEMENTATION_NOTE_MAX, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,
@@ -1680,7 +1680,9 @@ const IMPL_ERRORS = {
     DATES_PAIR: [400, 'Cada nivel lleva sus dos fechas, inicio y fin, o ninguna.'], DATE: [400, 'Una fecha no es válida.'], DATES_ORDER: [400, 'El fin de un nivel no puede ir antes de su inicio.'],
     // actividades de cada nivel
     NOT_FOUND: [404, 'Esa actividad no existe.'], TITLE: [400, 'Escribe la actividad (hasta 120 letras).'], RESPONSIBLE: [400, 'El responsable lleva hasta 80 letras.'], DATES: [400, 'Pon las dos fechas, inicio y fin, o ninguna.'],
-    RANGE: [400, 'El fin no puede ir antes del inicio.'], LEVEL_NA: [409, 'Ese nivel quedó «No aplica»: ya no se le agregan actividades.'],
+    RANGE: [400, 'El fin no puede ir antes del inicio.'], LEVEL_NA: [409, 'Ese nivel quedó «No aplica»: ya no se le agregan actividades, notas ni comentarios.'],
+    // notas de cada nivel
+    NOTE_REQUIRED: [400, 'Escribe la nota.'], NOTE_TOO_LONG: [400, `La nota no puede pasar de ${IMPLEMENTATION_NOTE_MAX} letras.`], NOTE_NOT_FOUND: [404, 'Esa nota no existe.'],
 };
 const implFail = (res, result) => { const [status, message] = IMPL_ERRORS[result.error] || [400, 'No se pudo hacer.']; return res.status(status).json({ message, code: result.error, key: result.key }); };
 const saasImplHasScreen = (req) => !!req.user.isSaasSuperAdmin || getSaasUserGrants(req.user.sub).some((g) => g.itemId === SAAS_IMPL_ITEM);
@@ -1754,8 +1756,18 @@ function implDecorateActivities(impl, who) {
     const open = impl.status === 'active';
     impl.levels.forEach((l) => {
         l.can = { add: open && who.canAdd && implActivityMayAddAt(who, l) };
+        // comentar en un nivel y agregar notas siguen la misma regla que agregar actividades (pieza 2 del Cronograma)
+        l.can.comment = l.can.add;
         l.activities.forEach((a) => { a.actions = { edit: open && implActivityRight(who, 'edit', a), remove: open && implActivityRight(who, 'edit', a), status: open && implActivityRight(who, 'status', a) }; });
+        l.notes.forEach((n) => { const mayEdit = open && implNoteRight(who, n); n.actions = { edit: mayEdit, remove: mayEdit }; });
     });
+}
+// Editar o quitar una NOTA: igual que editar una actividad (SaaS cualquiera; el administrador del cliente las que se escribieron desde el cliente; quien solo tiene la hoja, las que él escribió).
+function implNoteRight(who, note) {
+    if (!who.canAdd) return false;
+    if (who.side === 'saas') return true;
+    const mine = note.createdSide === 'client' && note.createdByUserId === who.userId;
+    return note.createdSide === 'client' && (who.isAdmin || mine);
 }
 const implActivityLabel = (impl, levelKey, a) => `${implLevelEs(impl, levelKey)} › ${a.title}`;
 const implActivityEs = (impl, levelKey, a) => { const bits = [a.responsible, a.startDate ? `${a.startDate} → ${a.endDate}` : ''].filter(Boolean); return `${implActivityLabel(impl, levelKey, a)}${bits.length ? ` (${bits.join(' · ')})` : ''}`; };
@@ -1803,6 +1815,41 @@ function implActivityRun(req, res, clientId, who, op, params, respond) {
     }
     return res.json({ ...respond(), activityId: found.activity.id });
 }
+// Una operación sobre las NOTAS de una compañía (add | update | remove), igual que implActivityRun: el cliente y SaaS usan la misma rutina y cada cambio queda en el historial de SaaS (implLog) y en los eventos.
+function implNoteRun(req, res, clientId, who, op, params, respond) {
+    const by = changedByLabel(req);
+    const impl = getImplementation(clientId);
+    if (!impl) return implFail(res, { error: 'NOT_STARTED' });
+    const forbidden = () => res.status(403).json({ message: 'No tienes permiso para hacer esto.', code: 'FORBIDDEN' });
+    if (op === 'add') {
+        const level = impl.levels.find((l) => l.key === params.levelKey);
+        if (!level) return implFail(res, { error: 'LEVEL' });
+        if (!who.canAdd) return forbidden();
+        if (impl.status !== 'active') return implFail(res, { error: 'CLOSED' });
+        if (level.state === 'na') return implFail(res, { error: 'LEVEL_NA' });
+        if (!implActivityMayAddAt(who, level)) return implFail(res, { error: 'LOCKED' });
+        const result = addImplementationNote(clientId, params.levelKey, { body: params.body, byLabel: by, byUserId: req.user.sub, side: who.side });
+        if (result.error) return implFail(res, result);
+        implLog(req, clientId, 'update', 'main.implHistNote', '', `${implLevelEs(result.implementation, params.levelKey)}: ${implNoteEs(params.body)}`);
+        return res.status(201).json({ ...respond(), noteId: result.noteId });
+    }
+    const found = findImplementationNote(impl, params.id);
+    if (!found) return implFail(res, { error: 'NOTE_NOT_FOUND' });
+    if (!implNoteRight(who, found.note)) return forbidden();
+    const label = implLevelEs(impl, found.level.key);
+    if (op === 'update') {
+        const result = updateImplementationNote(clientId, params.id, params.body, by);
+        if (result.error) return implFail(res, result);
+        if (result.changed) implLog(req, clientId, 'update', 'main.implHistNote', `${label}: ${implNoteEs(found.note.body)}`, `${label}: ${implNoteEs(params.body)}`);
+    } else {
+        const result = removeImplementationNote(clientId, params.id, by);
+        if (result.error) return implFail(res, result);
+        implLog(req, clientId, 'update', 'main.implHistNote', `${label}: ${implNoteEs(found.note.body)}`, '');
+    }
+    return res.json({ ...respond(), noteId: found.note.id });
+}
+const implNoteEs = (body) => { const text = String(body == null ? '' : body).replace(/\s+/g, ' ').trim(); return text.length > 160 ? `${text.slice(0, 160)}…` : text; };
+
 // Avisos de la campana: a la OTRA parte cuando una confirma o rechaza, y a las dos cuando se finaliza.
 function implNotify(req, clientId, event, side, note) {
     try {
@@ -1884,6 +1931,14 @@ app.post('/api/business/implementation/levels/:key/activities', requireAuth, (re
 app.patch('/api/business/implementation/activities/:id', requireAuth, (req, res) => implClientActivity(req, res, 'update', { id: Number(req.params.id), fields: implActivityFields(req.body, IMPL_ACTIVITY_KEYS) }));
 app.post('/api/business/implementation/activities/:id/status', requireAuth, (req, res) => implClientActivity(req, res, 'status', { id: Number(req.params.id), status: (req.body || {}).status }));
 app.delete('/api/business/implementation/activities/:id', requireAuth, (req, res) => implClientActivity(req, res, 'remove', { id: Number(req.params.id) }));
+// Notas de cada nivel (lado del cliente, pieza 2 del Cronograma): mismas reglas que las actividades (implNoteRun / implNoteRight). Los comentarios del nivel van por los hilos genéricos (tipo 'implementation-level', ver THREAD_TYPES).
+function implClientNote(req, res, op, params) {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    return implNoteRun(req, res, req.user.clientId, implActivityWho(req), op, params, () => implClientPayload(req));
+}
+app.post('/api/business/implementation/levels/:key/notes', requireAuth, (req, res) => implClientNote(req, res, 'add', { levelKey: String(req.params.key), body: (req.body || {}).body }));
+app.patch('/api/business/implementation/notes/:id', requireAuth, (req, res) => implClientNote(req, res, 'update', { id: Number(req.params.id), body: (req.body || {}).body }));
+app.delete('/api/business/implementation/notes/:id', requireAuth, (req, res) => implClientNote(req, res, 'remove', { id: Number(req.params.id) }));
 // Nivel 1 «Contratado»: lo contratado de la compañía contra lo que ya usa, y los permisos para dibujar su árbol de accesos contratado (solo lectura). Cualquier usuario de la compañía con la pantalla lo consulta.
 app.get('/api/business/implementation/contracted', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -2031,12 +2086,26 @@ app.delete('/api/business/work-plans/:id/items/:itemId', requireAuth, (req, res)
 // Un hilo es (tipo, id). Cada tipo se registra con UNA entrada en THREAD_TYPES: { guard?, notFound?, resolve(req, id) }. `guard` es la guarda de la pantalla dueña del tipo (responde ella misma); `resolve` devuelve null (no existe o no tiene acceso: 404) o
 // { label (título para mostrar), canRead, canPost, postError (código HTTP-4xx propio de la pantalla cuando no se puede comentar ahora), participants: [{id, name}] (las personas mencionables = las que hoy tienen acceso, de la misma compañía), canMention, planId? }.
 // Los comentarios son inmutables y no se borran: no hay PUT, PATCH ni DELETE. El historial de cambios de la pantalla NO registra comentarios (el hilo es su propio registro).
-const THREAD_HTTP = { THREAD_TYPE_INVALID: 404, THREAD_NOT_FOUND: 404, THREAD_BODY_REQUIRED: 400, THREAD_BODY_TOO_LONG: 400, THREAD_MENTION_INVALID: 400, THREAD_LIMIT: 409 };
+const THREAD_HTTP = { THREAD_TYPE_INVALID: 404, THREAD_NOT_FOUND: 404, THREAD_BODY_REQUIRED: 400, THREAD_BODY_TOO_LONG: 400, THREAD_MENTION_INVALID: 400, THREAD_LIMIT: 409, IMPL_CLOSED: 409, IMPL_FORBIDDEN: 403, IMPL_LEVEL_NA: 409, IMPL_LOCKED: 409 };
 const THREAD_MESSAGES = {
     THREAD_TYPE_INVALID: 'Ese tipo de conversación no existe.', THREAD_NOT_FOUND: 'Esa conversación no existe.', THREAD_BODY_REQUIRED: 'Escribe el comentario.',
     THREAD_BODY_TOO_LONG: `El comentario no puede pasar de ${THREAD_LIMITS.body} letras.`, THREAD_MENTION_INVALID: `Solo se puede mencionar, sin repetir y hasta ${THREAD_LIMITS.mentions} personas, a quienes hoy tienen acceso a esto.`,
     THREAD_LIMIT: (r) => `Esta conversación llegó al máximo de ${(r && r.limit) || THREAD_LIMITS.commentsPerThread} mensajes.`,
+    IMPL_CLOSED: 'La implementación ya está finalizada: solo se pueden leer los comentarios.', IMPL_FORBIDDEN: 'No tienes permiso para comentar en la implementación.',
+    IMPL_LEVEL_NA: 'Ese nivel quedó «No aplica»: ya no se le agregan comentarios.', IMPL_LOCKED: 'Ese nivel todavía no se abre: antes hay que completar el anterior.',
 };
+// Los comentarios de un NIVEL de la Implementación Inicial (pieza 2 del Cronograma): se leen cuando se ve el Cronograma y se escriben con la misma regla de agregar actividades (l.can.add): implementación activa, quien tiene la hoja de agregar (o el implementador
+// de SaaS) y un nivel que ya se abrió y no quedó «No aplica». Sin menciones. postError = por qué no se puede comentar ahora. afterPost deja el comentario como evento de la implementación (para su historial).
+function implLevelThreadSubject(impl, level, who) {
+    const open = impl.status === 'active';
+    const canPost = open && who.canAdd && implActivityMayAddAt(who, level);
+    let postError = null;
+    if (!canPost) postError = !open ? 'IMPL_CLOSED' : (!who.canAdd ? 'IMPL_FORBIDDEN' : (level.state === 'na' ? 'IMPL_LEVEL_NA' : 'IMPL_LOCKED'));
+    return {
+        label: implLevelEs(impl, level.key), canRead: true, canPost, postError, participants: [], canMention: false,
+        afterPost: (comment, byLabel) => logImplementationEvent(impl.id, level.key, 'comment_added', String((comment && comment.body) || '').replace(/\s+/g, ' ').trim().slice(0, 100), byLabel),
+    };
+}
 function threadFail(res, result) {
     const code = result.error;
     if (THREAD_HTTP[code]) { const raw = THREAD_MESSAGES[code]; const message = typeof raw === 'function' ? raw(result) : raw; return res.status(THREAD_HTTP[code]).json({ error: message, message, code }); }
@@ -2058,6 +2127,8 @@ function messagesGate(req, res) {
     return false;
 }
 const THREAD_TYPES = {
+    // thread_id = id del nivel (implementation_levels) de la implementación de la compañía de quien pregunta
+    'implementation-level': { guard: (req, res) => { if (req.user.clientId) return true; threadFail(res, { error: 'THREAD_NOT_FOUND' }); return false; }, notFound: 'THREAD_NOT_FOUND', resolve: (req, id) => implClientLevelThread(req, id) },
     // thread_id = id de la conversación; solo la ven sus dos personas
     chat: { guard: messagesGate, notFound: 'THREAD_NOT_FOUND', resolve: (req, id) => resolveChatThread(req.user.clientId, req.user.sub, id) },
     // thread_id = id del renglón
@@ -2065,6 +2136,16 @@ const THREAD_TYPES = {
     // thread_id = id del plan
     'work-plan': { guard: workPlanGate, notFound: 'WORK_PLAN_NOT_FOUND', resolve: (req, id) => resolveWorkPlanThread(req.user.clientId, req.user.sub, 'work-plan', id) },
 };
+function implClientLevelThread(req, levelId) {
+    const impl = getImplementation(req.user.clientId);
+    const level = impl ? impl.levels.find((l) => l.levelId === levelId) : null;
+    if (!level) return null;
+    const subject = implLevelThreadSubject(impl, level, implActivityWho(req));
+    const afterPost = subject.afterPost;
+    // la ruta genérica llama afterPost(comentario): aquí ya se sabe quién comenta
+    subject.afterPost = (comment) => afterPost(comment, changedByLabel(req));
+    return subject;
+}
 // El tipo, la guarda de su pantalla y el hilo visto por esta persona; si algo falla responde y devuelve null.
 function threadContext(req, res) {
     const def = Object.prototype.hasOwnProperty.call(THREAD_TYPES, req.params.type) ? THREAD_TYPES[req.params.type] : null;
@@ -2089,7 +2170,7 @@ app.post('/api/business/threads/:type/:id/comments', requireAuth, (req, res) => 
     const result = addThreadComment(req.user.clientId, req.user.sub, ctx.type, ctx.id, workPlanPick(req.body, ['body', 'mentions']), (ctx.subject.participants || []).map((p) => p.id), { maxComments: ctx.subject.maxComments });
     if (result.error) return threadFail(res, result);
     if (ctx.subject.planId) touchWorkPlan(ctx.subject.planId); // comentar es un movimiento del plan: sube en «último movimiento»
-    if (typeof ctx.subject.afterPost === 'function') ctx.subject.afterPost(); // lo propio de cada tipo (en los chats, last_message_at)
+    if (typeof ctx.subject.afterPost === 'function') ctx.subject.afterPost(result.comment); // lo propio de cada tipo (en los chats, last_message_at; en los niveles de la implementación, el evento del comentario)
     res.set('Cache-Control', 'no-store');
     res.status(201).json(result);
 });
@@ -2194,6 +2275,49 @@ app.post('/api/admin/implementations/:clientId/levels/:key/activities', requireA
 app.patch('/api/admin/implementations/:clientId/activities/:id', requireAuth, requireAdmin, (req, res) => implSaasActivity(req, res, 'update', { id: Number(req.params.id), fields: implActivityFields(req.body, IMPL_ACTIVITY_KEYS) }));
 app.post('/api/admin/implementations/:clientId/activities/:id/status', requireAuth, requireAdmin, (req, res) => implSaasActivity(req, res, 'status', { id: Number(req.params.id), status: (req.body || {}).status }));
 app.delete('/api/admin/implementations/:clientId/activities/:id', requireAuth, requireAdmin, (req, res) => implSaasActivity(req, res, 'remove', { id: Number(req.params.id) }));
+// Notas de cada nivel (lado de SaaS): la misma hoja «Marcar nivel y renglones» (mark).
+function implSaasNote(req, res, op, params) {
+    const client = implGate(req, res, 'mark');
+    if (!client) return;
+    return implNoteRun(req, res, client.id, { side: 'saas', canAdd: true, isAdmin: false, userId: req.user.sub }, op, params, () => saasImplDetail(req, client.id));
+}
+app.post('/api/admin/implementations/:clientId/levels/:key/notes', requireAuth, requireAdmin, (req, res) => implSaasNote(req, res, 'add', { levelKey: String(req.params.key), body: (req.body || {}).body }));
+app.patch('/api/admin/implementations/:clientId/notes/:id', requireAuth, requireAdmin, (req, res) => implSaasNote(req, res, 'update', { id: Number(req.params.id), body: (req.body || {}).body }));
+app.delete('/api/admin/implementations/:clientId/notes/:id', requireAuth, requireAdmin, (req, res) => implSaasNote(req, res, 'remove', { id: Number(req.params.id) }));
+// Comentarios de cada nivel (lado de SaaS): el MISMO hilo que ve el cliente (thread_comments, tipo 'implementation-level', thread_id = id del nivel de esa compañía), con la misma forma de respuesta que las rutas genéricas de hilos.
+// Leer: quien ve la pantalla Implementaciones; escribir: la hoja «Marcar nivel y renglones» (mark) en cualquier nivel menos «No aplica» y con la implementación activa. Sin menciones.
+function implSaasThread(req, res, needWrite) {
+    const client = implGate(req, res, needWrite ? 'mark' : undefined);
+    if (!client) return null;
+    const impl = getImplementation(client.id);
+    if (!impl) { implFail(res, { error: 'NOT_STARTED' }); return null; }
+    const level = impl.levels.find((l) => l.key === String(req.params.key));
+    if (!level) { implFail(res, { error: 'LEVEL' }); return null; }
+    return { client, impl, level, subject: implLevelThreadSubject(impl, level, { side: 'saas', canAdd: saasImplCan(req, 'mark'), isAdmin: false, userId: req.user.sub }) };
+}
+app.get('/api/admin/implementations/:clientId/levels/:key/comments', requireAuth, requireAdmin, (req, res) => {
+    const ctx = implSaasThread(req, res, false);
+    if (!ctx) return;
+    const listed = listThreadComments(ctx.client.id, req.user.sub, IMPLEMENTATION_LEVEL_THREAD, ctx.level.levelId, { after: req.query.after, limit: req.query.limit });
+    res.set('Cache-Control', 'no-store');
+    res.json({ ...listed, canPost: !!ctx.subject.canPost, people: [], label: ctx.subject.label });
+});
+app.post('/api/admin/implementations/:clientId/levels/:key/comments/read', requireAuth, requireAdmin, (req, res) => {
+    const ctx = implSaasThread(req, res, false);
+    if (!ctx) return;
+    res.set('Cache-Control', 'no-store');
+    res.json(markThreadRead(ctx.client.id, req.user.sub, IMPLEMENTATION_LEVEL_THREAD, ctx.level.levelId));
+});
+app.post('/api/admin/implementations/:clientId/levels/:key/comments', requireAuth, requireAdmin, (req, res) => {
+    const ctx = implSaasThread(req, res, true);
+    if (!ctx) return;
+    if (!ctx.subject.canPost) return threadFail(res, { error: ctx.subject.postError || 'THREAD_NOT_FOUND' });
+    const result = addThreadComment(ctx.client.id, req.user.sub, IMPLEMENTATION_LEVEL_THREAD, ctx.level.levelId, workPlanPick(req.body, ['body']), [], {});
+    if (result.error) return threadFail(res, result);
+    ctx.subject.afterPost(result.comment, changedByLabel(req));
+    res.set('Cache-Control', 'no-store');
+    res.status(201).json(result);
+});
 // Marcar un renglón de un nivel (listo, «No aplica» o reabrirlo): mismo botón «Marcar nivel y renglones».
 app.post('/api/admin/implementations/:clientId/levels/:key/tasks/:task/:action', requireAuth, requireAdmin, (req, res) => {
     const client = implGate(req, res, 'mark');

@@ -9887,3 +9887,14 @@ input[type="color"].cli-company{ opacity: 0.55; }
 .wp-tpl-input{ flex: 1 1 auto; min-width: 0; padding: 0.35rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-surface); color: var(--color-text-primary); font-family: inherit; font-size: 0.82rem; }
 .wp-lvl-row input:disabled{ opacity: 0.65; cursor: not-allowed; }
 @media (max-width: 640px){ .wp-tpl-row{ flex-wrap: wrap; } }
+
+/* Cronograma de Implementación, pieza 2: notas y comentarios de cada nivel */
+.impl-notes-wrap{ display: flex; flex-direction: column; gap: 0.6rem; width: 100%; }
+.impl-notes-block, .impl-comments-block{ display: flex; flex-direction: column; gap: 0.4rem; }
+.impl-note{ padding: 0.5rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); color: var(--color-text-primary); }
+.impl-note-body{ margin: 0 0 0.3rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.82rem; }
+.impl-note-meta{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; font-size: 0.7rem; color: var(--color-text-secondary); }
+.impl-note-form textarea{ width: 100%; min-height: 4.5rem; resize: vertical; }
+.impl-comments-toggle .bx{ font-size: 1rem; }
+.impl-thread{ margin-top: 0.4rem; max-width: 46rem; }
+.impl-thread .thr-list{ max-height: 18rem; }

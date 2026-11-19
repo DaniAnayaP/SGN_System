@@ -23,7 +23,7 @@ const MAX_BODY = 2000;
 const POLL_MS = 15000;
 
 async function api(method, path, body) {
-    const res = await fetch(`${BASE}${path}`, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const res = await fetch(String(path).startsWith('/api/') ? path : `${BASE}${path}`, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
     const out = await res.json().catch(() => ({}));
     if (!res.ok) { const err = new Error(out.error || out.message || 'failed'); err.body = out; err.status = res.status; throw err; }
     return out;
@@ -51,6 +51,11 @@ function mount(container, options) {
     const type = options.type;
     const id = options.id;
     const path = `/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
+    // otras pantallas pueden tener sus propias rutas (el Cronograma de SaaS): commentsUrl y readUrl completas; sin ellas, las de siempre
+    const commentsUrl = options.commentsUrl || `${path}/comments`;
+    const readUrl = options.readUrl || `${path}/read`;
+    // sin menciones y como COMENTARIOS (no como chat): el texto dice «comentario» (options.comments)
+    const chatWording = options.mentions === false && options.comments !== true;
     let comments = [];
     let state = { loaded: false, error: '', canPost: false, people: [], label: '', lastReadId: 0, hasMore: false, busy: false };
     let unreadFrom = 0; // id del primer comentario sin leer al abrir (para la línea «Sin leer»); 0 = ninguno
@@ -68,7 +73,7 @@ function mount(container, options) {
     function renderList() {
         if (!state.loaded) { listEl.innerHTML = `<p class="thr-note">${esc(t('main.thrLoading'))}</p>`; return; }
         if (state.error) { listEl.innerHTML = `<p class="thr-note thr-error">${esc(state.error)}</p>`; return; }
-        if (!comments.length) { listEl.innerHTML = `<p class="thr-note">${esc(t(options.mentions === false ? 'main.thrChatEmpty' : 'main.thrEmpty'))}</p>`; return; }
+        if (!comments.length) { listEl.innerHTML = `<p class="thr-note">${esc(t(chatWording ? 'main.thrChatEmpty' : 'main.thrEmpty'))}</p>`; return; }
         let html = '';
         comments.forEach((c) => {
             if (unreadFrom && c.id === unreadFrom) html += `<div class="thr-unread"><span>${esc(t('main.thrUnread'))}</span></div>`;
@@ -86,7 +91,7 @@ function mount(container, options) {
         const keep = composeEl.querySelector('textarea');
         if (keep) return; // ya está dibujado: no se pierde lo que se estaba escribiendo
         composeEl.innerHTML = `<div class="thr-sug" hidden role="listbox" aria-label="${esc(t('main.thrMentionHint'))}"></div>
-            <textarea class="thr-input" rows="2" maxlength="${MAX_BODY}" placeholder="${esc(t(options.mentions === false ? 'main.thrChatPlaceholder' : 'main.thrPlaceholder'))}" aria-label="${esc(t(options.mentions === false ? 'main.thrChatPlaceholder' : 'main.thrPlaceholder'))}" data-help-key="thrCompose"></textarea>
+            <textarea class="thr-input" rows="2" maxlength="${MAX_BODY}" placeholder="${esc(t(options.mentions === false ? (chatWording ? 'main.thrChatPlaceholder' : 'main.thrPlainPlaceholder') : 'main.thrPlaceholder'))}" aria-label="${esc(t(options.mentions === false ? (chatWording ? 'main.thrChatPlaceholder' : 'main.thrPlainPlaceholder') : 'main.thrPlaceholder'))}" data-help-key="thrCompose"></textarea>
             <div class="thr-actions"><span class="thr-hint">${esc(t(options.mentions === false ? 'main.thrChatHint' : 'main.thrMentionHint'))}</span><button type="button" class="btn thr-send" data-thr="send" data-help-key="thrSend">${esc(t('main.thrSend'))}</button></div>
             <p class="admin-error thr-form-error" role="alert" hidden></p>`;
     }
@@ -94,7 +99,7 @@ function mount(container, options) {
 
     async function load() {
         try {
-            const out = await api('GET', `${path}/comments?limit=200`);
+            const out = await api('GET', `${commentsUrl}?limit=200`);
             comments = out.comments || [];
             state = { ...state, loaded: true, error: '', canPost: !!out.canPost, people: out.people || [], label: out.label || '', lastReadId: out.lastReadId || 0, hasMore: !!out.hasMore };
             const firstUnread = comments.find((c) => !c.isMine && c.id > state.lastReadId);
@@ -110,14 +115,14 @@ function mount(container, options) {
     }
     async function markRead() {
         try {
-            const out = await api('POST', `${path}/read`);
+            const out = await api('POST', readUrl);
             state.lastReadId = out.lastReadId || lastId();
             if (options.onChange) options.onChange({ read: true });
         } catch (err) { /* un fallo al marcar leído no estorba: se vuelve a intentar al abrir */ }
     }
     async function loadMore() {
         try {
-            const out = await api('GET', `${path}/comments?after=${lastId()}&limit=200`);
+            const out = await api('GET', `${commentsUrl}?after=${lastId()}&limit=200`);
             comments = comments.concat(out.comments || []);
             state.hasMore = !!out.hasMore;
             renderList();
@@ -127,7 +132,7 @@ function mount(container, options) {
     async function poll() {
         if (destroyed || document.hidden || !state.loaded || state.error || state.hasMore) return;
         try {
-            const out = await api('GET', `${path}/comments?after=${lastId()}&limit=200`);
+            const out = await api('GET', `${commentsUrl}?after=${lastId()}&limit=200`);
             if (destroyed) return;
             const fresh = out.comments || [];
             if (fresh.length) {
@@ -153,7 +158,7 @@ function mount(container, options) {
         if (btn) btn.disabled = true;
         showError('');
         try {
-            const out = await api('POST', `${path}/comments`, { body, mentions });
+            const out = await api('POST', commentsUrl, { body, mentions });
             input.value = '';
             mentioned.clear();
             hideSuggestions();
