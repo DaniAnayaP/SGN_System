@@ -9832,13 +9832,22 @@ input[type="color"].cli-company{ opacity: 0.55; }
 .thr-sug[hidden]{ display: none; }
 .thr-sug-item{ text-align: left; padding: 0.4rem 0.7rem; border: 0; background: transparent; color: var(--color-text-primary); font-family: inherit; font-size: 0.8rem; cursor: pointer; }
 .thr-sug-item:hover, .thr-sug-item.active{ background: var(--color-bg); }
-/* Los tres logos de la compañía (Claro, Oscuro, Institucional): cada vista previa sobre el fondo de su estilo */
+/* Los tres logos de la compañía (Claro, Oscuro, Institucional) en una sola fila; cada vista previa sobre el fondo de su estilo */
 .admin-logo-field-wide{ grid-column: 1 / -1; }
-.brand-logos{ display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; }
-.brand-logo-card{ display: flex; flex-direction: column; gap: 0.35rem; margin: 0; }
+.admin-branding-fields-logo-only{ grid-template-columns: minmax(0, 1fr); }
+.admin-branding-fields-logo-only > .admin-logo-field{ max-width: 24rem; }
+.brand-logos-title{ font-size: 0.78rem; font-weight: 600; margin-bottom: 0.4rem; }
+.brand-logos-row{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.7rem; }
+.brand-logo-card{ display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.7rem; background: var(--color-surface); min-width: 0; }
+.brand-logo-side{ display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+.brand-logo-name{ font-size: 0.74rem; font-weight: 600; }
+.brand-logo-btns{ display: inline-flex; align-items: center; gap: 0.25rem; }
+.brand-logo-pick{ padding: 0.25rem 0.7rem; font-size: 0.72rem; cursor: pointer; }
+.brand-logo-x{ width: 1.6rem; height: 1.6rem; }
+.brand-logo-card:has(input:focus-visible) .brand-logo-pick{ outline: 2px solid var(--institutional-accent, #3F435D); outline-offset: 2px; }
 .brand-logo-stage{ flex: none; width: 3.2rem; height: 3.2rem; border-radius: 0.5rem; display: grid; place-items: center; box-shadow: 0 0 0 1px var(--color-border); overflow: hidden; }
 .brand-logo-stage-light{ background: #FFFFFF; }
 .brand-logo-stage-dark{ background: #1D2230; }
 .brand-logo-stage-institutional{ background: var(--institutional-accent, #3F435D); }
 .brand-logo-preview{ max-width: 80%; max-height: 80%; object-fit: contain; }
-.brand-logo-hint{ font-size: 0.72rem; color: var(--color-text-secondary); }
+@media (max-width: 760px){ .brand-logos-row{ grid-template-columns: minmax(0, 1fr); } }

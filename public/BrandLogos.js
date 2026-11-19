@@ -8,10 +8,11 @@
 'use strict';
 const MAX_BYTES = 350 * 1024; // el mismo tope del logo de siempre
 const ACCEPT = 'image/png,image/jpeg,image/svg+xml,image/webp';
+// name = el nombre corto del estilo (el mismo del menú Estilo); label = el nombre largo, para quien usa lector de pantalla
 const VARIANTS = [
-    { key: 'light', field: 'logoDataUrl', label: 'admin.logoLight', hint: 'admin.logoLightHint' },
-    { key: 'dark', field: 'logoDarkDataUrl', label: 'admin.logoDark', hint: 'admin.logoDarkHint' },
-    { key: 'institutional', field: 'logoInstitutionalDataUrl', label: 'admin.logoInstitutional', hint: 'admin.logoInstitutionalHint' },
+    { key: 'light', field: 'logoDataUrl', name: 'main.styleLight', label: 'admin.logoLight' },
+    { key: 'dark', field: 'logoDarkDataUrl', name: 'main.styleDark', label: 'admin.logoDark' },
+    { key: 'institutional', field: 'logoInstitutionalDataUrl', name: 'main.styleInstitutional', label: 'admin.logoInstitutional' },
 ];
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -22,15 +23,17 @@ function mount(container, options) {
     container.classList.add('brand-logos');
 
     function draw() {
-        container.innerHTML = VARIANTS.map((v) => `<div class="admin-field brand-logo-card" data-variant="${v.key}">
-            <label for="${prefix}-${v.key}">${esc(Dashboard.t(v.label))}</label>
-            <div class="admin-logo-row">
-                <span class="brand-logo-stage brand-logo-stage-${v.key}"><img class="brand-logo-preview" alt="" ${values[v.key] ? `src="${esc(values[v.key])}"` : 'hidden'}></span>
-                <input id="${prefix}-${v.key}" type="file" accept="${ACCEPT}" aria-label="${esc(Dashboard.t(v.label))}" data-help-key="brandLogoUpload">
-                <button type="button" class="btn btn-secondary admin-logo-clear" data-brand-logo-clear="${v.key}" data-help-key="brandLogoRemove"${values[v.key] ? '' : ' hidden'}>${esc(Dashboard.t('admin.removeLogo'))}</button>
+        container.innerHTML = `<div class="brand-logos-title">${esc(Dashboard.t('admin.logo'))}</div><div class="brand-logos-row">${VARIANTS.map((v) => `<div class="brand-logo-card" data-variant="${v.key}">
+            <span class="brand-logo-stage brand-logo-stage-${v.key}"><img class="brand-logo-preview" alt="" ${values[v.key] ? `src="${esc(values[v.key])}"` : 'hidden'}></span>
+            <div class="brand-logo-side">
+                <span class="brand-logo-name">${esc(Dashboard.t(v.name))}</span>
+                <span class="brand-logo-btns">
+                    <label class="btn btn-secondary brand-logo-pick" for="${prefix}-${v.key}" data-help-key="brandLogoUpload">${esc(Dashboard.t('admin.logoChoose'))}</label>
+                    <input id="${prefix}-${v.key}" class="sr-only" type="file" accept="${ACCEPT}" aria-label="${esc(Dashboard.t(v.label))}">
+                    <button type="button" class="admin-icon-btn brand-logo-x" data-brand-logo-clear="${v.key}" aria-label="${esc(Dashboard.t('admin.removeLogo'))}" title="${esc(Dashboard.t('admin.removeLogo'))}" data-help-key="brandLogoRemove"${values[v.key] ? '' : ' hidden'}><i class="bx bx-x" aria-hidden="true"></i></button>
+                </span>
             </div>
-            <small class="brand-logo-hint">${esc(Dashboard.t(v.hint))}</small>
-        </div>`).join('');
+        </div>`).join('')}</div>`;
     }
     container.addEventListener('change', (event) => {
         const input = event.target;
