@@ -582,7 +582,8 @@ const {
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
     LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
-    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask,
+    addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,
@@ -1675,6 +1676,9 @@ const IMPL_ERRORS = {
     TASKS_PENDING: [409, 'Faltan renglones por marcar en este nivel.'], LOCKED: [409, 'Ese nivel todavía no se abre: antes hay que completar el anterior.'],
     LEVEL_CLOSED: [409, 'El nivel ya está completo: reábrelo para cambiar sus renglones.'], TASK: [400, 'Ese renglón no existe.'],
     DATES_PAIR: [400, 'Cada nivel lleva sus dos fechas, inicio y fin, o ninguna.'], DATE: [400, 'Una fecha no es válida.'], DATES_ORDER: [400, 'El fin de un nivel no puede ir antes de su inicio.'],
+    // actividades de cada nivel
+    NOT_FOUND: [404, 'Esa actividad no existe.'], TITLE: [400, 'Escribe la actividad (hasta 120 letras).'], RESPONSIBLE: [400, 'El responsable lleva hasta 80 letras.'], DATES: [400, 'Pon las dos fechas, inicio y fin, o ninguna.'],
+    RANGE: [400, 'El fin no puede ir antes del inicio.'], LEVEL_NA: [409, 'Ese nivel quedó «No aplica»: ya no se le agregan actividades.'],
 };
 const implFail = (res, result) => { const [status, message] = IMPL_ERRORS[result.error] || [400, 'No se pudo hacer.']; return res.status(status).json({ message, code: result.error, key: result.key }); };
 const saasImplHasScreen = (req) => !!req.user.isSaasSuperAdmin || getSaasUserGrants(req.user.sub).some((g) => g.itemId === SAAS_IMPL_ITEM);
@@ -1703,8 +1707,9 @@ function saasImplDetail(req, clientId) {
                 l.tasks.forEach((t) => { t.stats = trainingStats[t.key] || null; if (!t.stats || t.stats.sessionsDone < 1 || t.stats.attendees < 1) t.actions.done = false; });
             }
         });
+        implDecorateActivities(impl, { side: 'saas', canAdd: can.mark, isAdmin: false, userId: req.user.sub });
     }
-    return { client: { id: clientId, name: client ? client.company_name : '' }, implementation: impl, can, implementers: can.start || can.edit ? listImplementerCandidates(SAAS_IMPL_ITEM) : [] };
+    return { client: { id: clientId, name: client ? client.company_name : '' }, implementation: impl, can, implementers: can.start || can.edit ? listImplementerCandidates(SAAS_IMPL_ITEM) : [], people: impl ? listImplementationPeople(clientId) : [] };
 }
 function implLog(req, clientId, action, fieldKey, oldText, newText) {
     const client = getClientById(clientId);
@@ -1723,6 +1728,79 @@ function implGate(req, res, key) {
 const IMPL_SIDE_ES = { client: 'el cliente', saas: 'SaaS' };
 const IMPL_CRONOGRAMA_TUPLE = { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuId: 'cat-operaciones/cat-operaciones-ti-impl-cronograma' };
 const implFinishCan = (req) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'implementacion', 'colImplFinalizar');
+// ---- Actividades de cada nivel (Cronograma con actividades, pieza 1): las agregan el implementador de SaaS y la gente de la compañía; NO bloquean completar un nivel ----
+// Quién puede qué (lo decide el servidor y manda `can` por nivel y `actions` por actividad; la pantalla solo lo muestra). Con la implementación finalizada todo queda de solo lectura.
+//  · AGREGAR: SaaS = la hoja «Marcar nivel y renglones» (mark) en cualquier nivel menos «No aplica»; cliente = el administrador o quien tiene la hoja «Agregar actividades, notas y comentarios» (colImplAgregar, Ver y operar,
+//    con el mismo canCreateColumn del botón Finalizar) y solo en niveles en curso o completos: un nivel bloqueado se ve, pero no se le agrega.
+//  · EDITAR / QUITAR: SaaS cualquiera; el administrador del cliente las que se crearon desde el cliente; quien tiene la hoja solo las que él creó.
+//  · CAMBIAR ESTADO (pendiente / en curso / hecha): SaaS y el administrador del cliente cualquiera; quien tiene la hoja las que creó o donde él es el responsable.
+const IMPL_ACTIVITY_STATUS_ES = { pending: 'Pendiente', running: 'En curso', done: 'Hecha' };
+const implActivityWho = (req) => {
+    const admin = !!req.user.isClientAdmin;
+    return { side: 'client', isAdmin: admin, userId: req.user.sub, canAdd: admin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'implementacion', 'colImplAgregar') };
+};
+const implActivityMayAddAt = (who, level) => (who.side === 'saas' ? level.state !== 'na' : (level.state === 'current' || level.state === 'done'));
+// ¿Puede hacer eso con esa actividad? (sin mirar si la implementación está abierta; eso lo dicen `actions` y la base)
+function implActivityRight(who, kind, activity) {
+    if (!who.canAdd) return false;
+    if (who.side === 'saas') return true;
+    const mine = activity.createdSide === 'client' && activity.createdByUserId === who.userId;
+    if (kind === 'status') return who.isAdmin || mine || (activity.responsibleUserId != null && activity.responsibleUserId === who.userId);
+    return activity.createdSide === 'client' && (who.isAdmin || mine);
+}
+function implDecorateActivities(impl, who) {
+    const open = impl.status === 'active';
+    impl.levels.forEach((l) => {
+        l.can = { add: open && who.canAdd && implActivityMayAddAt(who, l) };
+        l.activities.forEach((a) => { a.actions = { edit: open && implActivityRight(who, 'edit', a), remove: open && implActivityRight(who, 'edit', a), status: open && implActivityRight(who, 'status', a) }; });
+    });
+}
+const implActivityLabel = (impl, levelKey, a) => `${implLevelEs(impl, levelKey)} › ${a.title}`;
+const implActivityEs = (impl, levelKey, a) => { const bits = [a.responsible, a.startDate ? `${a.startDate} → ${a.endDate}` : ''].filter(Boolean); return `${implActivityLabel(impl, levelKey, a)}${bits.length ? ` (${bits.join(' · ')})` : ''}`; };
+const implActivityFields = (body, keys) => { const b = body && typeof body === 'object' ? body : {}; const out = {}; keys.forEach((k) => { if (Object.prototype.hasOwnProperty.call(b, k)) out[k] = b[k]; }); return out; };
+const IMPL_ACTIVITY_KEYS = ['title', 'responsible', 'startDate', 'endDate'];
+// Una operación sobre las actividades de una compañía (add | update | status | remove) para quien la pide (who): el cliente y SaaS usan la misma rutina. Cada cambio queda en el historial de SaaS (aunque lo haga el cliente) y
+// en los eventos de la implementación (los guarda db.js). `respond()` arma la respuesta ya con el cambio hecho.
+function implActivityRun(req, res, clientId, who, op, params, respond) {
+    const by = changedByLabel(req);
+    const impl = getImplementation(clientId);
+    if (!impl) return implFail(res, { error: 'NOT_STARTED' });
+    const forbidden = () => res.status(403).json({ message: 'No tienes permiso para hacer esto.', code: 'FORBIDDEN' });
+    if (op === 'add') {
+        const level = impl.levels.find((l) => l.key === params.levelKey);
+        if (!level) return implFail(res, { error: 'LEVEL' });
+        if (!who.canAdd) return forbidden();
+        if (impl.status !== 'active') return implFail(res, { error: 'CLOSED' });
+        if (level.state === 'na') return implFail(res, { error: 'LEVEL_NA' });
+        if (!implActivityMayAddAt(who, level)) return implFail(res, { error: 'LOCKED' });
+        const result = addImplementationActivity(clientId, params.levelKey, { ...params.fields, byLabel: by, byUserId: req.user.sub, side: who.side });
+        if (result.error) return implFail(res, result);
+        const added = findImplementationActivity(result.implementation, result.activityId).activity;
+        implLog(req, clientId, 'update', 'main.implHistActivity', '', implActivityEs(result.implementation, params.levelKey, added));
+        return res.status(201).json({ ...respond(), activityId: result.activityId });
+    }
+    const found = findImplementationActivity(impl, params.id);
+    if (!found) return implFail(res, { error: 'NOT_FOUND' });
+    if (!implActivityRight(who, op === 'status' ? 'status' : 'edit', found.activity)) return forbidden();
+    if (op === 'update') {
+        const result = updateImplementationActivity(clientId, params.id, params.fields, by);
+        if (result.error) return implFail(res, result);
+        if (result.changed.length) {
+            const after = findImplementationActivity(result.implementation, result.activityId).activity;
+            implLog(req, clientId, 'update', 'main.implHistActivity', implActivityEs(result.before, result.levelKey, found.activity), implActivityEs(result.implementation, result.levelKey, after));
+        }
+    } else if (op === 'status') {
+        const result = setImplementationActivityStatus(clientId, params.id, params.status, by);
+        if (result.error) return implFail(res, result);
+        const label = implActivityLabel(result.implementation, result.levelKey, found.activity);
+        implLog(req, clientId, 'update', 'main.implHistActivity', `${label}: ${IMPL_ACTIVITY_STATUS_ES[result.previous]}`, `${label}: ${IMPL_ACTIVITY_STATUS_ES[result.status]}`);
+    } else {
+        const result = removeImplementationActivity(clientId, params.id, by);
+        if (result.error) return implFail(res, result);
+        implLog(req, clientId, 'update', 'main.implHistActivity', implActivityEs(result.before, result.levelKey, found.activity), '');
+    }
+    return res.json({ ...respond(), activityId: found.activity.id });
+}
 // Avisos de la campana: a la OTRA parte cuando una confirma o rechaza, y a las dos cuando se finaliza.
 function implNotify(req, clientId, event, side, note) {
     try {
@@ -1777,12 +1855,33 @@ app.post('/api/admin/implementations/:clientId/finish/reject', requireAuth, requ
     if (result.error) return;
     res.json(saasImplDetail(req, client.id));
 });
+// La implementación para quien pregunta: con las actividades de cada nivel y lo que ESTA cuenta puede hacer con ellas (`can` por nivel, `actions` por actividad), si puede agregar (canAddActivities) y los nombres de las personas
+// de la compañía para elegir responsable (solo nombres de usuarios activos).
+function implClientPayload(req) {
+    const clientId = req.user.clientId;
+    const client = getClientById(clientId);
+    const impl = getImplementation(clientId);
+    const who = implActivityWho(req);
+    if (impl) implDecorateActivities(impl, who);
+    const out = { clientName: client ? client.company_name : '', implementation: impl, canFinalize: implFinishCan(req), canAddActivities: who.canAdd, people: impl ? listImplementationPeople(clientId) : [] };
+    // Sin implementación iniciada, el Cronograma muestra los niveles de la plantilla en gris (nada de ninguna compañía): su orden y cuáles son opcionales.
+    if (!impl) out.plannedLevels = IMPLEMENTATION_LEVELS.map((l, i) => ({ position: i + 1, key: l.key, optional: !!l.optional }));
+    return out;
+}
 app.get('/api/business/implementation', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const client = getClientById(req.user.clientId);
     res.set('Cache-Control', 'no-store');
-    res.json({ clientName: client ? client.company_name : '', implementation: getImplementation(req.user.clientId), canFinalize: implFinishCan(req) });
+    res.json(implClientPayload(req));
 });
+// Actividades de cada nivel (lado del cliente): agregar, cambiar, cambiar de estado y quitar. Las reglas de quién puede qué están en implActivityRight / implActivityRun.
+function implClientActivity(req, res, op, params) {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    return implActivityRun(req, res, req.user.clientId, implActivityWho(req), op, params, () => implClientPayload(req));
+}
+app.post('/api/business/implementation/levels/:key/activities', requireAuth, (req, res) => implClientActivity(req, res, 'add', { levelKey: String(req.params.key), fields: implActivityFields(req.body, IMPL_ACTIVITY_KEYS) }));
+app.patch('/api/business/implementation/activities/:id', requireAuth, (req, res) => implClientActivity(req, res, 'update', { id: Number(req.params.id), fields: implActivityFields(req.body, IMPL_ACTIVITY_KEYS) }));
+app.post('/api/business/implementation/activities/:id/status', requireAuth, (req, res) => implClientActivity(req, res, 'status', { id: Number(req.params.id), status: (req.body || {}).status }));
+app.delete('/api/business/implementation/activities/:id', requireAuth, (req, res) => implClientActivity(req, res, 'remove', { id: Number(req.params.id) }));
 // Nivel 1 «Contratado»: lo contratado de la compañía contra lo que ya usa, y los permisos para dibujar su árbol de accesos contratado (solo lectura). Cualquier usuario de la compañía con la pantalla lo consulta.
 app.get('/api/business/implementation/contracted', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -1858,6 +1957,16 @@ app.put('/api/admin/implementations/:clientId/dates', requireAuth, requireAdmin,
     });
     res.json(saasImplDetail(req, client.id));
 });
+// Actividades de cada nivel (lado de SaaS): la hoja es «Marcar nivel y renglones» (mark). Van ANTES de la ruta general `levels/:key/:action`, que si no las tomaría por una acción de nivel.
+function implSaasActivity(req, res, op, params) {
+    const client = implGate(req, res, 'mark');
+    if (!client) return;
+    return implActivityRun(req, res, client.id, { side: 'saas', canAdd: true, isAdmin: false, userId: req.user.sub }, op, params, () => saasImplDetail(req, client.id));
+}
+app.post('/api/admin/implementations/:clientId/levels/:key/activities', requireAuth, requireAdmin, (req, res) => implSaasActivity(req, res, 'add', { levelKey: String(req.params.key), fields: implActivityFields(req.body, IMPL_ACTIVITY_KEYS) }));
+app.patch('/api/admin/implementations/:clientId/activities/:id', requireAuth, requireAdmin, (req, res) => implSaasActivity(req, res, 'update', { id: Number(req.params.id), fields: implActivityFields(req.body, IMPL_ACTIVITY_KEYS) }));
+app.post('/api/admin/implementations/:clientId/activities/:id/status', requireAuth, requireAdmin, (req, res) => implSaasActivity(req, res, 'status', { id: Number(req.params.id), status: (req.body || {}).status }));
+app.delete('/api/admin/implementations/:clientId/activities/:id', requireAuth, requireAdmin, (req, res) => implSaasActivity(req, res, 'remove', { id: Number(req.params.id) }));
 // Marcar un renglón de un nivel (listo, «No aplica» o reabrirlo): mismo botón «Marcar nivel y renglones».
 app.post('/api/admin/implementations/:clientId/levels/:key/tasks/:task/:action', requireAuth, requireAdmin, (req, res) => {
     const client = implGate(req, res, 'mark');

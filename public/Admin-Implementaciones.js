@@ -176,7 +176,8 @@ function makeModal(html) {
     overlay.innerHTML = `<div class="modal-panel exp-panel impl-panel" role="dialog" aria-modal="true">${html}</div>`;
     document.body.appendChild(overlay);
     const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
-    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    // con la ventana de confirmar abierta (quitar una actividad), Escape cierra solo esa
+    const onKey = (event) => { const confirming = document.getElementById('confirm-modal'); if (event.key === 'Escape' && !(confirming && !confirming.hidden)) close(); };
     document.addEventListener('keydown', onKey);
     overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
     return { overlay, close, $: (sel) => overlay.querySelector(sel) };
@@ -241,6 +242,15 @@ async function openDetail(row) {
     const draft = {}; // fechas escritas que todavía no se guardan: sobreviven a volver a dibujar
     const expanded = new Set(); // los niveles con sus renglones abiertos (al principio, el que está en curso)
     let seeded = false;
+    // las actividades de cada nivel (agregar, cambiar, estado y quitar) las maneja ImplActivities; aquí solo se le dice a qué rutas llamar y qué hacer con la respuesta (el mismo detalle de GET /:clientId)
+    ImplActivities.closeForm();
+    ImplActivities.configure({
+        levelsBase: `${API}/${row.clientId}/levels`, activitiesBase: `${API}/${row.clientId}/activities`,
+        getData: () => detail,
+        onChange: async (json) => { detail = json; draw(); await load().catch(() => {}); },
+        rerender: () => draw(),
+        reload: async () => { await reload(); await load().catch(() => {}); },
+    });
     const body = () => modal.$('#impl-body');
     const showError = (text) => { const el = modal.$('#impl-error'); if (el) { el.textContent = text; el.hidden = !text; } };
     const draw = () => {
@@ -249,7 +259,7 @@ async function openDetail(row) {
         const open = impl.status === 'active';
         const canDates = open && detail.can.edit;
         const taskName = (l, task) => { if (task.labelKey) return t(task.labelKey); const name = t(`main.implTask_${l.key}_${task.key}`); return name.startsWith('main.') ? task.key : name; };
-        const taskRows = (l) => `<tr class="impl-task-row"><td colspan="5"><div class="impl-subtasks" data-help-key="saasImplTasks">${l.tasks.map((task) => {
+        const taskRows = (l) => `<tr class="impl-task-row"><td colspan="5">${l.tasks.length ? `<div class="impl-subtasks" data-help-key="saasImplTasks">${l.tasks.map((task) => {
             const acts = [
                 task.actions.done ? `<button type="button" class="btn btn-secondary sc-mini" data-lv="${l.key}" data-task="${task.key}" data-do="done">${esc(t(l.key === 'training' ? 'admin.saasImplTrainDone' : 'admin.saasImplTaskDone'))}</button>` : '',
                 task.actions.na ? `<button type="button" class="btn btn-secondary sc-mini" data-lv="${l.key}" data-task="${task.key}" data-do="na">${esc(t('admin.saasImplTaskNa'))}</button>` : '',
@@ -262,7 +272,7 @@ async function openDetail(row) {
             const chipText = training ? t(`main.implTrainState_${trainState}`) : t(`main.implTaskState_${task.status}`);
             const stats = training && task.stats ? `<small class="impl-subtask-stats">${esc(t('admin.saasImplTrainStats', { users: task.stats.users, sessions: task.stats.sessionsDone, trained: task.stats.trained }))}</small>` : '';
             return `<div class="impl-subtask"><span class="exp-chip exp-chip-${tone}">${esc(chipText)}</span><span class="impl-subtask-name">${esc(taskName(l, task))}${stats}</span><span class="impl-acts">${acts}</span></div>`;
-        }).join('')}</div></td></tr>`;
+        }).join('')}</div>` : ''}${ImplActivities.block(l)}</td></tr>`;
         // el cierre: lo confirman las dos partes con todos los niveles completos; la segunda confirmación finaliza la implementación
         const f = impl.finish;
         const sideName = (side) => t(side === 'client' ? 'main.implSideClient' : 'main.implSideSaas');
@@ -293,11 +303,14 @@ async function openDetail(row) {
                 l.actions.reopen ? `<button type="button" class="btn btn-secondary sc-mini" data-lv="${l.key}" data-do="reopen">${esc(t('admin.saasImplReopen'))}</button>` : '',
             ].join('');
             const stateChip = `<span class="exp-chip exp-chip-${{ done: 'approved', current: 'negotiating', locked: 'cancelled', na: 'cancelled' }[l.state]}">${esc(t(`main.implState_${l.state}`))}</span>${l.late ? ` <span class="exp-chip exp-chip-pending">${esc(t('main.implState_late'))}</span>` : ''}`;
-            const toggle = l.tasks.length ? `<button type="button" class="impl-toggle" data-toggle="${l.key}" aria-expanded="${expanded.has(l.key)}">${expanded.has(l.key) ? '▾' : '▸'} ${esc(t('admin.saasImplTasks'))} (${l.tasksDone}/${l.tasksTotal})</button>` : '';
-            return `<tr><td><b>${l.position}</b> · ${esc(levelName(l.key))}${toggle}</td>
+            // los renglones del sistema y las actividades agregadas se abren con el mismo botón (si el nivel tiene algo que mostrar o se le puede agregar)
+            const hasDetail = l.tasks.length > 0 || l.activities.length > 0 || !!(l.can && l.can.add);
+            const toggleText = [l.tasks.length ? `${t('admin.saasImplTasks')} (${l.tasksDone}/${l.tasksTotal})` : '', `${t('main.implActLabel')} (${l.activitiesTotal})`].filter(Boolean).join(' · ');
+            const toggle = hasDetail ? `<button type="button" class="impl-toggle" data-toggle="${l.key}" aria-expanded="${expanded.has(l.key)}">${expanded.has(l.key) ? '▾' : '▸'} ${esc(toggleText)}</button>` : '';
+            return `<tr><td><b>${l.position}</b> · ${esc(levelName(l.key))}${ImplActivities.counters(l)}${toggle}</td>
                 <td><input type="date" data-date="start" data-lv="${l.key}" value="${esc(d.start)}" aria-label="${esc(t('admin.saasImplStartDate'))}"${canDates ? '' : ' disabled'}></td>
                 <td><input type="date" data-date="end" data-lv="${l.key}" value="${esc(d.end)}" aria-label="${esc(t('admin.saasImplEndDate'))}"${canDates ? '' : ' disabled'}></td>
-                <td>${stateChip}</td><td class="impl-acts">${actions}</td></tr>${l.tasks.length && expanded.has(l.key) ? taskRows(l) : ''}`;
+                <td>${stateChip}</td><td class="impl-acts">${actions}</td></tr>${hasDetail && expanded.has(l.key) ? taskRows(l) : ''}`;
         }).join('');
         body().innerHTML = `<div class="admin-field impl-implementer" data-help-key="saasImplStart"><label for="impl-implementer">${esc(t('admin.saasImplField'))}</label>
             <div class="impl-inline"><select id="impl-implementer"${open && detail.can.edit ? '' : ' disabled'}>${implementerOptions(impl.implementerUserId)}</select>
@@ -316,6 +329,7 @@ async function openDetail(row) {
         }
     };
     try { await reload(); } catch (err) { body().innerHTML = `<p class="admin-error">${esc(explain(err))}</p>`; return; }
+    ImplActivities.bind(modal.overlay);
     modal.overlay.addEventListener('input', (event) => {
         const el = event.target;
         if (!el.dataset || !el.dataset.date) return;
@@ -342,7 +356,7 @@ async function openDetail(row) {
                 await load();
             });
         } else if (btn.dataset.toggle) {
-            if (expanded.has(btn.dataset.toggle)) expanded.delete(btn.dataset.toggle); else expanded.add(btn.dataset.toggle);
+            if (expanded.has(btn.dataset.toggle)) { expanded.delete(btn.dataset.toggle); ImplActivities.closeForm(); } else expanded.add(btn.dataset.toggle);
             draw();
         } else if (btn.dataset.task) {
             guard(async () => {

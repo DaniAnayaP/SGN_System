@@ -4057,7 +4057,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'habilitacion-codigos': { create: 'colHabCreateAuth' },
     'solicitudes-codigo': { create: 'colSolTiGestionar' },
     'expansiones': { create: 'colExpCreateAuth' },
-    'implementacion': { create: 'colImplFinalizar' },
+    'implementacion': { create: 'colImplAgregar', finish: 'colImplFinalizar' }, // «Agregar actividades…» es el botón que crea (su Notificar); «Finalizar implementación» es el del cierre
     'pedir-alta-codigo': { create: 'colSolCreateAuth' },
     'layout': { create: 'colLayoutCrearDesdeCero' },
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
@@ -15130,6 +15130,25 @@ db.exec(`
         UNIQUE (implementation_id, level_key, task_key)
     );
     CREATE INDEX IF NOT EXISTS idx_implementation_tasks_impl ON implementation_tasks (implementation_id);
+    CREATE TABLE IF NOT EXISTS implementation_activities (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        implementation_id   INTEGER NOT NULL REFERENCES implementations(id) ON DELETE CASCADE,
+        level_key           TEXT NOT NULL,
+        title               TEXT NOT NULL,
+        responsible         TEXT NOT NULL DEFAULT '',
+        responsible_user_id INTEGER,
+        start_date          TEXT NOT NULL DEFAULT '',
+        end_date            TEXT NOT NULL DEFAULT '',
+        status              TEXT NOT NULL DEFAULT 'pending',
+        done_at             TEXT,
+        done_by             TEXT NOT NULL DEFAULT '',
+        created_by          TEXT NOT NULL DEFAULT '',
+        created_by_user_id  INTEGER,
+        created_side        TEXT NOT NULL DEFAULT 'client',
+        created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_implementation_activities_impl ON implementation_activities (implementation_id);
 `);
 // El cierre (pieza 3): lo confirman AMBOS, el cliente y SaaS, cuando todos los niveles están completos (o «No aplica»); la segunda confirmación finaliza la implementación. Un rechazo pide motivo y borra las confirmaciones.
 ['client_confirmed_at TEXT', "client_confirmed_by TEXT NOT NULL DEFAULT ''", 'saas_confirmed_at TEXT', "saas_confirmed_by TEXT NOT NULL DEFAULT ''", 'closed_at TEXT',
@@ -15190,6 +15209,24 @@ function ensureImplementationTrainingTasks(implementationId, departmentKeys) {
     const insert = db.prepare('INSERT OR IGNORE INTO implementation_tasks (implementation_id, level_key, task_key, position) VALUES (?, ?, ?, ?)');
     db.transaction(() => missing.forEach((k) => insert.run(implementationId, IMPLEMENTATION_TRAINING_LEVEL, k, HR_DEPARTMENT_KEYS.indexOf(k) + 1)))();
 }
+// Una ACTIVIDAD agregada a un nivel (Cronograma con actividades, pieza 1) lista para dibujar. Las semanas se cuentan igual que las de los niveles (desde el lunes de la primera fecha del cronograma) y se recortan a su rango:
+// si la actividad cae en parte o del todo fuera del cronograma queda `outsidePlan` (y sin barra si no cabe nada). `late` = no está hecha y su fin ya pasó.
+function implementationActivityView(a, today, startMonday, weekCount) {
+    let fromWeek = null;
+    let toWeek = null;
+    let outsidePlan = false;
+    if (startMonday && weekCount && a.start_date) {
+        const from = weekIndex(startMonday, a.start_date);
+        const to = weekIndex(startMonday, a.end_date);
+        outsidePlan = from < 1 || to > weekCount;
+        if (to >= 1 && from <= weekCount) { fromWeek = Math.max(from, 1); toWeek = Math.min(to, weekCount); }
+    }
+    return {
+        id: a.id, title: a.title, responsible: a.responsible, responsibleUserId: a.responsible_user_id, startDate: a.start_date, endDate: a.end_date, fromWeek, toWeek, outsidePlan,
+        status: a.status, doneAt: a.done_at, doneBy: a.done_by, createdBy: a.created_by, createdSide: a.created_side, createdByUserId: a.created_by_user_id, createdAt: a.created_at,
+        late: a.status !== 'done' && !!a.end_date && a.end_date < today,
+    };
+}
 function getImplementation(clientId) {
     const row = db.prepare('SELECT * FROM implementations WHERE client_id = ?').get(clientId);
     if (!row) return null;
@@ -15228,6 +15265,15 @@ function getImplementation(clientId) {
         l.tasksDone = l.tasks.filter((t) => t.status === 'done').length;
         l.tasksPending = l.tasks.filter((t) => t.status === 'pending').length;
         l.taskProgress = l.tasksTotal ? Math.round((100 * l.tasksDone) / l.tasksTotal) : null;
+    });
+    // las actividades agregadas a cada nivel (por el implementador o por la gente de la compañía): NO cuentan en el avance ni bloquean completar un nivel; solo se cuentan para avisar «N pendientes»
+    const activitySpan = startMonday && endDate ? weekIndex(startMonday, endDate) : 0;
+    const activityRows = db.prepare('SELECT * FROM implementation_activities WHERE implementation_id = ? ORDER BY id').all(row.id);
+    levels.forEach((l) => {
+        l.activities = activityRows.filter((a) => a.level_key === l.key).map((a) => implementationActivityView(a, today, startMonday, activitySpan));
+        l.activitiesTotal = l.activities.length;
+        l.activitiesDone = l.activities.filter((a) => a.status === 'done').length;
+        l.activitiesPending = l.activitiesTotal - l.activitiesDone;
     });
     const applicable = levels.filter((l) => l.status !== 'na');
     const currentLevel = levels.find((l) => l.state === 'current');
@@ -15458,6 +15504,132 @@ function markImplementationTask(clientId, levelKey, taskKey, action, byLabel) {
         db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
     })();
     return { before, status: next, implementation: getImplementation(clientId) };
+}
+
+// --- Implementación Inicial · ACTIVIDADES de cada nivel (Cronograma con actividades, pieza 1) ---------------------------------------------------------------------------------------------------------
+// Además de los pasos del sistema (los renglones de implementation_tasks, con la etiqueta «Sistema»), el implementador de SaaS y la gente de la compañía agregan ACTIVIDADES a cada nivel: título, responsable (texto libre; si coincide con UNA
+// persona activa de la compañía se guarda su id para que esa persona pueda marcar la suya), fechas (las dos o ninguna, fin ≥ inicio, de calendario como las de los niveles) y estado (pendiente / en curso / hecha). NO cuentan en el avance
+// general ni bloquean completar un nivel: solo se cuentan para avisar «N pendientes». Quién puede hacer qué lo decide server.js (según el lado y su hoja del árbol); aquí van las reglas de los datos. Cada cambio queda en implementation_events.
+const IMPLEMENTATION_ACTIVITY_TITLE_MAX = 120;
+const IMPLEMENTATION_ACTIVITY_RESPONSIBLE_MAX = 80;
+const IMPLEMENTATION_ACTIVITY_STATUSES = ['pending', 'running', 'done'];
+// Un texto de una sola línea: sin saltos ni caracteres de control, espacios sobrantes quitados. (Se guarda tal cual lo escribió la persona; al dibujarlo cada pantalla lo escapa.)
+const implementationLine = (value) => String(value == null ? '' : value).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+// Los nombres de las personas activas de la compañía (usuarios reales, no la cuenta de pruebas): lo que se ofrece al elegir responsable. Solo nombres.
+function listImplementationPeople(clientId) {
+    return [...new Set(listActiveUsersBrief(clientId, false).map((u) => implementationLine(u.name)).filter(Boolean))];
+}
+// El id de la persona de la compañía cuyo nombre coincide con lo escrito (sin importar mayúsculas ni espacios de más); solo si es UNA, si no queda sin id.
+function implementationResponsibleUserId(clientId, name) {
+    if (!name) return null;
+    const wanted = name.toLocaleLowerCase('es');
+    const matches = listActiveUsersBrief(clientId, false).filter((u) => implementationLine(u.name).toLocaleLowerCase('es') === wanted);
+    return matches.length === 1 ? matches[0].id : null;
+}
+// Revisa los campos de una actividad: { title, responsible, start, end } limpios, o { error } (TITLE, RESPONSIBLE, DATES = una sola fecha, DATE = fecha falsa, RANGE = el fin va antes del inicio).
+function cleanImplementationActivityFields(f) {
+    if (typeof f.title !== 'string') return { error: 'TITLE' };
+    const title = implementationLine(f.title);
+    if (!title || Array.from(title).length > IMPLEMENTATION_ACTIVITY_TITLE_MAX) return { error: 'TITLE' };
+    if (f.responsible != null && typeof f.responsible !== 'string') return { error: 'RESPONSIBLE' };
+    const responsible = implementationLine(f.responsible);
+    if (Array.from(responsible).length > IMPLEMENTATION_ACTIVITY_RESPONSIBLE_MAX) return { error: 'RESPONSIBLE' };
+    for (const date of [f.startDate, f.endDate]) if (date != null && typeof date !== 'string') return { error: 'DATE' };
+    const start = String(f.startDate || '').trim();
+    const end = String(f.endDate || '').trim();
+    if ((start && !end) || (!start && end)) return { error: 'DATES' };
+    if (start && (!isRealDateOnly(start) || !isRealDateOnly(end))) return { error: 'DATE' };
+    if (start && end < start) return { error: 'RANGE' };
+    return { title, responsible, start, end };
+}
+const implementationActivityStamp = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
+// Agregar una actividad a un nivel (cualquier nivel que exista; si el lado puede agregar en ese estado de nivel lo decide server.js). side = 'client' | 'saas'.
+function addImplementationActivity(clientId, levelKey, { title, responsible, startDate, endDate, byLabel, byUserId, side }) {
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
+    if (!impl.levels.some((l) => l.key === levelKey)) return { error: 'LEVEL' };
+    if (side !== 'client' && side !== 'saas') return { error: 'SIDE' };
+    const clean = cleanImplementationActivityFields({ title, responsible, startDate, endDate });
+    if (clean.error) return clean;
+    let id = 0;
+    db.transaction(() => {
+        id = Number(db.prepare(`INSERT INTO implementation_activities (implementation_id, level_key, title, responsible, responsible_user_id, start_date, end_date, created_by, created_by_user_id, created_side)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(impl.id, levelKey, clean.title, clean.responsible, implementationResponsibleUserId(clientId, clean.responsible), clean.start, clean.end, byLabel || '', byUserId == null ? null : byUserId, side).lastInsertRowid);
+        logImplementationEvent(impl.id, levelKey, 'activity_added', clean.title, byLabel);
+        db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
+    })();
+    return { before: impl, activityId: id, levelKey, implementation: getImplementation(clientId) };
+}
+// La actividad (y su nivel) de ESA compañía: una de otra compañía o que no existe da null.
+function findImplementationActivity(impl, activityId) {
+    for (const level of impl.levels) {
+        const activity = level.activities.find((a) => a.id === activityId);
+        if (activity) return { level, activity };
+    }
+    return null;
+}
+// Cambiar el título, el responsable o las fechas (lo que venga en `fields`; lo demás se queda). Sin cambios no registra nada.
+function updateImplementationActivity(clientId, activityId, fields, byLabel) {
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
+    const found = findImplementationActivity(impl, Number(activityId));
+    if (!found) return { error: 'NOT_FOUND' };
+    const { level, activity } = found;
+    const has = (name) => Object.prototype.hasOwnProperty.call(fields || {}, name);
+    const clean = cleanImplementationActivityFields({
+        title: has('title') ? fields.title : activity.title, responsible: has('responsible') ? fields.responsible : activity.responsible,
+        startDate: has('startDate') ? fields.startDate : activity.startDate, endDate: has('endDate') ? fields.endDate : activity.endDate,
+    });
+    if (clean.error) return clean;
+    const changed = [];
+    if (clean.title !== activity.title) changed.push('title');
+    if (clean.responsible !== activity.responsible) changed.push('responsible');
+    if (clean.start !== activity.startDate || clean.end !== activity.endDate) changed.push('dates');
+    if (changed.length) {
+        db.transaction(() => {
+            const userId = clean.responsible === activity.responsible ? activity.responsibleUserId : implementationResponsibleUserId(clientId, clean.responsible);
+            db.prepare("UPDATE implementation_activities SET title = ?, responsible = ?, responsible_user_id = ?, start_date = ?, end_date = ?, updated_at = datetime('now') WHERE id = ? AND implementation_id = ?")
+                .run(clean.title, clean.responsible, userId, clean.start, clean.end, activity.id, impl.id);
+            logImplementationEvent(impl.id, level.key, 'activity_changed', `${clean.title} (${changed.join(', ')})`, byLabel);
+            db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
+        })();
+    }
+    return { before: impl, activityId: activity.id, levelKey: level.key, changed, implementation: changed.length ? getImplementation(clientId) : impl };
+}
+// Cambiar el estado: 'pending' | 'running' | 'done' (al marcarla hecha queda quién y cuándo; al volverla a otro estado se borra).
+function setImplementationActivityStatus(clientId, activityId, status, byLabel) {
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
+    const found = findImplementationActivity(impl, Number(activityId));
+    if (!found) return { error: 'NOT_FOUND' };
+    if (!IMPLEMENTATION_ACTIVITY_STATUSES.includes(status)) return { error: 'ACTION' };
+    const { level, activity } = found;
+    if (activity.status === status) return { error: 'ALREADY' };
+    db.transaction(() => {
+        db.prepare("UPDATE implementation_activities SET status = ?, done_at = ?, done_by = ?, updated_at = datetime('now') WHERE id = ? AND implementation_id = ?")
+            .run(status, status === 'done' ? implementationActivityStamp() : null, status === 'done' ? (byLabel || '') : '', activity.id, impl.id);
+        logImplementationEvent(impl.id, level.key, 'activity_status', `${activity.title}: ${activity.status} → ${status}`, byLabel);
+        db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
+    })();
+    return { before: impl, activityId: activity.id, levelKey: level.key, previous: activity.status, status, implementation: getImplementation(clientId) };
+}
+// Quitar una actividad (solo de las agregadas: los pasos del sistema no se tocan aquí).
+function removeImplementationActivity(clientId, activityId, byLabel) {
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
+    const found = findImplementationActivity(impl, Number(activityId));
+    if (!found) return { error: 'NOT_FOUND' };
+    const { level, activity } = found;
+    db.transaction(() => {
+        db.prepare('DELETE FROM implementation_activities WHERE id = ? AND implementation_id = ?').run(activity.id, impl.id);
+        logImplementationEvent(impl.id, level.key, 'activity_removed', activity.title, byLabel);
+        db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
+    })();
+    return { before: impl, activityId: activity.id, levelKey: level.key, implementation: getImplementation(clientId) };
 }
 
 // --- Implementación Inicial · nivel 1 «Contratado»: lo que la compañía contrató y lo que YA USA ---------------------------------------------------------------------------------------------------
@@ -17723,6 +17895,14 @@ function seedMaintenanceGrants() {
     ];
     seedLeavesForScreenHolders(MTTO_BUTTONS_SEED_KEY, alta, leaves, 'the Mantenimiento de activos buttons', { contractOnly: true });
 }
+// Cronograma con actividades (2026-11-19, pieza 1): el botón nuevo «Agregar actividades, notas y comentarios» (Cronograma > Botones) ESCRIBE datos: se agrega, UNA vez, solo a lo contratado (planes, adicionales del cliente y giros) de quien ya
+// tiene el Cronograma, con «Solo ver» y «Ver y operar» (sin «Solo ver» el árbol del cliente marca ese tramo en gris «−»). A puestos y usuarios no se les da solo: el administrador del cliente (que no depende de hojas) lo reparte desde el árbol.
+const IMPLEMENTATION_ACTIVITY_BUTTON_SEED_KEY = 'seed-impl-agregar-actividades-boton-v1';
+function seedImplementationActivityButton() {
+    const cronograma = TABLE_GRANT_PATHS.implementacion;
+    if (!cronograma) return;
+    seedLeavesForScreenHolders(IMPLEMENTATION_ACTIVITY_BUTTON_SEED_KEY, cronograma, ['solo-ver', 'ver-y-operar'].map((level) => `${cronograma.submenuPrefix}/class-botones/colImplAgregar/${level}`), 'the Cronograma add-activities button', { contractOnly: true });
+}
 // Arreglo de la siembra de arriba (2026-11-13): el botón «Desactivar» de Preventivo se sembró solo con «Eliminar» y le faltó «Solo ver», el nivel de abajo. En el árbol del cliente (Permisos Adicionales) el
 // grupo «Botones», la «Tabla Preventivo» y la pantalla salían en gris («−», incompleto) aunque todo estuviera seleccionado, porque cada contenedor se mide con «Solo ver» de cada botón. Una sola vez se le agrega
 // «Solo ver» a todo dueño que tiene «Eliminar» de ese botón y no tiene «Solo ver» (puestos, usuarios, planes, clientes y sectores). Lo que el botón permite hacer no cambia: ya lo tenían por «Eliminar».
@@ -17815,6 +17995,7 @@ seedAssetModelLeaves();
 seedAssetAuthorizeLeaf();
 seedCalibrationGrants();
 seedMaintenanceGrants();
+seedImplementationActivityButton();
 seedMttoDeleteSoloVer();
 seedLecturasGrants();
 seedActividadesActivosGrants();
@@ -18561,7 +18742,8 @@ module.exports = {
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
     LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
-    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask,
+    addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,

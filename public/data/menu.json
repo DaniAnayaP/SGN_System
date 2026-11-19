@@ -5910,6 +5910,11 @@
                   "id": "colImplFinalizar",
                   "labelKey": "main.colImplFinalizar",
                   "permissionOnly": true
+                },
+                {
+                  "id": "colImplAgregar",
+                  "labelKey": "main.colImplAgregar",
+                  "permissionOnly": true
                 }
               ]
             }

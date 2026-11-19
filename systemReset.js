@@ -60,6 +60,7 @@ const TABLES = {
     implementation_levels: { action: WIPE, group: 'captures' },
     implementation_events: { action: WIPE, group: 'captures' },
     implementation_tasks: { action: WIPE, group: 'captures' },
+    implementation_activities: { action: WIPE, group: 'captures' }, // las actividades que se agregan a cada nivel del Cronograma
     client_login_configs: { action: WIPE, group: 'captures' }, // Apps Nuestros Clientes: el inicio de sesión personalizado de cada cliente
     sku_requests: { action: WIPE, group: 'captures' },
     sku_request_events: { action: WIPE, group: 'captures' },
