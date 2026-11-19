@@ -12668,10 +12668,16 @@ function adminContractGrants() {
 }
 // General (main) del administrador del cliente: solo lo que se le asignó (el plan más los adicionales), igual que lo demás del menú (Daniel, 2026-11-19: «se le habilitaron más permisos de los que se le asignaron»).
 // Antes veía TODO General (los botones de arriba, la rueda de Configuración con todos sus renglones, Inicio/Panel/Tablero) aunque el contrato trajera solo algunos. Sigue igual (todo) cuando el contrato no trae NADA de General
-// (los clientes armados antes de que el árbol llevara General: no hay con qué comparar). Siempre visibles: «Administración del Negocio» (con ella el administrador arma a su gente y sus perfiles) y los centros de costos (no son parte del plan).
-function adminMainAlwaysIncluded(itemId, submenuId) {
-    if (itemId === 'cc-list') return true;
-    return itemId === 'btn-configuracion' && (!submenuId || submenuId === 'btn-admin-negocio' || String(submenuId).startsWith('btn-admin-negocio/'));
+// (los clientes armados antes de que el árbol llevara General: no hay con qué comparar). Lo único que no se mide son los centros de costos (no son parte del plan). «Administración del Negocio» también se mide: si no se le asignó, no sale (Daniel, 2026-11-19).
+function adminMainAlwaysIncluded(itemId) {
+    return itemId === 'cc-list';
+}
+// Salir, Departamento, Área y C. Costos se guardan cada uno con su propia llave (main / btn-departamento…) aunque en el árbol se vean dentro de «Configuración › Configuración botones», así que el renglón «Configuración botones» de la rueda
+// sale cuando el administrador tiene asignado alguno de ellos (con su módulo contratado, como los botones mismos) o el botón de Tamaño del Sistema, que también vive ahí.
+const ADMIN_BUTTON_CONFIG_IDS = ['btn-salir', 'btn-departamento', 'btn-area', 'btn-cc'];
+function adminButtonConfigHasShortcut() {
+    if (!isUnrestrictedClientAdmin()) return false;
+    return ADMIN_BUTTON_CONFIG_IDS.some((id) => hasMainButtonPermission(id) && (id === 'btn-salir' || contractedModuleKeys.includes(id))) || hasSettingsSubPermission('btn-tamano-sistema');
 }
 function adminMainContract() {
     const contract = adminContractGrants();
@@ -12683,7 +12689,7 @@ function adminMainContract() {
 function adminMainCovers(itemId, submenuId) {
     const main = adminMainContract();
     if (!main) return true;
-    if (adminMainAlwaysIncluded(itemId, submenuId)) return true;
+    if (adminMainAlwaysIncluded(itemId)) return true;
     return main.some((g) => !g.itemId || (g.itemId === itemId && (!submenuId || !g.submenuId || g.submenuId === submenuId || String(g.submenuId).startsWith(`${submenuId}/`))));
 }
 function grantsCoverScreen(grants, sectionId, itemId, submenuId) {
@@ -12758,7 +12764,7 @@ function syncButtonConfigShortcuts() {
 const SETTINGS_SUBITEM_IDS = ['btn-idioma', 'btn-estilo', 'btn-tamano-sistema', 'btn-admin-negocio', 'btn-config-botones', 'btn-base-datos', 'btn-negocio-inteligente', 'btn-otros'];
 function hasSettingsAccess() {
     if (!isEstatusVisible('main', 'btn-configuracion', null)) return false;
-    if (isUnrestrictedClientAdmin()) return true;
+    if (isUnrestrictedClientAdmin()) return adminMainCovers('btn-configuracion', null) || adminButtonConfigHasShortcut();
     const grants = cachedBusinessProfile?.effectiveGrants || [];
     return grants.some((g) => {
         if (g.sectionId !== 'main' || g.itemId !== 'btn-configuracion') return false;
@@ -12912,7 +12918,7 @@ function syncSettingsSubmenuVisibility() {
     if (languageGroup && !hasSettingsSubPermission('btn-idioma')) languageGroup.hidden = true;
     if (styleGroup && !hasSettingsSubPermission('btn-estilo')) styleGroup.hidden = true;
     if (businessAdminGroup && !hasSettingsSubPermission('btn-admin-negocio')) businessAdminGroup.hidden = true;
-    if (buttonConfigGroup && !hasSettingsSubPermission('btn-config-botones')) buttonConfigGroup.hidden = true;
+    if (buttonConfigGroup && !(hasSettingsSubPermission('btn-config-botones') || adminButtonConfigHasShortcut())) buttonConfigGroup.hidden = true;
     if (databaseGroup && !hasSettingsSubPermission('btn-base-datos')) databaseGroup.hidden = true;
     if (businessIntelligenceGroup && !hasSettingsSubPermission('btn-negocio-inteligente')) businessIntelligenceGroup.hidden = true;
     if (othersGroup && !hasSettingsSubPermission('btn-otros')) othersGroup.hidden = true;

@@ -310,9 +310,9 @@
         });
         let grantSet = new TrackedSet(); // costEdit/grantReadonlyCost modes
         // El conjunto del plan (verde); con mainIncluded, además toda llave de General cuenta como cubierta por el plan, salvo que el plan o los adicionales traigan ALGO de General: entonces
-        // solo cuenta lo asignado (más «Administración del Negocio» y los centros de costos, que el administrador siempre tiene), igual que el menú del administrador (Dashboard.adminMainCovers).
+        // solo cuenta lo asignado (más los centros de costos, que no son parte del plan), igual que el menú del administrador (Dashboard.adminMainCovers).
         let mainLimited = false;
-        const mainAlwaysIncluded = (key) => /^main::cc-list(::|$)/.test(key) || /^main::btn-configuracion::btn-admin-negocio(\/|$)/.test(key);
+        const mainAlwaysIncluded = (key) => /^main::cc-list(::|$)/.test(key);
         class PlanSet extends Set {
             // excluded (solo «Otorgar Accesos» de una persona): lo que el puesto da y se le quitó a ella ya no cuenta como cubierto
             has(key) {
