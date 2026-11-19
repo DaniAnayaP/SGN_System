@@ -37,7 +37,12 @@ const fold = (text) => String(text == null ? '' : text).normalize('NFD').replace
 let plans = [];                 // resúmenes de todos mis planes (activos y cerrados)
 const cache = new Map();        // id → { plan, items, people, canEdit }
 let canCreate = true;
-let tabs = { open: [], active: 'list' };
+let tabs = { open: [], active: 'list' }; // active: 'list' | 'mine' (Mis actividades) | id de un plan abierto
+const isPlanTab = (id) => typeof id === 'number';
+let mine = { activities: [], counts: { open: 0, done: 0 }, truncated: false }; // lo que me toca (responsable o quien ejecuta) de todos mis planes activos
+let mineFilter = 'open';        // 'open' (por hacer) | 'late' (vencidas) | 'done' | 'all'
+let mineRole = 'all';           // 'all' | 'responsible' (soy responsable, también si además ejecuto) | 'executor' (ejecuto, también si además soy responsable)
+let mineQuery = '';
 let listFilter = 'all';         // 'all' (activos de cualquier origen) | 'own' | 'shared' (compartidos conmigo y del equipo) | 'closed'
 let listQuery = '';
 let form = null;                // el formulario en línea abierto (uno a la vez): { mode: 'add'|'edit', planId, parentId, id, depth, values, error, busy }
@@ -78,6 +83,10 @@ async function loadList() {
     plans = out.plans || [];
     canCreate = out.canCreate !== false;
 }
+async function loadMine() {
+    const out = await api('GET', '/mine');
+    mine = { activities: out.activities || [], counts: out.counts || { open: 0, done: 0 }, truncated: !!out.truncated };
+}
 async function loadPlan(id) {
     const out = await api('GET', `/${id}`);
     cache.set(id, out);
@@ -89,19 +98,19 @@ async function loadPlan(id) {
 }
 // Vuelve a leer la lista y, si hay uno abierto, ese plan (un plan que ya no existe se quita de las pestañas).
 async function refreshAll(planId, quiet) {
-    await loadList();
+    await Promise.all([loadList(), loadMine().catch((err) => console.error('Mis actividades:', err))]);
     tabs.open = tabs.open.filter((id) => plans.some((p) => p.id === id));
-    if (tabs.active !== 'list' && !tabs.open.includes(tabs.active)) tabs.active = 'list';
+    if (isPlanTab(tabs.active) && !tabs.open.includes(tabs.active)) tabs.active = 'list';
     saveTabs();
     cache.forEach((_, id) => { if (!plans.some((p) => p.id === id)) cache.delete(id); });
-    const target = planId && tabs.open.includes(planId) ? planId : (tabs.active !== 'list' ? tabs.active : null);
+    const target = planId && tabs.open.includes(planId) ? planId : (isPlanTab(tabs.active) ? tabs.active : null);
     if (target) { try { await loadPlan(target); } catch (err) { /* se quita abajo */ } }
     if (!quiet) render();
 }
 // Al volver a la pestaña del navegador: se vuelve a leer y solo se redibuja si algo cambió (así no se pierde el foco ni lo que se estaba escribiendo).
 async function refreshQuietly() {
     const target = currentPlanId();
-    const signature = () => JSON.stringify([plans, target ? cache.get(target) : null, tabs]);
+    const signature = () => JSON.stringify([plans, target ? cache.get(target) : null, tabs, mine]);
     const before = signature();
     await refreshAll(target, true);
     if (signature() !== before) render();
@@ -141,6 +150,9 @@ function renderTabs() {
     const el = $('wp-tabs');
     const listActive = tabs.active === 'list';
     let html = `<div class="wp-tab wp-tab-list${listActive ? ' active' : ''}" role="tab" tabindex="0" aria-selected="${listActive}" data-wp-tab="list" data-help-key="wpTabs"><i class="bx bx-list-ul" aria-hidden="true"></i><span class="wp-tab-nm">${esc(t('main.wpTabAll'))}</span><span class="wp-count">${plans.filter(isLive).length}</span></div>`;
+    const mineActive = tabs.active === 'mine';
+    const lateCount = mine.activities.filter((a) => a.status !== 'done' && a.endDate && a.endDate < todayYmd()).length;
+    html += `<div class="wp-tab wp-tab-mine${mineActive ? ' active' : ''}" role="tab" tabindex="0" aria-selected="${mineActive}" data-wp-tab="mine" data-help-key="wpMineTab"><i class="bx bx-task" aria-hidden="true"></i><span class="wp-tab-nm">${esc(t('main.wpTabMine'))}</span><span class="wp-count${lateCount ? ' wp-count-hot' : ''}"${lateCount ? ` title="${esc(t('main.wpMineLateCount', { n: lateCount }))}"` : ''}>${mine.counts.open || 0}</span></div>`;
     tabs.open.forEach((id) => {
         const p = plans.find((x) => x.id === id);
         if (!p) return;
@@ -153,10 +165,11 @@ function renderTabs() {
 function activate(id) {
     form = null;
     tabs.active = id;
-    if (id !== 'list' && !tabs.open.includes(id)) tabs.open.push(id);
+    if (isPlanTab(id) && !tabs.open.includes(id)) tabs.open.push(id);
     saveTabs();
     render();
-    if (id !== 'list' && !cache.has(id)) {
+    if (id === 'mine') { loadMine().then(() => { if (tabs.active === 'mine') render(); }).catch((err) => failed(err)); return; }
+    if (isPlanTab(id) && !cache.has(id)) {
         planLoading = id;
         loadPlan(id).then(() => { planLoading = null; if (tabs.active === id) render(); }).catch((err) => { planLoading = null; failed(err, id); });
     }
@@ -167,7 +180,7 @@ function closeTab(id) {
     form = null;
     saveTabs();
     render();
-    if (tabs.active !== 'list' && !cache.has(tabs.active)) activate(tabs.active);
+    if (isPlanTab(tabs.active) && !cache.has(tabs.active)) activate(tabs.active);
 }
 
 // ---- la lista de planes -------------------------------------------------------------------------------------------------------------------------------
@@ -449,11 +462,111 @@ function renderPlan(id) {
 }
 function render() {
     renderTabs();
-    if (tabs.active === 'list') renderList(); else renderPlan(tabs.active);
+    if (tabs.active === 'list') renderList(); else if (tabs.active === 'mine') renderMine(); else renderPlan(tabs.active);
+}
+
+// ---- Mis actividades (pieza 3a) ------------------------------------------------------------------------------------------------------------------------
+// Lo que me toca (responsable o quien ejecuta) de TODOS mis planes activos, junto. El servidor manda la lista ya ordenada (lo que falta por fecha, lo hecho al final); aquí se agrupa por cuándo vence, se filtra y se cambia el estado de las hojas.
+const daysBetween = (fromYmd, toYmd) => Math.round((dayOf(toYmd) - dayOf(fromYmd)) / 86400000);
+// cuándo vence (group: late | week | later | nodate | done) y el texto con el color que le toca
+function dueInfo(a, today) {
+    if (a.status === 'done') return { group: 'done', text: '', tone: '' };
+    if (!a.endDate) return { group: 'nodate', text: t('main.wpNoDates'), tone: '' };
+    const n = daysBetween(today, a.endDate);
+    if (n < 0) return { group: 'late', text: t(n === -1 ? 'main.wpMineDueAgoOne' : 'main.wpMineDueAgo', { n: -n }), tone: 'late' };
+    const sunday = ymdOf(new Date(mondayOf(dayOf(today)).getTime() + 6 * 86400000 + 3600000));
+    const text = n === 0 ? t('main.wpMineDueToday') : (n === 1 ? t('main.wpMineDueTomorrow') : t('main.wpMineDueIn', { n }));
+    return { group: a.endDate <= sunday ? 'week' : 'later', text, tone: n <= 1 ? 'warn' : '' };
+}
+function mineMatches(a, today) {
+    if (mineRole === 'responsible' && a.role === 'executor') return false;
+    if (mineRole === 'executor' && a.role === 'responsible') return false;
+    if (mineQuery.trim() && !SearchSyntax.matches('contains', mineQuery, `${a.title} ${a.planTitle} ${a.path.join(' ')}`)) return false;
+    if (mineFilter === 'open') return a.status !== 'done';
+    if (mineFilter === 'late') return dueInfo(a, today).group === 'late';
+    if (mineFilter === 'done') return a.status === 'done';
+    return true;
+}
+function mineRow(a, today) {
+    const info = dueInfo(a, today);
+    const roleKey = a.role === 'both' ? 'main.wpMineChipBoth' : (a.role === 'responsible' ? 'main.wpMineChipResp' : 'main.wpMineChipExec');
+    const crumbs = [a.planTitle, ...a.path].map(esc).join(' › ');
+    const data = ` data-plan="${a.planId}" data-id="${a.itemId}"`;
+    const btn = (icon, labelKey, status) => `<button type="button" class="admin-icon-btn impl-act-btn" data-wp-mine="status"${data} data-status="${status}" aria-label="${esc(t(labelKey))}" title="${esc(t(labelKey))}"><i class="bx ${icon}" aria-hidden="true"></i></button>`;
+    const actions = [];
+    if (a.canStatus && a.isLeaf) {
+        if (a.status === 'pending') actions.push(btn('bx-play', 'main.wpMarkRunning', 'in_progress'));
+        if (a.status !== 'done') actions.push(btn('bx-check', 'main.wpMarkDone', 'done'));
+        if (a.status !== 'pending') actions.push(btn('bx-undo', 'main.wpMarkPending', 'pending'));
+    }
+    const range = a.startDate && a.endDate ? (a.startDate === a.endDate ? shortDate(a.endDate) : `${shortDate(a.startDate)} – ${shortDate(a.endDate)}`) : '';
+    const stateLabel = !a.isLeaf && a.status === 'in_progress' ? t('main.wpStatusProgress', { pct: a.progress || 0 }) : statusText(a.status);
+    const chips = [
+        `<span class="wp-chip${a.role === 'executor' ? ' wp-chip-team' : ' wp-chip-own'}">${esc(t(roleKey))}</span>`,
+        `<span class="exp-chip exp-chip-${TONE[a.status] || 'cancelled'}">${esc(stateLabel)}</span>`,
+        info.text ? `<span class="wp-chip${info.tone === 'late' ? ' wp-mine-late' : (info.tone === 'warn' ? ' wp-mine-warn' : '')}">${esc(info.text)}</span>` : '',
+        range ? `<span class="wp-chip">${esc(range)}</span>` : '',
+        a.unreadCount ? `<span class="wp-chip wp-chip-new" title="${esc(t('main.wpUnreadComments', { n: a.unreadCount }))}"><i class="bx bx-message-rounded-dots" aria-hidden="true"></i> ${a.unreadCount}</span>` : (a.commentCount ? `<span class="wp-chip"><i class="bx bx-message-rounded-dots" aria-hidden="true"></i> ${a.commentCount}</span>` : ''),
+    ].filter(Boolean).join('');
+    return `<div class="wp-mine-row${info.tone === 'late' ? ' is-late' : ''}${a.status === 'done' ? ' is-done' : ''}" role="group" aria-label="${esc(a.title)}" data-help-key="wpMineRow">
+        ${dot(a.status)}
+        <div class="wp-mine-main"><b class="wp-mine-title" data-wp-mine="open"${data} role="button" tabindex="0" title="${esc(t('main.wpOpenItem'))}">${esc(a.title)}</b> <span class="wp-lvl-tag">${esc(a.levelName || levelLabel({ levelNames: [] }, a.depth))}</span>
+            <span class="wp-mine-crumbs">${crumbs}</span><span class="wp-mine-meta">${chips}</span></div>
+        <div class="wp-mine-side">${actions.length ? `<span class="impl-act-btns" role="group" aria-label="${esc(t('main.wpNameActions'))}" data-help-key="wpMineActions">${actions.join('')}</span>` : ''}<button type="button" class="btn wp-open" data-wp-mine="open"${data}>${esc(t('main.wpMineOpenPlan'))} ›</button></div>
+    </div>`;
+}
+const MINE_GROUPS = [['late', 'main.wpMineGroupLate'], ['week', 'main.wpMineGroupWeek'], ['later', 'main.wpMineGroupLater'], ['nodate', 'main.wpMineGroupNoDate'], ['done', 'main.wpMineGroupDone']];
+// partial: al escribir en el buscador o cambiar un filtro solo se cambia lo de abajo, para no perder el cursor
+function renderMine(partial) {
+    const root = $('wp-root');
+    const today = todayYmd();
+    const all = mine.activities;
+    const groupOf = (a) => dueInfo(a, today).group;
+    const counts = { open: all.filter((a) => a.status !== 'done').length, late: all.filter((a) => groupOf(a) === 'late').length, done: all.filter((a) => a.status === 'done').length, all: all.length };
+    const pill = (attr, key, label, n, current) => `<button type="button" class="wp-pill${current === key ? ' active' : ''}" data-wp-mine-${attr}="${key}" aria-pressed="${current === key}">${esc(t(label))}${n == null ? '' : ` · ${n}`}</button>`;
+    const filters = `<div class="wp-filters wp-mine-filters" role="group" aria-label="${esc(t('main.wpMineFilterName'))}" data-help-key="wpMineFilter">${[['open', 'main.wpMineFilterOpen'], ['late', 'main.wpMineFilterLate'], ['done', 'main.wpMineFilterDone'], ['all', 'main.wpMineFilterAll']].map(([k, l]) => pill('filter', k, l, counts[k], mineFilter)).join('')}</div>`;
+    const roles = `<div class="wp-filters wp-mine-roles" role="group" aria-label="${esc(t('main.wpMineRoleName'))}" data-help-key="wpMineRole">${[['all', 'main.wpMineRoleAll'], ['responsible', 'main.wpMineRoleResp'], ['executor', 'main.wpMineRoleExec']].map(([k, l]) => pill('role', k, l, null, mineRole)).join('')}</div>`;
+    const search = `<div class="wp-search" data-help-key="wpSearch"><i class="bx bx-search" aria-hidden="true"></i><input id="wp-mine-search" type="search" value="${esc(mineQuery)}" placeholder="${esc(t('main.wpMineSearchPlaceholder'))}" aria-label="${esc(t('main.wpMineSearchPlaceholder'))}" autocomplete="off"></div>`;
+    const shown = all.filter((a) => mineMatches(a, today));
+    let body;
+    if (!all.length) body = `<div class="wp-empty"><i class="bx bx-task" aria-hidden="true"></i><h3>${esc(t('main.wpMineEmptyTitle'))}</h3></div>`;
+    else if (!shown.length) body = `<p class="wp-none">${esc(t(mineQuery.trim() ? 'main.wpNoMatches' : 'main.wpMineNone'))}</p>`;
+    else {
+        const parts = MINE_GROUPS.map(([key, label]) => {
+            let list = shown.filter((a) => groupOf(a) === key);
+            if (key === 'done') list = list.slice().sort((a, b) => (a.endDate && b.endDate ? (a.endDate < b.endDate ? 1 : a.endDate > b.endDate ? -1 : 0) : 0));
+            if (!list.length) return '';
+            const heading = mineFilter === 'done' ? '' : `<h4 class="wp-group">${esc(t(label))} · ${list.length}</h4>`;
+            return `${heading}<div class="wp-mine-list">${list.map((a) => mineRow(a, today)).join('')}</div>`;
+        });
+        body = parts.join('') + (mine.truncated ? `<p class="wp-none">${esc(t('main.wpMineTruncated', { n: all.length }))}</p>` : '');
+    }
+    const existing = root.querySelector('#wp-mine-body');
+    if (partial && existing && root.dataset.view === 'mine') { existing.innerHTML = body; root.querySelector('.wp-mine-filters').outerHTML = filters; root.querySelector('.wp-mine-roles').outerHTML = roles; return; }
+    root.dataset.view = 'mine';
+    root.innerHTML = `<div class="wp-toolbar">${filters}<div class="wp-toolbar-r">${roles}${search}</div></div><div id="wp-mine-body">${body}</div>`;
+}
+// abrir la actividad en su plan (con su conversación) o cambiar el estado de una hoja desde esta lista
+async function mineAction(el) {
+    const planId = Number(el.dataset.plan);
+    const itemId = Number(el.dataset.id);
+    if (el.dataset.wpMine === 'open') {
+        try { if (!cache.has(planId)) await loadPlan(planId); } catch (err) { failed(err, planId); return; }
+        activate(planId);
+        const data = cache.get(planId);
+        if (data && data.items.some((i) => i.id === itemId)) openItemDetail(planId, itemId);
+        return;
+    }
+    try {
+        await api('PATCH', `/${planId}/items/${itemId}`, { status: el.dataset.status });
+        cache.delete(planId);
+        await Promise.all([loadList(), loadMine()]);
+        render();
+    } catch (err) { failed(err, planId); }
 }
 
 // ---- acciones del plan --------------------------------------------------------------------------------------------------------------------------------
-const currentPlanId = () => (tabs.active !== 'list' ? tabs.active : null);
+const currentPlanId = () => (isPlanTab(tabs.active) ? tabs.active : null);
 async function planWrite(id, op) {
     try { await op(); await loadPlan(id); render(); return true; } catch (err) { failed(err, id); return false; }
 }
@@ -840,8 +953,14 @@ document.addEventListener('click', (event) => {
     const closeBtn = el.closest('[data-wp-close]');
     if (closeBtn) { closeTab(Number(closeBtn.dataset.wpClose)); return; }
     const tab = el.closest('[data-wp-tab]');
-    if (tab && $('wp-tabs').contains(tab)) { const id = tab.dataset.wpTab; activate(id === 'list' ? 'list' : Number(id)); return; }
+    if (tab && $('wp-tabs').contains(tab)) { const id = tab.dataset.wpTab; activate(id === 'list' || id === 'mine' ? id : Number(id)); return; }
     if (el.closest('[data-wp-new]')) { openPlanModal(null); return; }
+    const mineFilterBtn = el.closest('[data-wp-mine-filter]');
+    if (mineFilterBtn) { mineFilter = mineFilterBtn.dataset.wpMineFilter; renderMine(true); return; }
+    const mineRoleBtn = el.closest('[data-wp-mine-role]');
+    if (mineRoleBtn) { mineRole = mineRoleBtn.dataset.wpMineRole; renderMine(true); return; }
+    const mineBtn = el.closest('[data-wp-mine]');
+    if (mineBtn) { mineAction(mineBtn); return; }
     const pin = el.closest('[data-wp-pin]');
     if (pin) { togglePin(Number(pin.dataset.wpPin)); return; }
     const open = el.closest('[data-wp-open]');
@@ -883,14 +1002,17 @@ document.addEventListener('click', (event) => {
 });
 document.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
+    const mineTitle = event.target.closest && event.target.closest('.wp-mine-title[data-wp-mine]');
+    if (mineTitle && event.target === mineTitle) { event.preventDefault(); mineAction(mineTitle); return; }
     const title = event.target.closest && event.target.closest('.wp-title[data-wp-row]');
     if (title && event.target === title) { event.preventDefault(); rowAction('comments', Number(title.dataset.id), title); return; }
     const tab = event.target.closest && event.target.closest('.wp-tab[data-wp-tab]');
-    if (tab && event.target === tab) { event.preventDefault(); const id = tab.dataset.wpTab; activate(id === 'list' ? 'list' : Number(id)); }
+    if (tab && event.target === tab) { event.preventDefault(); const id = tab.dataset.wpTab; activate(id === 'list' || id === 'mine' ? id : Number(id)); }
 });
 document.addEventListener('input', (event) => {
     const input = event.target;
     if (input.id === 'wp-search') { listQuery = input.value; renderList(true); return; }
+    if (input.id === 'wp-mine-search') { mineQuery = input.value; renderMine(true); return; }
     if (form && input.name && input.closest('[data-wp-form]')) form.values[input.name] = input.value;
 });
 document.addEventListener('submit', (event) => {
@@ -909,11 +1031,12 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && !f
         if (!role) return;
         const saved = readJson(TABS_KEY, { open: [], active: 'list' });
         tabs = { open: Array.isArray(saved.open) ? saved.open.filter((id) => Number.isInteger(id)) : [], active: saved.active };
-        try { await loadList(); } catch (err) { $('wp-error').textContent = t('main.wpLoadError'); $('wp-error').hidden = false; console.error('Planes de trabajo: failed to load', err); return; }
+        try { await loadList(); await loadMine().catch((err) => console.error('Mis actividades:', err)); } catch (err) { $('wp-error').textContent = t('main.wpLoadError'); $('wp-error').hidden = false; console.error('Planes de trabajo: failed to load', err); return; }
         tabs.open = tabs.open.filter((id) => plans.some((p) => p.id === id));
-        if (tabs.active !== 'list' && !tabs.open.includes(tabs.active)) tabs.active = 'list';
+        if (tabs.active !== 'mine' && !isPlanTab(tabs.active)) tabs.active = 'list';
+        if (isPlanTab(tabs.active) && !tabs.open.includes(tabs.active)) tabs.active = 'list';
         saveTabs();
-        if (tabs.active !== 'list') { try { await loadPlan(tabs.active); } catch (err) { tabs.active = 'list'; } }
+        if (isPlanTab(tabs.active)) { try { await loadPlan(tabs.active); } catch (err) { tabs.active = 'list'; } }
         render();
         openFromHash().catch(() => {});
         // si un nombre no cabe en su pestaña se abrevia (y al sobreponer sale completo): ver Dashboard.watchLabelFit

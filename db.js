@@ -15675,7 +15675,7 @@ function removeImplementationActivity(clientId, activityId, byLabel) {
 // lectura; quien no tiene acceso sigue recibiendo «no existe». El acceso se decide en UN lugar (workPlanAccess) y de ahí salen los permisos de cada acción (workPlanPlanCan / workPlanItemRights). Las reglas de quién puede entrar a la pantalla las decide server.js.
 // El historial (data_table_changes) usa table_key 'work_plans' y record_id = id del PLAN, también para los cambios de sus renglones (cada fila lleva en record_label el renglón: «Actividad «Licencia sanitaria»»).
 const WORK_PLAN_TABLE = 'work_plans';
-const WORK_PLAN_LIMITS = { title: 120, description: 500, note: 1000, level: 30, levels: 50, responsible: 80, executor: 200, plansPerUser: 100, itemsPerPlan: 1000, membersPerPlan: 50, reason: 500 };
+const WORK_PLAN_LIMITS = { title: 120, description: 500, note: 1000, level: 30, levels: 50, responsible: 80, executor: 200, plansPerUser: 100, itemsPerPlan: 1000, membersPerPlan: 50, reason: 500, mineMax: 500 };
 const WORK_PLAN_ROLES = ['view', 'collaborate', 'admin'];
 const WORK_PLAN_ROLE_ES = { view: 'Ver', collaborate: 'Colaborar', admin: 'Administrar' };
 const WORK_PLAN_DEFAULT_LEVELS = ['Nivel', 'Clasificación', 'Proceso', 'Actividad', 'Subactividad']; // los planes ya creados conservan los suyos
@@ -16050,6 +16050,35 @@ function listWorkPlans(clientId, userId, status = 'active') {
         { access, prefs: access.role === 'owner' ? null : prefs.get(row.id), memberCount: counts.get(row.id) || 0, comments: commentCounts.get(row.id) }));
     plans.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (a.lastActivityAt < b.lastActivityAt ? 1 : a.lastActivityAt > b.lastActivityAt ? -1 : 0) || b.id - a.id);
     return { plans, closedCount, counts: counts4, total: ownTotal, canCreate: ownTotal < WORK_PLAN_LIMITS.plansPerUser };
+}
+// «Mis actividades» (pieza 3a): los renglones donde esa persona es responsable o quien ejecuta (por usuario ligado, no por un nombre escrito), de TODOS los planes ACTIVOS a los que tiene acceso, juntos. Cada uno trae su ruta (los
+// renglones de arriba), el plan, su fecha (la propia o, si tiene renglones debajo, el rango de lo de abajo), su estado y avance, qué papel tiene ella (responsible | executor | both), sus comentarios y si puede cambiar su estado (solo las hojas).
+// Primero lo que falta y por fecha (sin fecha al final); lo hecho al último. Hasta WORK_PLAN_LIMITS.mineMax; truncated avisa si hubo más. counts = cuántas faltan y cuántas están hechas (de todas, aunque se recorte la lista).
+function listMyWorkPlanActivities(clientId, userId) {
+    const entries = workPlanAccessibleEntries(clientId, userId).filter((e) => e.row.status === 'active');
+    const all = [];
+    entries.forEach(({ row, access }) => {
+        const items = workPlanItemsFor(row, access, userId);
+        const byId = new Map(items.map((i) => [i.id, i]));
+        const levels = workPlanLevelsOf(row);
+        items.forEach((i) => {
+            const resp = i.responsibleUserId === userId;
+            const exec = i.executorUserId === userId;
+            if (!resp && !exec) return;
+            const path = [];
+            for (let p = i.parentId == null ? null : byId.get(i.parentId); p; p = p.parentId == null ? null : byId.get(p.parentId)) path.unshift(p.title);
+            all.push({
+                planId: row.id, planTitle: row.title, planOrigin: access.origin, itemId: i.id, title: i.title, path, depth: i.depth, levelName: levels[i.depth - 1] || '', isLeaf: i.childCount === 0,
+                startDate: i.rangeStart, endDate: i.rangeEnd, status: i.effectiveStatus, progress: i.progress, role: resp && exec ? 'both' : (resp ? 'responsible' : 'executor'),
+                responsibleName: i.responsibleName || '', executorName: i.executorName || '', commentCount: i.commentCount, unreadCount: i.unreadCount, canStatus: !!(i.can && i.can.status), position: i.position,
+            });
+        });
+    });
+    const open = all.filter((a) => a.status !== 'done').length;
+    all.sort((a, b) => (a.status === 'done') - (b.status === 'done')
+        || (a.endDate && b.endDate ? (a.endDate < b.endDate ? -1 : a.endDate > b.endDate ? 1 : 0) : (a.endDate ? -1 : (b.endDate ? 1 : 0)))
+        || (a.planTitle < b.planTitle ? -1 : a.planTitle > b.planTitle ? 1 : 0) || a.itemId - b.itemId);
+    return { activities: all.slice(0, WORK_PLAN_LIMITS.mineMax).map(({ position, ...rest }) => rest), counts: { open, done: all.length - open }, truncated: all.length > WORK_PLAN_LIMITS.mineMax };
 }
 // Los ids de los planes a los que esa persona tiene acceso (propios, compartidos y de su equipo): el historial de un plan solo lo ven ellos (ver las rutas de table-changes en server.js).
 function listAccessibleWorkPlanIds(clientId, userId) {
@@ -19963,7 +19992,7 @@ module.exports = {
     getUserGrants,
     setUserGrants,
     getUserGrantChangeLog,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
     MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices,
     THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,

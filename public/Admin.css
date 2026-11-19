@@ -9851,3 +9851,20 @@ input[type="color"].cli-company{ opacity: 0.55; }
 .brand-logo-stage-institutional{ background: var(--institutional-accent, #3F435D); }
 .brand-logo-preview{ max-width: 80%; max-height: 80%; object-fit: contain; }
 @media (max-width: 760px){ .brand-logos-row{ grid-template-columns: minmax(0, 1fr); } }
+
+/* Planes de trabajo, pieza 3a: pestaña «Mis actividades» (lo que me toca de todos mis planes) */
+.wp-mine-list{ display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.9rem; }
+.wp-mine-row{ display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 0.7rem; align-items: start; padding: 0.65rem 0.85rem; border: 1px solid var(--color-border); border-radius: 0.7rem; background: var(--color-surface); color: var(--color-text-primary); }
+.wp-mine-row .impl-dot{ margin-top: 0.3rem; }
+.wp-mine-row.is-late{ border-color: var(--color-report-calc-text); }
+.wp-mine-row.is-done .wp-mine-title{ text-decoration: line-through; opacity: 0.7; }
+.wp-mine-main{ min-width: 0; }
+.wp-mine-title{ cursor: pointer; font-size: 0.88rem; }
+.wp-mine-title:hover{ text-decoration: underline; }
+.wp-mine-crumbs{ display: block; margin-top: 0.1rem; font-size: 0.72rem; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.wp-mine-meta{ display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.4rem; }
+.wp-mine-side{ display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
+.wp-mine-late{ background: var(--color-report-calc-bg); color: var(--color-report-calc-text); border-color: var(--color-report-calc-text); }
+.wp-mine-warn{ border-color: var(--color-report-calc-text); }
+.wp-tab-list, .wp-tab-mine{ flex: 0 0 auto; } /* las dos pestañas fijas no se encogen: en celular la fila de pestañas se desliza de lado */
+@media (max-width: 640px){ .wp-mine-row{ grid-template-columns: auto minmax(0, 1fr); } .wp-mine-side{ grid-column: 1 / -1; flex-direction: row; justify-content: flex-end; align-items: center; } }
