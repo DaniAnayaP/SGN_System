@@ -22,6 +22,7 @@ const t = (key, params) => {
 };
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const locale = () => (localStorage.getItem('lang') === 'en' ? 'en-US' : 'es-MX');
+const stampDay = (at) => { const d = new Date(`${String(at).replace(' ', 'T')}Z`); return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' }); };
 const dayOf = (ymd) => { const [y, m, d] = String(ymd).split('-').map(Number); return new Date(y, m - 1, d); };
 const shortDate = (ymd) => (ymd ? dayOf(ymd).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' }) : '');
 const levelName = (key) => { const name = t(`main.implLevelName_${key}`); return name.startsWith('main.') ? key : name; };
@@ -125,7 +126,8 @@ function buildRow(r) {
     tr.dataset.recordId = String(r.clientId);
     const status = document.createElement('td');
     status.dataset.col = 'status';
-    status.innerHTML = `${statusChip(r.status)}${r.late ? ` <span class="exp-chip exp-chip-pending">${esc(t('main.implState_late'))}</span>` : ''}`;
+    const finishKey = r.finishStatus === 'ready' ? 'main.implRowFinish_ready' : (r.finishStatus === 'awaiting' ? (r.finishMissing.includes('client') ? 'main.implRowFinish_awaiting_client' : 'main.implRowFinish_awaiting_saas') : '');
+    status.innerHTML = `${statusChip(r.status)}${r.late ? ` <span class="exp-chip exp-chip-pending">${esc(t('main.implState_late'))}</span>` : ''}${finishKey ? ` <span class="exp-chip exp-chip-negotiating">${esc(t(finishKey))}</span>` : ''}`;
     tr.append(
         ...systemCells(r),
         cell('client', r.client), status, cell('implementer', r.implementer), cell('start', shortDate(r.startDate)), cell('end', shortDate(r.endDate)), cell('level', levelText(r)),
@@ -217,6 +219,21 @@ function openStart(row) {
     });
 }
 
+// El motivo de un rechazo de la finalización (obligatorio): se pide en una ventana aparte y se manda con onSend(nota).
+function openFinishReject(row, onSend) {
+    const modal = makeModal(`<h3>${esc(t('admin.saasImplFinishReject'))} · ${esc(row.client)}</h3>
+        <div class="admin-field"><label for="impl-reject-note">${esc(t('main.implFinishRejectReason'))}</label><textarea id="impl-reject-note" rows="3" maxlength="600"></textarea></div>
+        <p class="admin-error" id="impl-reject-error" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" id="impl-reject-ok">${esc(t('main.implFinishSend'))}</button><button type="button" class="btn btn-secondary" id="impl-reject-x">${esc(t('admin.saasImplClose'))}</button></div>`);
+    modal.$('#impl-reject-x').addEventListener('click', modal.close);
+    modal.$('#impl-reject-ok').addEventListener('click', async () => {
+        const note = modal.$('#impl-reject-note').value.trim();
+        const errorEl = modal.$('#impl-reject-error');
+        if (!note) { errorEl.textContent = t('admin.saasImplErr_NOTE'); errorEl.hidden = false; return; }
+        modal.$('#impl-reject-ok').disabled = true;
+        try { await onSend(note); modal.close(); } catch (err) { errorEl.textContent = explain(err); errorEl.hidden = false; modal.$('#impl-reject-ok').disabled = false; }
+    });
+}
 // «Cronograma»: los 10 niveles con sus fechas (se editan aquí) y lo que se puede hacer con cada uno según el orden.
 async function openDetail(row) {
     const modal = makeModal(`<h3>${esc(t('admin.saasImplDetailTitle', { client: row.client }))}</h3><div id="impl-body"><p class="exp-note">…</p></div>`);
@@ -246,6 +263,28 @@ async function openDetail(row) {
             const stats = training && task.stats ? `<small class="impl-subtask-stats">${esc(t('admin.saasImplTrainStats', { users: task.stats.users, sessions: task.stats.sessionsDone, trained: task.stats.trained }))}</small>` : '';
             return `<div class="impl-subtask"><span class="exp-chip exp-chip-${tone}">${esc(chipText)}</span><span class="impl-subtask-name">${esc(taskName(l, task))}${stats}</span><span class="impl-acts">${acts}</span></div>`;
         }).join('')}</div></td></tr>`;
+        // el cierre: lo confirman las dos partes con todos los niveles completos; la segunda confirmación finaliza la implementación
+        const f = impl.finish;
+        const sideName = (side) => t(side === 'client' ? 'main.implSideClient' : 'main.implSideSaas');
+        const party = (side) => t(side === 'client' ? 'main.implPartyClient' : 'main.implPartySaas');
+        const confirmation = (side) => {
+            const at = side === 'client' ? f.clientConfirmedAt : f.saasConfirmedAt;
+            const by = side === 'client' ? f.clientConfirmedBy : f.saasConfirmedBy;
+            return at ? t('main.implFinishConfirmedBy', { who: party(side), date: stampDay(at), by: by || '—' }) : t('main.implFinishPending', { who: party(side) });
+        };
+        let finishStatus;
+        if (f.status === 'closed') finishStatus = t('main.implFinishClosed', { date: stampDay(f.closedAt) });
+        else if (f.status === 'blocked') finishStatus = t('main.implFinishBlocked');
+        else if (f.missing.length === 2) finishStatus = `${t('main.implFinishReady')} · ${t('main.implFinishAwaitingBoth')}`;
+        else finishStatus = t(f.missing[0] === 'client' ? 'main.implFinishAwaitingClient' : 'main.implFinishAwaitingSaas');
+        const finishTone = { closed: 'approved', blocked: 'cancelled', ready: 'negotiating', awaiting: 'negotiating' }[f.status] || 'cancelled';
+        const finishButtons = [
+            f.canFinalize && detail.can.finish && !f.saasConfirmedAt ? `<button type="button" class="btn btn-secondary sc-mini" data-fin="confirm">${esc(t('admin.saasImplFinishConfirm'))}</button>` : '',
+            f.canFinalize && detail.can.rejectFinish ? `<button type="button" class="btn btn-secondary sc-mini" data-fin="reject">${esc(t('admin.saasImplFinishReject'))}</button>` : '',
+        ].join('');
+        const finishRejection = f.rejection && f.status !== 'closed' ? `<span class="impl-sub impl-rejected">${esc(t('main.implFinishRejected', { who: sideName(f.rejection.side), date: stampDay(f.rejection.at), note: f.rejection.note }))}</span>` : '';
+        const finishHtml = `<div class="impl-card impl-finish" data-help-key="saasImplFinish"><div class="impl-finish-head"><h4>${esc(t('admin.saasImplFinishTitle'))}</h4><span class="exp-chip exp-chip-${finishTone}">${esc(finishStatus)}</span></div>
+            ${f.status === 'blocked' ? '' : `<span class="impl-sub">${esc(confirmation('client'))}</span><span class="impl-sub">${esc(confirmation('saas'))}</span>`}${finishRejection}${finishButtons ? `<div class="impl-inline">${finishButtons}</div>` : ''}</div>`;
         const rows = impl.levels.map((l) => {
             const d = draft[l.key] || { start: l.startDate, end: l.endDate };
             const actions = [
@@ -263,6 +302,7 @@ async function openDetail(row) {
         body().innerHTML = `<div class="admin-field impl-implementer" data-help-key="saasImplStart"><label for="impl-implementer">${esc(t('admin.saasImplField'))}</label>
             <div class="impl-inline"><select id="impl-implementer"${open && detail.can.edit ? '' : ' disabled'}>${implementerOptions(impl.implementerUserId)}</select>
             ${open && detail.can.edit ? `<button type="button" class="btn btn-secondary sc-mini" id="impl-save-implementer">${esc(t('admin.saasImplSaveImplementer'))}</button>` : ''}</div></div>
+            ${finishHtml}
             <div class="impl-table-wrap" data-help-key="saasImplDates"><table class="impl-table"><thead><tr><th>${esc(t('admin.saasImplLevel'))}</th><th>${esc(t('admin.saasImplStartDate'))}</th><th>${esc(t('admin.saasImplEndDate'))}</th><th data-help-key="saasImplMark">${esc(t('admin.saasImplState'))}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
             <p class="admin-error" id="impl-error" hidden></p>
             <div class="admin-form-actions">${canDates ? `<button type="button" class="btn" id="impl-save-dates">${esc(t('admin.saasImplSaveDates'))}</button>` : ''}<button type="button" class="btn btn-secondary" id="impl-x">${esc(t('admin.saasImplClose'))}</button></div>`;
@@ -272,7 +312,7 @@ async function openDetail(row) {
     const guard = async (fn) => {
         try { await fn(); } catch (err) {
             showError(explain(err));
-            if (err.body && ['ORDER', 'ORDER_LATER', 'ALREADY', 'CLOSED', 'LOCKED', 'LEVEL_CLOSED', 'TASKS_PENDING', 'NO_SESSION'].includes(err.body.code)) { await reload().catch(() => {}); showError(explain(err)); }
+            if (err.body && ['ORDER', 'ORDER_LATER', 'ALREADY', 'CLOSED', 'LOCKED', 'LEVEL_CLOSED', 'TASKS_PENDING', 'NO_SESSION', 'NOT_READY', 'ALREADY_CONFIRMED'].includes(err.body.code)) { await reload().catch(() => {}); showError(explain(err)); }
         }
     };
     try { await reload(); } catch (err) { body().innerHTML = `<p class="admin-error">${esc(explain(err))}</p>`; return; }
@@ -287,7 +327,21 @@ async function openDetail(row) {
     modal.overlay.addEventListener('click', (event) => {
         const btn = event.target.closest('button');
         if (!btn) return;
-        if (btn.dataset.toggle) {
+        if (btn.dataset.fin === 'confirm') {
+            guard(async () => {
+                detail = await call('POST', `${API}/${row.clientId}/finish/confirm`, {});
+                draw();
+                Dashboard.showToast(t('admin.saasImplDone'), 'success');
+                await load();
+            });
+        } else if (btn.dataset.fin === 'reject') {
+            openFinishReject(row, async (note) => {
+                detail = await call('POST', `${API}/${row.clientId}/finish/reject`, { note });
+                draw();
+                Dashboard.showToast(t('admin.saasImplDone'), 'success');
+                await load();
+            });
+        } else if (btn.dataset.toggle) {
             if (expanded.has(btn.dataset.toggle)) expanded.delete(btn.dataset.toggle); else expanded.add(btn.dataset.toggle);
             draw();
         } else if (btn.dataset.task) {

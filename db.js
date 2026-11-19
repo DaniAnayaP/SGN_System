@@ -3834,6 +3834,7 @@ const TABLE_GRANT_PATHS = {
     'solicitudes-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-solicitudes-codigo' },
     'expansiones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-expansiones' },
     'sesiones-capacitacion': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-sesiones-capacitacion' },
+    'implementacion': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-cronograma' },
     'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     'kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'ayuda-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
@@ -4054,6 +4055,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'habilitacion-codigos': { create: 'colHabCreateAuth' },
     'solicitudes-codigo': { create: 'colSolTiGestionar' },
     'expansiones': { create: 'colExpCreateAuth' },
+    'implementacion': { create: 'colImplFinalizar' },
     'pedir-alta-codigo': { create: 'colSolCreateAuth' },
     'layout': { create: 'colLayoutCrearDesdeCero' },
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
@@ -15122,6 +15124,10 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_implementation_tasks_impl ON implementation_tasks (implementation_id);
 `);
+// El cierre (pieza 3): lo confirman AMBOS, el cliente y SaaS, cuando todos los niveles están completos (o «No aplica»); la segunda confirmación finaliza la implementación. Un rechazo pide motivo y borra las confirmaciones.
+['client_confirmed_at TEXT', "client_confirmed_by TEXT NOT NULL DEFAULT ''", 'saas_confirmed_at TEXT', "saas_confirmed_by TEXT NOT NULL DEFAULT ''", 'closed_at TEXT',
+    "rejection_side TEXT NOT NULL DEFAULT ''", "rejection_note TEXT NOT NULL DEFAULT ''", "rejection_by TEXT NOT NULL DEFAULT ''", 'rejection_at TEXT',
+].forEach((def) => { const [name, ...rest] = def.split(' '); ensureColumn('implementations', name, rest.join(' ')); });
 const IMPLEMENTATION_LEVELS = [
     { key: 'contracted', optional: 0 }, { key: 'design', optional: 0 }, { key: 'structure', optional: 0 }, { key: 'orgchart', optional: 0 }, { key: 'layout', optional: 0 },
     { key: 'codes', optional: 0 }, { key: 'access', optional: 0 }, { key: 'training', optional: 0 }, { key: 'api', optional: 1 }, { key: 'startup', optional: 0 },
@@ -15222,13 +15228,25 @@ function getImplementation(clientId) {
     const weekCount = startMonday && endDate ? weekIndex(startMonday, endDate) : 0;
     let currentWeek = null;
     if (startMonday && weekCount) currentWeek = Math.min(Math.max(weekIndex(startMonday, today), 0), weekCount + 1);
+    const pendingLevels = levels.filter((l) => l.status === 'pending').length;
+    const clientConfirmed = !!row.client_confirmed_at;
+    const saasConfirmed = !!row.saas_confirmed_at;
+    const finish = {
+        // blocked = faltan niveles; ready = todo completo y nadie ha confirmado; awaiting = confirmó una parte; closed = finalizada
+        status: row.status === 'closed' ? 'closed' : (pendingLevels > 0 ? 'blocked' : (clientConfirmed || saasConfirmed ? 'awaiting' : 'ready')),
+        canFinalize: row.status === 'active' && pendingLevels === 0,
+        clientConfirmedAt: row.client_confirmed_at, clientConfirmedBy: row.client_confirmed_by, saasConfirmedAt: row.saas_confirmed_at, saasConfirmedBy: row.saas_confirmed_by,
+        missing: row.status === 'closed' ? [] : ['client', 'saas'].filter((side) => !(side === 'client' ? clientConfirmed : saasConfirmed)),
+        closedAt: row.closed_at,
+        rejection: row.rejection_side ? { side: row.rejection_side, note: row.rejection_note, by: row.rejection_by, at: row.rejection_at } : null,
+    };
     return {
         id: row.id, clientId, status: row.status, implementerUserId: row.implementer_user_id, implementer: row.implementer_name, startedBy: row.started_by, startedAt: row.started_at, today,
         startDate, endDate, weekCount, currentWeek,
         currentKey: firstPending ? firstPending.level_key : '', done: applicable.filter((l) => l.status === 'done').length, total: applicable.length,
         // el avance general cuenta los niveles completos y lo que va del nivel en curso (sin llegar al 100% de ese nivel hasta que se marque completo)
         progress: applicable.length ? Math.floor(1e-9 + (100 * (applicable.filter((l) => l.status === 'done').length + partial)) / applicable.length) : 0,
-        levels,
+        levels, finish,
     };
 }
 function logImplementationEvent(implementationId, levelKey, event, detail, byLabel) {
@@ -15241,7 +15259,7 @@ function listImplementationsSummary() {
         return {
             clientId: c.id, client: c.company_name, createdAt: impl ? impl.startedAt : c.created_at, started: !!impl, status: impl ? impl.status : 'none', implementer: impl ? impl.implementer : '',
             startDate: impl ? impl.startDate : '', endDate: impl ? impl.endDate : '', currentKey: impl ? impl.currentKey : '', progress: impl ? impl.progress : 0, done: impl ? impl.done : 0, total: impl ? impl.total : 0,
-            late: impl ? impl.levels.some((l) => l.late) : false,
+            late: impl ? impl.levels.some((l) => l.late) : false, finishStatus: impl ? impl.finish.status : '', finishMissing: impl ? impl.finish.missing : [],
         };
     });
 }
@@ -15266,6 +15284,7 @@ function startImplementation(clientId, { implementerUserId, startedBy }) {
 function setImplementationImplementer(clientId, implementerUserId, byLabel) {
     const impl = getImplementation(clientId);
     if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
     const user = implementerUserId ? db.prepare('SELECT id, name FROM users WHERE id = ?').get(implementerUserId) : null;
     if (implementerUserId && !user) return { error: 'IMPLEMENTER' };
     db.transaction(() => {
@@ -15329,6 +15348,7 @@ function markImplementationLevel(clientId, levelKey, action, byLabel) {
             .run(next, next === 'pending' ? null : new Date().toISOString().slice(0, 19).replace('T', ' '), next === 'pending' ? '' : (byLabel || ''), impl.id, levelKey);
         logImplementationEvent(impl.id, levelKey, next === 'pending' ? 'reopened' : (next === 'done' ? 'done' : 'na'), '', byLabel);
         db.prepare("UPDATE implementations SET updated_at = datetime('now') WHERE id = ?").run(impl.id);
+        if (next === 'pending') clearImplementationFinishConfirmations(impl.id, byLabel); // ya no está todo completo: lo confirmado deja de valer
     })();
     return { before, status: next, implementation: getImplementation(clientId) };
 }
@@ -15354,6 +15374,58 @@ function getImplementationTrainingStats(clientId) {
 // ¿Ese módulo ya tiene al menos una sesión REALIZADA con asistentes? Es lo que se pide para marcar su capacitación como cumplida.
 function moduleHasTrainedSession(clientId, departmentKey) {
     return !!db.prepare(`SELECT 1 FROM training_sessions s JOIN training_session_attendees a ON a.session_id = s.id WHERE s.client_id = ? AND s.department = ? AND s.status = 'done' LIMIT 1`).get(clientId, departmentKey);
+}
+
+// Si había confirmaciones del cierre (de una parte o de ambas) y algo cambió, se borran: hay que volver a confirmar con todo completo.
+function clearImplementationFinishConfirmations(implementationId, byLabel) {
+    const row = db.prepare('SELECT client_confirmed_at, saas_confirmed_at FROM implementations WHERE id = ?').get(implementationId);
+    if (!row || (!row.client_confirmed_at && !row.saas_confirmed_at)) return;
+    db.prepare("UPDATE implementations SET client_confirmed_at = NULL, client_confirmed_by = '', saas_confirmed_at = NULL, saas_confirmed_by = '' WHERE id = ?").run(implementationId);
+    logImplementationEvent(implementationId, '', 'finish_cleared', '', byLabel);
+}
+// Confirmar la finalización: side = 'client' | 'saas'. Solo con todos los niveles completos (o «No aplica»); la segunda confirmación finaliza la implementación (queda cerrada: ya no se edita).
+function confirmImplementationFinish(clientId, side, byLabel) {
+    if (side !== 'client' && side !== 'saas') return { error: 'SIDE' };
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
+    if (!impl.finish.canFinalize) return { error: 'NOT_READY' };
+    if (side === 'client' ? impl.finish.clientConfirmedAt : impl.finish.saasConfirmedAt) return { error: 'ALREADY_CONFIRMED' };
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const other = side === 'client' ? impl.finish.saasConfirmedAt : impl.finish.clientConfirmedAt;
+    db.transaction(() => {
+        db.prepare(`UPDATE implementations SET ${side}_confirmed_at = ?, ${side}_confirmed_by = ?, rejection_side = '', rejection_note = '', rejection_by = '', rejection_at = NULL, updated_at = datetime('now') WHERE id = ?`).run(now, byLabel || '', impl.id);
+        logImplementationEvent(impl.id, '', 'finish_confirmed', side, byLabel);
+        if (other) {
+            db.prepare("UPDATE implementations SET status = 'closed', closed_at = ?, updated_at = datetime('now') WHERE id = ?").run(now, impl.id);
+            logImplementationEvent(impl.id, '', 'closed', '', byLabel);
+        }
+    })();
+    return { implementation: getImplementation(clientId), closed: !!other };
+}
+// Rechazar la finalización (con su motivo): borra las confirmaciones de las dos partes y deja el rechazo a la vista hasta que alguien vuelva a confirmar.
+function rejectImplementationFinish(clientId, side, note, byLabel) {
+    if (side !== 'client' && side !== 'saas') return { error: 'SIDE' };
+    const impl = getImplementation(clientId);
+    if (!impl) return { error: 'NOT_STARTED' };
+    if (impl.status !== 'active') return { error: 'CLOSED' };
+    if (!impl.finish.canFinalize) return { error: 'NOT_READY' };
+    const text = String(note || '').trim().slice(0, 600);
+    if (!text) return { error: 'NOTE' };
+    db.transaction(() => {
+        db.prepare("UPDATE implementations SET client_confirmed_at = NULL, client_confirmed_by = '', saas_confirmed_at = NULL, saas_confirmed_by = '', rejection_side = ?, rejection_note = ?, rejection_by = ?, rejection_at = datetime('now'), updated_at = datetime('now') WHERE id = ?").run(side, text, byLabel || '', impl.id);
+        logImplementationEvent(impl.id, '', 'finish_rejected', `${side}: ${text}`, byLabel);
+    })();
+    return { before: impl, implementation: getImplementation(clientId) };
+}
+// Aviso de la campana (kind 'implementation', scope 'data'): una parte confirmó o rechazó la finalización, o la implementación quedó finalizada. side = quién lo hizo; toSaas = el aviso es para SaaS.
+function publishImplementationNotice({ recipientIds, event, side, toSaas, clientName, note = '', actorUserId, actorLabel }) {
+    const ids = [...new Set((recipientIds || []).filter((id) => id != null && id !== actorUserId))];
+    if (!ids.length) return [];
+    const payload = JSON.stringify({ event, side: side || '', toSaas: !!toSaas, client: clientName || '', note: String(note || '').slice(0, 200) });
+    const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'implementation', 'data', ?, ?, ?)");
+    db.transaction(() => ids.forEach((id) => insert.run(id, payload, actorUserId == null ? null : actorUserId, actorLabel || '')))();
+    return ids;
 }
 
 // Marcar un RENGLÓN de un nivel: 'done' (listo), 'na' (No aplica) o 'reopen' (vuelve a pendiente). Solo se marcan los del nivel EN CURSO: uno bloqueado todavía no se abre y uno completo se reabre primero.
@@ -18176,7 +18248,7 @@ module.exports = {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,

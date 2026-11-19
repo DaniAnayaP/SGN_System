@@ -580,7 +580,7 @@ const {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,
@@ -1659,7 +1659,7 @@ app.post('/api/admin/training-sessions/:id/cancel', requireAuth, requireAdmin, (
 // se abre al completar el anterior; los opcionales, como la API, pueden quedar «No aplica» sin bloquear). El cliente consulta el cronograma. «Implementador» = cualquier cuenta de SaaS con esta pantalla en su árbol de accesos.
 // Posición de cada botón (a) en SaasAdminCatalog.js: no cambiar el orden.
 const SAAS_IMPL_ITEM = 'saas-implementations';
-const SAAS_IMPL_LEAVES = { start: 'tabla::a0', edit: 'tabla::a1', mark: 'tabla::a2', reopen: 'tabla::a3' };
+const SAAS_IMPL_LEAVES = { start: 'tabla::a0', edit: 'tabla::a1', mark: 'tabla::a2', reopen: 'tabla::a3', finish: 'tabla::a4', rejectFinish: 'tabla::a5' };
 const IMPL_LEVEL_ES = { contracted: 'Contratado', design: 'Diseño', structure: 'Estructura de Compañía', orgchart: 'Organigrama', layout: 'Layout de sitios', codes: 'Códigos y catálogos', access: 'Asignación de accesos', training: 'Capacitación', api: 'Conectividad API', startup: 'Arranque' };
 const IMPL_STATUS_ES = { pending: 'Pendiente', done: 'Completo', na: 'No aplica' };
 const IMPL_TASK_STATUS_ES = { pending: 'Pendiente', done: 'Listo', na: 'No aplica' };
@@ -1668,6 +1668,7 @@ const IMPL_ERRORS = {
     NOT_STARTED: [404, 'Esa compañía todavía no inicia su implementación.'], EXISTS: [409, 'Esa compañía ya tiene su implementación iniciada.'], CLOSED: [409, 'La implementación ya está finalizada.'],
     LEVEL: [400, 'Ese nivel no existe.'], ORDER: [409, 'Antes hay que completar los niveles anteriores.'], ORDER_LATER: [409, 'Hay niveles posteriores ya completos: reábrelos primero.'], ALREADY: [409, 'El nivel ya está en ese estado.'],
     NOT_OPTIONAL: [409, 'Solo un nivel opcional puede quedar «No aplica».'], ACTION: [400, 'Esa acción no existe.'], IMPLEMENTER: [400, 'Elige a una persona de SaaS que implemente.'], CLIENT: [400, 'Elige la compañía.'],
+    NOT_READY: [409, 'Todavía faltan niveles por completar.'], ALREADY_CONFIRMED: [409, 'Ya confirmaste la finalización.'], SIDE: [400, 'Esa parte no existe.'], NOTE: [400, 'Escribe el motivo del rechazo.'],
     NO_SESSION: [409, 'Antes registra una sesión realizada de ese módulo con sus asistentes (Servicio a Cliente › Sesiones de capacitación).'],
     TASKS_PENDING: [409, 'Faltan renglones por marcar en este nivel.'], LOCKED: [409, 'Ese nivel todavía no se abre: antes hay que completar el anterior.'],
     LEVEL_CLOSED: [409, 'El nivel ya está completo: reábrelo para cambiar sus renglones.'], TASK: [400, 'Ese renglón no existe.'],
@@ -1715,11 +1716,70 @@ function implGate(req, res, key) {
     if (!client) { res.status(404).json({ message: 'Esa compañía no existe.' }); return null; }
     return client;
 }
+// ---- El cierre (pieza 3): finalizar la implementación lo confirman AMBOS, el cliente y SaaS, con todos los niveles completos; la segunda confirmación la finaliza. Un rechazo pide motivo y borra las confirmaciones. ----
+// El cliente lo hace con el botón «Finalizar implementación» de su Cronograma (administrador del cliente o quien lo tenga en el árbol); SaaS con «Confirmar finalización» / «Rechazar finalización» (a4 y a5 de SaasAdminCatalog).
+const IMPL_SIDE_ES = { client: 'el cliente', saas: 'SaaS' };
+const IMPL_CRONOGRAMA_TUPLE = { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuId: 'cat-operaciones/cat-operaciones-ti-impl-cronograma' };
+const implFinishCan = (req) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'implementacion', 'colImplFinalizar');
+// Avisos de la campana: a la OTRA parte cuando una confirma o rechaza, y a las dos cuando se finaliza.
+function implNotify(req, clientId, event, side, note) {
+    try {
+        const client = getClientById(clientId);
+        const impl = getImplementation(clientId);
+        const base = { event, side, clientName: client ? client.company_name : '', note, actorUserId: req.user.sub, actorLabel: changedByLabel(req) };
+        const toClient = () => publishImplementationNotice({ ...base, recipientIds: listUserIdsWithScreenGrant(clientId, false, IMPL_CRONOGRAMA_TUPLE, []), toSaas: false });
+        const toSaas = () => publishImplementationNotice({ ...base, recipientIds: [...listSaasUserIdsForScreen(SAAS_IMPL_ITEM), impl && impl.implementerUserId].filter(Boolean), toSaas: true });
+        if (event === 'closed') { toClient(); toSaas(); } else if (side === 'client') toSaas(); else toClient();
+    } catch (err) { console.error('Implementación: no se pudo avisar en la campana', err && err.message); }
+}
+// La confirmación o el rechazo de UNA parte (la ruta ya validó el permiso): lo registra en el historial de SaaS y avisa.
+function implFinishApply(req, res, clientId, side, kind, note) {
+    const by = changedByLabel(req);
+    const result = kind === 'confirm' ? confirmImplementationFinish(clientId, side, by) : rejectImplementationFinish(clientId, side, note, by);
+    if (result.error) return implFail(res, result);
+    if (kind === 'confirm') {
+        implLog(req, clientId, 'update', 'main.implHistFinish', '', `Confirmó ${IMPL_SIDE_ES[side]}`);
+        implNotify(req, clientId, 'confirmed', side, '');
+        if (result.closed) { implLog(req, clientId, 'update', 'main.implHistFinish', 'En curso', 'Finalizada'); implNotify(req, clientId, 'closed', side, ''); }
+    } else {
+        implLog(req, clientId, 'update', 'main.implHistFinish', '', `Rechazó ${IMPL_SIDE_ES[side]}: ${String(note).trim().slice(0, 200)}`);
+        implNotify(req, clientId, 'rejected', side, String(note).trim());
+    }
+    return result;
+}
+app.post('/api/business/implementation/finish/confirm', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!implFinishCan(req)) return res.status(403).json({ message: 'No tienes permiso para finalizar la implementación.', code: 'FORBIDDEN' });
+    const result = implFinishApply(req, res, req.user.clientId, 'client', 'confirm');
+    if (result.error) return;
+    res.json({ implementation: result.implementation, closed: result.closed, canFinalize: true });
+});
+app.post('/api/business/implementation/finish/reject', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!implFinishCan(req)) return res.status(403).json({ message: 'No tienes permiso para finalizar la implementación.', code: 'FORBIDDEN' });
+    const result = implFinishApply(req, res, req.user.clientId, 'client', 'reject', (req.body || {}).note);
+    if (result.error) return;
+    res.json({ implementation: result.implementation, canFinalize: true });
+});
+app.post('/api/admin/implementations/:clientId/finish/confirm', requireAuth, requireAdmin, (req, res) => {
+    const client = implGate(req, res, 'finish');
+    if (!client) return;
+    const result = implFinishApply(req, res, client.id, 'saas', 'confirm');
+    if (result.error) return;
+    res.json(saasImplDetail(req, client.id));
+});
+app.post('/api/admin/implementations/:clientId/finish/reject', requireAuth, requireAdmin, (req, res) => {
+    const client = implGate(req, res, 'rejectFinish');
+    if (!client) return;
+    const result = implFinishApply(req, res, client.id, 'saas', 'reject', (req.body || {}).note);
+    if (result.error) return;
+    res.json(saasImplDetail(req, client.id));
+});
 app.get('/api/business/implementation', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const client = getClientById(req.user.clientId);
     res.set('Cache-Control', 'no-store');
-    res.json({ clientName: client ? client.company_name : '', implementation: getImplementation(req.user.clientId) });
+    res.json({ clientName: client ? client.company_name : '', implementation: getImplementation(req.user.clientId), canFinalize: implFinishCan(req) });
 });
 // Nivel 1 «Contratado»: lo contratado de la compañía contra lo que ya usa, y los permisos para dibujar su árbol de accesos contratado (solo lectura). Cualquier usuario de la compañía con la pantalla lo consulta.
 app.get('/api/business/implementation/contracted', requireAuth, (req, res) => {

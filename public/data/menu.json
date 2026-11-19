@@ -5899,7 +5899,21 @@
           "id": "cat-operaciones-ti-impl-cronograma",
           "labelKey": "menu.implCronograma",
           "href": "OpTIImplCronograma.html",
-          "icon": "bx-calendar-event"
+          "icon": "bx-calendar-event",
+          "submenu": [
+            {
+              "id": "class-botones",
+              "labelKey": "menu.classBotones",
+              "isClassification": true,
+              "submenu": [
+                {
+                  "id": "colImplFinalizar",
+                  "labelKey": "main.colImplFinalizar",
+                  "permissionOnly": true
+                }
+              ]
+            }
+          ]
         },
         {
           "id": "cat-operaciones-ti-impl-contracted",

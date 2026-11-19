@@ -9510,3 +9510,11 @@ body.dark-mode .impl-tag-unused{ color: #b4bcc6; }
 /* Implementación Inicial · nivel 8 «Capacitación»: cómo va cada módulo dentro del modal de SaaS */
 .impl-subtask-name{ display: flex; flex-direction: column; min-width: 0; }
 .impl-subtask-stats{ font-size: 0.68rem; opacity: 0.7; }
+
+/* Implementación Inicial · el cierre: confirmación de las dos partes */
+.impl-finish{ margin-top: 1rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.impl-finish-head{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
+.impl-finish-head h4{ margin: 0; }
+.impl-rejected{ color: #c0392b; opacity: 1; }
+body.dark-mode .impl-rejected{ color: #ff8f80; }
+.impl-finish .admin-form-actions{ margin-top: 0.6rem; }

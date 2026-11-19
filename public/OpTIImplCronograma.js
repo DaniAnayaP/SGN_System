@@ -20,6 +20,8 @@ const shortDate = (ymd) => (ymd ? dayOf(ymd).toLocaleDateString(locale(), { day:
 const longDate = (ymd) => (ymd ? dayOf(ymd).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' }) : '');
 const levelName = (key) => { const name = t(`main.implLevelName_${key}`); return name.startsWith('main.') ? key : name; };
 const levelSub = (key) => { const sub = t(`main.implLevelSub_${key}`); return sub.startsWith('main.') ? '' : sub; };
+// «2026-03-18 15:04:05» (UTC) → el día en la hora de quien lo ve.
+const stampDay = (at) => { const d = new Date(`${String(at).replace(' ', 'T')}Z`); return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' }); };
 let state = null;
 
 async function load() {
@@ -72,14 +74,99 @@ function gantt(impl) {
     });
     return `${html}</div>`;
 }
+// El cierre (pieza 3): lo confirman las dos partes cuando todos los niveles están completos; la segunda confirmación finaliza la implementación. Los botones solo los ve quien tiene «Finalizar implementación» en su árbol.
+function finishPanel(impl) {
+    const f = impl.finish;
+    if (!f) return '';
+    const sideName = (side) => t(side === 'client' ? 'main.implSideClient' : 'main.implSideSaas');
+    const party = (side) => t(side === 'client' ? 'main.implPartyClient' : 'main.implPartySaas');
+    const confirmation = (side) => {
+        const at = side === 'client' ? f.clientConfirmedAt : f.saasConfirmedAt;
+        const by = side === 'client' ? f.clientConfirmedBy : f.saasConfirmedBy;
+        return at ? t('main.implFinishConfirmedBy', { who: party(side), date: stampDay(at), by: by || '—' }) : t('main.implFinishPending', { who: party(side) });
+    };
+    let status;
+    if (f.status === 'closed') status = t('main.implFinishClosed', { date: stampDay(f.closedAt) });
+    else if (f.status === 'blocked') status = t('main.implFinishBlocked');
+    else if (f.missing.length === 2) status = `${t('main.implFinishReady')} · ${t('main.implFinishAwaitingBoth')}`;
+    else status = t(f.missing[0] === 'client' ? 'main.implFinishAwaitingClient' : 'main.implFinishAwaitingSaas');
+    const tone = { closed: 'approved', blocked: 'cancelled', ready: 'negotiating', awaiting: 'negotiating' }[f.status] || 'cancelled';
+    const lines = f.status === 'blocked' ? '' : `<span class="impl-sub">${esc(confirmation('client'))}</span><span class="impl-sub">${esc(confirmation('saas'))}</span>`;
+    const rejection = f.rejection && f.status !== 'closed' ? `<span class="impl-sub impl-rejected">${esc(t('main.implFinishRejected', { who: sideName(f.rejection.side), date: stampDay(f.rejection.at), note: f.rejection.note }))}</span>` : '';
+    let buttons = '';
+    if (state.canFinalize && f.status !== 'closed') {
+        if (f.status === 'blocked') buttons = `<button type="button" class="btn" disabled>${esc(t('main.implFinishTitle'))}</button>`;
+        else buttons = `${f.clientConfirmedAt ? '' : `<button type="button" class="btn" data-impl-fin="confirm">${esc(t('main.implFinishConfirm'))}</button>`}<button type="button" class="btn btn-secondary" data-impl-fin="reject">${esc(t('main.implFinishReject'))}</button>`;
+    }
+    return `<div class="impl-card impl-finish" data-help-key="implFinish"><div class="impl-finish-head"><h4>${esc(t('main.implFinishTitle'))}</h4><span class="exp-chip exp-chip-${tone}">${esc(status)}</span></div>${lines}${rejection}${buttons ? `<div class="admin-form-actions">${buttons}</div>` : ''}</div>`;
+}
 function render() {
     const root = $('impl-root');
     const impl = state.implementation;
     if (!impl) { root.innerHTML = `<p class="impl-empty">${esc(t('main.implNotStarted'))}</p>`; return; }
     const range = impl.startDate ? t('main.implRange', { from: longDate(impl.startDate), to: longDate(impl.endDate), weeks: impl.weekCount }) : t('main.implNoDates');
     root.innerHTML = `<div class="impl-head"><div><h3>${esc(state.clientName)}</h3><span class="impl-sub">${esc(range)}</span><span class="impl-sub">${esc(impl.implementer ? t('main.implImplementer', { name: impl.implementer }) : t('main.implNoImplementer'))}</span></div>${kpis(impl, state.clientName)}</div>
-        <div class="impl-frame" data-help-key="implGantt">${gantt(impl)}</div>`;
+        <div class="impl-frame" data-help-key="implGantt">${gantt(impl)}</div>${finishPanel(impl)}`;
 }
+// ---- confirmar o rechazar la finalización ----
+async function post(path, body) {
+    const res = await fetch(path, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) { const err = new Error(out.message || 'failed'); err.body = out; throw err; }
+    return out;
+}
+function finishError(err) {
+    const code = err.body && err.body.code;
+    const key = `main.implFinishErr_${code}`;
+    const text = Dashboard.t(key);
+    return text !== key ? text : t('main.implFinishErr_default');
+}
+function openReject() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    overlay.innerHTML = `<div class="modal-panel exp-panel" role="dialog" aria-modal="true"><h3>${esc(t('main.implFinishRejectTitle'))}</h3>
+        <div class="admin-field"><label for="impl-reject-note">${esc(t('main.implFinishRejectReason'))}</label><textarea id="impl-reject-note" rows="3" maxlength="600"></textarea></div>
+        <p class="admin-error" id="impl-reject-error" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" id="impl-reject-ok">${esc(t('main.implFinishSend'))}</button><button type="button" class="btn btn-secondary" id="impl-reject-x">${esc(t('main.implFinishCancel'))}</button></div></div>`;
+    document.body.appendChild(overlay);
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
+    overlay.querySelector('#impl-reject-x').addEventListener('click', close);
+    overlay.querySelector('#impl-reject-ok').addEventListener('click', async () => {
+        const note = overlay.querySelector('#impl-reject-note').value.trim();
+        const errorEl = overlay.querySelector('#impl-reject-error');
+        if (!note) { errorEl.textContent = t('main.implFinishErr_NOTE'); errorEl.hidden = false; return; }
+        overlay.querySelector('#impl-reject-ok').disabled = true;
+        try {
+            await post('/api/business/implementation/finish/reject', { note });
+            close();
+            Dashboard.showToast(t('main.implFinishDone'), 'success');
+            await refresh(true);
+        } catch (err) {
+            errorEl.textContent = finishError(err);
+            errorEl.hidden = false;
+            overlay.querySelector('#impl-reject-ok').disabled = false;
+            if (err.body && ['NOT_READY', 'CLOSED'].includes(err.body.code)) refresh(true);
+        }
+    });
+}
+document.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-impl-fin]');
+    if (!btn) return;
+    if (btn.dataset.implFin === 'reject') { openReject(); return; }
+    btn.disabled = true;
+    try {
+        await post('/api/business/implementation/finish/confirm');
+        Dashboard.showToast(t('main.implFinishDone'), 'success');
+        await refresh(true);
+    } catch (err) {
+        Dashboard.showToast(finishError(err), 'error');
+        btn.disabled = false;
+        if (err.body && ['NOT_READY', 'ALREADY_CONFIRMED', 'CLOSED'].includes(err.body.code)) refresh(true);
+    }
+});
 async function refresh(quiet) {
     try {
         state = await load();
