@@ -15856,6 +15856,7 @@ function summarizeWorkPlan(row, items, ownerName, viewer) {
         ownerId: row.owner_user_id, ownerName, createdAt: row.created_at, updatedAt: row.updated_at, lastActivityAt: row.last_activity_at, closedAt: row.closed_at || null,
         itemCount: items.length, leafCount: leaves.length, doneCount: done, openLeafCount: leaves.length - done, progress: leaves.length ? Math.round((done / leaves.length) * 100) : 0,
         startDate: start, endDate: end, nextDue: next,
+        commentCount: viewer.comments.commentCount, unreadComments: viewer.comments.unreadComments,
         hasWork: stats.hasWork, cancelReason: row.cancel_reason || '', cancelledAt: row.cancelled_at || null, cancelledByName: row.cancelled_by_user_id != null ? workPlanOwnerName(row.cancelled_by_user_id) : '',
         ...workPlanViewerFields(row, viewer.access, viewer.prefs, viewer.memberCount, stats),
     };
@@ -15957,7 +15958,12 @@ function workPlanItemsFor(row, access, userId) {
         if (!mineMemo.has(i.id)) mineMemo.set(i.id, i.createdByUserId === userId && (kids.get(i.id) || []).every(allMine));
         return mineMemo.get(i.id);
     };
-    items.forEach((i) => { i.can = workPlanItemRights(row, access, userId, levelsCount, i, allMine(i)); });
+    const commentCounts = workPlanItemCommentCounts(row.client_id, userId, row.id);
+    items.forEach((i) => {
+        i.can = workPlanItemRights(row, access, userId, levelsCount, i, allMine(i));
+        const cc = commentCounts.get(i.id);
+        i.commentCount = cc ? cc.commentCount : 0; i.unreadCount = cc ? cc.unreadCount : 0;
+    });
     return items;
 }
 // Lo propio de quien ve el plan que se suma al resumen: origen, rol, fijado (el del dueño es del plan; el de los demás, su preferencia), cuántas personas lo comparten, interruptor de la jefa, «Nuevo» y qué puede hacer.
@@ -15975,14 +15981,12 @@ const workPlanMemberCount = (planId) => db.prepare('SELECT COUNT(*) AS n FROM wo
 // El plan + sus renglones tal como los ve esa persona.
 function workPlanSnapshot(row, userId, access) {
     const items = workPlanItemsFor(row, access, userId);
-    const viewer = { access, prefs: access.role === 'owner' ? null : workPlanPrefsOf(row.id, userId), memberCount: workPlanMemberCount(row.id) };
+    const viewer = { access, prefs: access.role === 'owner' ? null : workPlanPrefsOf(row.id, userId), memberCount: workPlanMemberCount(row.id), comments: workPlanCommentCounts(row.client_id, userId, [row.id]).get(row.id) };
     return { plan: summarizeWorkPlan(row, items, workPlanOwnerName(row.owner_user_id), viewer), items };
 }
 const touchWorkPlan = (planId) => { const now = workPlanNow(); db.prepare('UPDATE work_plans SET updated_at = ?, last_activity_at = ? WHERE id = ?').run(now, now, planId); return now; };
-// Los planes a los que esa persona tiene acceso: los suyos, los que le compartieron y los de su equipo (jefa con el interruptor encendido). Fijados (según SU preferencia) primero y luego por último movimiento.
-// status = 'active' (por defecto) | 'closed' (finalizados) | 'inactive' | 'cancelled' | 'all'. counts = cuántos hay de cada estado entre todos los que ve esa persona (closedCount sigue siendo el de finalizados).
-function listWorkPlans(clientId, userId, status = 'active') {
-    if (status !== 'all' && !WORK_PLAN_STATUSES.includes(status)) return { error: 'WORK_PLAN_STATUS_INVALID' };
+// Los planes a los que esa persona tiene acceso: [{ row, access }] (propios, compartidos con ella y los de su equipo: jefa directa con el interruptor encendido).
+function workPlanAccessibleEntries(clientId, userId) {
     const entries = [];
     const seen = new Set();
     const take = (row, access) => { if (seen.has(row.id)) return; seen.add(row.id); entries.push({ row, access }); };
@@ -15992,6 +15996,13 @@ function listWorkPlans(clientId, userId, status = 'active') {
     db.prepare('SELECT DISTINCT owner_user_id AS ownerId FROM work_plans WHERE client_id = ? AND boss_can_view = 1 AND owner_user_id != ?').all(clientId, userId)
         .filter((o) => workPlanBossOf(clientId, o.ownerId) === userId)
         .forEach((o) => db.prepare('SELECT * FROM work_plans WHERE client_id = ? AND owner_user_id = ? AND boss_can_view = 1').all(clientId, o.ownerId).forEach((row) => take(row, { origin: 'team', role: 'team', member: null })));
+    return entries;
+}
+// Los planes a los que esa persona tiene acceso: los suyos, los que le compartieron y los de su equipo (jefa con el interruptor encendido). Fijados (según SU preferencia) primero y luego por último movimiento.
+// status = 'active' (por defecto) | 'closed' (finalizados) | 'inactive' | 'cancelled' | 'all'. counts = cuántos hay de cada estado entre todos los que ve esa persona (closedCount sigue siendo el de finalizados).
+function listWorkPlans(clientId, userId, status = 'active') {
+    if (status !== 'all' && !WORK_PLAN_STATUSES.includes(status)) return { error: 'WORK_PLAN_STATUS_INVALID' };
+    const entries = workPlanAccessibleEntries(clientId, userId);
     const ownTotal = entries.filter((e) => e.access.origin === 'own').length;
     const counts4 = { active: 0, closed: 0, inactive: 0, cancelled: 0 };
     entries.forEach((e) => { if (e.row.status in counts4) counts4[e.row.status] += 1; });
@@ -16004,10 +16015,11 @@ function listWorkPlans(clientId, userId, status = 'active') {
     itemRows.forEach((r) => { if (!byPlan.has(r.plan_id)) byPlan.set(r.plan_id, []); byPlan.get(r.plan_id).push(r); });
     const prefs = new Map((ids.length ? db.prepare(`SELECT * FROM work_plan_user_prefs WHERE user_id = ? AND plan_id IN (${marks})`).all(userId, ...ids) : []).map((p) => [p.plan_id, p]));
     const counts = new Map((ids.length ? db.prepare(`SELECT plan_id AS planId, COUNT(*) AS n FROM work_plan_members WHERE plan_id IN (${marks}) GROUP BY plan_id`).all(...ids) : []).map((c) => [c.planId, c.n]));
+    const commentCounts = workPlanCommentCounts(clientId, userId, ids);
     const ownerNames = new Map();
     const ownerName = (id) => { if (!ownerNames.has(id)) ownerNames.set(id, workPlanOwnerName(id)); return ownerNames.get(id); };
     const plans = shown.map(({ row, access }) => summarizeWorkPlan(row, computeWorkPlanItems(byPlan.get(row.id) || []), ownerName(row.owner_user_id),
-        { access, prefs: access.role === 'owner' ? null : prefs.get(row.id), memberCount: counts.get(row.id) || 0 }));
+        { access, prefs: access.role === 'owner' ? null : prefs.get(row.id), memberCount: counts.get(row.id) || 0, comments: commentCounts.get(row.id) }));
     plans.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (a.lastActivityAt < b.lastActivityAt ? 1 : a.lastActivityAt > b.lastActivityAt ? -1 : 0) || b.id - a.id);
     return { plans, closedCount, counts: counts4, total: ownTotal, canCreate: ownTotal < WORK_PLAN_LIMITS.plansPerUser };
 }
@@ -16417,6 +16429,188 @@ function removeWorkPlanMember(clientId, userId, planId, targetId) {
     })();
     const again = findWorkPlanFor(clientId, userId, row.id);
     return { ok: true, planId: row.id, plan: workPlanSnapshot(again.row, userId, again.access).plan, changes: [{ action: 'update', recordLabel: workPlanLabel(row.title), fieldKey: 'main.workPlanFieldMember', oldValue: workPlanMemberText(member.shownName, member.role), newValue: '' }] };
+}
+
+// --- Hilos de comentarios GENÉRICOS (pieza 2b) ----------------------------------------------------------------------------------------------------------
+// Un hilo = (thread_type, thread_id): nada de las tablas es propio de los planes. Lo usan los comentarios de cada renglón ('work-plan-item') y del plan ('work-plan'); la siguiente pantalla que quiera comentarios solo agrega su tipo en
+// server.js (THREAD_TYPES). Los comentarios son INMUTABLES y NUNCA se borran (ni editar ni eliminar: «jamás se borra»); solo se van con la compañía (borrar compañía / Reinicio del Sistema). Un comentario puede mencionar personas (thread_comment_mentions)
+// y cada persona lleva hasta qué comentario ya leyó en cada hilo (thread_reads): «sin leer» = comentarios de otras personas con id mayor al último leído.
+const THREAD_LIMITS = { body: 2000, mentions: 20, commentsPerThread: 2000, pageDefault: 100, pageMax: 200 };
+db.exec(`
+    CREATE TABLE IF NOT EXISTS thread_comments (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id      INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        thread_type    TEXT NOT NULL,
+        thread_id      INTEGER NOT NULL,
+        author_user_id INTEGER NOT NULL,
+        author_name    TEXT NOT NULL DEFAULT '',
+        body           TEXT NOT NULL,
+        created_at     TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_thread_comments_thread ON thread_comments (client_id, thread_type, thread_id, id);
+    CREATE TABLE IF NOT EXISTS thread_comment_mentions (
+        comment_id INTEGER NOT NULL REFERENCES thread_comments(id) ON DELETE CASCADE,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        PRIMARY KEY (comment_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_thread_comment_mentions_user ON thread_comment_mentions (user_id);
+    CREATE TABLE IF NOT EXISTS thread_reads (
+        user_id              INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        thread_type          TEXT NOT NULL,
+        thread_id            INTEGER NOT NULL,
+        last_read_comment_id INTEGER NOT NULL DEFAULT 0,
+        updated_at           TEXT NOT NULL,
+        PRIMARY KEY (user_id, thread_type, thread_id)
+    );
+`);
+const threadUserName = (userId, snapshot) => { const u = userId == null ? null : db.prepare('SELECT name, username FROM users WHERE id = ?').get(userId); return u ? (implementationLine(u.name) || u.username) : (snapshot || ''); };
+const threadLastRead = (userId, type, id) => { const r = db.prepare('SELECT last_read_comment_id AS n FROM thread_reads WHERE user_id = ? AND thread_type = ? AND thread_id = ?').get(userId, type, id); return r ? r.n : 0; };
+// El texto de un comentario: varias líneas, sin caracteres de control, sin espacios en los extremos.
+const threadText = (value) => workPlanText(value);
+// Los comentarios de un hilo en orden ascendente (los más viejos primero). after = solo los de id mayor; limit por defecto 100 (máximo 200). Cada uno trae sus menciones y si es mío / me menciona.
+// `hasMore` = hay comentarios después de los devueltos; `lastReadId` y `unreadCount` son de quien pregunta (sobre TODO el hilo, no solo la página).
+function listThreadComments(clientId, userId, type, id, { after, limit } = {}) {
+    const afterId = Number.isInteger(Number(after)) && Number(after) > 0 ? Number(after) : 0;
+    const take = Math.min(Math.max(Number.isInteger(Number(limit)) && Number(limit) > 0 ? Number(limit) : THREAD_LIMITS.pageDefault, 1), THREAD_LIMITS.pageMax);
+    const rows = db.prepare('SELECT * FROM thread_comments WHERE client_id = ? AND thread_type = ? AND thread_id = ? AND id > ? ORDER BY id ASC LIMIT ?').all(clientId, type, id, afterId, take + 1);
+    const hasMore = rows.length > take;
+    const page = hasMore ? rows.slice(0, take) : rows;
+    const marks = page.map(() => '?').join(',');
+    const mentionRows = page.length ? db.prepare(`SELECT m.comment_id AS commentId, m.user_id AS userId, u.name, u.username FROM thread_comment_mentions m LEFT JOIN users u ON u.id = m.user_id WHERE m.comment_id IN (${marks}) ORDER BY m.rowid`).all(...page.map((r) => r.id)) : [];
+    const byComment = new Map();
+    mentionRows.forEach((m) => { if (!byComment.has(m.commentId)) byComment.set(m.commentId, []); byComment.get(m.commentId).push({ userId: m.userId, name: implementationLine(m.name) || m.username || '' }); });
+    const names = new Map();
+    const comments = page.map((r) => {
+        if (!names.has(r.author_user_id)) names.set(r.author_user_id, threadUserName(r.author_user_id, r.author_name));
+        const mentions = byComment.get(r.id) || [];
+        return { id: r.id, authorId: r.author_user_id, authorName: names.get(r.author_user_id), body: r.body, createdAt: r.created_at, mentions, mentionsMe: mentions.some((m) => m.userId === userId), isMine: r.author_user_id === userId };
+    });
+    const lastReadId = threadLastRead(userId, type, id);
+    const unreadCount = db.prepare('SELECT COUNT(*) AS n FROM thread_comments WHERE client_id = ? AND thread_type = ? AND thread_id = ? AND id > ? AND author_user_id != ?').get(clientId, type, id, lastReadId, userId).n;
+    return { comments, lastReadId, unreadCount, hasMore };
+}
+// Agregar un comentario: texto obligatorio (≤ 2000), hasta 20 menciones sin repetir y todas de `participantIds` (las personas que hoy tienen acceso a lo comentado), hasta 2000 comentarios por hilo. Queda leído para quien comenta.
+function addThreadComment(clientId, userId, type, id, fields, participantIds) {
+    const f = fields && typeof fields === 'object' ? fields : {};
+    const body = typeof f.body === 'string' ? threadText(f.body) : '';
+    if (!body) return { error: 'THREAD_BODY_REQUIRED' };
+    if (workPlanLen(body) > THREAD_LIMITS.body) return { error: 'THREAD_BODY_TOO_LONG' };
+    let mentions = [];
+    if (f.mentions != null) {
+        if (!Array.isArray(f.mentions) || f.mentions.length > THREAD_LIMITS.mentions) return { error: 'THREAD_MENTION_INVALID' };
+        mentions = f.mentions.map((m) => (typeof m === 'number' || (typeof m === 'string' && /^\d+$/.test(m)) ? Number(m) : NaN));
+        const allowed = new Set(participantIds || []);
+        if (mentions.some((m) => !Number.isInteger(m) || !allowed.has(m)) || new Set(mentions).size !== mentions.length) return { error: 'THREAD_MENTION_INVALID' };
+    }
+    if (db.prepare('SELECT COUNT(*) AS n FROM thread_comments WHERE client_id = ? AND thread_type = ? AND thread_id = ?').get(clientId, type, id).n >= THREAD_LIMITS.commentsPerThread) return { error: 'THREAD_LIMIT' };
+    let commentId = 0;
+    const now = workPlanNow();
+    db.transaction(() => {
+        commentId = Number(db.prepare('INSERT INTO thread_comments (client_id, thread_type, thread_id, author_user_id, author_name, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+            .run(clientId, type, id, userId, threadUserName(userId, ''), body, now).lastInsertRowid);
+        const ins = db.prepare('INSERT INTO thread_comment_mentions (comment_id, user_id) VALUES (?, ?)');
+        mentions.forEach((m) => ins.run(commentId, m));
+        db.prepare('INSERT INTO thread_reads (user_id, thread_type, thread_id, last_read_comment_id, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, thread_type, thread_id) DO UPDATE SET last_read_comment_id = excluded.last_read_comment_id, updated_at = excluded.updated_at')
+            .run(userId, type, id, commentId, now);
+    })();
+    const listed = listThreadComments(clientId, userId, type, id, { after: commentId - 1, limit: 1 });
+    return { comment: listed.comments[0], unreadCount: 0 };
+}
+// Marcar todo el hilo como leído para esa persona (hasta el último comentario que hay hoy).
+function markThreadRead(clientId, userId, type, id) {
+    const last = db.prepare('SELECT COALESCE(MAX(id), 0) AS n FROM thread_comments WHERE client_id = ? AND thread_type = ? AND thread_id = ?').get(clientId, type, id).n;
+    db.prepare('INSERT INTO thread_reads (user_id, thread_type, thread_id, last_read_comment_id, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, thread_type, thread_id) DO UPDATE SET last_read_comment_id = MAX(last_read_comment_id, excluded.last_read_comment_id), updated_at = excluded.updated_at')
+        .run(userId, type, id, last, workPlanNow());
+    return { ok: true, lastReadId: threadLastRead(userId, type, id) };
+}
+// Las personas que hoy tienen acceso a un plan (y por lo tanto se pueden mencionar en sus hilos): la dueña, las personas con quien se comparte y la jefa directa si la dueña encendió el interruptor; solo cuentas activas de la compañía.
+function workPlanParticipants(clientId, row) {
+    const ids = new Set([row.owner_user_id]);
+    db.prepare('SELECT user_id AS userId FROM work_plan_members WHERE plan_id = ?').all(row.id).forEach((m) => ids.add(m.userId));
+    if (row.boss_can_view) { const boss = workPlanBossOf(clientId, row.owner_user_id); if (boss) ids.add(boss); }
+    const list = [...ids];
+    if (!list.length) return [];
+    return db.prepare(`SELECT id, name, username FROM users WHERE client_id = ? AND active != 0 AND id IN (${list.map(() => '?').join(',')}) ORDER BY name COLLATE NOCASE ASC`).all(clientId, ...list)
+        .map((u) => ({ id: u.id, name: implementationLine(u.name) || u.username }));
+}
+// El hilo de un renglón ('work-plan-item', thread_id = id del renglón) o del plan ('work-plan', thread_id = id del plan) visto por esa persona. null = no existe o no tiene acceso al plan (la ruta responde igual en los dos casos).
+// canRead = cualquier acceso (dueña, miembro de cualquier rol, jefa); canPost = cualquiera con acceso SOLO si el plan está activo (si no, postError trae el código de su estado: WORK_PLAN_CLOSED / INACTIVE / CANCELLED).
+function resolveWorkPlanThread(clientId, userId, type, id) {
+    const threadId = Number(id);
+    if (!Number.isInteger(threadId)) return null;
+    let item = null;
+    let planId = threadId;
+    if (type === 'work-plan-item') {
+        item = db.prepare('SELECT * FROM work_plan_items WHERE id = ?').get(threadId);
+        if (!item) return null;
+        planId = item.plan_id;
+    } else if (type !== 'work-plan') return null;
+    const found = findWorkPlanFor(clientId, userId, planId);
+    if (!found) return null;
+    const { row } = found;
+    const postError = workPlanLockError(row);
+    return {
+        label: item ? workPlanItemLabel(workPlanLevelsOf(row), item.depth, item.title) : workPlanLabel(row.title), planId: row.id, planTitle: row.title,
+        canRead: true, canPost: !postError, postError, canMention: !postError, participants: workPlanParticipants(clientId, row),
+    };
+}
+// Cuántos comentarios tiene cada plan (sus renglones + el hilo del plan) y cuántos le faltan por leer a esa persona (de otras personas, con id mayor al último leído de cada hilo). Una consulta agrupada para todos los planes.
+function workPlanCommentCounts(clientId, userId, planIds) {
+    const out = new Map(planIds.map((id) => [id, { commentCount: 0, unreadComments: 0 }]));
+    if (!planIds.length) return out;
+    const marks = planIds.map(() => '?').join(',');
+    db.prepare(`SELECT x.plan_id AS planId, COUNT(*) AS total, COALESCE(SUM(CASE WHEN c.author_user_id != ? AND c.id > COALESCE(r.last_read_comment_id, 0) THEN 1 ELSE 0 END), 0) AS unread
+        FROM thread_comments c
+        JOIN (SELECT 'work-plan' AS t, id AS thread_id, id AS plan_id FROM work_plans WHERE id IN (${marks})
+              UNION ALL SELECT 'work-plan-item', id, plan_id FROM work_plan_items WHERE plan_id IN (${marks})) x ON x.t = c.thread_type AND x.thread_id = c.thread_id
+        LEFT JOIN thread_reads r ON r.user_id = ? AND r.thread_type = c.thread_type AND r.thread_id = c.thread_id
+        WHERE c.client_id = ? GROUP BY x.plan_id`).all(userId, ...planIds, ...planIds, userId, clientId)
+        .forEach((r) => { out.set(r.planId, { commentCount: r.total, unreadComments: r.unread }); });
+    return out;
+}
+// Lo mismo por renglón de UN plan: Map(itemId → { commentCount, unreadCount }).
+function workPlanItemCommentCounts(clientId, userId, planId) {
+    const out = new Map();
+    db.prepare(`SELECT c.thread_id AS itemId, COUNT(*) AS total, COALESCE(SUM(CASE WHEN c.author_user_id != ? AND c.id > COALESCE(r.last_read_comment_id, 0) THEN 1 ELSE 0 END), 0) AS unread
+        FROM thread_comments c JOIN work_plan_items i ON c.thread_type = 'work-plan-item' AND i.id = c.thread_id AND i.plan_id = ?
+        LEFT JOIN thread_reads r ON r.user_id = ? AND r.thread_type = c.thread_type AND r.thread_id = c.thread_id
+        WHERE c.client_id = ? GROUP BY c.thread_id`).all(userId, planId, userId, clientId).forEach((r) => out.set(r.itemId, { commentCount: r.total, unreadCount: r.unread }));
+    return out;
+}
+// Los hilos con comentarios SIN LEER de esa persona, solo de lo que hoy puede leer (planes propios, compartidos y de su equipo), del más reciente al más viejo. Lo usa el panel de Mensajes (2c).
+// [{ threadType, threadId, label, planId, planTitle, unreadCount, lastCommentAt, lastAuthorName, lastBody (≤ 160), mentionsMe }]; mentionsMe = alguno de los comentarios sin leer la menciona.
+function listUnreadCommentThreads(clientId, userId) {
+    const entries = workPlanAccessibleEntries(clientId, userId);
+    if (!entries.length) return [];
+    const planIds = entries.map((e) => e.row.id);
+    const marks = planIds.map(() => '?').join(',');
+    const groups = db.prepare(`SELECT c.thread_type AS threadType, c.thread_id AS threadId, COUNT(*) AS unreadCount, MAX(c.id) AS lastId,
+            MAX(CASE WHEN m.user_id IS NULL THEN 0 ELSE 1 END) AS mentionsMe
+        FROM thread_comments c
+        LEFT JOIN thread_reads r ON r.user_id = ? AND r.thread_type = c.thread_type AND r.thread_id = c.thread_id
+        LEFT JOIN thread_comment_mentions m ON m.comment_id = c.id AND m.user_id = ?
+        WHERE c.client_id = ? AND c.author_user_id != ? AND c.id > COALESCE(r.last_read_comment_id, 0)
+          AND ((c.thread_type = 'work-plan' AND c.thread_id IN (${marks})) OR (c.thread_type = 'work-plan-item' AND c.thread_id IN (SELECT id FROM work_plan_items WHERE plan_id IN (${marks}))))
+        GROUP BY c.thread_type, c.thread_id`).all(userId, userId, clientId, userId, ...planIds, ...planIds);
+    if (!groups.length) return [];
+    const rowsById = new Map(entries.map((e) => [e.row.id, e.row]));
+    const itemIds = groups.filter((g) => g.threadType === 'work-plan-item').map((g) => g.threadId);
+    const items = new Map((itemIds.length ? db.prepare(`SELECT * FROM work_plan_items WHERE id IN (${itemIds.map(() => '?').join(',')})`).all(...itemIds) : []).map((i) => [i.id, i]));
+    const lastIds = groups.map((g) => g.lastId);
+    const lasts = new Map(db.prepare(`SELECT * FROM thread_comments WHERE id IN (${lastIds.map(() => '?').join(',')})`).all(...lastIds).map((c) => [c.id, c]));
+    return groups.map((g) => {
+        const item = g.threadType === 'work-plan-item' ? items.get(g.threadId) : null;
+        const row = rowsById.get(item ? item.plan_id : g.threadId);
+        const last = lasts.get(g.lastId);
+        return {
+            threadType: g.threadType, threadId: g.threadId, label: item ? workPlanItemLabel(workPlanLevelsOf(row), item.depth, item.title) : workPlanLabel(row.title), planId: row.id, planTitle: row.title,
+            unreadCount: g.unreadCount, lastCommentAt: last.created_at, lastAuthorName: threadUserName(last.author_user_id, last.author_name), lastBody: Array.from(last.body).slice(0, 160).join(''), mentionsMe: g.mentionsMe === 1,
+        };
+    }).sort((a, b) => (a.lastCommentAt < b.lastCommentAt ? 1 : a.lastCommentAt > b.lastCommentAt ? -1 : 0));
+}
+// Cuántos comentarios sin leer tiene esa persona en total (el globito del botón Mensajes).
+function countUnreadComments(clientId, userId) {
+    return listUnreadCommentThreads(clientId, userId).reduce((sum, t) => sum + t.unreadCount, 0);
 }
 
 // --- Implementación Inicial · nivel 1 «Contratado»: lo que la compañía contrató y lo que YA USA---------------------------------------------------------------------------------------------------
@@ -19543,4 +19737,5 @@ module.exports = {
     getUserGrantChangeLog,
     WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
+    THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,
 };

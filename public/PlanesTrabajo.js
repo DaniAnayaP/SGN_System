@@ -145,7 +145,7 @@ function renderTabs() {
         const p = plans.find((x) => x.id === id);
         if (!p) return;
         const active = tabs.active === id;
-        html += `<div class="wp-tab${active ? ' active' : ''}${!isLive(p) ? ' wp-tab-closed' : ''}" role="tab" tabindex="0" aria-selected="${active}" data-wp-tab="${id}" title="${esc(planName(p))}"><span class="wp-dot wp-dot-${!isLive(p) ? 'closed' : (p.origin || 'own')}" aria-hidden="true"></span><span class="wp-tab-nm">${esc(planName(p))}</span><button type="button" class="wp-tab-x" data-wp-close="${id}" aria-label="${esc(t('main.wpTabClose', { name: planName(p) }))}" title="${esc(t('main.wpTabClose', { name: planName(p) }))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>`;
+        html += `<div class="wp-tab${active ? ' active' : ''}${!isLive(p) ? ' wp-tab-closed' : ''}" role="tab" tabindex="0" aria-selected="${active}" data-wp-tab="${id}" title="${esc(planName(p))}"><span class="wp-dot wp-dot-${!isLive(p) ? 'closed' : (p.origin || 'own')}" aria-hidden="true"></span><span class="wp-tab-nm">${esc(planName(p))}</span>${p.unreadComments ? `<span class="wp-count wp-count-hot" title="${esc(t('main.wpUnreadComments', { n: p.unreadComments }))}">${p.unreadComments}</span>` : ''}<button type="button" class="wp-tab-x" data-wp-close="${id}" aria-label="${esc(t('main.wpTabClose', { name: planName(p) }))}" title="${esc(t('main.wpTabClose', { name: planName(p) }))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>`;
     });
     if (canCreate) html += `<button type="button" class="wp-tab wp-tab-add" data-wp-new="1" data-help-key="wpNew"><i class="bx bx-plus" aria-hidden="true"></i><span class="wp-tab-nm">${esc(t('main.wpNew'))}</span></button>`;
     el.innerHTML = html;
@@ -201,6 +201,7 @@ function cardChips(p) {
         chips.push(`<span class="wp-chip">${esc(t('main.wpReadOnly'))}</span>`);
     }
     if (p.isNew) chips.push(`<span class="wp-chip wp-chip-new">${esc(t('main.wpNewChip'))}</span>`);
+    if (p.unreadComments) chips.push(`<span class="wp-chip wp-chip-new" title="${esc(t('main.wpUnreadComments', { n: p.unreadComments }))}"><i class="bx bx-message-rounded-dots" aria-hidden="true"></i> ${esc(t('main.wpUnreadComments', { n: p.unreadComments }))}</span>`);
     if (!isLive(p)) chips.push(stateChip(p.status));
     return chips.join('');
 }
@@ -284,7 +285,7 @@ function planActions(plan) {
     const can = plan.can || {};
     const closed = plan.status === 'closed';
     const live = isLive(plan);
-    const btn = (op, icon, labelKey, extra) => `<button type="button" class="btn btn-secondary wp-small${extra ? ` ${extra}` : ''}" data-wp-act="${op}" data-help-key="${{ pin: 'wpPin', history: 'wpHistory', close: 'wpClose', reopen: 'wpClose', inactivate: 'wpInactivate', reactivate: 'wpInactivate', cancel: 'wpCancel', delete: 'wpDelete', 'edit-plan': 'wpEditPlan', share: 'wpShare', people: 'wpShare', leave: 'wpLeave' }[op] || 'wpPlanActions'}"><i class="bx ${icon}" aria-hidden="true"></i> ${esc(t(labelKey))}</button>`;
+    const btn = (op, icon, labelKey, extra) => `<button type="button" class="btn btn-secondary wp-small${extra ? ` ${extra}` : ''}" data-wp-act="${op}" data-help-key="${{ pin: 'wpPin', history: 'wpHistory', comments: 'wpPlanComments', close: 'wpClose', reopen: 'wpClose', inactivate: 'wpInactivate', reactivate: 'wpInactivate', cancel: 'wpCancel', delete: 'wpDelete', 'edit-plan': 'wpEditPlan', share: 'wpShare', people: 'wpShare', leave: 'wpLeave' }[op] || 'wpPlanActions'}"><i class="bx ${icon}" aria-hidden="true"></i> ${esc(t(labelKey))}</button>`;
     const out = [btn('pin', plan.pinned ? 'bxs-star' : 'bx-star', plan.pinned ? 'main.wpUnpin' : 'main.wpPin')];
     if (can.edit && live) out.push(btn('edit-plan', 'bx-edit-alt', 'main.wpEditPlan'));
     out.push(can.share && live ? btn('share', 'bx-share-alt', 'main.wpShare') : btn('people', 'bx-group', 'main.wpPeople'));
@@ -293,6 +294,7 @@ function planActions(plan) {
     if (can.reactivate) out.push(btn('reactivate', 'bx-play-circle', 'main.wpReactivatePlan'));
     if (can.cancel) out.push(btn('cancel', 'bx-block', 'main.wpCancelPlan', 'wp-danger'));
     if (can.delete) out.push(btn('delete', 'bx-trash', 'main.wpDeletePlan', 'wp-danger'));
+    out.push(btn('comments', 'bx-message-rounded-dots', 'main.wpPlanComments'));
     out.push(btn('history', 'bx-history', 'main.wpHistory'));
     if (can.leave) out.push(btn('leave', 'bx-log-out-circle', 'main.wpLeave'));
     return `<div class="wp-actions">${out.join('')}</div>`;
@@ -322,6 +324,13 @@ function whoCell(item) {
     const exec = item.executorName ? `<span class="wp-who wp-who-exec" title="${esc(t('main.wpFieldExecutor'))}"><i class="bx bx-hard-hat" aria-hidden="true"></i>${esc(t('main.wpWhoExec', { name: item.executorName }))}</span>` : '';
     return `<span class="impl-act-who wp-whos">${resp}${exec}${resp || exec ? '' : `<span class="wp-who wp-who-none">${esc(t('main.wpNoResponsible'))}</span>`}</span>`;
 }
+// El globito de comentarios de un renglón: cuántos lleva y, si hay sin leer, se resalta. Siempre está (aunque no lleve ninguno) para poder escribir el primero.
+function commentChip(item) {
+    const n = item.commentCount || 0;
+    const unread = item.unreadCount || 0;
+    const label = unread ? t('main.wpCommentsUnread', { n: unread, title: item.title }) : t('main.wpCommentsOf', { title: item.title });
+    return `<button type="button" class="wp-cmt${unread ? ' wp-cmt-hot' : ''}${n ? '' : ' wp-cmt-none'}" data-wp-row="comments" data-id="${item.id}" aria-label="${esc(label)}" title="${esc(label)}" data-help-key="wpComments"><i class="bx bx-message-rounded-dots" aria-hidden="true"></i>${n ? `<span>${n}</span>` : ''}</button>`;
+}
 function nameCell(plan, item, collapsed) {
     const status = statusOf(item);
     const pad = 0.5 + Math.min(item.depth - 1, 10) * 1.25; // la sangría deja de crecer pasado el nivel 11 para que el nombre siga cabiendo
@@ -330,7 +339,7 @@ function nameCell(plan, item, collapsed) {
         : '<span class="impl-chev impl-chev-none" aria-hidden="true"></span>';
     const note = item.note ? `<i class="bx bx-note wp-note-ico" role="img" aria-label="${esc(t('main.wpHasNote'))}" title="${esc(item.note)}"></i>` : '';
     const count = item.childCount ? `<span class="impl-cnt">${esc(t('main.wpChildCount', { n: item.childCount }))}</span>` : '';
-    return `<div class="impl-nm impl-act-nm wp-nm${item.childCount ? ' wp-node' : ''}" style="padding-left:${pad}rem" role="group" aria-label="${esc(item.title)}" data-help-key="wpItemRow"><span class="impl-act-line"><span class="impl-act-t">${toggle}${dot(status)}<span class="impl-act-name"><b>${esc(item.title)}</b> <span class="wp-lvl-tag">${esc(levelLabel(plan, item.depth))}</span> ${count}${note}</span></span></span>
+    return `<div class="impl-nm impl-act-nm wp-nm${item.childCount ? ' wp-node' : ''}" style="padding-left:${pad}rem" role="group" aria-label="${esc(item.title)}" data-help-key="wpItemRow"><span class="impl-act-line"><span class="impl-act-t">${toggle}${dot(status)}<span class="impl-act-name"><b class="wp-title" data-wp-row="comments" data-id="${item.id}" role="button" tabindex="0" title="${esc(t('main.wpOpenItem'))}">${esc(item.title)}</b> <span class="wp-lvl-tag">${esc(levelLabel(plan, item.depth))}</span> ${count}${note} ${commentChip(item)}</span></span></span>
         <span class="impl-act-line impl-act-sub">${whoCell(item)}${rowButtons(plan, item)}</span></div>`;
 }
 function barCells(item, axis, today) {
@@ -587,6 +596,7 @@ async function rowAction(op, itemId, button) {
     if (!data) return;
     const item = data.items.find((i) => i.id === itemId);
     if (!item) return;
+    if (op === 'comments') { openItemDetail(planId, itemId); return; }
     if (op === 'edit') { openForm('edit', planId, { id: itemId }); return; }
     if (op === 'add-child') { openForm('add', planId, { parentId: itemId }); return; }
     if (op === 'status') { await planWrite(planId, () => api('PATCH', `/${planId}/items/${itemId}`, { status: button.dataset.status })); return; }
@@ -666,6 +676,45 @@ function openPlanModal(planId) {
             btn.disabled = false;
         }
     });
+}
+
+// ---- detalle de un renglón y sus comentarios (hilos genéricos: Threads.js) ------------------------------------------------------------------------------
+// El detalle junta lo del renglón (nivel, estado, fechas, quién responde y quién ejecuta, nota) con su conversación. Los comentarios no se editan ni se borran. Al cerrarlo se vuelven a leer los contadores del plan.
+function openThreadModal(planId, { type, id, title, factsHtml, helpKey }) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal wp-detail" role="dialog" aria-modal="true" aria-label="${esc(title)}" data-help-key="${helpKey}">
+        <div class="wp-detail-head"><h3>${esc(title)}</h3><button type="button" class="admin-icon-btn" data-wp-d="close" aria-label="${esc(t('main.wpDetailClose'))}" title="${esc(t('main.wpDetailClose'))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>
+        ${factsHtml || ''}<h4 class="wp-group">${esc(t('main.thrTitle'))}</h4><div class="wp-detail-thread"></div></div>`;
+    document.body.appendChild(overlay);
+    let dirty = false;
+    const controller = Threads.mount(overlay.querySelector('.wp-detail-thread'), { type, id, onChange: () => { dirty = true; } });
+    const close = async () => {
+        controller.destroy();
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+        if (!dirty) return;
+        try { await loadList(); if (cache.has(planId)) await loadPlan(planId); render(); } catch (err) { /* los contadores se arreglan en la próxima lectura */ }
+    };
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) close(); });
+    overlay.addEventListener('click', (event) => { if (event.target.closest('[data-wp-d="close"]')) close(); });
+    setTimeout(() => { const input = overlay.querySelector('textarea'); if (input) input.focus(); }, 400);
+}
+function openItemDetail(planId, itemId) {
+    const data = cache.get(planId);
+    const item = data && data.items.find((i) => i.id === itemId);
+    if (!item) return;
+    const status = statusOf(item);
+    const dates = item.rangeStart ? `${shortDate(item.rangeStart)} – ${shortDate(item.rangeEnd)}` : t('main.wpNoDates');
+    const facts = `<div class="wp-detail-facts"><span class="wp-lvl-tag">${esc(levelLabel(data.plan, item.depth))}</span><span class="exp-chip exp-chip-${TONE[status] || 'cancelled'}">${esc(statusText(status))}</span><span class="impl-dates">${esc(dates)}</span>${whoCell(item)}</div>${item.note ? `<p class="wp-detail-note"><i class="bx bx-note" aria-hidden="true"></i> ${esc(item.note)}</p>` : ''}`;
+    openThreadModal(planId, { type: 'work-plan-item', id: itemId, title: item.title, factsHtml: facts, helpKey: 'wpItemDetail' });
+}
+function openPlanThread(planId) {
+    const plan = plans.find((p) => p.id === planId);
+    if (!plan) return;
+    openThreadModal(planId, { type: 'work-plan', id: planId, title: t('main.wpPlanCommentsTitle', { title: plan.title }), factsHtml: '', helpKey: 'wpPlanComments' });
 }
 
 // ---- compartir un plan y quitarlo de mi lista ----------------------------------------------------------------------------------------------------------
@@ -771,6 +820,20 @@ async function leavePlan(id) {
     } catch (err) { failed(err, id); }
 }
 
+// ---- enlace directo ---------------------------------------------------------------------------------------------------------------------------------
+// PlanesTrabajo.html#plan=12&item=34 abre ese plan y, si trae item, el detalle de ese renglón con su conversación (así llega Mensajes). Si el plan ya no es visible para quien lo abre, se queda en la lista.
+async function openFromHash() {
+    const found = /plan=(\d+)(?:&item=(\d+))?/.exec(location.hash || '');
+    if (!found) return;
+    const planId = Number(found[1]);
+    const itemId = found[2] ? Number(found[2]) : 0;
+    try { history.replaceState(null, '', `${location.pathname}${location.search}`); } catch (err) { /* sin historial: el enlace se queda en la barra */ }
+    try { await loadPlan(planId); } catch (err) { failed(err, planId); return; }
+    activate(planId);
+    if (itemId && cache.get(planId) && cache.get(planId).items.some((i) => i.id === itemId)) openItemDetail(planId, itemId);
+}
+window.addEventListener('hashchange', () => { openFromHash().catch(() => {}); });
+
 // ---- eventos ------------------------------------------------------------------------------------------------------------------------------------------
 document.addEventListener('click', (event) => {
     const el = event.target;
@@ -814,11 +877,14 @@ document.addEventListener('click', (event) => {
     else if (op === 'cancel') openCancelModal(planId);
     else if (op === 'delete') deleteEmptyPlan(planId);
     else if (op === 'history') Dashboard.openChangeHistory('work_plans', planId);
+    else if (op === 'comments') openPlanThread(planId);
     else if (op === 'share' || op === 'people') openShareModal(planId);
     else if (op === 'leave') leavePlan(planId);
 });
 document.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
+    const title = event.target.closest && event.target.closest('.wp-title[data-wp-row]');
+    if (title && event.target === title) { event.preventDefault(); rowAction('comments', Number(title.dataset.id), title); return; }
     const tab = event.target.closest && event.target.closest('.wp-tab[data-wp-tab]');
     if (tab && event.target === tab) { event.preventDefault(); const id = tab.dataset.wpTab; activate(id === 'list' ? 'list' : Number(id)); }
 });
@@ -849,6 +915,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && !f
         saveTabs();
         if (tabs.active !== 'list') { try { await loadPlan(tabs.active); } catch (err) { tabs.active = 'list'; } }
         render();
+        openFromHash().catch(() => {});
         // si un nombre no cabe en su pestaña se abrevia (y al sobreponer sale completo): ver Dashboard.watchLabelFit
         Dashboard.watchLabelFit($('wp-tabs'), '.wp-tab-nm');
     } catch (err) {

@@ -615,7 +615,7 @@ const {
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -2000,6 +2000,60 @@ app.post('/api/business/work-plans/:id/items/:itemId/move', requireAuth, (req, r
     () => moveWorkPlanItem(req.user.clientId, req.user.sub, req.params.id, req.params.itemId, (req.body || {}).direction), 200, (r) => ({ ok: true, moved: r.moved, plan: r.plan })));
 app.delete('/api/business/work-plans/:id/items/:itemId', requireAuth, (req, res) => workPlanRun(req, res,
     () => removeWorkPlanItem(req.user.clientId, req.user.sub, req.params.id, req.params.itemId), 200, (r) => ({ ok: true, removedCount: r.removedCount, plan: r.plan })));
+// ---- Hilos de comentarios genéricos (pieza 2b) ----
+// Un hilo es (tipo, id). Cada tipo se registra con UNA entrada en THREAD_TYPES: { guard?, notFound?, resolve(req, id) }. `guard` es la guarda de la pantalla dueña del tipo (responde ella misma); `resolve` devuelve null (no existe o no tiene acceso: 404) o
+// { label (título para mostrar), canRead, canPost, postError (código HTTP-4xx propio de la pantalla cuando no se puede comentar ahora), participants: [{id, name}] (las personas mencionables = las que hoy tienen acceso, de la misma compañía), canMention, planId? }.
+// Los comentarios son inmutables y no se borran: no hay PUT, PATCH ni DELETE. El historial de cambios de la pantalla NO registra comentarios (el hilo es su propio registro).
+const THREAD_HTTP = { THREAD_TYPE_INVALID: 404, THREAD_NOT_FOUND: 404, THREAD_BODY_REQUIRED: 400, THREAD_BODY_TOO_LONG: 400, THREAD_MENTION_INVALID: 400, THREAD_LIMIT: 409 };
+const THREAD_MESSAGES = {
+    THREAD_TYPE_INVALID: 'Ese tipo de conversación no existe.', THREAD_NOT_FOUND: 'Esa conversación no existe.', THREAD_BODY_REQUIRED: 'Escribe el comentario.',
+    THREAD_BODY_TOO_LONG: `El comentario no puede pasar de ${THREAD_LIMITS.body} letras.`, THREAD_MENTION_INVALID: `Solo se puede mencionar, sin repetir y hasta ${THREAD_LIMITS.mentions} personas, a quienes hoy tienen acceso a esto.`,
+    THREAD_LIMIT: `Esta conversación llegó al máximo de ${THREAD_LIMITS.commentsPerThread} comentarios.`,
+};
+function threadFail(res, result) {
+    const code = result.error;
+    if (THREAD_HTTP[code]) { const message = THREAD_MESSAGES[code]; return res.status(THREAD_HTTP[code]).json({ error: message, message, code }); }
+    return workPlanFail(res, result);
+}
+const THREAD_TYPES = {
+    // thread_id = id del renglón
+    'work-plan-item': { guard: workPlanGate, notFound: 'WORK_PLAN_NOT_FOUND', resolve: (req, id) => resolveWorkPlanThread(req.user.clientId, req.user.sub, 'work-plan-item', id) },
+    // thread_id = id del plan
+    'work-plan': { guard: workPlanGate, notFound: 'WORK_PLAN_NOT_FOUND', resolve: (req, id) => resolveWorkPlanThread(req.user.clientId, req.user.sub, 'work-plan', id) },
+};
+// El tipo, la guarda de su pantalla y el hilo visto por esta persona; si algo falla responde y devuelve null.
+function threadContext(req, res) {
+    const def = Object.prototype.hasOwnProperty.call(THREAD_TYPES, req.params.type) ? THREAD_TYPES[req.params.type] : null;
+    if (!def) { threadFail(res, { error: 'THREAD_TYPE_INVALID' }); return null; }
+    if (def.guard && !def.guard(req, res)) return null;
+    const id = /^\d+$/.test(req.params.id) ? Number(req.params.id) : NaN;
+    const subject = Number.isInteger(id) ? def.resolve(req, id) : null;
+    if (!subject || !subject.canRead) { threadFail(res, { error: def.notFound || 'THREAD_NOT_FOUND' }); return null; }
+    return { type: req.params.type, id, subject };
+}
+app.get('/api/business/threads/:type/:id/comments', requireAuth, (req, res) => {
+    const ctx = threadContext(req, res);
+    if (!ctx) return;
+    const listed = listThreadComments(req.user.clientId, req.user.sub, ctx.type, ctx.id, { after: req.query.after, limit: req.query.limit });
+    res.set('Cache-Control', 'no-store');
+    res.json({ ...listed, canPost: !!ctx.subject.canPost, people: ctx.subject.canPost && ctx.subject.canMention ? (ctx.subject.participants || []).filter((p) => p.id !== req.user.sub) : [], label: ctx.subject.label });
+});
+app.post('/api/business/threads/:type/:id/comments', requireAuth, (req, res) => {
+    const ctx = threadContext(req, res);
+    if (!ctx) return;
+    if (!ctx.subject.canPost) return threadFail(res, { error: ctx.subject.postError || 'THREAD_NOT_FOUND' });
+    const result = addThreadComment(req.user.clientId, req.user.sub, ctx.type, ctx.id, workPlanPick(req.body, ['body', 'mentions']), (ctx.subject.participants || []).map((p) => p.id));
+    if (result.error) return threadFail(res, result);
+    if (ctx.subject.planId) touchWorkPlan(ctx.subject.planId); // comentar es un movimiento del plan: sube en «último movimiento»
+    res.set('Cache-Control', 'no-store');
+    res.status(201).json(result);
+});
+app.post('/api/business/threads/:type/:id/read', requireAuth, (req, res) => {
+    const ctx = threadContext(req, res);
+    if (!ctx) return;
+    res.set('Cache-Control', 'no-store');
+    res.json(markThreadRead(req.user.clientId, req.user.sub, ctx.type, ctx.id));
+});
 // El historial de un plan lo ve cualquiera con acceso al plan (la dueña, las personas con quien se comparte y la jefa si la dueña lo encendió): los renglones de work_plans de planes a los que no se tiene acceso se quitan de cualquier lista de cambios.
 const workPlanChangeFilter = (req) => { const access = listAccessibleWorkPlanIds(req.user.clientId, req.user.sub); return (change) => change.table_key !== WORK_PLAN_TABLE || access.has(change.record_id); };
 app.get('/api/admin/implementations', requireAuth, requireAdmin, (req, res) => {
