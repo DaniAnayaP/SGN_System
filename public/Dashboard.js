@@ -2719,14 +2719,50 @@ function checkTopBarFit() {
     topBar.classList.remove('top-bar-icons-collapsed', 'top-bar-title-hidden');
 
     const GAP = 12; // px of breathing room before calling it a collision
-    const titleRight = titleGroup.getBoundingClientRect().right;
-    if (titleRight + GAP <= actionsGroup.getBoundingClientRect().left) return;
-
-    topBar.classList.add('top-bar-icons-collapsed');
-    // Re-measure: the icons are now tucked behind "⋮", a much narrower
-    // target — only hide the title too if it's STILL colliding against that.
-    if (titleRight + GAP > actionsGroup.getBoundingClientRect().left) {
+    // El nombre de la pantalla (regla de todo el sistema, Daniel 2026-11-19: si no cabe, se abrevia): primero se prueba todo completo; si choca, los iconos se recogen detrás de «⋮» (como siempre) y, si el
+    // título todavía choca, en lugar de esconderlo se abrevia (la escalera de la barra lateral) hasta que quepa. Solo si ni abreviado cabe se esconde. Se mide con el propio diseño, siempre partiendo del
+    // nombre completo, así da la misma respuesta cada vez; el observador del título se suelta mientras se escribe para que este ajuste no se llame a sí mismo.
+    const title = titleGroup.querySelector('.welcome-text');
+    const info = topBarTitleInfo(title);
+    const collides = () => titleGroup.getBoundingClientRect().right + GAP > actionsGroup.getBoundingClientRect().left;
+    if (topBarTitleObserver) topBarTitleObserver.disconnect();
+    try {
+        setTopBarTitleText(title, info, 0);
+        if (!collides()) return;
+        topBar.classList.add('top-bar-icons-collapsed');
+        // Re-measure: the icons are now tucked behind "⋮", a much narrower
+        // target — only hide the title too if it's STILL colliding against that.
+        if (!collides()) return;
+        for (let step = 1; info && step < info.ladder.length; step += 1) {
+            setTopBarTitleText(title, info, step);
+            if (!collides()) return;
+        }
+        setTopBarTitleText(title, info, 0);
         topBar.classList.add('top-bar-title-hidden');
+    } finally {
+        if (topBarTitleObserver && topBarTitleEl) topBarTitleObserver.observe(topBarTitleEl, { childList: true, subtree: true, characterData: true });
+    }
+}
+// El nombre completo del título y su escalera de abreviaturas. El texto que otra parte del código escribe en el título (cambiar de pantalla, de idioma) se toma como el completo nuevo; el que dejó este
+// ajuste se reconoce (abbrShown) para no confundirlo con el completo. Un título con enlaces o iconos adentro no es solo texto: no se toca.
+function topBarTitleInfo(title) {
+    if (!title || title.children.length || !title.textContent.trim()) return null;
+    const current = title.textContent;
+    const full = title.dataset.abbrShown !== undefined && current === title.dataset.abbrShown ? title.dataset.abbrFull : current;
+    return { full, ladder: autoAbbrLadder(full) };
+}
+function setTopBarTitleText(title, info, step) {
+    if (!title || !info) return;
+    const text = info.ladder[step] !== undefined ? info.ladder[step] : info.full;
+    if (title.textContent !== text) title.textContent = text;
+    if (step > 0) {
+        title.dataset.abbrFull = info.full;
+        title.dataset.abbrShown = text;
+        if (!title.hasAttribute('title') || title.dataset.abbrTitle) { title.title = info.full; title.dataset.abbrTitle = '1'; }
+    } else {
+        delete title.dataset.abbrFull;
+        delete title.dataset.abbrShown;
+        if (title.dataset.abbrTitle) { title.removeAttribute('title'); delete title.dataset.abbrTitle; }
     }
 }
 let topBarFitTimer = null;
@@ -2749,9 +2785,10 @@ scheduleTopBarFitCheck();
 // switches, and any other content change inside the title group — without
 // needing to separately hook every call site that might affect its width.
 const topBarTitleEl = document.querySelector('.top-bar-title');
+let topBarTitleObserver = null;
 if (topBarTitleEl) {
-    new MutationObserver(scheduleTopBarFitCheck)
-        .observe(topBarTitleEl, { childList: true, subtree: true, characterData: true });
+    topBarTitleObserver = new MutationObserver(scheduleTopBarFitCheck);
+    topBarTitleObserver.observe(topBarTitleEl, { childList: true, subtree: true, characterData: true });
 }
 
 // Every dropdown/panel below (top-bar-actions overflow, Configuración,
@@ -13623,6 +13660,56 @@ if (document.fonts) {
     if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', scheduleBreadcrumbFit);
 }
 
+// --- Selectores (departamento, área, sitios, centros de costos) y título de la barra de arriba: si el nombre no cabe, se abrevia (regla de todo el sistema, Daniel 2026-11-19) ---
+// Antes se cortaban con «…» (max-width de 8 y 11 rem). Con la escalera automática de la barra lateral se abrevian hasta que cabe y el nombre completo sale al sobreponer (title). Lo que otra parte del código
+// escribe en esas etiquetas (cambiar de área, elegir sitios, cambiar de idioma) se toma como el nombre completo nuevo y se vuelve a ajustar; el texto que dejó este ajuste se reconoce (abbrShown) para no
+// confundirlo con el completo. Los cambios de texto de este mismo ajuste no vuelven a llamarlo (el observador se suelta mientras escribe). Las listas desplegables no se tocan: su ancho se adapta al nombre.
+const TOP_BAR_FIT_LABELS = '.top-bar .dept-picker-btn > span, .top-bar .cc-picker-btn > span'; // el nombre de la pantalla se abrevia dentro de checkTopBarFit (depende de cuánto choca con los iconos)
+let topBarLabelObserver = null;
+let topBarLabelTimer = 0;
+function fitTopBarLabels() {
+    const bar = document.querySelector('.top-bar');
+    if (!bar) return;
+    if (topBarLabelObserver) topBarLabelObserver.disconnect();
+    bar.querySelectorAll(TOP_BAR_FIT_LABELS).forEach((span) => {
+        if (span.children.length) return; // un título con enlaces o iconos adentro no es solo texto: no se toca
+        const current = span.textContent;
+        const full = span.dataset.abbrShown !== undefined && current === span.dataset.abbrShown ? span.dataset.abbrFull : current;
+        if (!full || !full.trim()) return;
+        const ladder = autoAbbrLadder(full);
+        let step = 0;
+        if (current !== full) span.textContent = full;
+        while (step < ladder.length - 1 && !submenuSpanFits(span)) { step += 1; span.textContent = ladder[step]; }
+        if (step > 0) {
+            span.dataset.abbrFull = full;
+            span.dataset.abbrShown = span.textContent;
+            if (!span.hasAttribute('title') || span.dataset.abbrTitle) { span.title = full; span.dataset.abbrTitle = '1'; }
+        } else {
+            delete span.dataset.abbrFull;
+            delete span.dataset.abbrShown;
+            if (span.dataset.abbrTitle) { span.removeAttribute('title'); delete span.dataset.abbrTitle; }
+        }
+    });
+    if (topBarLabelObserver) topBarLabelObserver.observe(bar, { childList: true, subtree: true, characterData: true });
+}
+function scheduleTopBarLabelFit() {
+    clearTimeout(topBarLabelTimer);
+    topBarLabelTimer = setTimeout(fitTopBarLabels, 40); // setTimeout y no requestAnimationFrame: una pestaña en segundo plano no dibuja cuadros
+}
+function watchTopBarLabels() {
+    const bar = document.querySelector('.top-bar');
+    if (!bar || bar.dataset.abbrWatched) return;
+    bar.dataset.abbrWatched = '1';
+    topBarLabelObserver = new MutationObserver(scheduleTopBarLabelFit);
+    new ResizeObserver(scheduleTopBarLabelFit).observe(bar);
+    window.addEventListener('resize', scheduleTopBarLabelFit);
+    if (document.fonts) {
+        if (document.fonts.ready) document.fonts.ready.then(scheduleTopBarLabelFit);
+        if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', scheduleTopBarLabelFit);
+    }
+    fitTopBarLabels();
+}
+
 // --- Collapsible top bar -------------------------------------------------
 // "Optimizar la pantalla, solo cuando se requiera": the top bar (department/
 // área/centro de costos pickers, welcome text, action icons) can be
@@ -14006,6 +14093,7 @@ async function initDashboardInner({ activePage } = {}) {
     applyStyle(getStoredStyle());
     renderBreadcrumbBar();
     renderTopBarCollapseToggle();
+    watchTopBarLabels();
     chromeLabelsReady = true;
     renderDataTableZoomControls();
     renderDataTableColumnControls();
