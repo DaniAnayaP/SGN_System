@@ -1951,7 +1951,7 @@ function submenuSpanFits(span) {
 // 10 niveles de Implementación Inicial, «3 · Estructura de organización») se abrevian solos: primero las palabras largas (de la más larga a la más corta: «Estruc. de organización», «Estruc. de Org.»), luego sin conectores
 // y al final solo las primeras palabras. El nombre completo se ve igual que en los demás: con la barra cerrada al pasar el mouse, en la ruta de arriba y en Modo ayuda.
 const AUTO_ABBR_CONNECTORS = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'e', 'o', 'u', 'para', 'por', 'en', 'al', 'con', 'of', 'the', 'and', 'for', 'to', 'in', 'on', 'at', 'with']);
-function autoAbbrLadder(full) {
+function autoAbbrLadder(full, options) {
     const numbered = /^(\s*\d+\s*[·.\-:)]\s*)([\s\S]*)$/.exec(full); // «3 · Estructura…»: el número de adelante se queda
     const prefix = numbered ? numbered[1] : '';
     let words = (numbered ? numbered[2] : full).split(/\s+/).filter(Boolean);
@@ -1961,7 +1961,7 @@ function autoAbbrLadder(full) {
         if (text.length < ladder[ladder.length - 1].length) ladder.push(text);
     };
     // 1) palabras largas abreviadas con punto, la más larga primero (a igual largo, la de más a la derecha)
-    const longest = words.map((w, i) => i).filter((i) => Array.from(words[i]).length >= 7).sort((a, b) => Array.from(words[b]).length - Array.from(words[a]).length || b - a);
+    const longest = words.map((w, i) => i).filter((i) => Array.from(words[i]).length >= 7 && /^[\p{L}\p{M}]+$/u.test(words[i])).sort((a, b) => Array.from(words[b]).length - Array.from(words[a]).length || b - a);
     // la abreviatura corta la palabra más o menos a la mitad y termina en consonante (Estructura → Estruc., organización → organiz., Asignación → Asign., Conectividad → Conect.)
     const isVowel = (ch) => /[aeiouáéíóúü]/i.test(ch);
     const abbreviate = (word) => {
@@ -1979,8 +1979,8 @@ function autoAbbrLadder(full) {
     // 2) sin conectores (menos el primero)
     const noConnectors = words.filter((w, i) => i === 0 || !AUTO_ABBR_CONNECTORS.has(w.toLowerCase()));
     if (noConnectors.length !== words.length) { words = noConnectors; push(words); }
-    // 3) solo las primeras palabras
-    for (let n = words.length - 1; n >= 1; n -= 1) push(words.slice(0, n));
+    // 3) solo las primeras palabras (los datos de una tabla no llegan aquí: «Claude Verify Admin» no puede quedar como «Claude»; ahí el último recurso es el «…» de siempre)
+    if (!(options && options.keepWords)) for (let n = words.length - 1; n >= 1; n -= 1) push(words.slice(0, n));
     return ladder;
 }
 // «Mi App» (TI › Configuración Compañía) se llama «Mi App + nombre corto del cliente» en la barra, en la ruta y en la pestaña (pedido de Daniel, 2026-11-18). El nombre corto sale de GET /api/business/mi-app/name,
@@ -2039,6 +2039,163 @@ function applySubmenuAbbreviations() {
     });
 }
 window.addEventListener('resize', applySubmenuAbbreviations);
+
+// --- Tablas: si un nombre no cabe en su columna, se abrevia (regla de todo el sistema, Daniel 2026-11-19: «si algo no cabe se abrevia, y al sobreponer ya se ve el nombre real completo») ---
+// Aplica a los ENCABEZADOS de cada .data-table y a las celdas de texto sencillo (nombres, descripciones). El texto de verdad NO se toca: se queda en la celda, así los filtros, el orden, el copiar y el exportar lo siguen leyendo
+// completo; solo cambia lo que se VE (CSS de Inicio-en.css: data-abbr dibuja la abreviatura encima del texto, que se vuelve transparente). El nombre completo sale al sobreponer (title). Se mide con un canvas (con la misma
+// letra, tamaño, mayúsculas y espaciado de la celda) y sin tocar el diseño por celda, así una tabla de mil renglones no se traba. Las celdas con números, fechas, códigos, correos o botones no se abrevian (un dato no se
+// acorta como un nombre): si ni abreviado cabe, queda el «…» de siempre. Lo vuelve a revisar cuando cambia el ancho de una columna (arrastrar, ventana, barra lateral), el tamaño de letra, el idioma o los renglones.
+const TABLE_ABBR_TEXT_RE = /^[\p{L}][\p{L}\p{M}\s.,&'’()·-]*$/u;
+const tableAbbrCtx = document.createElement('canvas').getContext('2d');
+const tableAbbrWidths = new Map();
+const tableAbbrLadders = new Map();
+const dataTableAbbrQueued = new Set();
+function tableAbbrSpec(el) {
+    const cs = getComputedStyle(el);
+    const spacing = parseFloat(cs.letterSpacing) || 0;
+    const avail = el.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    // solo donde el texto de verdad se corta con «…»: una línea, escondiendo lo que sobra (el historial, por ejemplo, parte sus textos en líneas)
+    const skip = cs.whiteSpace !== 'nowrap' || cs.overflowX !== 'hidden' || avail <= 0;
+    return { skip, avail, spacing, upper: cs.textTransform === 'uppercase', font: `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}` };
+}
+function tableAbbrWidth(spec, text) {
+    const shown = spec.upper ? text.toUpperCase() : text;
+    const key = `${spec.font}|${spec.spacing}|${shown}`;
+    let width = tableAbbrWidths.get(key);
+    if (width === undefined) {
+        if (tableAbbrWidths.size > 30000) tableAbbrWidths.clear();
+        tableAbbrCtx.font = spec.font;
+        width = tableAbbrCtx.measureText(shown).width + spec.spacing * Array.from(shown).length;
+        tableAbbrWidths.set(key, width);
+    }
+    return width;
+}
+// { step: la abreviatura que cabe | null, clipped: true si ni abreviado cabe (queda el «…» de siempre, pero el nombre completo sale al sobreponer) }.
+const TABLE_ABBR_NONE = { step: null, clipped: false };
+function tableAbbrFor(text, spec, keepWords) {
+    if (!text || !spec || spec.skip || tableAbbrWidth(spec, text) <= spec.avail) return TABLE_ABBR_NONE;
+    const key = `${keepWords ? 1 : 0}|${text}`;
+    let ladder = tableAbbrLadders.get(key);
+    if (!ladder) {
+        if (tableAbbrLadders.size > 20000) tableAbbrLadders.clear();
+        ladder = autoAbbrLadder(text, { keepWords });
+        tableAbbrLadders.set(key, ladder);
+    }
+    for (let i = 1; i < ladder.length; i += 1) if (tableAbbrWidth(spec, ladder[i]) <= spec.avail) return { step: ladder[i], clipped: false };
+    return { step: null, clipped: true };
+}
+function abbreviateDataTableTexts(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    const table = state && state.table;
+    if (!table || !table.isConnected || !table.offsetParent) return; // una tabla escondida (un diálogo cerrado) se revisa al abrirse: sus encabezados cambian de tamaño
+    const headerRow = getHeaderRow(table);
+    if (!headerRow) return;
+    // 1) lecturas (todas juntas: escribir en medio obligaría al navegador a recalcular el diseño una y otra vez)
+    const heads = Array.from(headerRow.cells).filter((th) => th.dataset.col).map((th) => {
+        if (state.abbrResizeObserver) state.abbrResizeObserver.observe(th);
+        const node = Array.from(th.childNodes).find((n) => n.nodeType === 3 && n.nodeValue.trim());
+        return { el: th, text: node ? node.nodeValue.trim() : '', spec: tableAbbrSpec(th) };
+    });
+    // las bandas de arriba («Control Interno», la pantalla de origen) también son nombres
+    const bands = Array.from(table.tHead ? table.tHead.querySelectorAll('tr.data-table-group-band th') : []).map((th) => {
+        if (state.abbrResizeObserver) state.abbrResizeObserver.observe(th);
+        const node = Array.from(th.childNodes).find((n) => n.nodeType === 3 && n.nodeValue.trim());
+        return { el: th, text: node && th.childNodes.length === 1 ? node.nodeValue.trim() : '', spec: tableAbbrSpec(th) };
+    });
+    const rows = table.tBodies[0] ? Array.from(table.tBodies[0].rows) : [];
+    const colSpecs = new Map();
+    for (let i = 0; i < rows.length && i < 60 && colSpecs.size < heads.length; i += 1) {
+        if (rows[i].hidden || rows[i].querySelector('td.data-table-empty-cell')) continue;
+        Array.from(rows[i].cells).forEach((td) => { if (td.dataset.col && !colSpecs.has(td.dataset.col) && td.clientWidth > 0) colSpecs.set(td.dataset.col, tableAbbrSpec(td)); });
+    }
+    // Solo se revisa lo que cambió: una columna cuyo ancho o letra es el de la vez anterior no se vuelve a medir en los renglones que ya se vieron (una tabla de mil renglones que se llena por tandas, o una
+    // columna que se arrastra, no repite el trabajo de todo lo demás). Un renglón nuevo o cuyo contenido cambió (state.abbrDirty) se revisa completo.
+    const sigs = state.abbrSigs || (state.abbrSigs = new Map());
+    const seen = state.abbrSeen || (state.abbrSeen = new WeakSet());
+    const dirty = state.abbrDirty || new Set();
+    state.abbrDirty = new Set();
+    const changed = new Set();
+    colSpecs.forEach((spec, key) => {
+        const sig = `${spec.skip}|${spec.avail}|${spec.font}|${spec.spacing}`;
+        if (sigs.get(key) !== sig) { changed.add(key); sigs.set(key, sig); }
+    });
+    // 2) decisiones (sin tocar el diseño) y 3) escrituras
+    const writes = [];
+    const decide = (el, text, spec, keepWords) => {
+        const { step, clipped } = tableAbbrFor(text, spec, keepWords);
+        const wantTitle = step !== null || clipped;
+        const same = step === null
+            ? el.dataset.abbr === undefined && (wantTitle ? el.dataset.abbrFull === text : el.dataset.abbrTitle === undefined)
+            : el.dataset.abbr === step && el.dataset.abbrFull === text;
+        if (!same) writes.push([el, step, text, wantTitle]);
+    };
+    heads.forEach((h) => decide(h.el, h.text, h.spec, false));
+    bands.forEach((b) => decide(b.el, b.text, b.spec, false));
+    rows.forEach((tr) => {
+        const fresh = !seen.has(tr) || dirty.has(tr);
+        seen.add(tr);
+        if (!fresh && !changed.size) return;
+        Array.from(tr.cells).forEach((td) => {
+            if (!fresh && !changed.has(td.dataset.col)) return;
+            const spec = colSpecs.get(td.dataset.col);
+            const plain = spec && td.childNodes.length === 1 && td.firstChild.nodeType === 3 && !td.classList.contains('data-table-empty-cell') && !td.classList.contains('editable-cell');
+            const text = plain ? td.firstChild.nodeValue.trim() : '';
+            decide(td, plain && TABLE_ABBR_TEXT_RE.test(text) ? text : '', spec, true);
+        });
+    });
+    writes.forEach(([el, step, text, wantTitle]) => {
+        if (step === null) delete el.dataset.abbr; else el.dataset.abbr = step;
+        if (wantTitle) {
+            el.dataset.abbrFull = text;
+            if (!el.hasAttribute('title') || el.dataset.abbrTitle) { el.title = text; el.dataset.abbrTitle = '1'; }
+        } else {
+            delete el.dataset.abbrFull;
+            if (el.dataset.abbrTitle) { el.removeAttribute('title'); delete el.dataset.abbrTitle; }
+        }
+    });
+}
+function scheduleDataTableAbbreviation(tableId) {
+    if (dataTableAbbrQueued.has(tableId)) return;
+    dataTableAbbrQueued.add(tableId);
+    // setTimeout y no requestAnimationFrame: una pestaña en segundo plano no dibuja cuadros y la revisión se quedaría esperando
+    setTimeout(() => {
+        dataTableAbbrQueued.delete(tableId);
+        try { abbreviateDataTableTexts(tableId); } catch (err) { console.warn('Abreviar tabla:', err); }
+    }, 40);
+}
+function scheduleAllDataTableAbbreviations() {
+    dataTableColumnState.forEach((state, tableId) => scheduleDataTableAbbreviation(tableId));
+}
+// Una vez por tabla: se vuelve a revisar cuando cambia el tamaño de un encabezado (arrastrar una columna, la ventana, la barra lateral) o el contenido de la tabla (renglones nuevos, un dato que se edita).
+function watchDataTableAbbreviation(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || !state.table || state.abbrWatched) return;
+    state.abbrWatched = true;
+    const schedule = () => scheduleDataTableAbbreviation(tableId);
+    state.abbrResizeObserver = new ResizeObserver(schedule);
+    state.abbrDirty = new Set();
+    new MutationObserver((mutations) => {
+        for (const m of mutations) {
+            const el = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+            const tr = el && el.closest ? el.closest('tr') : null;
+            if (tr && tr.parentElement && tr.parentElement.tagName === 'TBODY') state.abbrDirty.add(tr);
+        }
+        schedule();
+    }).observe(state.table, { childList: true, subtree: true, characterData: true });
+    schedule();
+}
+window.addEventListener('resize', scheduleAllDataTableAbbreviations);
+document.addEventListener('dashboard:language-changed', () => setTimeout(scheduleAllDataTableAbbreviations, 0));
+// Las medidas dependen de que la letra de la tabla ya esté cargada: cuando termina de cargar, lo medido antes se olvida y se revisa todo otra vez.
+function remeasureAllDataTableAbbreviations() {
+    tableAbbrWidths.clear();
+    dataTableColumnState.forEach((state) => { if (state.abbrSigs) state.abbrSigs.clear(); });
+    scheduleAllDataTableAbbreviations();
+}
+if (document.fonts) {
+    if (document.fonts.ready) document.fonts.ready.then(remeasureAllDataTableAbbreviations);
+    if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', remeasureAllDataTableAbbreviations);
+}
 
 // --- Menu interactions (dropdowns, minimize, mobile) ------------------------
 function wireMenuInteractions() {
@@ -3135,6 +3292,7 @@ function setDataTableFontSize(size) {
         if (inBtn) inBtn.disabled = clamped >= DATA_TABLE_FONT_MAX;
     });
     sizeDataTableWrappers();
+    scheduleAllDataTableAbbreviations();
     return clamped;
 }
 
@@ -5067,6 +5225,8 @@ function bindExternalColumnFilters(tableId, table) {
     applySortIndicators(tableId);
     applyTableSort(tableId);
     headers.forEach((th) => updateColumnFilterIndicator(th, state.columnFilters.has(th.dataset.col) || state.columnRules.has(th.dataset.col)));
+    state.abbrWatched = false; // la tabla es otra (se dibujó de nuevo): se vigila la nueva
+    watchDataTableAbbreviation(tableId);
     return new Set([...state.columnFilters.keys(), ...state.columnRules.keys()]).size;
 }
 
@@ -5177,6 +5337,7 @@ function initDataTableColumns(wrapper, index) {
         attachColumnFilterTrigger(th, tableId);
     });
     observeTableBody(table, tableId);
+    watchDataTableAbbreviation(tableId);
     attachFieldLockGuard(wrapper, tableId);
     loadFieldFillRules(tableId);
     // Fire-and-forget -- this function is synchronous (called from a

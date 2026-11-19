@@ -3095,6 +3095,33 @@
         top: 0;
         z-index: 4;
     }
+    /* Si un nombre no cabe en su columna se muestra abreviado (Dashboard.js abbreviateDataTableTexts, regla de todo el sistema). El texto de verdad sigue en la celda (filtros, orden, copiar) y solo se vuelve
+       transparente; la abreviatura (data-abbr) se dibuja encima, con la misma letra y el mismo relleno. En el encabezado va en ::before porque su ::after ya es la flecha de orden; en las celdas, en ::after porque
+       el candado de campo usa ::before. Los botones del encabezado (filtro, arrastrar) conservan su color. */
+    .data-table th[data-abbr],
+    .data-table td[data-abbr]{
+        -webkit-text-fill-color: transparent;
+    }
+    .data-table td[data-abbr]:not(.data-table-col-pinned){
+        position: relative;
+    }
+    .data-table th[data-abbr] > *{
+        -webkit-text-fill-color: currentColor;
+    }
+    .data-table th[data-abbr]::before,
+    .data-table td[data-abbr]::after{
+        content: attr(data-abbr);
+        position: absolute;
+        inset: 0;
+        box-sizing: border-box;
+        padding: inherit;
+        display: flex;
+        align-items: center;
+        white-space: nowrap;
+        overflow: hidden;
+        pointer-events: none;
+        -webkit-text-fill-color: currentColor;
+    }
     /* Column-group band (Dashboard.js: renderColumnGroupBand) — a purely
        cosmetic row above the real header, one <th colspan> per contiguous
        run of same-group columns (e.g. "Control Interno"). Se queda fija junto
