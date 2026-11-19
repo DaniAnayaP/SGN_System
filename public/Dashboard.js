@@ -11040,28 +11040,30 @@ function renderTrainingNoticeRow(item) {
     return row;
 }
 
-// Implementación Inicial (kind 'implementation', ver publishImplementationNotice en db.js): una parte (el cliente o SaaS) confirmó o rechazó la finalización, o la implementación quedó finalizada. Abre la pantalla que le toca a quien lo recibe.
+// Implementación Inicial (kind 'implementation', ver publishImplementationNotice en db.js): una parte (el cliente o SaaS) confirmó o rechazó la finalización, o la implementación quedó finalizada, o dejó notas o comentarios en un nivel (los que no se han visto vienen juntos: n). Abre la pantalla que le toca a quien lo recibe.
 function renderImplementationNoticeRow(item) {
     const row = document.createElement('div');
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
     const tag = document.createElement('div');
     tag.className = 'notifications-item-meta';
     tag.style.fontWeight = '700';
-    tag.textContent = item.event === 'closed' ? t('main.noticeImpl_closed') : t(`main.noticeImpl_${item.event}_${item.side === 'client' ? 'client' : 'saas'}`);
+    const implKey = item.event === 'closed' ? 'main.noticeImpl_closed' : `main.noticeImpl_${item.event}_${item.side === 'client' ? 'client' : 'saas'}`;
+    tag.textContent = (item.event === 'comment' || item.event === 'note') && item.n > 1 ? t(`${implKey}_many`, { n: item.n }) : t(implKey);
     const meta = document.createElement('div');
     meta.className = 'notifications-item-meta';
     meta.textContent = `${item.toSaas && item.client ? `${item.client} · ` : ''}${formatNotificationDate(item.createdAt)}`;
     meta.title = timeStampTitle(item.createdAt);
     const desc = document.createElement('div');
     desc.className = 'notifications-item-desc';
-    desc.textContent = item.note || '—';
+    const implLevel = item.level ? t(`main.implLevelName_${item.level}`) : '';
+    desc.textContent = implLevel && !implLevel.startsWith('main.') ? `${implLevel}: ${item.note || '—'}` : (item.note || '—');
     const by = document.createElement('div');
     by.className = 'notifications-item-meta';
     by.textContent = t('main.noticeChangedBy', { name: item.actorLabel || '—' });
     const link = document.createElement('a');
     link.href = item.toSaas ? 'Admin-Implementaciones.html' : 'OpTIImplCronograma.html';
     link.className = 'notifications-item-meta';
-    link.textContent = t('main.expView');
+    link.textContent = t(item.toSaas ? 'main.noticeImplViewSaas' : 'main.noticeImplView');
     row.append(tag, meta, desc, by, link);
     return row;
 }

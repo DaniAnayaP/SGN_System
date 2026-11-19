@@ -81,6 +81,7 @@ function counters(level) {
     if (level.activitiesPending) chips.push(`<span class="impl-cnt impl-cnt-hot">${esc(level.activitiesPending === 1 ? t('main.implActPendingOne') : t('main.implActPendingMany', { n: level.activitiesPending }))}</span>`);
     if (level.notesTotal) chips.push(`<span class="impl-cnt">${esc(t(level.notesTotal === 1 ? 'main.implNoteCountOne' : 'main.implNoteCount', { n: level.notesTotal }))}</span>`);
     if (level.commentsTotal) chips.push(`<span class="impl-cnt">${esc(t(level.commentsTotal === 1 ? 'main.implCommentCountOne' : 'main.implCommentCount', { n: level.commentsTotal }))}</span>`);
+    if (level.commentsUnread) chips.push(`<span class="impl-cnt impl-cnt-hot">${esc(t(level.commentsUnread === 1 ? 'main.implCommentUnreadOne' : 'main.implCommentUnread', { n: level.commentsUnread }))}</span>`);
     return chips.length ? `<span class="impl-cnts" data-help-key="implActToggle">${chips.join('')}</span>` : '';
 }
 // Los iconos de lo que se puede hacer con una actividad (según los `actions` que manda el servidor).
@@ -163,8 +164,8 @@ function commentsBlock(level) {
     const open = openThreads.has(level.key);
     const n = level.commentsTotal || 0;
     if (!n && !open && !(level.can && level.can.comment)) return '';
-    const label = t(n === 1 ? 'main.implCommentsToggleOne' : 'main.implCommentsToggle', { n });
-    return `<div class="impl-acts-block impl-comments-block"><h5 class="impl-acts-h">${esc(t('main.implCommentsLabel'))}</h5><button type="button" class="impl-add impl-comments-toggle" data-impl-comments="${esc(level.key)}" aria-expanded="${open}" data-help-key="implComments"><i class="bx bx-message-rounded-dots" aria-hidden="true"></i> ${esc(label)}</button>${open ? `<div class="impl-thread" data-impl-thread="${esc(level.key)}"></div>` : ''}</div>`;
+    const label = (level.commentsUnread ? t('main.implCommentsToggleUnread', { n, unread: level.commentsUnread }) : t(n === 1 ? 'main.implCommentsToggleOne' : 'main.implCommentsToggle', { n }));
+    return `<div class="impl-acts-block impl-comments-block"><h5 class="impl-acts-h">${esc(t('main.implCommentsLabel'))}</h5><button type="button" class="impl-add impl-comments-toggle${level.commentsUnread ? ' impl-comments-unread' : ''}" data-impl-comments="${esc(level.key)}" aria-expanded="${open}" data-help-key="implComments"><i class="bx bx-message-rounded-dots" aria-hidden="true"></i> ${esc(label)}</button>${open ? `<div class="impl-thread" data-impl-thread="${esc(level.key)}"></div>` : ''}</div>`;
 }
 // Se llama después de cada dibujo de la pantalla: monta los hilos abiertos en su lugar y suelta los que ya no se ven. La pantalla de SaaS pasa su ventana; la del cliente, su contenedor.
 function afterRender(rootEl) {
@@ -183,7 +184,9 @@ function afterRender(rootEl) {
         host.setAttribute('data-impl-thread', key);
         slot.replaceWith(host);
         const controller = window.Threads.mount(host, { mentions: false, comments: true, ...(ctx.threadOptions ? ctx.threadOptions(level) : {}),
-            onChange: (info) => { if (info && info.posted) { const l = (((ctx.getData().implementation) || {}).levels || []).find((x) => x.key === key); if (l) { l.commentsTotal = (l.commentsTotal || 0) + 1; ctx.rerender(); } } } });
+            onChange: (info) => {
+                if (info && info.read) { const l0 = (((ctx.getData().implementation) || {}).levels || []).find((x) => x.key === key); if (l0 && l0.commentsUnread) { l0.commentsUnread = 0; ctx.rerender(); } }
+                if (info && info.posted) { const l = (((ctx.getData().implementation) || {}).levels || []).find((x) => x.key === key); if (l) { l.commentsTotal = (l.commentsTotal || 0) + 1; ctx.rerender(); } } } });
         threadHosts.set(key, { host, controller });
     });
     destroyThreads(keep);

@@ -9898,3 +9898,4 @@ input[type="color"].cli-company{ opacity: 0.55; }
 .impl-comments-toggle .bx{ font-size: 1rem; }
 .impl-thread{ margin-top: 0.4rem; max-width: 46rem; }
 .impl-thread .thr-list{ max-height: 18rem; }
+.impl-comments-unread{ color: var(--color-report-calc-text); font-weight: 700; }

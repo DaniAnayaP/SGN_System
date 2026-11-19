@@ -583,7 +583,7 @@ const {
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
     LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
-    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask,
+    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, countImplementationUnreadComments, markImplementationTask,
     addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, addImplementationNote, updateImplementationNote, removeImplementationNote, findImplementationNote, logImplementationEvent, IMPLEMENTATION_LEVEL_THREAD, IMPLEMENTATION_NOTE_MAX, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
@@ -1712,6 +1712,7 @@ function saasImplDetail(req, clientId) {
             }
         });
         implDecorateActivities(impl, { side: 'saas', canAdd: can.mark, isAdmin: false, userId: req.user.sub });
+        implDecorateUnread(impl, clientId, req.user.sub);
     }
     return { client: { id: clientId, name: client ? client.company_name : '' }, implementation: impl, can, implementers: can.start || can.edit ? listImplementerCandidates(SAAS_IMPL_ITEM) : [], people: impl ? listImplementationPeople(clientId) : [] };
 }
@@ -1751,6 +1752,11 @@ function implActivityRight(who, kind, activity) {
     const mine = activity.createdSide === 'client' && activity.createdByUserId === who.userId;
     if (kind === 'status') return who.isAdmin || mine || (activity.responsibleUserId != null && activity.responsibleUserId === who.userId);
     return activity.createdSide === 'client' && (who.isAdmin || mine);
+}
+// Cuántos comentarios de OTRAS personas lleva sin leer cada nivel para quien pregunta (commentsUnread); leerlos es abrir el hilo (markThreadRead).
+function implDecorateUnread(impl, clientId, userId) {
+    const unread = countImplementationUnreadComments(clientId, userId, impl.levels.map((l) => l.levelId));
+    impl.levels.forEach((l) => { l.commentsUnread = unread.get(l.levelId) || 0; });
 }
 function implDecorateActivities(impl, who) {
     const open = impl.status === 'active';
@@ -1831,6 +1837,7 @@ function implNoteRun(req, res, clientId, who, op, params, respond) {
         const result = addImplementationNote(clientId, params.levelKey, { body: params.body, byLabel: by, byUserId: req.user.sub, side: who.side });
         if (result.error) return implFail(res, result);
         implLog(req, clientId, 'update', 'main.implHistNote', '', `${implLevelEs(result.implementation, params.levelKey)}: ${implNoteEs(params.body)}`);
+        implNotify(req, clientId, 'note', who.side, implNoteEs(params.body), params.levelKey);
         return res.status(201).json({ ...respond(), noteId: result.noteId });
     }
     const found = findImplementationNote(impl, params.id);
@@ -1850,12 +1857,12 @@ function implNoteRun(req, res, clientId, who, op, params, respond) {
 }
 const implNoteEs = (body) => { const text = String(body == null ? '' : body).replace(/\s+/g, ' ').trim(); return text.length > 160 ? `${text.slice(0, 160)}…` : text; };
 
-// Avisos de la campana: a la OTRA parte cuando una confirma o rechaza, y a las dos cuando se finaliza.
-function implNotify(req, clientId, event, side, note) {
+// Avisos de la campana: a la OTRA parte cuando una confirma o rechaza o deja una nota o un comentario en un nivel (levelKey), y a las dos cuando se finaliza.
+function implNotify(req, clientId, event, side, note, levelKey) {
     try {
         const client = getClientById(clientId);
         const impl = getImplementation(clientId);
-        const base = { event, side, clientName: client ? client.company_name : '', note, actorUserId: req.user.sub, actorLabel: changedByLabel(req) };
+        const base = { event, side, clientName: client ? client.company_name : '', note, actorUserId: req.user.sub, actorLabel: changedByLabel(req), level: levelKey || '' };
         const toClient = () => publishImplementationNotice({ ...base, recipientIds: listUserIdsWithScreenGrant(clientId, false, IMPL_CRONOGRAMA_TUPLE, []), toSaas: false });
         const toSaas = () => publishImplementationNotice({ ...base, recipientIds: [...listSaasUserIdsForScreen(SAAS_IMPL_ITEM), impl && impl.implementerUserId].filter(Boolean), toSaas: true });
         if (event === 'closed') { toClient(); toSaas(); } else if (side === 'client') toSaas(); else toClient();
@@ -1911,7 +1918,7 @@ function implClientPayload(req) {
     const client = getClientById(clientId);
     const impl = getImplementation(clientId);
     const who = implActivityWho(req);
-    if (impl) implDecorateActivities(impl, who);
+    if (impl) { implDecorateActivities(impl, who); implDecorateUnread(impl, clientId, req.user.sub); }
     const out = { clientName: client ? client.company_name : '', implementation: impl, canFinalize: implFinishCan(req), canAddActivities: who.canAdd, people: impl ? listImplementationPeople(clientId) : [] };
     // Sin implementación iniciada, el Cronograma muestra los niveles de la plantilla en gris (nada de ninguna compañía): su orden y cuáles son opcionales.
     if (!impl) out.plannedLevels = IMPLEMENTATION_LEVELS.map((l, i) => ({ position: i + 1, key: l.key, optional: !!l.optional }));
@@ -2096,14 +2103,18 @@ const THREAD_MESSAGES = {
 };
 // Los comentarios de un NIVEL de la Implementación Inicial (pieza 2 del Cronograma): se leen cuando se ve el Cronograma y se escriben con la misma regla de agregar actividades (l.can.add): implementación activa, quien tiene la hoja de agregar (o el implementador
 // de SaaS) y un nivel que ya se abrió y no quedó «No aplica». Sin menciones. postError = por qué no se puede comentar ahora. afterPost deja el comentario como evento de la implementación (para su historial).
-function implLevelThreadSubject(impl, level, who) {
+function implLevelThreadSubject(impl, level, who, req) {
     const open = impl.status === 'active';
     const canPost = open && who.canAdd && implActivityMayAddAt(who, level);
     let postError = null;
     if (!canPost) postError = !open ? 'IMPL_CLOSED' : (!who.canAdd ? 'IMPL_FORBIDDEN' : (level.state === 'na' ? 'IMPL_LEVEL_NA' : 'IMPL_LOCKED'));
     return {
         label: implLevelEs(impl, level.key), canRead: true, canPost, postError, participants: [], canMention: false,
-        afterPost: (comment, byLabel) => logImplementationEvent(impl.id, level.key, 'comment_added', String((comment && comment.body) || '').replace(/\s+/g, ' ').trim().slice(0, 100), byLabel),
+        afterPost: (comment, byLabel) => {
+            logImplementationEvent(impl.id, level.key, 'comment_added', String((comment && comment.body) || '').replace(/\s+/g, ' ').trim().slice(0, 100), byLabel);
+            // aviso de la campana a la otra parte (si no hay req no se avisa, p. ej. al probar la regla sola)
+            if (req) implNotify(req, impl.clientId, 'comment', who.side, String((comment && comment.body) || '').replace(/\s+/g, ' ').trim().slice(0, 160), level.key);
+        },
     };
 }
 function threadFail(res, result) {
@@ -2140,7 +2151,7 @@ function implClientLevelThread(req, levelId) {
     const impl = getImplementation(req.user.clientId);
     const level = impl ? impl.levels.find((l) => l.levelId === levelId) : null;
     if (!level) return null;
-    const subject = implLevelThreadSubject(impl, level, implActivityWho(req));
+    const subject = implLevelThreadSubject(impl, level, implActivityWho(req), req);
     const afterPost = subject.afterPost;
     // la ruta genérica llama afterPost(comentario): aquí ya se sabe quién comenta
     subject.afterPost = (comment) => afterPost(comment, changedByLabel(req));
@@ -2293,7 +2304,7 @@ function implSaasThread(req, res, needWrite) {
     if (!impl) { implFail(res, { error: 'NOT_STARTED' }); return null; }
     const level = impl.levels.find((l) => l.key === String(req.params.key));
     if (!level) { implFail(res, { error: 'LEVEL' }); return null; }
-    return { client, impl, level, subject: implLevelThreadSubject(impl, level, { side: 'saas', canAdd: saasImplCan(req, 'mark'), isAdmin: false, userId: req.user.sub }) };
+    return { client, impl, level, subject: implLevelThreadSubject(impl, level, { side: 'saas', canAdd: saasImplCan(req, 'mark'), isAdmin: false, userId: req.user.sub }, req) };
 }
 app.get('/api/admin/implementations/:clientId/levels/:key/comments', requireAuth, requireAdmin, (req, res) => {
     const ctx = implSaasThread(req, res, false);

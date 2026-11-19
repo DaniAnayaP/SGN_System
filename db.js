@@ -15531,14 +15531,36 @@ function rejectImplementationFinish(clientId, side, note, byLabel) {
     })();
     return { before: impl, implementation: getImplementation(clientId) };
 }
-// Aviso de la campana (kind 'implementation', scope 'data'): una parte confirmó o rechazó la finalización, o la implementación quedó finalizada. side = quién lo hizo; toSaas = el aviso es para SaaS.
-function publishImplementationNotice({ recipientIds, event, side, toSaas, clientName, note = '', actorUserId, actorLabel }) {
+// Aviso de la campana (kind 'implementation', scope 'data'): una parte confirmó o rechazó la finalización, o la implementación quedó finalizada (confirmed | rejected | closed), o dejó una nota o un comentario en un nivel (note | comment, con su `level`).
+// side = quién lo hizo; toSaas = el aviso es para SaaS. Las notas y los comentarios se JUNTAN: si quien recibe ya tiene sin ver un aviso de lo mismo (mismo evento, mismo nivel, misma parte), ese aviso se actualiza (n = cuántos van, el último texto y quién, y sube
+// de nuevo en la lista) en vez de llenar la campana con uno por comentario.
+function publishImplementationNotice({ recipientIds, event, side, toSaas, clientName, note = '', actorUserId, actorLabel, level = '' }) {
     const ids = [...new Set((recipientIds || []).filter((id) => id != null && id !== actorUserId))];
     if (!ids.length) return [];
-    const payload = JSON.stringify({ event, side: side || '', toSaas: !!toSaas, client: clientName || '', note: String(note || '').slice(0, 200) });
+    const grouped = event === 'note' || event === 'comment';
+    const base = { event, side: side || '', toSaas: !!toSaas, client: clientName || '', note: String(note || '').slice(0, 200) };
+    if (level) base.level = String(level);
     const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'implementation', 'data', ?, ?, ?)");
-    db.transaction(() => ids.forEach((id) => insert.run(id, payload, actorUserId == null ? null : actorUserId, actorLabel || '')))();
+    const find = db.prepare("SELECT id, payload FROM saas_tree_notices WHERE user_id = ? AND kind = 'implementation' AND seen_at IS NULL AND json_extract(payload, '$.event') = ? AND COALESCE(json_extract(payload, '$.level'), '') = ? AND COALESCE(json_extract(payload, '$.side'), '') = ? AND COALESCE(json_extract(payload, '$.client'), '') = ? ORDER BY id DESC LIMIT 1");
+    const bump = db.prepare("UPDATE saas_tree_notices SET payload = ?, actor_user_id = ?, actor_label = ?, created_at = datetime('now') WHERE id = ?");
+    db.transaction(() => ids.forEach((id) => {
+        const same = grouped ? find.get(id, event, base.level || '', base.side, base.client) : null;
+        if (same) {
+            let before = {}; try { before = JSON.parse(same.payload) || {}; } catch (err) { before = {}; }
+            bump.run(JSON.stringify({ ...base, n: (Number(before.n) || 1) + 1 }), actorUserId == null ? null : actorUserId, actorLabel || '', same.id);
+        } else insert.run(id, JSON.stringify(grouped ? { ...base, n: 1 } : base), actorUserId == null ? null : actorUserId, actorLabel || '');
+    }))();
     return ids;
+}
+// «Sin leer» de los comentarios de cada nivel para esa persona: de cada hilo 'implementation-level' de la compañía, los comentarios de OTRAS personas con id mayor al último que leyó. Devuelve Map(levelId → cuántos).
+function countImplementationUnreadComments(clientId, userId, levelIds) {
+    const ids = (levelIds || []).filter((id) => Number.isInteger(id));
+    if (!ids.length) return new Map();
+    const rows = db.prepare(`SELECT c.thread_id AS levelId, COUNT(*) AS n FROM thread_comments c
+        WHERE c.client_id = ? AND c.thread_type = 'implementation-level' AND c.thread_id IN (${ids.map(() => '?').join(',')}) AND c.author_user_id != ?
+          AND c.id > COALESCE((SELECT r.last_read_comment_id FROM thread_reads r WHERE r.user_id = ? AND r.thread_type = 'implementation-level' AND r.thread_id = c.thread_id), 0)
+        GROUP BY c.thread_id`).all(clientId, ...ids, userId, userId);
+    return new Map(rows.map((r) => [r.levelId, r.n]));
 }
 
 // Marcar un RENGLÓN de un nivel: 'done' (listo), 'na' (No aplica) o 'reopen' (vuelve a pendiente). Solo se marcan los del nivel EN CURSO: uno bloqueado todavía no se abre y uno completo se reabre primero.
@@ -20236,7 +20258,7 @@ module.exports = {
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
     LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
-    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask,
+    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, countImplementationUnreadComments, markImplementationTask,
     addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, addImplementationNote, updateImplementationNote, removeImplementationNote, findImplementationNote, logImplementationEvent, IMPLEMENTATION_LEVEL_THREAD, IMPLEMENTATION_NOTE_MAX, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
