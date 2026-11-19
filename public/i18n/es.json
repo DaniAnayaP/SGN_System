@@ -7439,7 +7439,33 @@
     "screenOpening": "Abriendo {label}…",
     "viewGrid": "Cuadrícula",
     "viewList": "Lista",
-    "categorySoonTag": "Pronto"
+    "categorySoonTag": "Pronto",
+    "calCached": "Sin señal: se muestran los certificados guardados en tu celular.",
+    "calNoData": "Todavía no se bajaron los certificados. Conéctate una vez para verlos sin señal.",
+    "calNoMatch": "Ningún certificado coincide con tu búsqueda.",
+    "calShowing": "Se muestran {n} de {total}: escribe para buscar el resto.",
+    "calEdit": "Editar",
+    "calSaveChanges": "Guardar cambios",
+    "calNoFile": "Sin archivo todavía.",
+    "calAddFile": "Elegir foto o PDF",
+    "calChangeFile": "Cambiar archivo",
+    "calFilePreparing": "Preparando el archivo…",
+    "calFileNeedsSignal": "El archivo necesita señal: inténtalo cuando tengas conexión.",
+    "calFileOpenError": "No se pudo abrir el archivo.",
+    "calFileAfterSignal": "El archivo no se envía sin señal: cuando haya conexión, abre el certificado y súbelo.",
+    "calFileFailed": "El archivo no se pudo subir: ábrelo en el certificado y súbelo otra vez.",
+    "calSavedOffline": "Sin señal: el cambio quedó en tu celular y se enviará solo.",
+    "calSavedNewOffline": "Sin señal: la calibración de {code} quedó en tu celular y se enviará sola.",
+    "calQueuedNote": "Esta calibración está en tu celular y se enviará sola cuando haya señal; hasta entonces no se puede corregir.",
+    "calQueuedEdits": "Tienes cambios guardados en tu celular: se enviarán solos cuando haya señal.",
+    "calDiscard": "Se perderá lo que ya escribiste. ¿Salir sin guardar?",
+    "calDiscardEdit": "Se perderán los cambios que no guardaste. ¿Salir?",
+    "calErrDate": "Esa fecha de calibración no es válida.",
+    "calErrFuture": "La fecha de calibración no puede ser futura.",
+    "calErrDueOrder": "El vencimiento debe ser después de la fecha de calibración.",
+    "calErrDup": "Este activo ya tiene registrado el certificado {cert}.",
+    "calErrResult": "Elige un resultado válido.",
+    "calErrNoCal": "El tipo de este activo no lleva calibración."
   },
   "help": {
     "appTmpTabs": {
@@ -7492,6 +7518,30 @@
     },
     "appLimTerminar": {
       "what": "Cierra la limpieza: pide la foto de después y guarda cuánto duró. Solo la puede terminar quien la empezó.",
+    "appCalBuscar": {
+      "what": "Busca en el código, número de serie, modelo y nombre del activo, el certificado, el laboratorio, las observaciones y las fechas. Usa $ para lo que va antes, @ para lo que va después y la coma para varias búsquedas.",
+      "example": "Escribes H001, 4227 y ves los certificados de H001 y los que dicen 4227."
+    },
+    "appCalLista": {
+      "what": "Cada tarjeta es un certificado de calibración: el activo con su estado (Vigente, Por vencer, Vencida o Fuera de tolerancia; los certificados anteriores dicen «Historial»), el certificado, el laboratorio, las fechas y el resultado. Toca una tarjeta para ver su detalle. Los que guardaste sin señal salen primero como «En tu celular».",
+      "example": "H001 · Por vencer · 22 días: tocas la tarjeta y ves todos sus datos y el archivo."
+    },
+    "appCalCertificados": {
+      "what": "Un activo puede tener varios certificados: el más reciente es el vigente y los demás quedan de historial. Este vínculo deja ver solo los de ese activo.",
+      "example": "H001 · «2 certificados»."
+    },
+    "appCalNuevo": {
+      "what": "Abre el formulario para registrar un certificado de calibración: eliges el activo, escribes lo que dice el certificado y, si quieres, agregas su foto o PDF. Un certificado nuevo del mismo activo pasa a ser el vigente y el anterior queda de historial. Sin señal se guarda en tu celular.",
+      "example": "H001, certificado 4227-16787565, calibrado el 01 jun 2026, vence el 01 jun 2028."
+    },
+    "appCalEditar": {
+      "what": "Corrige los datos del certificado (certificado, laboratorio, fechas, resultado y observaciones). Solo se envía lo que cambiaste. Un dato ya escrito pide la autorización de siempre; los que tu cuenta no puede cambiar se quedan solo para leer. Sin señal el cambio queda en tu celular.",
+      "example": "Cambias el vencimiento a 01 jul 2028 y tocas «Guardar cambios»."
+    },
+    "appCalFile": {
+      "what": "El certificado en PDF o foto (JPG o PNG, máximo 3 MB; una foto más pesada se reduce sola). Toca «Ver el certificado» para abrirlo; si no hay archivo, quien registra puede subirlo, y cambiar uno ya subido pide «Modificar» en esta columna. Subir el archivo necesita señal.",
+      "example": "certificado-4227.pdf."
+    },
       "example": "terminas el anaquel, tomas la foto y queda guardada la duración."
     },
     "appSegTabs": {

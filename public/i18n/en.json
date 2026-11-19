@@ -7440,7 +7440,33 @@
     "screenOpening": "Opening {label}…",
     "viewGrid": "Grid",
     "viewList": "List",
-    "categorySoonTag": "Soon"
+    "categorySoonTag": "Soon",
+    "calCached": "No signal: showing the certificates saved on your phone.",
+    "calNoData": "The certificates have not been downloaded yet. Connect once to see them without signal.",
+    "calNoMatch": "No certificate matches your search.",
+    "calShowing": "Showing {n} of {total}: type to search the rest.",
+    "calEdit": "Edit",
+    "calSaveChanges": "Save changes",
+    "calNoFile": "No file yet.",
+    "calAddFile": "Choose a photo or PDF",
+    "calChangeFile": "Change file",
+    "calFilePreparing": "Preparing the file…",
+    "calFileNeedsSignal": "The file needs a signal: try again when you are connected.",
+    "calFileOpenError": "The file could not be opened.",
+    "calFileAfterSignal": "The file is not sent without signal: when you are connected, open the certificate and upload it.",
+    "calFileFailed": "The file could not be uploaded: open the certificate and upload it again.",
+    "calSavedOffline": "No signal: the change is saved on your phone and will be sent by itself.",
+    "calSavedNewOffline": "No signal: the calibration of {code} is saved on your phone and will be sent by itself.",
+    "calQueuedNote": "This calibration is on your phone and will be sent by itself when there is a signal; it cannot be edited until then.",
+    "calQueuedEdits": "You have changes saved on your phone: they will be sent by themselves when there is a signal.",
+    "calDiscard": "What you wrote will be lost. Leave without saving?",
+    "calDiscardEdit": "The changes you did not save will be lost. Leave?",
+    "calErrDate": "That calibration date is not valid.",
+    "calErrFuture": "The calibration date cannot be in the future.",
+    "calErrDueOrder": "The due date must be after the calibration date.",
+    "calErrDup": "This asset already has certificate {cert} registered.",
+    "calErrResult": "Choose a valid result.",
+    "calErrNoCal": "This asset's type does not require calibration."
   },
   "help": {
     "appTmpTabs": {
@@ -7493,6 +7519,30 @@
     },
     "appLimTerminar": {
       "what": "Closes the cleaning: asks for the after photo and saves how long it lasted. Only who started it can finish it.",
+    "appCalBuscar": {
+      "what": "Searches the asset code, serial number, model and name, the certificate, the laboratory, the notes and the dates. Use $ for what comes before, @ for what comes after and a comma for several searches.",
+      "example": "You type H001, 4227 and see the certificates of H001 and those that say 4227."
+    },
+    "appCalLista": {
+      "what": "Each card is a calibration certificate: the asset with its status (Valid, Due soon, Expired or Out of tolerance; earlier certificates say «History»), the certificate, the laboratory, the dates and the result. Tap a card to see its detail. Those you saved without signal come first as «On your phone».",
+      "example": "H001 · Due soon · 22 days: you tap the card and see all its data and the file."
+    },
+    "appCalCertificados": {
+      "what": "An asset can have several certificates: the most recent one is the valid one and the others stay as history. This link shows only the certificates of that asset.",
+      "example": "H001 · «2 certificates»."
+    },
+    "appCalNuevo": {
+      "what": "Opens the form to register a calibration certificate: you choose the asset, type what the certificate says and, if you want, add its photo or PDF. A new certificate of the same asset becomes the valid one and the previous one stays as history. Without signal it is saved on your phone.",
+      "example": "H001, certificate 4227-16787565, calibrated on 01 Jun 2026, due on 01 Jun 2028."
+    },
+    "appCalEditar": {
+      "what": "Fixes the certificate data (certificate, laboratory, dates, result and notes). Only what you changed is sent. A value already written asks for the usual authorization; those your account cannot change stay read-only. Without signal the change stays on your phone.",
+      "example": "You change the due date to 01 Jul 2028 and tap «Save changes»."
+    },
+    "appCalFile": {
+      "what": "The certificate as a PDF or photo (JPG or PNG, 3 MB maximum; a heavier photo is reduced by itself). Tap «View the certificate» to open it; if there is no file, whoever registers can upload it, and changing one already uploaded asks for «Modify» in this column. Uploading the file needs a signal.",
+      "example": "certificado-4227.pdf."
+    },
       "example": "you finish the rack, take the photo and the duration is saved."
     },
     "appSegTabs": {

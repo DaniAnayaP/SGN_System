@@ -2358,3 +2358,37 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .pac-viewer-bar{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.7rem 1rem; color: #fff; font-size: 0.85rem; font-weight: 700; }
 .pac-viewer-bar button{ background: none; border: 0; color: #fff; font-size: 1.6rem; cursor: pointer; }
 .pac-viewer img{ flex: 1; min-height: 0; width: 100%; object-fit: contain; }
+
+/* Calibraciones (App): la lista de certificados (tarjetas con su estado), el detalle y el formulario de «Nueva calibración» */
+.cal-chip{ --cal-hue: #8a7b91; display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.7rem; font-weight: 700; line-height: 1.25; padding: 0.18rem 0.6rem; border-radius: 999px; white-space: nowrap; background: color-mix(in srgb, var(--cal-hue) 16%, transparent); color: color-mix(in srgb, var(--cal-hue) 75%, var(--home-text-primary)); }
+.cal-chip::before{ content: ""; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--cal-hue); flex: none; }
+.cal-chip-valid{ --cal-hue: #1d7f55; }
+.cal-chip-soon{ --cal-hue: #b7791f; }
+.cal-chip-expired, .cal-chip-failed{ --cal-hue: #c0392b; }
+.cal-chip-none, .cal-chip-history{ --cal-hue: #8a7b91; }
+.cal-assets-link{ background: none; border: 0; padding: 0; font: inherit; font-size: 0.74rem; font-weight: 600; color: var(--home-accent); cursor: pointer; text-decoration: underline; }
+.cal-app-list{ display: flex; flex-direction: column; }
+.cal-app-card{ gap: 0.4rem; }
+.cal-app-card-history{ opacity: 0.8; }
+.cal-app-main{ display: flex; flex-direction: column; gap: 0.45rem; width: 100%; padding: 0; border: 0; background: transparent; text-align: left; font-family: inherit; color: inherit; cursor: pointer; }
+.cal-app-top{ display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+.cal-app-asset{ display: flex; align-items: baseline; gap: 0.4rem; min-width: 0; }
+.cal-app-asset b{ font-size: 0.95rem; color: var(--home-text-primary); }
+.cal-app-asset small{ font-size: 0.68rem; color: var(--home-text-muted); font-variant-numeric: tabular-nums; }
+.cal-app-model{ font-size: 0.72rem; color: var(--home-text-muted); overflow-wrap: anywhere; }
+.cal-app-grid{ display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem 0.8rem; }
+.cal-app-cell{ display: flex; flex-direction: column; min-width: 0; }
+.cal-app-cell i{ font-style: normal; font-size: 0.62rem; color: var(--home-text-muted); }
+.cal-app-cell b{ font-size: 0.76rem; font-weight: 600; color: var(--home-text-secondary); overflow-wrap: anywhere; }
+.cal-app-wide{ grid-column: 1 / -1; }
+.cal-app-foot{ display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding-top: 0.4rem; border-top: 1px solid var(--home-divider); }
+.cal-app-pills{ display: flex; align-items: center; gap: 0.35rem; margin-left: auto; }
+.cal-app-fileicon{ display: inline-flex; color: var(--home-accent); font-size: 1.15rem; }
+.cal-app-filter{ display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.3rem; }
+.cal-app-detail-top{ display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.cal-app-tag{ display: block; font-size: 0.6rem; font-weight: 600; color: var(--home-accent); text-align: right; }
+.cal-app-hint{ font-size: 0.66rem; font-weight: 500; color: var(--home-text-muted); }
+.cal-app-filepreview{ display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem; border: 1px solid var(--home-border); border-radius: 0.7rem; background: var(--home-bg); }
+.cal-app-filepreview img{ width: 4rem; height: 4rem; flex: none; object-fit: cover; border-radius: 0.5rem; }
+.cal-app-filepreview > i{ flex: none; font-size: 2.2rem; color: #d9604c; }
+.cal-app-filepreview span{ flex: 1; min-width: 0; font-size: 0.72rem; color: var(--home-text-secondary); overflow-wrap: anywhere; }
