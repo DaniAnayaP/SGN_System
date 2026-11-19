@@ -15341,6 +15341,58 @@ function markImplementationTask(clientId, levelKey, taskKey, action, byLabel) {
     return { before, status: next, implementation: getImplementation(clientId) };
 }
 
+// --- Implementación Inicial · nivel 1 «Contratado»: lo que la compañía contrató y lo que YA USA ---------------------------------------------------------------------------------------------------
+// Resumen de departamentos, áreas, sitios y centros de costo contratados contra lo que ya se está usando, más el árbol de accesos contratado (el de Mis Accesos, solo lectura). «En uso» = ya hay algo hecho (Daniel, 2026-11-19):
+// sitios y centros = los que ya están creados; una pantalla = ya tiene datos capturados (al menos un cambio en su historial, data_table_changes); un área = alguna de sus pantallas está en uso; un departamento = alguna de sus áreas está en uso.
+// Se calcula en cada lectura (se actualiza solo mientras avanzan los demás niveles). Las pantallas sin historial (vistas, tableros) no cuentan.
+db.exec('CREATE INDEX IF NOT EXISTS idx_data_table_changes_client_table ON data_table_changes (client_id, table_key)');
+let implementationMenuAreasCache = null;
+function implementationAreasOf(departmentKey) {
+    if (!implementationMenuAreasCache) implementationMenuAreasCache = (JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'data', 'menu.json'), 'utf8')).areas) || {};
+    const listed = implementationMenuAreasCache[departmentKey];
+    if (listed) return listed.map((a) => ({ id: a.id, labelKey: a.labelKey, labelParams: null }));
+    return GENERIC_AREA_IDS.map((id, i) => ({ id, labelKey: 'menu.area.generic', labelParams: { n: i + 1 } }));
+}
+function getImplementationContracted(clientId) {
+    const client = getClientById(clientId);
+    if (!client) return null;
+    const plan = client.plan ? getPlanByName(client.plan) : null;
+    const grants = getClientAdminContractGrants(clientId);
+    const hasTree = grants.length > 0;
+    const moduleKeys = new Set(getClientModuleKeys(clientId));
+    const departments = HR_DEPARTMENT_KEYS.filter((k) => moduleKeys.has(k));
+    // lo que ya tiene datos: las pantallas (por su clave de tabla) con al menos un cambio en su historial, contadas por área
+    const usedByArea = new Map();
+    db.prepare('SELECT DISTINCT table_key FROM data_table_changes WHERE client_id = ?').all(clientId).forEach((r) => {
+        const route = TABLE_GRANT_PATHS[r.table_key];
+        if (!route || !route.itemId) return;
+        const key = `${route.sectionId}/${route.itemId}`;
+        usedByArea.set(key, (usedByArea.get(key) || 0) + 1);
+    });
+    const rows = departments.map((dept) => {
+        const deptGrants = grants.filter((g) => g.sectionId === dept);
+        const wholeDepartment = !hasTree || deptGrants.some((g) => !g.itemId);
+        const areas = implementationAreasOf(dept)
+            .filter((a) => wholeDepartment || deptGrants.some((g) => g.itemId === a.id))
+            .map((a) => ({ key: a.id, labelKey: a.labelKey, labelParams: a.labelParams, screensUsed: usedByArea.get(`${dept}/${a.id}`) || 0, used: (usedByArea.get(`${dept}/${a.id}`) || 0) > 0 }));
+        const mod = MODULE_CATALOG.find((m) => m.key === dept);
+        return { key: dept, labelKey: mod ? mod.labelKey : dept, areas, used: areas.some((a) => a.used) };
+    });
+    const areaTotal = rows.reduce((n, d) => n + d.areas.length, 0);
+    return {
+        plan: client.plan || '', giro: client.sector_negocio || '',
+        summary: {
+            departments: { contracted: rows.length, used: rows.filter((d) => d.used).length, unusedLabelKeys: rows.filter((d) => !d.used).map((d) => d.labelKey) },
+            areas: { contracted: areaTotal, used: rows.reduce((n, d) => n + d.areas.filter((a) => a.used).length, 0) },
+            sites: { contracted: client.sites_limit || 0, used: countSites(clientId, false) },
+            costCenters: { contracted: client.cost_centers_limit || 0, used: countCostCenters(clientId, false) },
+        },
+        departments: rows,
+        // el árbol contratado se dibuja con PermissionCostTree (como Mis Accesos): verde = en el plan, amarillo = adicional; giroGrants (null si no hay plan) deja solo lo que existe en su giro
+        tree: { planGrants: plan ? getPlanGrants(plan.id) : [], additionalGrants: getClientPermissionGrants(clientId), giroGrants: plan && plan.businessSectorId ? getSectorGrants(plan.businessSectorId) : null },
+    };
+}
+
 // --- Query helpers: permission grants (módulo / apartado / pantalla) ---------
 // (Perfiles/profiles removed -- Roles is now Puesto de Trabajo-based, see
 // job_position_grants/getJobPositionGrants above.)
@@ -18084,7 +18136,7 @@ module.exports = {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, markImplementationTask, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, markImplementationTask, getImplementationContracted, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,

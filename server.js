@@ -580,7 +580,7 @@ const {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, markImplementationTask, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
+    IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, markImplementationTask, getImplementationContracted, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,
@@ -1714,6 +1714,12 @@ app.get('/api/business/implementation', requireAuth, (req, res) => {
     const client = getClientById(req.user.clientId);
     res.set('Cache-Control', 'no-store');
     res.json({ clientName: client ? client.company_name : '', implementation: getImplementation(req.user.clientId) });
+});
+// Nivel 1 «Contratado»: lo contratado de la compañía contra lo que ya usa, y los permisos para dibujar su árbol de accesos contratado (solo lectura). Cualquier usuario de la compañía con la pantalla lo consulta.
+app.get('/api/business/implementation/contracted', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.set('Cache-Control', 'no-store');
+    res.json(getImplementationContracted(req.user.clientId));
 });
 app.get('/api/admin/implementations', requireAuth, requireAdmin, (req, res) => {
     if (!saasImplHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver las implementaciones.' });
