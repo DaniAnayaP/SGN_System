@@ -52,6 +52,8 @@ const TABLES = {
     transfers: { action: WIPE, group: 'captures' },
     sku_items: { action: WIPE, group: 'captures' },
     sku_enablements: { action: WIPE, group: 'captures' },
+    expansion_requests: { action: WIPE, group: 'captures' }, // TI › Configuración Compañía › Expansiones: lo que el cliente pide ampliar de su contrato
+    expansion_request_events: { action: WIPE, group: 'captures' },
     sku_requests: { action: WIPE, group: 'captures' },
     sku_request_events: { action: WIPE, group: 'captures' },
     fixed_assets: { action: WIPE, group: 'captures' }, // Alta Activos (2026-11-12)

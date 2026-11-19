@@ -3416,6 +3416,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'habilitacion-codigos': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Habilitación de Códigos' },
     'solicitudes-codigo': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Solicitudes de alta de código' },
     'config-botones': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Configuración de botones' },
+    'expansiones': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Expansiones' },
     'pedir-alta-codigo': { area: '', modulo: 'Operaciones', pantalla: 'Pedir alta de código' },
     'soportes-cerrados': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Soportes cerrados' },
     'ayuda-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Errores y ayuda' },
@@ -3830,6 +3831,7 @@ const TABLE_GRANT_PATHS = {
     'casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     'habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },
     'solicitudes-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-solicitudes-codigo' },
+    'expansiones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-expansiones' },
     'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     'kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'ayuda-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
@@ -4049,6 +4051,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'casos-soporte': { create: 'colSpCreateAuth' },
     'habilitacion-codigos': { create: 'colHabCreateAuth' },
     'solicitudes-codigo': { create: 'colSolTiGestionar' },
+    'expansiones': { create: 'colExpCreateAuth' },
     'pedir-alta-codigo': { create: 'colSolCreateAuth' },
     'layout': { create: 'colLayoutCrearDesdeCero' },
     'relacion-codigo': { create: 'colRelCreateAuth', delete: 'colRelDeleteAuth', import: 'colRelTemplateAuth' },
@@ -14738,6 +14741,135 @@ function getEffectiveUiScale(userId, clientId) {
     return getClientButtonDefaults(clientId).uiScale || (row ? row.ui_scale : 4);
 }
 
+// --- Expansiones (TI › Configuración Compañía): el cliente pide ampliar su contrato ---------------------------------------------------------------------------------------
+// Una solicitud lleva uno o varios renglones (sitios, centros de costo, departamentos, App móvil, un giro adicional u otra cosa) y un comentario. Cada renglón guarda su ESTIMADO de la lista de precios al momento de pedir (null = «por cotizar»);
+// el costo final lo negocia SaaS (con descuentos, etc.) y SaaS aplica el cambio al contrato a mano. Estatus: pending (pedida) → negotiating (en negociación) → approved (aprobada) → applied (aplicada al contrato); rejected en cualquier punto.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS expansion_requests (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id            INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data         INTEGER NOT NULL DEFAULT 0,
+        folio                INTEGER NOT NULL,
+        requested_by         TEXT NOT NULL DEFAULT '',
+        requested_by_user_id INTEGER,
+        status               TEXT NOT NULL DEFAULT 'pending',
+        items                TEXT NOT NULL DEFAULT '[]',
+        note                 TEXT NOT NULL DEFAULT '',
+        currency             TEXT NOT NULL DEFAULT 'MXN',
+        est_cost             REAL NOT NULL DEFAULT 0,
+        est_pending          INTEGER NOT NULL DEFAULT 0,
+        final_cost           REAL,
+        saas_note            TEXT NOT NULL DEFAULT '',
+        created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at           TEXT NOT NULL DEFAULT (datetime('now')),
+        closed_at            TEXT,
+        UNIQUE (client_id, folio)
+    );
+    CREATE INDEX IF NOT EXISTS idx_expansion_requests_client ON expansion_requests (client_id, is_test_data);
+    CREATE TABLE IF NOT EXISTS expansion_request_events (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id INTEGER NOT NULL REFERENCES expansion_requests(id) ON DELETE CASCADE,
+        status     TEXT NOT NULL,
+        note       TEXT NOT NULL DEFAULT '',
+        by_label   TEXT NOT NULL DEFAULT '',
+        at         TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_expansion_request_events_request ON expansion_request_events (request_id);
+`);
+const EXPANSION_TYPES = ['sites', 'cost_centers', 'departments', 'app', 'giro', 'other'];
+const EXPANSION_STATUSES = ['pending', 'negotiating', 'approved', 'applied', 'rejected'];
+
+// Lo que el cliente tiene contratado y lo que puede pedir: plan, sitios y centros (contratados y en uso), departamentos (los que tiene y los que le faltan), App y giro (con los giros que puede sumar).
+function getClientContractSummary(clientId, forTestAccount = false) {
+    const client = getClientById(clientId);
+    if (!client) return null;
+    const plan = client.plan ? getPlanByName(client.plan) : null;
+    const contracted = new Set(getClientModuleKeys(clientId));
+    const departments = HR_DEPARTMENT_KEYS.filter((key) => contracted.has(key));
+    const missingDepartments = HR_DEPARTMENT_KEYS.filter((key) => !contracted.has(key));
+    const giros = listBusinessSectors().filter((s) => (s.status || 'active') === 'active' && s.name !== client.sector_negocio).map((s) => ({ id: s.id, name: s.name }));
+    return {
+        plan: client.plan || '',
+        currency: plan ? plan.currency : 'MXN',
+        sites: { contracted: client.sites_limit || 0, used: countSites(clientId, forTestAccount) },
+        costCenters: { contracted: client.cost_centers_limit || 0, used: countCostCenters(clientId, forTestAccount) },
+        departments,
+        missingDepartments,
+        app: { enabled: !!client.app_enabled },
+        giro: { current: client.sector_negocio || '', available: giros },
+    };
+}
+// El estimado (precio de lista) de UN renglón con la cascada de costos del plan del cliente; null = «por cotizar» (no hay precio de lista que lo calcule).
+// centros: costo por centro del plan × cantidad; departamentos: todo lo que cuesta ese departamento (web); App: lo que cuesta la App en los departamentos que ya tiene; giro: lo que cuestan los accesos de ese giro; sitios y «otra cosa» no tienen precio de lista.
+function estimateExpansionItem(client, plan, item) {
+    if (!plan) return null;
+    const positive = (n) => (Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null);
+    if (item.type === 'cost_centers') return positive((plan.costPerCostCenter || 0) * item.qty);
+    if (item.type === 'departments' || item.type === 'app') {
+        const ctx = buildCascadeContextForPlan(plan.id);
+        const wanted = item.type === 'departments' ? new Set(item.keys) : new Set(getClientModuleKeys(client.id));
+        let total = 0;
+        walkCostTreeNodes((sectionId, itemId, submenuId) => {
+            if (!wanted.has(sectionId)) return;
+            const cost = computeCascadedCost(sectionId, itemId, submenuId, ctx);
+            total += item.type === 'departments' ? cost.web : cost.app;
+        });
+        return positive(total);
+    }
+    if (item.type === 'giro') {
+        const grantSet = new Set(getSectorGrants(item.sectorId).map((g) => planTupleKey(g.sectionId, g.itemId, g.submenuId)));
+        return positive(computeCostTotalForGrantSet(grantSet, buildCascadedCostMapForPlan(plan.id)));
+    }
+    return null;
+}
+function estimateExpansionItems(clientId, items) {
+    const client = getClientById(clientId);
+    const plan = client && client.plan ? getPlanByName(client.plan) : null;
+    const withEstimate = items.map((item) => ({ ...item, est: estimateExpansionItem(client, plan, item) }));
+    return {
+        items: withEstimate,
+        currency: plan ? plan.currency : 'MXN',
+        estCost: Math.round(withEstimate.reduce((n, i) => n + (i.est || 0), 0) * 100) / 100,
+        estPending: withEstimate.filter((i) => i.est === null).length,
+    };
+}
+function deserializeExpansionRequest(row, events) {
+    let items = [];
+    try { items = JSON.parse(row.items || '[]'); } catch { items = []; }
+    return {
+        id: row.id, folio: row.folio, label: `EXP-${String(row.folio).padStart(4, '0')}`, requestedBy: row.requested_by, requestedByUserId: row.requested_by_user_id, status: row.status,
+        items, note: row.note, currency: row.currency, estCost: row.est_cost, estPending: row.est_pending, finalCost: row.final_cost, saasNote: row.saas_note,
+        createdAt: row.created_at, updatedAt: row.updated_at, closedAt: row.closed_at,
+        events: (events || []).map((e) => ({ status: e.status, note: e.note, by: e.by_label, at: e.at })),
+    };
+}
+function listExpansionRequests(clientId, forTestAccount = false) {
+    const rows = db.prepare('SELECT * FROM expansion_requests WHERE client_id = ? AND is_test_data = ? ORDER BY id DESC').all(clientId, forTestAccount ? 1 : 0);
+    const byRequest = new Map();
+    if (rows.length) {
+        db.prepare(`SELECT * FROM expansion_request_events WHERE request_id IN (${rows.map(() => '?').join(',')}) ORDER BY id ASC`).all(...rows.map((r) => r.id))
+            .forEach((e) => { if (!byRequest.has(e.request_id)) byRequest.set(e.request_id, []); byRequest.get(e.request_id).push(e); });
+    }
+    return rows.map((row) => deserializeExpansionRequest(row, byRequest.get(row.id)));
+}
+function getExpansionRequest(id, clientId, forTestAccount = false) {
+    const row = db.prepare('SELECT * FROM expansion_requests WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+    if (!row) return null;
+    return deserializeExpansionRequest(row, db.prepare('SELECT * FROM expansion_request_events WHERE request_id = ? ORDER BY id ASC').all(id));
+}
+// Crea la solicitud (los renglones ya vienen validados y con su estimado) con su primer evento «pending». El folio sigue por cliente.
+function createExpansionRequest({ clientId, forTestAccount = false, requestedBy, requestedByUserId, items, note, currency, estCost, estPending }) {
+    return db.transaction(() => {
+        const folio = (db.prepare('SELECT COALESCE(MAX(folio), 0) AS m FROM expansion_requests WHERE client_id = ?').get(clientId).m || 0) + 1;
+        const result = db.prepare(`
+            INSERT INTO expansion_requests (client_id, is_test_data, folio, requested_by, requested_by_user_id, items, note, currency, est_cost, est_pending)
+            VALUES (@clientId, @isTest, @folio, @requestedBy, @requestedByUserId, @items, @note, @currency, @estCost, @estPending)
+        `).run({ clientId, isTest: forTestAccount ? 1 : 0, folio, requestedBy: requestedBy || '', requestedByUserId: requestedByUserId || null, items: JSON.stringify(items), note: String(note || '').slice(0, 600), currency: currency || 'MXN', estCost: estCost || 0, estPending: estPending || 0 });
+        db.prepare("INSERT INTO expansion_request_events (request_id, status, note, by_label) VALUES (?, 'pending', '', ?)").run(result.lastInsertRowid, requestedBy || '');
+        return getExpansionRequest(result.lastInsertRowid, clientId, forTestAccount);
+    })();
+}
+
 // --- Query helpers: permission grants (módulo / apartado / pantalla) ---------
 // (Perfiles/profiles removed -- Roles is now Puesto de Trabajo-based, see
 // job_position_grants/getJobPositionGrants above.)
@@ -17479,6 +17611,7 @@ module.exports = {
     getUserJobPositionGrants,
     getUserDefaults,
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
+    EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     setUserDefaults,
     getUserUiScale,
     setUserUiScale,

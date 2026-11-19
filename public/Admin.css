@@ -9378,3 +9378,40 @@ body.dark-mode .perm-tree-access-summary-touch{ color: #b9a4ff; }
 .cb-center{ display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; cursor: pointer; }
 .cb-center-all{ flex-basis: 100%; font-weight: 700; padding-bottom: 0.4rem; border-bottom: 1px solid var(--color-border); }
 .cb-center input{ accent-color: var(--color-accent, #4a5bd6); }
+
+/* Expansiones (TI › Configuración Compañía) */
+.exp-panel{ width: min(44rem, 94vw); max-height: 92vh; overflow-y: auto; }
+.exp-sub{ margin: 1rem 0 0.4rem; font-size: 0.82rem; font-weight: 700; color: var(--color-text-secondary, inherit); }
+.exp-have{ display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.35rem 1.2rem; padding: 0.6rem 0.8rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-bg); }
+.exp-have-row{ display: flex; justify-content: space-between; gap: 0.6rem; font-size: 0.82rem; }
+.exp-have-row span{ opacity: 0.75; }
+.exp-types{ display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.8rem; }
+.exp-type{ border: 1px solid var(--color-border); border-radius: 0.5rem; padding: 0.5rem 0.75rem; }
+.exp-type-head{ display: flex; align-items: center; gap: 0.5rem; font-weight: 600; cursor: pointer; }
+.exp-type-body{ margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.exp-type-body input[type=number]{ width: 6rem; margin-left: 0.4rem; }
+.exp-type-body textarea, .exp-type-body select{ width: 100%; }
+.exp-checks{ display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; }
+.exp-checks label{ display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; }
+.exp-estimate, .exp-est-box{ border: 1px solid var(--color-border); border-radius: 0.5rem; padding: 0.55rem 0.8rem; background: var(--color-bg); margin: 0.6rem 0; }
+.exp-est-row, .exp-est-total{ display: flex; justify-content: space-between; gap: 1rem; font-size: 0.85rem; padding: 0.15rem 0; }
+.exp-est-total{ border-top: 1px solid var(--color-border); margin-top: 0.3rem; padding-top: 0.4rem; font-weight: 700; }
+.exp-final{ color: #1e7a46; }
+body.dark-mode .exp-final{ color: #6fd49b; }
+.exp-detail-head{ display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
+.exp-note{ font-size: 0.85rem; margin: 0.4rem 0; overflow-wrap: anywhere; }
+.exp-timeline{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.exp-step{ border-left: 3px solid var(--color-border); padding-left: 0.7rem; }
+.exp-step-meta{ margin-left: 0.5rem; font-size: 0.75rem; opacity: 0.75; }
+.exp-step-note{ font-size: 0.82rem; margin-top: 0.2rem; }
+.exp-chip{ display: inline-block; font-size: 0.7rem; font-weight: 700; line-height: 1; padding: 0.28rem 0.6rem; border-radius: 1rem; border: 1px solid var(--color-border); white-space: nowrap; }
+.exp-chip-pending{ color: #b45f06; background: rgba(240, 160, 40, 0.16); border-color: rgba(240, 160, 40, 0.45); }
+.exp-chip-negotiating{ color: #1f5fa8; background: rgba(60, 130, 220, 0.14); border-color: rgba(60, 130, 220, 0.4); }
+.exp-chip-approved{ color: #1e7a46; background: rgba(40, 170, 90, 0.15); border-color: rgba(40, 170, 90, 0.42); }
+.exp-chip-applied{ color: #0b6b5c; background: rgba(20, 160, 140, 0.15); border-color: rgba(20, 160, 140, 0.42); }
+.exp-chip-rejected{ color: #c0392b; background: rgba(220, 70, 60, 0.13); border-color: rgba(220, 70, 60, 0.42); }
+body.dark-mode .exp-chip-pending{ color: #ffc169; }
+body.dark-mode .exp-chip-negotiating{ color: #8dbcf2; }
+body.dark-mode .exp-chip-approved{ color: #6fd49b; }
+body.dark-mode .exp-chip-applied{ color: #5fd3bf; }
+body.dark-mode .exp-chip-rejected{ color: #ff8f80; }

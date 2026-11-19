@@ -578,6 +578,7 @@ const {
     getUserJobPositionGrants,
     getUserDefaults,
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
+    EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     setUserDefaults,
     getUserUiScale,
     setUserUiScale,
@@ -630,7 +631,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
+const EXTRA_SCREEN_LABEL_KEYS = { 'expansiones': 'menu.expansions', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -1297,6 +1298,94 @@ app.put('/api/business/button-defaults', requireAuth, requireClientAdmin, (req, 
         });
     });
     res.json({ defaults: saved, canEdit: true, options });
+});
+
+// --- Expansiones (TI › Configuración Compañía): el cliente pide ampliar su contrato ------------------------------------------------------------------------------------
+// Pide sitios, centros de costo, departamentos, la App móvil, un giro adicional u otra cosa; ve el ESTIMADO de la lista de precios antes de enviar (el costo final lo negocia SaaS, con descuentos) y sigue sus solicitudes con su
+// estatus. SaaS aplica el cambio al contrato a mano (pieza 2: su bandeja). Pide el administrador del cliente o quien tenga el botón «Pedir ampliación» en su árbol.
+const EXP_TABLE = 'expansiones';
+const EXP_MAX_QTY = 999;
+const expCanRequest = (req) => !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), EXP_TABLE, 'colExpCreateAuth');
+// Lo que llega del navegador → renglones validados contra lo que el cliente tiene hoy; { items } o { error, code }.
+function expCleanItems(req, raw) {
+    if (!Array.isArray(raw) || !raw.length) return { error: 'Elige qué quieres pedir.', code: 'EMPTY' };
+    if (raw.length > EXPANSION_TYPES.length) return { error: 'Hay demasiados renglones.', code: 'TOO_MANY' };
+    const summary = getClientContractSummary(req.user.clientId, req.user.isTestAccount);
+    const seen = new Set();
+    const items = [];
+    for (const r of raw) {
+        const type = r && r.type;
+        if (!EXPANSION_TYPES.includes(type) || seen.has(type)) return { error: 'Un renglón no es válido.', code: 'TYPE' };
+        seen.add(type);
+        if (type === 'sites' || type === 'cost_centers') {
+            const qty = Number(r.qty);
+            if (!Number.isInteger(qty) || qty < 1 || qty > EXP_MAX_QTY) return { error: `La cantidad va de 1 a ${EXP_MAX_QTY}.`, code: 'QTY' };
+            items.push({ type, qty });
+        } else if (type === 'departments') {
+            const keys = Array.isArray(r.keys) ? [...new Set(r.keys.map(String))] : [];
+            if (!keys.length || !keys.every((k) => summary.missingDepartments.includes(k))) return { error: 'Elige departamentos que todavía no tienes.', code: 'DEPARTMENTS' };
+            items.push({ type, keys });
+        } else if (type === 'app') {
+            if (summary.app.enabled) return { error: 'Ya tienes la App móvil.', code: 'APP' };
+            items.push({ type });
+        } else if (type === 'giro') {
+            const giro = summary.giro.available.find((g) => g.id === Number(r.sectorId));
+            if (!giro) return { error: 'Ese giro no se puede pedir.', code: 'GIRO' };
+            items.push({ type, sectorId: giro.id, name: giro.name });
+        } else {
+            const text = String(r.text || '').trim().slice(0, 600);
+            if (!text) return { error: 'Escribe qué más necesitas.', code: 'TEXT' };
+            items.push({ type, text });
+        }
+    }
+    return { items };
+}
+// Cómo se escribe una solicitud en el historial: «3 centros de costo · Departamentos: Finanzas, Compras · App móvil».
+function expSummaryEs(items) {
+    return items.map((i) => {
+        if (i.type === 'sites') return `${i.qty} sitio${i.qty === 1 ? '' : 's'}`;
+        if (i.type === 'cost_centers') return `${i.qty} centro${i.qty === 1 ? '' : 's'} de costo`;
+        if (i.type === 'departments') return `Departamentos: ${i.keys.map((k) => HR_DEPARTMENT_NAMES_ES[k] || k).join(', ')}`;
+        if (i.type === 'app') return 'App móvil';
+        if (i.type === 'giro') return `Giro adicional: ${i.name}`;
+        return `Otra cosa: ${i.text.slice(0, 80)}`;
+    }).join(' · ');
+}
+// La solicitud con las 13 columnas de Control Interno que lleva toda tabla.
+function expMap(req, r) {
+    const client = getClientById(req.user.clientId);
+    return {
+        ...r,
+        ...getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Expansiones', centroCostos: '', createdAt: r.createdAt }),
+    };
+}
+app.get('/api/business/expansions', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ summary: getClientContractSummary(req.user.clientId, req.user.isTestAccount), requests: listExpansionRequests(req.user.clientId, req.user.isTestAccount).map((r) => expMap(req, r)), canRequest: expCanRequest(req) });
+});
+// El estimado de lo que se está armando (el formulario lo pide mientras se llena; no guarda nada).
+app.post('/api/business/expansions/estimate', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const cleaned = expCleanItems(req, (req.body || {}).items);
+    if (cleaned.error) return res.status(400).json({ message: cleaned.error, code: cleaned.code });
+    res.json(estimateExpansionItems(req.user.clientId, cleaned.items));
+});
+app.post('/api/business/expansions', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!expCanRequest(req)) return res.status(403).json({ message: 'No tienes permiso para pedir ampliaciones.', code: 'FORBIDDEN' });
+    const body = req.body || {};
+    const cleaned = expCleanItems(req, body.items);
+    if (cleaned.error) return res.status(400).json({ message: cleaned.error, code: cleaned.code });
+    const estimate = estimateExpansionItems(req.user.clientId, cleaned.items);
+    const created = createExpansionRequest({
+        clientId: req.user.clientId, forTestAccount: !!req.user.isTestAccount, requestedBy: changedByLabel(req), requestedByUserId: req.user.sub,
+        items: estimate.items, note: body.note, currency: estimate.currency, estCost: estimate.estCost, estPending: estimate.estPending,
+    });
+    const base = { clientId: req.user.clientId, tableKey: EXP_TABLE, recordId: created.id, recordLabel: created.label, changedBy: changedByLabel(req) };
+    logTableChange({ ...base, action: 'create', fieldKey: '', oldValue: '', newValue: '' });
+    logTableChange({ ...base, action: 'update', fieldKey: 'main.colExpQue', oldValue: '', newValue: expSummaryEs(created.items) });
+    res.status(201).json({ request: expMap(req, created) });
 });
 
 // --- SaaS admin: clients + per-client module entitlements ("Contrataciones") -
