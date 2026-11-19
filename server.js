@@ -580,7 +580,7 @@ const {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, removeClientLogin, setClientLoginSlug,
+    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
@@ -1889,6 +1889,7 @@ const CL_ERRORS = {
     FORMAT: [400, 'La clave usa de 3 a 40 letras minúsculas sin acentos, números y guiones.'], RESERVED: [400, 'Esa clave está reservada por el sistema.'], TAKEN: [409, 'Esa clave ya la tiene otro cliente.'],
     COLOR: [400, 'Un color no es válido.'], IMAGE: [400, 'La imagen debe ser PNG, JPG, WEBP, GIF o SVG.'], IMAGE_SIZE: [400, 'La imagen es demasiado grande.'], BACKGROUND_TYPE: [400, 'Ese tipo de fondo no existe.'],
     SHORT_NAME: [400, 'El nombre abreviado lleva hasta 12 letras, números, espacios y . & \' + -'],
+    CLIENT_CHANGED: [409, 'El cliente cambió esta personalización después de lo inicial. Si publicas, se sobrescriben sus cambios.'], NO_INITIAL: [409, 'SGN todavía no ha publicado lo inicial de este cliente: no hay a dónde volver.'],
 };
 const clFail = (res, result) => { const [status, message] = CL_ERRORS[result.error] || [400, 'No se pudo hacer.']; return res.status(status).json({ message, code: result.error, field: result.field }); };
 const saasClHasScreen = (req) => !!req.user.isSaasSuperAdmin || getSaasUserGrants(req.user.sub).some((g) => g.itemId === SAAS_CL_ITEM);
@@ -1910,16 +1911,19 @@ const clValueEs = (path, value) => {
     if (path === 'identity.iconColor' && value === '') return '(el color principal)';
     return value === '' ? '(el de la compañía)' : String(value);
 };
-function clLog(req, clientId, action, fieldKey, oldText, newText) {
+// Cada cambio queda en DOS historiales: el de SGN (Apps Nuestros Clientes) y el del cliente (TI › Mi App), y dice si lo hizo SGN o alguien del cliente (fromClient).
+function clLog(req, clientId, action, fieldKey, oldText, newText, { fromClient = false } = {}) {
     const company = getClientLoginCompany(clientId);
-    logSaasTableChange({ tableKey: 'apps-clientes-saas', recordId: clientId, recordLabel: company ? company.name : String(clientId), action, fieldKey, oldValue: oldText, newValue: newText, changedBy: changedByLabel(req) });
+    const label = changedByLabel(req);
+    logSaasTableChange({ tableKey: 'apps-clientes-saas', recordId: clientId, recordLabel: company ? company.name : String(clientId), action, fieldKey, oldValue: oldText, newValue: newText, changedBy: fromClient ? `Cliente · ${label}` : label });
+    logTableChange({ clientId, tableKey: 'mi-app', recordId: clientId, recordLabel: 'Mi App', action, fieldKey, oldValue: oldText, newValue: newText, changedBy: fromClient ? label : `SGN · ${label}` });
 }
 // El detalle de UN cliente para el editor: su compañía (logo y colores para la vista previa), el borrador completo (con imágenes) y qué puede hacer esta cuenta.
 function saasClDetail(req, clientId) {
     const config = getClientLogin(clientId);
     return {
         company: getClientLoginCompany(clientId),
-        config: config ? { slug: config.slug, address: `/c/${config.slug}`, draft: config.draft, dirty: config.dirty, web: config.web, app: config.app, published: !!config.live, liveAt: config.liveAt, liveBy: config.liveBy, updatedAt: config.updatedAt, updatedBy: config.updatedBy } : null,
+        config: config ? { slug: config.slug, address: `/c/${config.slug}`, draft: config.draft, dirty: config.dirty, web: config.web, app: config.app, published: !!config.live, liveAt: config.liveAt, liveBy: config.liveBy, updatedAt: config.updatedAt, updatedBy: config.updatedBy, clientChange: config.clientChangedAt ? { at: config.clientChangedAt, by: config.clientChangedBy } : null, initialAt: config.initialAt, initialBy: config.initialBy } : null,
         defaults: defaultLoginDraft(),
         reserved: LOGIN_RESERVED_SLUGS,
         can: Object.fromEntries(Object.keys(SAAS_CL_LEAVES).map((k) => [k, saasClCan(req, k)])),
@@ -1972,10 +1976,12 @@ app.put('/api/admin/client-logins/:clientId/draft', requireAuth, requireAdmin, (
 app.post('/api/admin/client-logins/:clientId/publish', requireAuth, requireAdmin, (req, res) => {
     const company = clGate(req, res, 'publish');
     if (!company) return;
-    const result = publishClientLogin(company.id, changedByLabel(req));
+    const force = !!(req.body && req.body.force);
+    const result = publishClientLogin(company.id, changedByLabel(req), { force });
+    if (result.error === 'CLIENT_CHANGED') return res.status(409).json({ message: CL_ERRORS.CLIENT_CHANGED[1], code: 'CLIENT_CHANGED', changedAt: result.at, changedBy: result.by });
     if (result.error) return clFail(res, result);
     const d = result.config.draft;
-    clLog(req, company.id, 'update', 'main.cliHistPublish', result.before.live ? 'Publicado' : 'Sin publicar', `Publicado (computadora: ${d.channels.web ? 'sí' : 'no'}, celular: ${d.channels.app ? 'sí' : 'no'})`);
+    clLog(req, company.id, 'update', 'main.cliHistPublish', result.before.live ? 'Publicado' : 'Sin publicar', `Publicado (computadora: ${d.channels.web ? 'sí' : 'no'}, celular: ${d.channels.app ? 'sí' : 'no'})${result.before.clientChangedAt ? ' · sobrescribió un cambio del cliente' : ''}`);
     res.json(saasClDetail(req, company.id));
 });
 app.put('/api/admin/client-logins/:clientId/slug', requireAuth, requireAdmin, (req, res) => {
@@ -1993,6 +1999,92 @@ app.delete('/api/admin/client-logins/:clientId', requireAuth, requireAdmin, (req
     if (result.error) return clFail(res, result);
     clLog(req, company.id, 'delete', 'main.cliHistRemove', result.before.slug, '');
     res.json(saasClDetail(req, company.id));
+});
+
+// --- Mi App (TI › Configuración Compañía): el cliente ajusta SU app --------------------------------------------------------------------------------------------------------------------------
+// Lo mismo que edita SGN en Apps Nuestros Clientes (misma tabla), pero desde el sistema del cliente: SGN la deja armada como INICIAL y el cliente la cambia y publica directo (sin aprobación de SGN). Lo que NO puede cambiar: la clave y la
+// identidad de la app (nombre abreviado y color del ícono), porque cambian la app ya instalada y el enlace ya entregado: para eso «Pedir cambio a SGN» (llega a SGN como una solicitud en Expansiones). «Volver a lo inicial» regresa a lo que SGN dejó.
+// Aparece solo al cliente al que SGN ya le creó su inicio personalizado (db.js: ensureMiAppGrant). Ve quien tiene la pantalla; cambia, publica, vuelve a lo inicial y pide cambios el administrador del cliente.
+function miAppDetail(req) {
+    const config = getClientLogin(req.user.clientId);
+    if (!config) return null;
+    const company = getClientLoginCompany(req.user.clientId);
+    return {
+        company, canEdit: !!req.user.isClientAdmin, defaults: defaultLoginDraft(), name: config.draft.identity.shortName || (company && company.suggestedShortName) || '',
+        config: {
+            slug: config.slug, address: `/c/${config.slug}`, draft: config.draft, dirty: config.dirty, web: config.web, app: config.app, published: !!config.live, liveAt: config.liveAt, liveBy: config.liveBy, updatedAt: config.updatedAt, updatedBy: config.updatedBy,
+            hasInitial: !!config.initial, initialAt: config.initialAt, initialBy: config.initialBy, clientChangedAt: config.clientChangedAt, clientChangedBy: config.clientChangedBy,
+        },
+    };
+}
+function miAppGate(req, res, needEdit) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return false; }
+    if (needEdit && !req.user.isClientAdmin) { res.status(403).json({ message: 'Solo el administrador del cliente puede hacer esto.', code: 'FORBIDDEN' }); return false; }
+    return true;
+}
+app.get('/api/business/mi-app', requireAuth, (req, res) => {
+    if (!miAppGate(req, res, false)) return;
+    const detail = miAppDetail(req);
+    if (!detail) return res.status(404).json({ message: 'SGN todavía no te ha creado un inicio personalizado.', code: 'NO_CONFIG' });
+    res.set('Cache-Control', 'no-store');
+    res.json(detail);
+});
+app.put('/api/business/mi-app/draft', requireAuth, (req, res) => {
+    if (!miAppGate(req, res, true)) return;
+    const before = getClientLogin(req.user.clientId);
+    if (!before) return res.status(404).json({ message: 'SGN todavía no te ha creado un inicio personalizado.', code: 'NO_CONFIG' });
+    // la identidad de la app no la cambia el cliente: se conserva la que hay (lo que llegue en ese grupo se ignora)
+    const result = saveClientLoginDraft(req.user.clientId, { ...((req.body || {}).draft || {}), identity: before.draft.identity }, changedByLabel(req));
+    if (result.error) return clFail(res, result);
+    const b = clFlatten(result.before.draft);
+    const a = clFlatten(result.config.draft);
+    Object.keys(a).filter((k) => JSON.stringify(b[k]) !== JSON.stringify(a[k])).forEach((k) => clLog(req, req.user.clientId, 'update', 'main.cliHistDraft', `${CL_FIELD_ES[k] || k}: ${clValueEs(k, b[k])}`, `${CL_FIELD_ES[k] || k}: ${clValueEs(k, a[k])}`, { fromClient: true }));
+    res.json(miAppDetail(req));
+});
+app.post('/api/business/mi-app/publish', requireAuth, (req, res) => {
+    if (!miAppGate(req, res, true)) return;
+    const result = publishClientLoginByClient(req.user.clientId, changedByLabel(req));
+    if (result.error === 'NOT_FOUND') return res.status(404).json({ message: 'SGN todavía no te ha creado un inicio personalizado.', code: 'NO_CONFIG' });
+    if (result.error) return clFail(res, result);
+    const d = result.config.draft;
+    clLog(req, req.user.clientId, 'update', 'main.cliHistPublish', result.before.live ? 'Publicado' : 'Sin publicar', `Publicado (computadora: ${d.channels.web ? 'sí' : 'no'}, celular: ${d.channels.app ? 'sí' : 'no'})`, { fromClient: true });
+    res.json(miAppDetail(req));
+});
+app.post('/api/business/mi-app/restore', requireAuth, (req, res) => {
+    if (!miAppGate(req, res, true)) return;
+    const result = restoreClientLoginInitial(req.user.clientId, changedByLabel(req));
+    if (result.error === 'NOT_FOUND') return res.status(404).json({ message: 'SGN todavía no te ha creado un inicio personalizado.', code: 'NO_CONFIG' });
+    if (result.error) return clFail(res, result);
+    clLog(req, req.user.clientId, 'update', 'main.cliHistRestore', result.before.clientChangedAt ? 'Con cambios del cliente' : 'Sin cambios sobre lo inicial', 'Lo inicial que dejó SGN', { fromClient: true });
+    res.json(miAppDetail(req));
+});
+app.get('/api/business/mi-app/link', requireAuth, (req, res) => {
+    if (!miAppGate(req, res, false)) return;
+    const config = getClientLogin(req.user.clientId);
+    if (!config) return res.status(404).json({ message: 'SGN todavía no te ha creado un inicio personalizado.', code: 'NO_CONFIG' });
+    const url = `${req.protocol}://${req.get('host')}/c/${config.slug}`;
+    res.set('Cache-Control', 'no-store');
+    res.json({ url, qrRows: layoutQrRows(url), slug: config.slug, live: config.web === 'published' || config.web === 'published_changes' });
+});
+// «Pedir cambio a SGN»: lo que el cliente no puede cambiar solo (la clave y la identidad de la app). Llega a SGN como una solicitud de tipo «otra cosa» en Expansiones, con su aviso en la campana.
+app.post('/api/business/mi-app/change-request', requireAuth, (req, res) => {
+    if (!miAppGate(req, res, true)) return;
+    if (!getClientLogin(req.user.clientId)) return res.status(404).json({ message: 'SGN todavía no te ha creado un inicio personalizado.', code: 'NO_CONFIG' });
+    const message = String((req.body || {}).message || '').replace(/\s+/g, ' ').trim();
+    if (message.length < 5 || message.length > 500) return res.status(400).json({ message: 'Cuéntale a SGN qué quieres cambiar (de 5 a 500 letras).', code: 'MESSAGE' });
+    const estimate = estimateExpansionItems(req.user.clientId, [{ type: 'other', text: `Mi App: ${message}` }]);
+    const created = createExpansionRequest({
+        clientId: req.user.clientId, forTestAccount: !!req.user.isTestAccount, requestedBy: changedByLabel(req), requestedByUserId: req.user.sub,
+        items: estimate.items, note: `Mi App: ${message}`, currency: estimate.currency, estCost: estimate.estCost, estPending: estimate.estPending,
+    });
+    const base = { clientId: req.user.clientId, tableKey: EXP_TABLE, recordId: created.id, recordLabel: created.label, changedBy: changedByLabel(req) };
+    logTableChange({ ...base, action: 'create', fieldKey: '', oldValue: '', newValue: '' });
+    logTableChange({ ...base, action: 'update', fieldKey: 'main.colExpQue', oldValue: '', newValue: expSummaryEs(created.items) });
+    try {
+        const client = getClientById(req.user.clientId);
+        publishExpansionNotice({ recipientIds: listSaasUserIdsForScreen(SAAS_EXP_ITEM), event: 'new', toSaas: true, request: { id: created.id, label: created.label, client: client ? client.company_name : '', summary: `Mi App: ${message}`.slice(0, 120), currency: created.currency }, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
+    } catch (err) { console.error('Mi App: no se pudo avisar a SGN en la campana', err && err.message); }
+    res.status(201).json({ ok: true, label: created.label });
 });
 
 // Pieza 2: la dirección pública. …/c/<clave> abre el Login con la marca PUBLICADA del cliente (el borrador nunca sale). Sin sesión, de aquí solo sale marca (logo, colores, fondo, textos y qué se muestra), nunca datos del cliente.

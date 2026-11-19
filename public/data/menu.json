@@ -6478,6 +6478,12 @@
           ],
           "href": "OpTIConfigBotones.html",
           "icon": "bx-slider-alt"
+        },
+        {
+          "id": "cat-operaciones-ti-cc-mi-app",
+          "labelKey": "menu.ccMiApp",
+          "href": "OpTIMiApp.html",
+          "icon": "bx-devices"
         }
       ]
     }

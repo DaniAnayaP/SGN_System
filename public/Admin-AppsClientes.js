@@ -240,6 +240,7 @@ function renderStatus() {
     const c = ed.config;
     const published = c.published ? (c.dirty || dirty ? 'published_changes' : 'published') : 'draft';
     const lines = [dirty ? t('admin.saasCliUnsaved') : t('admin.saasCliSavedAt', { date: stamp(c.updatedAt), by: c.updatedBy || '—' }), c.published ? t('admin.saasCliPublishedAt', { date: stamp(c.liveAt), by: c.liveBy || '—' }) : t('admin.saasCliNeverPublished')];
+    if (c.clientChange) lines.push(t('admin.saasCliClientChanged', { by: c.clientChange.by || '—', date: stamp(c.clientChange.at) }));
     $('#cli-status').innerHTML = `${stateChip(published)} <span class="cli-sub">${esc(lines.join(' · '))}</span>`;
     const save = $('#cli-save'); const pub = $('#cli-publish');
     if (save) save.disabled = !dirty;
@@ -431,7 +432,14 @@ const doSave = () => guarded(async () => { await saveDraft(); Dashboard.showToas
 const doPublish = () => guarded(async () => {
     const ed = state.editor;
     if (JSON.stringify(ed.work) !== ed.savedJson) await saveDraft();
-    const detail = await call('POST', `${API}/${ed.clientId}/publish`, {});
+    let detail;
+    try { detail = await call('POST', `${API}/${ed.clientId}/publish`, {}); } catch (err) {
+        // El cliente ya cambió su «Mi App» después de lo inicial: publicar sobrescribe sus cambios, así que se pide confirmar.
+        if (!(err.body && err.body.code === 'CLIENT_CHANGED')) throw err;
+        const confirmFn = (window.Dashboard && window.Dashboard.confirm) || window.confirm;
+        if (!(await confirmFn(t('admin.saasCliClientChangedConfirm', { by: err.body.changedBy || '—', date: stamp(err.body.changedAt) })))) return;
+        detail = await call('POST', `${API}/${ed.clientId}/publish`, { force: true });
+    }
     adopt(detail, false);
     syncControls(); renderPreviews(); loadLink();
     Dashboard.showToast(t('admin.saasCliPublished'), 'success');

@@ -1947,7 +1947,49 @@ function submenuSpanFits(span) {
     range.selectNodeContents(span);
     return range.getBoundingClientRect().width <= span.getBoundingClientRect().width + 0.05;
 }
+// Regla de todo el sistema (Daniel, 2026-11-19): si un nombre no cabe, se ABREVIA; no se corta con «…». Los nombres que ya traen su escalera (abbrKeys en menu.json) usan esa; los que no la traen (por ejemplo los
+// 10 niveles de Implementación Inicial, «3 · Estructura de organización») se abrevian solos: primero las palabras largas (de la más larga a la más corta: «Estruc. de organización», «Estruc. de Org.»), luego sin conectores
+// y al final solo las primeras palabras. El nombre completo se ve igual que en los demás: con la barra cerrada al pasar el mouse, en la ruta de arriba y en Modo ayuda.
+const AUTO_ABBR_CONNECTORS = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'e', 'o', 'u', 'para', 'por', 'en', 'al', 'con', 'of', 'the', 'and', 'for', 'to', 'in', 'on', 'at', 'with']);
+function autoAbbrLadder(full) {
+    const numbered = /^(\s*\d+\s*[·.\-:)]\s*)([\s\S]*)$/.exec(full); // «3 · Estructura…»: el número de adelante se queda
+    const prefix = numbered ? numbered[1] : '';
+    let words = (numbered ? numbered[2] : full).split(/\s+/).filter(Boolean);
+    const ladder = [full];
+    const push = (list) => {
+        const text = prefix + list.join(' ');
+        if (text.length < ladder[ladder.length - 1].length) ladder.push(text);
+    };
+    // 1) palabras largas abreviadas con punto, la más larga primero (a igual largo, la de más a la derecha)
+    const longest = words.map((w, i) => i).filter((i) => Array.from(words[i]).length >= 7).sort((a, b) => Array.from(words[b]).length - Array.from(words[a]).length || b - a);
+    // la abreviatura corta la palabra más o menos a la mitad y termina en consonante (Estructura → Estruc., organización → organiz., Asignación → Asign., Conectividad → Conect.)
+    const isVowel = (ch) => /[aeiouáéíóúü]/i.test(ch);
+    const abbreviate = (word) => {
+        const letters = Array.from(word);
+        let n = Math.max(4, Math.ceil(letters.length * 0.55));
+        while (n > 4 && isVowel(letters[n - 1])) n -= 1;
+        while (n < letters.length - 2 && isVowel(letters[n - 1])) n += 1;
+        return `${letters.slice(0, n).join('')}.`;
+    };
+    longest.forEach((i) => {
+        words = words.slice();
+        words[i] = abbreviate(words[i]);
+        push(words);
+    });
+    // 2) sin conectores (menos el primero)
+    const noConnectors = words.filter((w, i) => i === 0 || !AUTO_ABBR_CONNECTORS.has(w.toLowerCase()));
+    if (noConnectors.length !== words.length) { words = noConnectors; push(words); }
+    // 3) solo las primeras palabras
+    for (let n = words.length - 1; n >= 1; n -= 1) push(words.slice(0, n));
+    return ladder;
+}
 function applySubmenuAbbreviations() {
+    // los nombres sin escalera propia que no caben reciben la automática (se guarda para que el redibujo al cambiar el ancho la siga usando)
+    document.querySelectorAll('.sub-menu-link > span:first-of-type:not([data-abbr-ladder]), .menu-link > span:first-of-type:not([data-abbr-ladder])').forEach((span) => {
+        if (!span.textContent || submenuSpanFits(span)) return;
+        const ladder = autoAbbrLadder(span.textContent);
+        if (ladder.length > 1) span.dataset.abbrLadder = JSON.stringify(ladder);
+    });
     document.querySelectorAll('.sub-menu-link span[data-abbr-ladder], .menu-link span[data-abbr-ladder]').forEach((span) => {
         const ladder = JSON.parse(span.dataset.abbrLadder);
         for (const text of ladder) {
@@ -13896,6 +13938,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-ti-habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },
     'cat-operaciones-ti-solicitudes-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-solicitudes-codigo' },
     'cat-operaciones-ti-cc-config-botones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-config-botones' },
+    'cat-operaciones-ti-cc-mi-app': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-mi-app' },
     'cat-operaciones-ti-cc-expansiones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-expansiones' },
     'cat-operaciones-ti-cc-sesiones-capacitacion': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-sesiones-capacitacion' },
     'cat-operaciones-ti-impl-cronograma': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-cronograma' },

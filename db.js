@@ -3416,6 +3416,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'habilitacion-codigos': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Habilitación de Códigos' },
     'solicitudes-codigo': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Solicitudes de alta de código' },
     'config-botones': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Configuración de botones' },
+    'mi-app': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Mi App' },
     'expansiones': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Expansiones' },
     'sesiones-capacitacion': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Sesiones de capacitación' },
     'pedir-alta-codigo': { area: '', modulo: 'Operaciones', pantalla: 'Pedir alta de código' },
@@ -15528,6 +15529,13 @@ db.exec(`
         updated_by TEXT NOT NULL DEFAULT ''
     );
 `);
+// «Mi App» (TI › Configuración Compañía): el cliente ajusta SU app desde su propio sistema. SGN la deja armada como INICIAL (lo último que SGN publicó: initial) y el cliente la cambia y publica directo; client_changed_* guarda
+// su último cambio (si SGN vuelve a publicar después, el sistema avisa antes de sobrescribirlo). «Volver a lo inicial» regresa a initial. La clave y la identidad de la app (nombre abreviado y color del ícono) las cambia solo SGN.
+{
+    const cols = db.prepare('PRAGMA table_info(client_login_configs)').all().map((c) => c.name);
+    [['initial', "TEXT NOT NULL DEFAULT ''"], ['initial_at', 'TEXT'], ['initial_by', "TEXT NOT NULL DEFAULT ''"], ['client_changed_at', 'TEXT'], ['client_changed_by', "TEXT NOT NULL DEFAULT ''"]]
+        .forEach(([name, def]) => { if (!cols.includes(name)) db.exec(`ALTER TABLE client_login_configs ADD COLUMN ${name} ${def}`); });
+}
 // Palabras que no pueden ser la clave de un cliente: rutas y carpetas de la aplicación.
 const LOGIN_RESERVED_SLUGS = ['admin', 'api', 'c', 'app', 'apps', 'login', 'downloads', 'icons', 'fonts', 'vendor', 'i18n', 'data', 'imagenes', 'sw', 'static', 'public', 'www', 'help', 'soporte', 'sgn', 'geipsa', 'null', 'undefined'];
 const LOGIN_SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -15629,10 +15637,13 @@ function deserializeClientLogin(row) {
     const draft = normalizeLoginDraft(parseLoginJson(row.draft)).draft || defaultLoginDraft();
     const liveRaw = parseLoginJson(row.live);
     const live = liveRaw ? (normalizeLoginDraft(liveRaw).draft || null) : null;
+    const initialRaw = parseLoginJson(row.initial);
+    const initial = initialRaw ? (normalizeLoginDraft(initialRaw).draft || null) : null;
     return {
         id: row.id, clientId: row.client_id, slug: row.slug, draft, live, dirty: JSON.stringify(draft) !== JSON.stringify(live), liveAt: row.live_at, liveBy: row.live_by,
         createdAt: row.created_at, updatedAt: row.updated_at, updatedBy: row.updated_by,
         web: loginChannelStatus(draft, live, 'web'), app: loginChannelStatus(draft, live, 'app'),
+        initial, initialAt: row.initial_at || null, initialBy: row.initial_by || '', clientChangedAt: row.client_changed_at || null, clientChangedBy: row.client_changed_by || '',
     };
 }
 function getClientLogin(clientId) {
@@ -15661,6 +15672,7 @@ function createClientLogin(clientId, updatedBy) {
     if (getClientLogin(clientId)) return { error: 'EXISTS' };
     const slug = loginSuggestSlug(clientId);
     db.prepare('INSERT INTO client_login_configs (client_id, slug, draft, updated_by) VALUES (?, ?, ?, ?)').run(clientId, slug, JSON.stringify(defaultLoginDraft()), updatedBy || '');
+    ensureMiAppGrant(clientId);
     return { config: getClientLogin(clientId) };
 }
 function saveClientLoginDraft(clientId, rawDraft, updatedBy) {
@@ -15672,18 +15684,62 @@ function saveClientLoginDraft(clientId, rawDraft, updatedBy) {
     return { before, config: getClientLogin(clientId) };
 }
 // Publicar = el borrador pasa a ser lo publicado. Pide al menos un canal encendido (si no, no hay nada que publicar).
-function publishClientLogin(clientId, publishedBy) {
+// SGN publica: lo que publica queda también como lo INICIAL del cliente. Si el cliente cambió algo después de lo inicial (client_changed_at) no se sobrescribe sin confirmar: { error: 'CLIENT_CHANGED', at, by } y se repite con force.
+function publishClientLogin(clientId, publishedBy, { force = false } = {}) {
     const before = getClientLogin(clientId);
     if (!before) return { error: 'NOT_FOUND' };
     if (!before.draft.channels.web && !before.draft.channels.app) return { error: 'NO_CHANNEL' };
-    db.prepare("UPDATE client_login_configs SET live = ?, live_at = datetime('now'), live_by = ?, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?").run(JSON.stringify(before.draft), publishedBy || '', publishedBy || '', clientId);
+    if (before.clientChangedAt && !force) return { error: 'CLIENT_CHANGED', at: before.clientChangedAt, by: before.clientChangedBy };
+    const snapshot = JSON.stringify(before.draft);
+    db.prepare("UPDATE client_login_configs SET live = ?, live_at = datetime('now'), live_by = ?, initial = ?, initial_at = datetime('now'), initial_by = ?, client_changed_at = NULL, client_changed_by = '', updated_at = datetime('now'), updated_by = ? WHERE client_id = ?")
+        .run(snapshot, publishedBy || '', snapshot, publishedBy || '', publishedBy || '', clientId);
     return { before, config: getClientLogin(clientId) };
 }
+// El cliente publica su cambio directo (sin aprobación de SGN): lo publicado es su borrador y queda marcado quién lo cambió y cuándo (lo inicial no se toca).
+function publishClientLoginByClient(clientId, changedBy) {
+    const before = getClientLogin(clientId);
+    if (!before) return { error: 'NOT_FOUND' };
+    if (!before.draft.channels.web && !before.draft.channels.app) return { error: 'NO_CHANNEL' };
+    db.prepare("UPDATE client_login_configs SET live = ?, live_at = datetime('now'), live_by = ?, client_changed_at = datetime('now'), client_changed_by = ?, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?")
+        .run(JSON.stringify(before.draft), changedBy || '', changedBy || '', changedBy || '', clientId);
+    return { before, config: getClientLogin(clientId) };
+}
+// «Volver a lo inicial»: el borrador y lo publicado vuelven a lo que SGN dejó armado (y el cliente ya no tiene cambios sobre lo inicial). Sin lo inicial (SGN nunca publicó) no hay a dónde volver.
+function restoreClientLoginInitial(clientId, changedBy) {
+    const before = getClientLogin(clientId);
+    if (!before) return { error: 'NOT_FOUND' };
+    if (!before.initial) return { error: 'NO_INITIAL' };
+    const snapshot = JSON.stringify(before.initial);
+    db.prepare("UPDATE client_login_configs SET draft = ?, live = ?, live_at = datetime('now'), live_by = ?, client_changed_at = NULL, client_changed_by = '', updated_at = datetime('now'), updated_by = ? WHERE client_id = ?")
+        .run(snapshot, snapshot, changedBy || '', changedBy || '', clientId);
+    return { before, config: getClientLogin(clientId) };
+}
+// La pantalla «Mi App» (TI › Configuración Compañía) aparece SOLO para el cliente al que SGN ya le creó su inicio personalizado: entra a su contrato como un adicional sin costo y sale cuando SGN quita la personalización.
+// (No va en el mínimo de TI de todos los contratos.) SGN la puede quitar o poner a mano en «+ Permisos Adicionales» como cualquier otro acceso.
+const MI_APP_GRANT = { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuId: 'cat-operaciones/cat-operaciones-ti-cc-mi-app' };
+function ensureMiAppGrant(clientId) {
+    const has = db.prepare('SELECT 1 FROM client_permission_grants WHERE client_id = ? AND section_id = ? AND item_id = ? AND submenu_id = ?').get(clientId, MI_APP_GRANT.sectionId, MI_APP_GRANT.itemId, MI_APP_GRANT.submenuId);
+    if (!has) db.prepare('INSERT INTO client_permission_grants (client_id, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)').run(clientId, MI_APP_GRANT.sectionId, MI_APP_GRANT.itemId, MI_APP_GRANT.submenuId);
+}
+function removeMiAppGrant(clientId) {
+    db.prepare('DELETE FROM client_permission_grants WHERE client_id = ? AND section_id = ? AND item_id = ? AND submenu_id = ?').run(clientId, MI_APP_GRANT.sectionId, MI_APP_GRANT.itemId, MI_APP_GRANT.submenuId);
+}
+// Una sola vez: lo que SGN ya había publicado pasa a ser lo INICIAL del cliente y quien ya tenía su inicio personalizado recibe la pantalla.
+(function seedMiAppOnce() {
+    const KEY = 'seed-mi-app-v1';
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(KEY)) return;
+    db.transaction(() => {
+        db.prepare("UPDATE client_login_configs SET initial = live, initial_at = live_at, initial_by = live_by WHERE initial = '' AND live != ''").run();
+        db.prepare('SELECT client_id FROM client_login_configs').all().forEach((r) => ensureMiAppGrant(r.client_id));
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(KEY);
+    })();
+})();
 // Quitar la personalización: se borra todo (borrador, publicado y clave) y el cliente vuelve al inicio de siempre. La clave queda libre.
 function removeClientLogin(clientId) {
     const before = getClientLogin(clientId);
     if (!before) return { error: 'NOT_FOUND' };
     db.prepare('DELETE FROM client_login_configs WHERE client_id = ?').run(clientId);
+    removeMiAppGrant(clientId);
     return { before };
 }
 function setClientLoginSlug(clientId, slug, updatedBy) {
@@ -18440,7 +18496,7 @@ module.exports = {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, removeClientLogin, setClientLoginSlug,
+    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, markImplementationTask, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
