@@ -2898,6 +2898,26 @@
         // text fits that remaining room, or there's no shorter step left
         // (icon-only) -- at which point whatever's still too wide is
         // exactly what .perm-tree's own overflow-x:auto is for.
+        // El ancho que de verdad necesita la caja CERRADA de un Estatus con ese texto (texto + relleno + borde + la flecha del navegador): se mide con un <select> de prueba escondido en lugar de
+        // sumar «texto + 38 px» a ojo, que dejaba «Habilitado para servic…» cortado con «…» (regla de todo el sistema, Daniel 2026-11-19: si no cabe se abrevia, no se corta).
+        const statusProbeWidths = new Map();
+        function probeStatusSelectWidth(text) {
+            const key = `${getComputedStyle(treeRoot).fontFamily}|${getComputedStyle(document.documentElement).fontSize}|${text}`;
+            if (statusProbeWidths.has(key)) return statusProbeWidths.get(key);
+            const probe = document.createElement('select');
+            probe.className = 'perm-tree-mstatus-select';
+            probe.setAttribute('aria-hidden', 'true');
+            probe.tabIndex = -1;
+            probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;max-width:none;width:auto;';
+            const optionEl = document.createElement('option');
+            optionEl.textContent = text;
+            probe.appendChild(optionEl);
+            treeRoot.appendChild(probe);
+            const width = probe.getBoundingClientRect().width;
+            probe.remove();
+            if (width > 0) statusProbeWidths.set(key, width);
+            return width;
+        }
         function applyStatusAbbreviations() {
             const selects = Array.from(treeRoot.querySelectorAll('select.perm-tree-mstatus-select'));
             if (!selects.length) return;
@@ -2939,7 +2959,15 @@
             // follows whatever this step actually needs (plus its own
             // padding/arrow), instead of a fixed 9.5rem disconnected from
             // what's actually showing.
-            treeRoot.style.setProperty('--perm-tree-status-col-width', `${Math.ceil(widestAtStep) + 38}px`);
+            let widestBox = 0;
+            const seenTexts = new Set();
+            selects.forEach((select) => {
+                const selectedText = select.options[select.selectedIndex].textContent;
+                if (seenTexts.has(selectedText)) return;
+                seenTexts.add(selectedText);
+                widestBox = Math.max(widestBox, probeStatusSelectWidth(selectedText));
+            });
+            treeRoot.style.setProperty('--perm-tree-status-col-width', `${Math.ceil(widestBox > 0 ? widestBox : widestAtStep + 38) + 2}px`);
         }
 
         // Sets --perm-tree-label-col-width (read by .perm-tree-mstatus-

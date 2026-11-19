@@ -2068,6 +2068,50 @@ function measureTextWidth(text, font) {
     saasMeasureCtx.font = font;
     return saasMeasureCtx.measureText(text).width;
 }
+// Estatus (regla de todo el sistema, Daniel 2026-11-19: si no cabe se abrevia, no se corta con «…»): la columna de esta pantalla es fija (9.5rem) y «Habilitado para servicio» no cabía («Habilitado para s…»).
+// Se baja por la misma escalera que el Árbol de Permisos Maestro (PermissionTree.js, STATUS_LADDER_KEYS: «Habilitado», «Habil.», «✓») hasta que el más ancho de los estatus elegidos cabe en la caja cerrada
+// (medida con un <select> de prueba: texto + relleno + flecha del navegador). Se reescriben todas las opciones juntas, así la lista abierta dice lo mismo que la caja; el nombre completo queda en title.
+const STATUS_LADDER_KEYS = {
+    habilitado: ['admin.masterTreeStatusHabilitado', 'admin.masterTreeStatusHabilitadoMed', 'admin.masterTreeStatusHabilitadoShort', 'admin.masterTreeStatusHabilitadoIcon'],
+    inhabilitado: ['admin.masterTreeStatusInhabilitado', 'admin.masterTreeStatusInhabilitadoShort', 'admin.masterTreeStatusInhabilitadoIcon'],
+    construccion: ['admin.masterTreeStatusConstruccion', 'admin.masterTreeStatusConstruccionMed', 'admin.masterTreeStatusConstruccionShort', 'admin.masterTreeStatusConstruccionIcon'],
+    mejoras: ['admin.masterTreeStatusMejoras', 'admin.masterTreeStatusMejorasShort', 'admin.masterTreeStatusMejorasIcon'],
+};
+function probeStatusSelectWidth(text) {
+    const probe = document.createElement('select');
+    probe.className = 'perm-tree-mstatus-select';
+    probe.setAttribute('aria-hidden', 'true');
+    probe.tabIndex = -1;
+    probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;pointer-events:none;max-width:none;width:auto;';
+    const optionEl = document.createElement('option');
+    optionEl.textContent = text;
+    probe.appendChild(optionEl);
+    listEl.appendChild(probe);
+    const width = probe.getBoundingClientRect().width;
+    probe.remove();
+    return width;
+}
+function applyStatusFit() {
+    const selects = Array.from(listEl.querySelectorAll('select.perm-tree-mstatus-select'));
+    const cell = listEl.querySelector('.perm-tree-mstatus-status-cell');
+    if (!selects.length || !cell) return;
+    const room = cell.getBoundingClientRect().width;
+    if (!(room > 0)) return;
+    const ladders = STATUS_OPTIONS.map((opt) => STATUS_LADDER_KEYS[opt.value]);
+    const maxSteps = Math.max(...ladders.map((ladder) => ladder.length));
+    for (let step = 0; step < maxSteps; step += 1) {
+        const texts = ladders.map((ladder) => Dashboard.t(ladder[Math.min(step, ladder.length - 1)]));
+        selects.forEach((select) => { Array.from(select.options).forEach((optionEl, i) => { optionEl.textContent = texts[i]; }); });
+        const widths = new Map();
+        let widest = 0;
+        selects.forEach((select) => {
+            const text = select.options[select.selectedIndex].textContent;
+            if (!widths.has(text)) widths.set(text, probeStatusSelectWidth(text));
+            widest = Math.max(widest, widths.get(text));
+        });
+        if (widest <= room + 0.5) break;
+    }
+}
 function alignLabelColumnWidth() {
     const labels = listEl.querySelectorAll('.perm-tree-mstatus-label');
     if (!labels.length) return;
@@ -2742,6 +2786,7 @@ function renderList() {
     });
 
     alignLabelColumnWidth();
+    applyStatusFit();
 
     // setTimeout, not requestAnimationFrame -- rAF gets throttled/suspended
     // on a backgrounded tab, which silently left every guide missing during
