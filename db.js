@@ -5697,6 +5697,27 @@ function isSkuEnabledAt(clientId, isTest, skuItemId, costCenterId, { department,
         .get(clientId, isTest ? 1 : 0, skuItemId, department, area, site, costCenterId);
 }
 
+// Dónde vale cada código, de una vez, para la App (que guarda la lista en el celular y filtra sin señal): código → '*' (habilitado en «todos los sitios»: vale en cualquier centro) o la lista de ids de los centros donde vale.
+// Es lo mismo que listSkuIdsEnabledFor + isSkuEnabledAt pero para todos los centros a la vez. Un código sin habilitación no sale en el mapa (no vale en ningún centro).
+function skuEnabledCentersMap(clientId, isTest, { department, area } = SKU_ENABLEMENT_DEFAULT) {
+    const rows = db.prepare('SELECT sku_item_id AS id, site_code AS siteCode, cost_center_id AS costCenterId FROM sku_enablements WHERE client_id = ? AND is_test_data = ? AND department = ? AND area = ?').all(clientId, isTest ? 1 : 0, department, area);
+    const centersOfSite = new Map();
+    db.prepare('SELECT id, site_code AS siteCode FROM cost_centers WHERE client_id = ?').all(clientId).forEach((c) => {
+        if (!centersOfSite.has(c.siteCode)) centersOfSite.set(c.siteCode, []);
+        centersOfSite.get(c.siteCode).push(c.id);
+    });
+    const out = new Map();
+    rows.forEach((r) => {
+        if (out.get(r.id) === '*') return;
+        if (r.siteCode === '') { out.set(r.id, '*'); return; }
+        const set = out.get(r.id) || new Set();
+        out.set(r.id, set);
+        if (r.costCenterId === 0) (centersOfSite.get(r.siteCode) || []).forEach((id) => set.add(id));
+        else set.add(r.costCenterId);
+    });
+    return new Map([...out].map(([id, v]) => [id, v === '*' ? '*' : [...v].sort((a, z) => a - z)]));
+}
+
 const SKU_ITEM_PATCHABLE_FIELDS = {
     upc: { column: 'upc', fieldKey: 'main.colArticuloUpc' },
     uniqueDescription: { column: 'unique_description', fieldKey: 'main.colArticuloDescUnica' },
@@ -16766,7 +16787,7 @@ module.exports = {
     deleteSupportMaterial,
     SUPPORT_MATERIAL_CATEGORIES,
     listSkuItems,
-    listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, isSkuEnabledAt, SKU_ENABLEMENT_DEFAULT,
+    listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, isSkuEnabledAt, skuEnabledCentersMap, SKU_ENABLEMENT_DEFAULT,
     createSkuRequest, getSkuRequest, listSkuRequests, setSkuRequestPhoto, setSkuRequestPlace, listSkuRequestEvents, updateSkuRequestData, setSkuRequestStatus, skuRequestTimes, skuRequestProgress, skuRequestDescriptionsInUse, sanitizeSkuRequestData,
     SKU_REQUEST_STATUSES, SKU_REQUEST_OPEN, SKU_REQUEST_HOLDER, SKU_REQUEST_REQUIRED_KEYS, skuRequestFilled, skuLettersFor,
     getSkuItemById,

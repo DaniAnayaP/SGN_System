@@ -480,7 +480,9 @@ function renderPick() {
         if (!window.SearchSyntax.ready('contains', pickQuery)) { if (codesState !== 'cached') note.textContent = t('home.pmTypeMore'); return; }
         const test = window.SearchSyntax.compile('contains', pickQuery);
         const found = [];
-        for (const c of codes) { if ([c.sku, c.upc, c.description].some((v) => !!v && test(v))) { found.push(c); if (found.length > MAX_CODES) break; } }
+        // solo los códigos que TI habilitó para el centro de este lugar (Habilitación de Códigos): «ea» = '*' en cualquier centro, o la lista de centros; una copia vieja sin «ea» no filtra
+        const enabledHere = (c) => c.ea === undefined || c.ea === '*' || c.ea.includes(Number(r.cc));
+        for (const c of codes) { if (enabledHere(c) && [c.sku, c.upc, c.description].some((v) => !!v && test(v))) { found.push(c); if (found.length > MAX_CODES) break; } }
         if (!found.length) { note.textContent = t('main.capSinResultados'); return; }
         found.slice(0, MAX_CODES).forEach((c) => {
             const btn = document.createElement('button');

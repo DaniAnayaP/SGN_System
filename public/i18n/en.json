@@ -4327,6 +4327,7 @@
     "relMissingWarehouse": "the warehouse",
     "relReady": "Ready to save: the code will be located.",
     "relReadyPartial": "You can save it like this; it stays \"Partial\" until the location is complete.",
+    "relNotEnabled": "That code is not enabled for this cost center. IT enables it in Code Enablement.",
     "relStatusLocated": "Located",
     "relStatusPartial": "Partial",
     "relEdit": "Edit relation",

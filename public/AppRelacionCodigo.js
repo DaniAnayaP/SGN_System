@@ -155,6 +155,13 @@ function selectedCenterIds() {
 }
 // Una relación sin centro se ve siempre, para poder asignárselo.
 const centerShown = (id) => { const sel = selectedCenterIds(); return !sel || !id || sel.includes(String(id)); };
+// ¿Vale este código en este centro? Cada código trae «ea» (dónde lo habilitó TI en Habilitación de Códigos): '*' = en cualquier centro; si no, la lista de centros. Sin centro elegido todavía vale si sirve en alguno de los que se pueden elegir.
+// Una copia vieja de la lista, sin «ea», no filtra (el servidor igual lo revisa al guardar).
+function enabledAt(s, centerId) {
+    if (!s || s.ea === undefined || s.ea === '*') return true;
+    if (centerId) return s.ea.includes(Number(centerId));
+    return centerChoices().some((c) => s.ea.includes(Number(c.id)));
+}
 // Los centros que se pueden elegir en el formulario: los completos que están marcados (más el de la relación que se edita, aunque ya no esté marcado). Con uno solo, la relación nueva arranca en él.
 function centerChoices() {
     const sel = selectedCenterIds();
@@ -185,7 +192,7 @@ async function loadAll() {
             return readCache(key);
         }
     };
-    const [o, s, l] = await Promise.all([get(`${API}/options`, CACHE.options), get(`${API}/skus?all=1`, CACHE.skus), get(API, CACHE.list)]);
+    const [o, s, l] = await Promise.all([get(`${API}/options`, CACHE.options), get(`${API}/skus?all=1&ea=1`, CACHE.skus), get(API, CACHE.list)]);
     options = o;
     skus = (s && s.skus) || [];
     relations = (l && l.relations) || [];
@@ -432,7 +439,7 @@ function searchCodes() {
     const q = document.getElementById('rel-code').value.trim().toLowerCase();
     const box = document.getElementById('rel-results');
     if (!q) { box.hidden = true; return; }
-    const found = skus.filter((s) => [s.sku, s.upc, s.description].join(' ').toLowerCase().includes(q)).slice(0, 20);
+    const found = skus.filter((s) => enabledAt(s, st.centro) && [s.sku, s.upc, s.description].join(' ').toLowerCase().includes(q)).slice(0, 20);
     box.innerHTML = found.length
         ? found.map((s) => `<button type="button" class="relapp-result" data-id="${s.id}"><b>${esc(s.sku)}</b> ${esc(s.description)} <span>${esc(s.upc)}</span></button>`).join('')
         : `<span class="relapp-muted">${esc(t('main.relNoMatches'))}</span>`;
@@ -465,13 +472,16 @@ function refreshForm(keepInput) {
     fillSelect('rel-pos', freeNums.map((n) => ({ value: n, label: n })), nums.length > 1 ? t('main.relPositionShort') : '—', st.pos, !freeNums.length);
     drawRack(d.rack);
     drawPath(d);
-    const ready = !!(st.sku && st.centro && st.alm);
+    // Un código que no está habilitado en este centro no se puede guardar ahí (salvo una relación que ya lo tenía y no lo cambia: el servidor la respeta).
+    const keepsSame = !!(editing && editing.skuItemId === (st.sku && st.sku.id) && String(editing.costCenterId || '') === String(st.centro || ''));
+    const notEnabled = !!(st.sku && st.centro && !keepsSame && !enabledAt(st.sku, st.centro));
+    const ready = !!(st.sku && st.centro && st.alm) && !notEnabled;
     document.getElementById('rel-save').disabled = !ready;
     const missing = [];
     if (!st.sku) missing.push(t('main.relMissingCode'));
     if (!st.centro) missing.push(t('main.relMissingCost')); else if (!st.alm) missing.push(t('main.relMissingWarehouse'));
     const located = (d.sub && d.sub.kind === 'virtual') || (st.est && st.niv && st.esp && (st.pos || nums.length <= 1));
-    document.getElementById('rel-msg').textContent = ready ? t(located ? 'main.relReady' : 'main.relReadyPartial') : t('main.relMissing', { x: missing.join(' / ') });
+    document.getElementById('rel-msg').textContent = notEnabled ? t('main.relNotEnabled') : (ready ? t(located ? 'main.relReady' : 'main.relReadyPartial') : t('main.relMissing', { x: missing.join(' / ') }));
 }
 
 function drawRack(rack) {

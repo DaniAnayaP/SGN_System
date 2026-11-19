@@ -151,7 +151,7 @@ const {
     deleteFleetUnit,
     suggestFuelTypeForEcoUnit,
     listSkuItems,
-    listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, isSkuEnabledAt, SKU_ENABLEMENT_DEFAULT,
+    listSkuEnablements, normalizeEnablementRows, setSkuEnablements, bulkSkuEnablements, listSkuIdsEnabledFor, isSkuEnabledAt, skuEnabledCentersMap, SKU_ENABLEMENT_DEFAULT,
     createSkuRequest, getSkuRequest, listSkuRequests, setSkuRequestPhoto, setSkuRequestPlace, listSkuRequestEvents, updateSkuRequestData, setSkuRequestStatus, skuRequestTimes, skuRequestProgress, skuRequestDescriptionsInUse, sanitizeSkuRequestData,
     SKU_REQUEST_STATUSES, SKU_REQUEST_OPEN, SKU_REQUEST_HOLDER, SKU_REQUEST_REQUIRED_KEYS, skuRequestFilled, skuLettersFor,
     getSkuItemById,
@@ -13758,10 +13758,13 @@ app.get('/api/business/code-relations/skus', requireAuth, (req, res) => {
     } else {
         found = keepEnabled(searchSkuItems(req.user.clientId, req.query.all === '1' ? '' : term, req.user.isTestAccount, enabledIds ? 100000 : limit)).slice(0, limit);
     }
+    // ea=1 (la App, que guarda la lista y filtra sin señal): en qué centros vale cada código, '*' = en cualquiera, o la lista de centros ([] = en ninguno). Habilitación de Códigos, C. Distribución.
+    const where = req.query.ea === '1' ? skuEnabledCentersMap(req.user.clientId, !!req.user.isTestAccount) : null;
     res.json({
         skus: found.map((s) => ({
             id: s.id, sku: padSku(s.record_number, s.sku_code), num: s.record_number, upc: s.upc || '', description: s.unique_description || s.known_description || s.custom_description || '', unique: s.unique_description || '', uom: s.main_uom || '',
             length: s.length || 0, width: s.width || 0, height: s.height || 0, packaging: packMap.get(s.id) || null,
+            ...(where ? { ea: where.get(s.id) || [] } : {}),
         })),
     });
 });
@@ -17272,8 +17275,10 @@ app.get('/api/business/storage-capacity/codes', requireAuth, (req, res) => {
     const { clientId, isTestAccount } = req.user;
     const ids = searchSkuItems(clientId, '', isTestAccount, 5000).map((r) => r.id);
     const presBySku = capacityPresentationsMap(clientId, isTestAccount);
+    // ea: en qué centros vale cada código (Habilitación de Códigos, C. Distribución): '*' = en cualquiera, o la lista de centros; la App elige solo entre los del centro del lugar.
+    const where = skuEnabledCentersMap(clientId, isTestAccount);
     const codes = listSkuCapacityData(clientId, isTestAccount, ids).map((raw) => skuCapacityEffective(raw, presBySku.get(raw.id))).map((r) => ({
-        id: r.id, storageTypes: r.storageTypes || [], sku: padSku(r.record_number, r.sku_code), upc: r.upc || '', description: r.custom_description || r.known_description || r.unique_description || '', uom: r.main_uom || '',
+        id: r.id, ea: where.get(r.id) || [], storageTypes: r.storageTypes || [], sku: padSku(r.record_number, r.sku_code), upc: r.upc || '', description: r.custom_description || r.known_description || r.unique_description || '', uom: r.main_uom || '',
         storageType: r.storage_type || '', length: r.length || 0, width: r.width || 0, height: r.height || 0, ti: r.units_per_layer || 0, hi: r.layers_per_pallet || 0, stack: r.max_stack || 0,
     }));
     res.set('Cache-Control', 'no-store');

@@ -4326,6 +4326,7 @@
     "relMissingWarehouse": "el almacén",
     "relReady": "Lista para guardar: el código quedará ubicado.",
     "relReadyPartial": "Se puede guardar así; quedará «A medias» hasta completar la ubicación.",
+    "relNotEnabled": "Ese código no está habilitado para este centro de costos. TI lo habilita en Habilitación de Códigos.",
     "relStatusLocated": "Ubicado",
     "relStatusPartial": "A medias",
     "relEdit": "Editar relación",
