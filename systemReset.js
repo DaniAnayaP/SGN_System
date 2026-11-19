@@ -32,6 +32,7 @@ const TABLES = {
     // Usuarios de los clientes (los del equipo SaaS, sin client_id, se conservan) y sus permisos
     users: { action: PARTIAL, group: 'clientUsers', where: 'client_id IS NOT NULL' },
     user_grants: { action: WIPE, group: 'clientUsers' },
+    user_grant_exclusions: { action: WIPE, group: 'clientUsers' }, // lo que se le quita a una persona de lo que le da su puesto (cuelga de users: debe irse con ellos)
     user_grant_change_log: { action: WIPE, group: 'clientUsers' },
     user_profiles: { action: WIPE, group: 'clientUsers' },
     profiles: { action: WIPE, group: 'clientUsers' },
@@ -64,6 +65,23 @@ const TABLES = {
     maintenance_runs: { action: WIPE, group: 'captures' }, // lo que se hizo en cada programa
     maintenance_faults: { action: WIPE, group: 'captures' }, // Mantenimiento Correctivo: fallas
     maintenance_photos: { action: WIPE, group: 'captures' }, // fotos de las corridas y de las fallas
+    // Pantallas anteriores que seguían sin clasificar (todas son datos de cada cliente o fotos que cuelgan de sus registros; ninguna es catálogo de la plataforma)
+    cleaning_records: { action: WIPE, group: 'captures' }, // Operaciones > Limpieza
+    cleaning_photos: { action: WIPE, group: 'captures' },
+    incidents: { action: WIPE, group: 'captures' }, // Operaciones > Incidentes
+    incident_photos: { action: WIPE, group: 'captures' },
+    safety_checks: { action: WIPE, group: 'captures' }, // Operaciones > Seguridad
+    safety_check_photos: { action: WIPE, group: 'captures' },
+    temperature_records: { action: WIPE, group: 'captures' }, // Operaciones > Temperaturas
+    temperature_photos: { action: WIPE, group: 'captures' },
+    manual_orders: { action: WIPE, group: 'captures' }, // Operaciones > Pedido Manual
+    manual_order_lines: { action: WIPE, group: 'captures' },
+    manual_order_deliveries: { action: WIPE, group: 'captures' },
+    code_relations: { action: WIPE, group: 'captures' }, // Relación Código
+    code_ship_relations: { action: WIPE, group: 'captures' }, // Relación Código Envío
+    sku_distribution_units: { action: WIPE, group: 'captures' }, // Presentaciones de Distribución (UDM por distribución)
+    storage_capacity: { action: WIPE, group: 'captures' }, // Capacidad de Almacenamiento
+    client_layouts: { action: WIPE, group: 'captures' }, // el Layout dibujado de cada centro de costos
     article_categories: { action: WIPE, group: 'captures' },
     unit_types: { action: WIPE, group: 'captures' },
     catalog_value_requests: { action: WIPE, group: 'captures' },
@@ -85,6 +103,7 @@ const TABLES = {
     // Personalización y reglas de cada cliente
     field_fill_rules: { action: WIPE, group: 'clientSettings' },
     support_map: { action: WIPE, group: 'clientSettings' }, // Admin > Mapa de soporte: los ajustes de Soporte de cada empresa (2026-11-18)
+    qr_locks: { action: WIPE, group: 'clientSettings' }, // los candados de los QR de cada centro (pedir inicio de sesión, registro)
     saved_layouts: { action: WIPE, group: 'clientSettings' },
     saved_searches: { action: WIPE, group: 'clientSettings' },
     column_color_level_overrides: { action: PARTIAL, group: 'clientSettings', where: CLIENT_LEVELS_WHERE },
