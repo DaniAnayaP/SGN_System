@@ -768,6 +768,26 @@ for (const col of ['default_department', 'default_area', 'default_cost_centers']
 if (!userColumns.some((c) => c.name === 'ui_scale')) {
     db.exec('ALTER TABLE users ADD COLUMN ui_scale INTEGER NOT NULL DEFAULT 4');
 }
+// «Configuración de botones» de la compañía (TI › Configuración Compañía): ui_scale vale 4 tanto si la persona lo eligió como si nunca eligió nada, así que ui_scale_set anota si ya eligió su tamaño
+// (1) o todavía no (0, le toca el de la compañía si lo hay). Quien ya tenía un tamaño distinto de «Ideal» lo conserva.
+if (!userColumns.some((c) => c.name === 'ui_scale_set')) {
+    db.exec('ALTER TABLE users ADD COLUMN ui_scale_set INTEGER NOT NULL DEFAULT 0');
+    db.exec('UPDATE users SET ui_scale_set = 1 WHERE ui_scale <> 4');
+}
+// Valores por defecto de TODA la compañía para lo que cada persona configura en «Configuración de botones» del engrane (Botón Salir, Departamento, Área, Centros de Costo y Tamaño del Sistema). Lo que la persona ya eligió
+// sigue mandando; lo de la compañía solo vale para quien todavía no eligió (ver getEffectiveUserDefaults / getEffectiveUiScale). Vacío = la compañía no fija ese valor (department/area '', cost_centers 'all', ui_scale 0, logout_mode '').
+db.exec(`
+    CREATE TABLE IF NOT EXISTS client_button_defaults (
+        client_id    INTEGER PRIMARY KEY REFERENCES clients(id) ON DELETE CASCADE,
+        department   TEXT NOT NULL DEFAULT '',
+        area         TEXT NOT NULL DEFAULT '',
+        cost_centers TEXT NOT NULL DEFAULT 'all',
+        ui_scale     INTEGER NOT NULL DEFAULT 0,
+        logout_mode  TEXT NOT NULL DEFAULT '',
+        updated_by   TEXT NOT NULL DEFAULT '',
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+`);
 
 const clientColumns = db.prepare('PRAGMA table_info(clients)').all();
 if (!clientColumns.some((c) => c.name === 'admin_user_id')) {
@@ -3395,6 +3415,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'casos-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Casos de soporte' },
     'habilitacion-codigos': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Habilitación de Códigos' },
     'solicitudes-codigo': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Solicitudes de alta de código' },
+    'config-botones': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Configuración de botones' },
     'pedir-alta-codigo': { area: '', modulo: 'Operaciones', pantalla: 'Pedir alta de código' },
     'soportes-cerrados': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Soportes cerrados' },
     'ayuda-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Errores y ayuda' },
@@ -14661,8 +14682,60 @@ function getUserUiScale(userId) {
 }
 
 function setUserUiScale(userId, level) {
-    db.prepare('UPDATE users SET ui_scale = ? WHERE id = ?').run(level, userId);
+    db.prepare('UPDATE users SET ui_scale = ?, ui_scale_set = 1 WHERE id = ?').run(level, userId);
     return getUserUiScale(userId);
+}
+
+// --- Valores por defecto de la compañía (TI › Configuración Compañía › Configuración de botones) --------------------------------------------------------------------------
+// { department, area, costCenters ('all' o ids), uiScale (1-8 o null), logoutMode ('confirm'|'direct' o null) }; null = la compañía no fija ese valor.
+function getClientButtonDefaults(clientId) {
+    const row = clientId ? db.prepare('SELECT * FROM client_button_defaults WHERE client_id = ?').get(clientId) : null;
+    let costCenters = 'all';
+    if (row && row.cost_centers && row.cost_centers !== 'all') {
+        try { const parsed = JSON.parse(row.cost_centers); if (Array.isArray(parsed) && parsed.length) costCenters = parsed; } catch { /* se queda en 'all' */ }
+    }
+    return {
+        department: (row && row.department) || null,
+        area: (row && row.area) || null,
+        costCenters,
+        uiScale: row && row.ui_scale > 0 ? row.ui_scale : null,
+        logoutMode: (row && row.logout_mode) || null,
+        updatedBy: row ? row.updated_by : '',
+        updatedAt: row ? row.updated_at : null,
+    };
+}
+// Reemplaza los cinco valores de la compañía (el servidor ya los validó). Un valor vacío (null/''/'all'/0) quita ese valor de la compañía.
+function setClientButtonDefaults(clientId, { department, area, costCenters, uiScale, logoutMode }, updatedBy) {
+    db.prepare(`
+        INSERT INTO client_button_defaults (client_id, department, area, cost_centers, ui_scale, logout_mode, updated_by, updated_at)
+        VALUES (@clientId, @department, @area, @costCenters, @uiScale, @logoutMode, @updatedBy, datetime('now'))
+        ON CONFLICT(client_id) DO UPDATE SET department = @department, area = @area, cost_centers = @costCenters, ui_scale = @uiScale, logout_mode = @logoutMode, updated_by = @updatedBy, updated_at = datetime('now')
+    `).run({
+        clientId,
+        department: department || '',
+        area: area || '',
+        costCenters: Array.isArray(costCenters) && costCenters.length ? JSON.stringify(costCenters) : 'all',
+        uiScale: Number.isInteger(uiScale) && uiScale > 0 ? uiScale : 0,
+        logoutMode: logoutMode || '',
+        updatedBy: updatedBy || '',
+    });
+    return getClientButtonDefaults(clientId);
+}
+// Lo que de verdad se aplica a una cuenta al entrar: lo que ella ya eligió y, donde no eligió nada, lo de su compañía. El área de la compañía solo vale junto con su departamento. Quien tiene centros elegidos (no «todos») los conserva.
+function getEffectiveUserDefaults(userId, clientId) {
+    const own = getUserDefaults(userId) || { department: null, area: null, costCenters: 'all' };
+    const company = getClientButtonDefaults(clientId);
+    const department = own.department || company.department;
+    return {
+        department,
+        area: own.area || (department && department === company.department ? company.area : null),
+        costCenters: own.costCenters !== 'all' ? own.costCenters : company.costCenters,
+    };
+}
+function getEffectiveUiScale(userId, clientId) {
+    const row = db.prepare('SELECT ui_scale, ui_scale_set FROM users WHERE id = ?').get(userId);
+    if (row && row.ui_scale_set) return row.ui_scale;
+    return getClientButtonDefaults(clientId).uiScale || (row ? row.ui_scale : 4);
 }
 
 // --- Query helpers: permission grants (módulo / apartado / pantalla) ---------
@@ -17405,6 +17478,7 @@ module.exports = {
     getUserEffectiveGrants,
     getUserJobPositionGrants,
     getUserDefaults,
+    getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     setUserDefaults,
     getUserUiScale,
     setUserUiScale,

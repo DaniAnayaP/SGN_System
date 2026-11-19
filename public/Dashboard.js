@@ -12712,8 +12712,10 @@ document.getElementById('button-config-cc-btn')?.addEventListener('click', (even
 // the user picks one — defaults to "confirm" so every account starts out
 // asking, per instructions. ---------------------------------------------------
 function getLogoutMode() {
+    // lo que la persona eligió; si todavía no eligió, lo que fijó su compañía (TI › Configuración de botones) y, si tampoco, «Preguntar»
     const stored = localStorage.getItem('logoutMode');
-    return stored === 'direct' ? 'direct' : 'confirm';
+    if (stored === 'direct' || stored === 'confirm') return stored;
+    return localStorage.getItem('companyLogoutMode') === 'direct' ? 'direct' : 'confirm';
 }
 
 const logoutModeMenuBtn = document.getElementById('logout-mode-menu-btn');
@@ -13286,7 +13288,12 @@ async function applyLoginDefaultsIfNeeded() {
     try {
         const res = await fetch(`${API_BASE}/me/defaults`, { credentials: 'include' });
         if (!res.ok) return;
-        const { defaults } = await res.json();
+        const { defaults, company } = await res.json();
+        // El Botón Salir que fijó la compañía (TI › Configuración de botones): se guarda aparte y solo vale mientras la persona no haya elegido el suyo (ver getLogoutMode).
+        try {
+            if (company && company.logoutMode) localStorage.setItem('companyLogoutMode', company.logoutMode);
+            else localStorage.removeItem('companyLogoutMode');
+        } catch { /* sin almacenamiento: queda «Preguntar» */ }
         if (!defaults) return;
         if (defaults.department) {
             selectedDepartment = defaults.department;
@@ -13774,6 +13781,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-ti-casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     'cat-operaciones-ti-habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },
     'cat-operaciones-ti-solicitudes-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-solicitudes-codigo' },
+    'cat-operaciones-ti-cc-config-botones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-config-botones' },
     'cat-gestion-ti-soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     // Punto Venta: Ventas (Operaciones) y Transacciones (Gestión), por ahora vacías
     'cat-operaciones-pv-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-operaciones/cat-operaciones-pv-ventas' },

@@ -577,6 +577,7 @@ const {
     getUserEffectiveGrants,
     getUserJobPositionGrants,
     getUserDefaults,
+    getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     setUserDefaults,
     getUserUiScale,
     setUserUiScale,
@@ -629,7 +630,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
+const EXTRA_SCREEN_LABEL_KEYS = { 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -1193,8 +1194,12 @@ app.get('/api/me/business-profile', requireAuth, (req, res) => {
 // Default Departamento/Área/Centro de Costos, applied by Dashboard.js right
 // after a fresh login (see applyLoginDefaults there) — set from
 // "Configuración de Botones" > Botón Departamento/Área/C. Costos.
+// Lo que ella eligió y, donde no eligió nada, lo que fijó su compañía en «Configuración de botones» (TI); company.logoutMode es el Botón Salir de la compañía (lo guarda el navegador aparte, ver Dashboard.js).
 app.get('/api/me/defaults', requireAuth, (req, res) => {
-    res.json({ defaults: getUserDefaults(req.user.sub) });
+    res.json({
+        defaults: getEffectiveUserDefaults(req.user.sub, req.user.clientId),
+        company: { logoutMode: getClientButtonDefaults(req.user.clientId).logoutMode },
+    });
 });
 
 app.put('/api/me/defaults', requireAuth, (req, res) => {
@@ -1218,7 +1223,8 @@ const UI_SCALE_MIN = 1;
 const UI_SCALE_MAX = 8;
 
 app.get('/api/me/ui-scale', requireAuth, (req, res) => {
-    res.json({ scale: getUserUiScale(req.user.sub) });
+    // el que ella eligió; si todavía no eligió, el de su compañía (Configuración de botones de TI) y, si tampoco hay, «Ideal»
+    res.json({ scale: getEffectiveUiScale(req.user.sub, req.user.clientId) });
 });
 
 app.put('/api/me/ui-scale', requireAuth, (req, res) => {
@@ -1227,6 +1233,70 @@ app.put('/api/me/ui-scale', requireAuth, (req, res) => {
         return res.status(400).json({ message: `scale must be an integer between ${UI_SCALE_MIN} and ${UI_SCALE_MAX}.` });
     }
     res.json({ scale: setUserUiScale(req.user.sub, scale) });
+});
+
+// --- Configuración de botones de la COMPAÑÍA (TI › Configuración Compañía) ------------------------------------------------------------------------------------------------
+// Los valores por defecto de toda la compañía para lo que cada persona configura en «Configuración de botones» del engrane: Botón Salir, Departamento, Área, Centros de Costo y Tamaño del Sistema. Lo que cada persona ya eligió
+// sigue mandando; lo de la compañía vale para quien todavía no eligió (en su próxima entrada). Solo el administrador del cliente los cambia; cada cambio queda en el historial (tabla «config-botones»).
+const BTN_DEF_TABLE = 'config-botones';
+const BTN_DEF_LOGOUT_ES = { confirm: 'Preguntar antes de salir', direct: 'Salir sin preguntar' };
+const BTN_DEF_SCALES = [70, 80, 90, 100, 110, 120, 130, 140];
+function btnDefOptions(req) {
+    const options = hrAssignmentOptions(req.user.clientId, req.user.isTestAccount);
+    return {
+        departments: options.departments,
+        areas: Object.fromEntries(options.departments.map((dept) => [dept, (options.areas[dept] || []).map((a) => ({ id: a.id, labelKey: a.labelKey, labelParams: a.labelParams || null }))])),
+        costCenters: listCostCenters(req.user.clientId, req.user.isTestAccount).filter((cc) => cc.status === 'active').map((cc) => ({ id: cc.id, code: cc.code, name: cc.name, siteCode: cc.site_code || '' })),
+    };
+}
+app.get('/api/business/button-defaults', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ defaults: getClientButtonDefaults(req.user.clientId), canEdit: !!req.user.isClientAdmin, options: btnDefOptions(req) });
+});
+app.put('/api/business/button-defaults', requireAuth, requireClientAdmin, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const body = req.body || {};
+    const options = btnDefOptions(req);
+    const current = getClientButtonDefaults(req.user.clientId);
+    const next = {
+        department: body.department !== undefined ? (body.department || null) : current.department,
+        area: body.area !== undefined ? (body.area || null) : current.area,
+        costCenters: body.costCenters !== undefined ? body.costCenters : current.costCenters,
+        uiScale: body.uiScale !== undefined ? (body.uiScale || null) : current.uiScale,
+        logoutMode: body.logoutMode !== undefined ? (body.logoutMode || null) : current.logoutMode,
+    };
+    const bad = (message, code) => res.status(400).json({ message, code });
+    if (next.department !== null && !options.departments.includes(next.department)) return bad('Ese departamento no está contratado.', 'DEPARTMENT');
+    if (next.area !== null) {
+        if (!next.department) return bad('Elige primero el departamento.', 'AREA');
+        if (!(options.areas[next.department] || []).some((a) => a.id === next.area)) return bad('Esa área no es del departamento.', 'AREA');
+    }
+    if (next.costCenters !== 'all' && next.costCenters !== null) {
+        const known = new Set(options.costCenters.map((cc) => cc.id));
+        if (!Array.isArray(next.costCenters) || !next.costCenters.every((id) => Number.isInteger(id) && known.has(id))) return bad('Hay un centro de costos que no existe.', 'COST_CENTERS');
+    }
+    if (next.costCenters === null || (Array.isArray(next.costCenters) && !next.costCenters.length)) next.costCenters = 'all';
+    if (next.uiScale !== null && !(Number.isInteger(next.uiScale) && next.uiScale >= 1 && next.uiScale <= BTN_DEF_SCALES.length)) return bad('Ese tamaño no existe.', 'UI_SCALE');
+    if (next.logoutMode !== null && !BTN_DEF_LOGOUT_ES[next.logoutMode]) return bad('Ese modo del Botón Salir no existe.', 'LOGOUT');
+    const saved = setClientButtonDefaults(req.user.clientId, next, changedByLabel(req));
+    const centerName = (id) => { const cc = options.costCenters.find((c) => c.id === id); return cc ? (cc.name || cc.code) : String(id); };
+    const text = {
+        logoutMode: (v) => (v ? BTN_DEF_LOGOUT_ES[v] : ''),
+        department: (v) => (v ? (HR_DEPARTMENT_NAMES_ES[v] || v) : ''),
+        area: (v, side) => (v ? hrAreaNameEs(side.department || '', v) : ''),
+        costCenters: (v) => (Array.isArray(v) ? v.map(centerName).join(', ') : 'Todos'),
+        uiScale: (v) => (v ? `${BTN_DEF_SCALES[v - 1]}%` : ''),
+    };
+    const fields = [['logoutMode', 'main.colCbSalir'], ['department', 'main.colCbDepartamento'], ['area', 'main.colCbArea'], ['costCenters', 'main.colCbCentros'], ['uiScale', 'main.colCbTamano']];
+    fields.forEach(([key, fieldKey]) => {
+        if (JSON.stringify(current[key]) === JSON.stringify(saved[key])) return;
+        logTableChange({
+            clientId: req.user.clientId, tableKey: BTN_DEF_TABLE, recordId: req.user.clientId, recordLabel: 'Configuración de botones', action: 'update', fieldKey,
+            oldValue: text[key](current[key], current) || 'Sin valor', newValue: text[key](saved[key], saved) || 'Sin valor', changedBy: changedByLabel(req),
+        });
+    });
+    res.json({ defaults: saved, canEdit: true, options });
 });
 
 // --- SaaS admin: clients + per-client module entitlements ("Contrataciones") -

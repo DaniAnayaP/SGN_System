@@ -26,6 +26,7 @@ const TABLES = {
     client_changes: { action: WIPE, group: 'clients' },
     client_modules: { action: WIPE, group: 'clients' },
     client_permission_grants: { action: WIPE, group: 'clients' },
+    client_button_defaults: { action: WIPE, group: 'clients' },
     client_permission_change_log: { action: WIPE, group: 'clients' },
     anexo_changes: { action: WIPE, group: 'clients' },
     // Usuarios de los clientes (los del equipo SaaS, sin client_id, se conservan) y sus permisos
@@ -50,6 +51,8 @@ const TABLES = {
     transfers: { action: WIPE, group: 'captures' },
     sku_items: { action: WIPE, group: 'captures' },
     sku_enablements: { action: WIPE, group: 'captures' },
+    sku_requests: { action: WIPE, group: 'captures' },
+    sku_request_events: { action: WIPE, group: 'captures' },
     fixed_assets: { action: WIPE, group: 'captures' }, // Alta Activos (2026-11-12)
     asset_authorizations: { action: WIPE, group: 'captures' }, // autorización del jefe directo para usar y editar activos (2026-11-13)
     asset_model_photos: { action: WIPE, group: 'captures' }, // fotos de las 6 caras de cada modelo de activo (2026-11-13)
@@ -114,6 +117,7 @@ const TABLES = {
     master_permission_cost: { action: KEEP, group: 'masterTree' },
     master_permission_order: { action: KEEP, group: 'masterTree' },
     master_permission_status: { action: KEEP, group: 'masterTree' },
+    access_relations: { action: KEEP, group: 'masterTree' }, // Relación de Accesos (SaaS): mínimo indispensable y lo que toca de cada acceso, parte de la configuración del Árbol Maestro
     module_costs: { action: KEEP, group: 'masterTree' },
     saas_classification_colors: { action: KEEP, group: 'masterTree' },
     saas_classification_overrides: { action: KEEP, group: 'masterTree' },
