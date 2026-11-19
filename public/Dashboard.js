@@ -1472,12 +1472,42 @@ function applyMainNavGrantFilter(data) {
 
 // Al cambiar el departamento o el área desde los selectores de arriba, una pantalla que es de otra área ya no va: se sale de ella (a «Panel») para no dejar, por ejemplo, el Layout de C. Distribución abierto estando en Transporte Volumen.
 // Solo se llama cuando la persona cambia el selector (no al abrir la pantalla). Las pantallas generales (Inicio, Panel, Configuración) y las que no pertenecen a un área se quedan.
+// Al cambiar de departamento o de área, la pantalla abierta se cierra (va a Panel) si ya no es de lo elegido. Hay dos formas de saberlo:
+//  1) las pantallas con una sola ruta en SCREEN_GRANT_PATHS: se cierra si su departamento › área no es el elegido;
+//  2) las demás pantallas que viven SOLO dentro de áreas (todas las que salen en areaCategories/areaOverrides del menú y no en las secciones generales: p. ej. Alta Artículos, los catálogos, «Pedir alta de código», que existe en
+//     cada área): se abrieron «para» el departamento y el área de ese momento (areaOpenedWith, se anota al abrir la página) y se cierran en cuanto cambia cualquiera de los dos. Antes solo cerraban las de (1) y el resto se quedaba abierta.
+let areaOpenedWith = null;
+let areaOnlyPages = new Set();
+function computeAreaOnlyPages(rawMenu) {
+    const collect = (node, into) => {
+        if (Array.isArray(node)) { node.forEach((n) => collect(n, into)); return; }
+        if (node && typeof node === 'object') {
+            if (typeof node.href === 'string' && /\.html$/i.test(node.href)) into.add(node.href);
+            Object.values(node).forEach((v) => collect(v, into));
+        }
+    };
+    const inAreas = new Set();
+    collect(rawMenu && rawMenu.areaCategories, inAreas);
+    collect(rawMenu && rawMenu.areaOverrides, inAreas);
+    const general = new Set();
+    collect(rawMenu && rawMenu.sections, general);
+    return new Set([...inAreas].filter((href) => !general.has(href)));
+}
 function leaveScreenIfOutOfArea() {
     const page = document.body && document.body.dataset ? document.body.dataset.activePage : '';
     const grant = page && typeof SCREEN_GRANT_PATHS !== 'undefined' ? SCREEN_GRANT_PATHS[page] : null;
-    if (!grant || grant.sectionId === 'main') return;
-    if (grant.sectionId === selectedDepartment && grant.itemId === selectedArea) return;
-    location.href = 'Panel.html';
+    if (grant) {
+        if (grant.sectionId === 'main') return;
+        if (grant.sectionId === selectedDepartment && grant.itemId === selectedArea) return;
+        location.href = 'Panel.html';
+        return;
+    }
+    // Soporte, Panel, los botones generales y las pantallas de GEIPSA se abren desde fuera de las áreas: no se cierran al cambiar
+    if (!page || page === 'support' || page === 'panel' || page.startsWith('btn-') || page.startsWith('admin-')) return;
+    const file = (location.pathname.split('/').pop() || '').trim();
+    if (!areaOnlyPages.has(file)) return;
+    const same = areaOpenedWith && selectedDepartment === areaOpenedWith.department && selectedArea === areaOpenedWith.area;
+    if (!same) location.href = 'Panel.html';
 }
 function renderFilteredMenu() {
     syncPickerCascade();
@@ -13522,6 +13552,7 @@ async function initDashboardInner({ activePage } = {}) {
         }
     }
     menuData = await menuPromise;
+    areaOnlyPages = computeAreaOnlyPages(menuData);
     menuData = buildSidebarData(menuData, role, activePage);
     // loadBusinessProfile() above already rendered the "Datos de Usuario del
     // Negocio" summary once, but at that point menuData was still null —
@@ -13532,6 +13563,8 @@ async function initDashboardInner({ activePage } = {}) {
     // without cachedBusinessProfile).
     renderBusinessProfile();
     renderFilteredMenu();
+    // la pantalla se abre «para» el departamento y el área de este momento (ver leaveScreenIfOutOfArea)
+    areaOpenedWith = { department: selectedDepartment, area: selectedArea };
     updateDeptPickerLabel();
     renderAreaPickerOptions();
     checkWindowSize();
