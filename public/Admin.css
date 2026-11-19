@@ -9415,3 +9415,10 @@ body.dark-mode .exp-chip-negotiating{ color: #8dbcf2; }
 body.dark-mode .exp-chip-approved{ color: #6fd49b; }
 body.dark-mode .exp-chip-applied{ color: #5fd3bf; }
 body.dark-mode .exp-chip-rejected{ color: #ff8f80; }
+/* Sesiones de capacitación: programada (azul), realizada (verde) y cancelada (gris) */
+.exp-chip-scheduled{ color: #1f5fa8; background: rgba(60, 130, 220, 0.14); border-color: rgba(60, 130, 220, 0.4); }
+.exp-chip-done{ color: #1e7a46; background: rgba(40, 170, 90, 0.15); border-color: rgba(40, 170, 90, 0.42); }
+.exp-chip-cancelled{ color: #5c6773; background: rgba(120, 130, 145, 0.14); border-color: rgba(120, 130, 145, 0.4); }
+body.dark-mode .exp-chip-scheduled{ color: #8dbcf2; }
+body.dark-mode .exp-chip-done{ color: #6fd49b; }
+body.dark-mode .exp-chip-cancelled{ color: #b4bcc6; }

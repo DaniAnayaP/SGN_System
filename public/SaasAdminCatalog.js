@@ -146,6 +146,16 @@ window.SAAS_ADMIN_CATALOG = [
                         ['Pasar a negociación', 'Fijar costo final', 'Aprobar', 'Marcar aplicada al contrato', 'Rechazar']),
                 ],
             },
+            {
+                // Sesiones de capacitación (Servicio a Cliente): el implementador registra las sesiones de TODAS las compañías (Admin-Capacitacion.html). El ORDEN de columnas y botones no debe cambiar una vez guardado:
+                // server.js lee los botones por su posición (SAAS_TRAIN_LEAVES). Lo nuevo va al final.
+                itemId: 'saas-training', labelKey: 'menu.saasTraining', href: 'Admin-Capacitacion.html',
+                apartados: [
+                    tablaApartado('tabla',
+                        ['Folio', 'Cliente', 'Módulo', 'Tema', 'Fecha y hora', 'Duración', 'Modalidad', 'Capacita', 'Estatus', 'Asistentes', 'Notas'],
+                        ['Programar sesión', 'Editar sesión', 'Registrar asistencia', 'Cancelar sesión']),
+                ],
+            },
         ],
     },
     {

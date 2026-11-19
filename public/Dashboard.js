@@ -925,6 +925,7 @@ const SAAS_SCREEN_GRANT_PATHS = {
     'admin-business-sectors': 'saas-business-sectors',
     'admin-soporte-saas': 'saas-support',
     'admin-expansiones-saas': 'saas-expansions',
+    'admin-capacitacion-saas': 'saas-training',
     'admin-limits-audit': 'saas-limits-audit',
     'admin-system-reset': 'saas-system-reset',
     'admin-access-relations': 'saas-access-relations',
@@ -964,6 +965,7 @@ const SAAS_TABLE_ICON_SCREENS = {
     'business-sectors': { screenItemId: 'saas-business-sectors', apartadoId: 'tabla' },
     'soporte-saas': { screenItemId: 'saas-support', apartadoId: 'tabla' },
     'expansiones-saas': { screenItemId: 'saas-expansions', apartadoId: 'tabla' },
+    'capacitacion-saas': { screenItemId: 'saas-training', apartadoId: 'tabla' },
     'admin-nuestros-respaldos': { screenItemId: 'saas-backups', apartadoId: 'tabla' },
     'admin-material-apoyo': { screenItemId: 'saas-material-apoyo', apartadoId: 'tabla' },
 };
@@ -1020,6 +1022,7 @@ const CUSTOMER_SERVICE_SAAS_ORDER_IDS = {
     'admin-business-sectors': 'saas-business-sectors',
     'admin-soporte-saas': 'saas-support',
     'admin-expansiones-saas': 'saas-expansions',
+    'admin-capacitacion-saas': 'saas-training',
 };
 const SAAS_CONFIG_SAAS_ORDER_IDS = {
     'admin-saas-master-status': 'saas-master-tree',
@@ -1109,6 +1112,8 @@ function buildSidebarData(data, role, activePage) {
         { id: 'admin-soporte-saas', labelKey: 'menu.saasSupport', href: 'Admin-SoporteCasos.html', icon: 'bx-support', saasItemId: 'saas-support' },
         // Expansiones: las solicitudes de ampliar el contrato de todos los clientes.
         { id: 'admin-expansiones-saas', labelKey: 'menu.saasExpansions', href: 'Admin-Expansiones.html', icon: 'bx-trending-up', saasItemId: 'saas-expansions' },
+        // Sesiones de capacitación: el implementador registra las de todas las compañías y marca quién asistió.
+        { id: 'admin-capacitacion-saas', labelKey: 'menu.saasTraining', href: 'Admin-Capacitacion.html', icon: 'bx-chalkboard', saasItemId: 'saas-training' },
     ].filter((item) => !item.saasItemId || hasSaasScreenGrant(item.saasItemId));
     const customerServiceSubmenuOrdered = applySaasSidebarOrder(customerServiceSubmenu, 'customerService', CUSTOMER_SERVICE_SAAS_ORDER_IDS);
     const saasConfigSubmenu = [
@@ -10632,6 +10637,32 @@ function renderExpansionNoticeRow(item) {
     return row;
 }
 
+// Sesiones de capacitación (kind 'training', ver publishTrainingNotice en db.js): se programó, cambió, se canceló o se realizó una sesión. El módulo y la hora ya vienen escritos (en la hora de la compañía); abre la pantalla «Sesiones de capacitación».
+function renderTrainingNoticeRow(item) {
+    const row = document.createElement('div');
+    row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
+    const tag = document.createElement('div');
+    tag.className = 'notifications-item-meta';
+    tag.style.fontWeight = '700';
+    tag.textContent = t(`main.noticeTrain_${item.event}`);
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = `${item.label || ''} · ${formatNotificationDate(item.createdAt)}`;
+    meta.title = timeStampTitle(item.createdAt);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    desc.textContent = [item.topic, item.department, item.startsAt].filter(Boolean).join(' · ') || '—';
+    const by = document.createElement('div');
+    by.className = 'notifications-item-meta';
+    by.textContent = t('main.noticeChangedBy', { name: item.actorLabel || '—' });
+    const link = document.createElement('a');
+    link.href = 'OpTICapacitacion.html';
+    link.className = 'notifications-item-meta';
+    link.textContent = t('main.capView');
+    row.append(tag, meta, desc, by, link);
+    return row;
+}
+
 // Cambios de accesos (kind 'access-change', ver publishAccessChangeNotice en db.js): quién lo hizo, a quién, el detalle (dado / editado / quitado) y por qué te llegó.
 const ACCESS_LEVEL_LABEL_KEYS = {
     'solo-ver': 'main.permSoloVer', 'ver-y-operar': 'main.permVerYOperar', editar: 'main.permEditar', autorizar: 'main.permAutorizar', eliminar: 'main.permEliminar',
@@ -10926,6 +10957,7 @@ function renderTreeNoticeRow(item) {
     if (item.kind === 'data-change') return renderDataChangeNoticeRow(item);
     if (item.kind === 'sku-request') return renderSkuRequestNoticeRow(item);
     if (item.kind === 'expansion') return renderExpansionNoticeRow(item);
+    if (item.kind === 'training') return renderTrainingNoticeRow(item);
     if (item.kind === 'access-change') return renderAccessChangeNoticeRow(item);
     const row = document.createElement('div');
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
@@ -11353,7 +11385,7 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance' || item.kind === 'asset-alert' || item.kind === 'asset-activity' || item.kind === 'support' || item.kind === 'sku-request' || item.kind === 'expansion') row = renderTreeNoticeRow(item);
+            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance' || item.kind === 'asset-alert' || item.kind === 'asset-activity' || item.kind === 'support' || item.kind === 'sku-request' || item.kind === 'expansion' || item.kind === 'training') row = renderTreeNoticeRow(item);
             else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (item.kind === 'asset-auth') row = renderAssetAuthRow(item, activeNotificationTab);
@@ -13727,6 +13759,7 @@ const TABLE_GRANT_PATHS = {
     'habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },
     'solicitudes-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-solicitudes-codigo' },
     'expansiones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-expansiones' },
+    'sesiones-capacitacion': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-sesiones-capacitacion' },
     'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     'kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'ayuda-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
@@ -13817,6 +13850,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-ti-solicitudes-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-solicitudes-codigo' },
     'cat-operaciones-ti-cc-config-botones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-config-botones' },
     'cat-operaciones-ti-cc-expansiones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-expansiones' },
+    'cat-operaciones-ti-cc-sesiones-capacitacion': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-sesiones-capacitacion' },
     'cat-gestion-ti-soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     // Punto Venta: Ventas (Operaciones) y Transacciones (Gestión), por ahora vacías
     'cat-operaciones-pv-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-operaciones/cat-operaciones-pv-ventas' },

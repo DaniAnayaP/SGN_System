@@ -580,6 +580,7 @@ const {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
+    TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,
     setUserUiScale,
@@ -632,7 +633,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { 'expansiones': 'menu.expansions', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
+const EXTRA_SCREEN_LABEL_KEYS = { 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -1474,6 +1475,182 @@ app.put('/api/admin/expansions/:id/cost', requireAuth, requireAdmin, (req, res) 
     expLogMove(req, rec, saved, 'main.colExpFinal', rec.finalCost === null ? 'Sin costo final' : expMoneyEs(rec.finalCost, rec.currency), `${expMoneyEs(rounded, rec.currency)}${note ? ` · ${note}` : ''}`);
     expNotifyClient(req, saved, 'cost', note);
     res.json({ request: saasExpPublic(req, saved) });
+});
+
+// --- Sesiones de capacitación (TI › Configuración Compañía, solo consulta; las registra el implementador en Servicio a Cliente › Sesiones de capacitación) ---------------------------------------
+// Cada sesión es de un módulo (departamento habilitado) o general, con su tema, fecha y hora (se guarda en UTC), modalidad y quién capacita. El implementador (SaaS) las programa, las edita mientras no ocurren, las cancela con su
+// motivo y, ya realizadas, marca de la lista de usuarios de la compañía a quienes asistieron (queda con fecha y quién la marcó). El cliente las consulta. Posición de cada botón (a) en SaasAdminCatalog.js: no cambiar el orden.
+const TRAIN_TABLE = 'sesiones-capacitacion';
+const SAAS_TRAIN_ITEM = 'saas-training';
+const SAAS_TRAIN_LEAVES = { create: 'tabla::a0', edit: 'tabla::a1', attendance: 'tabla::a2', cancel: 'tabla::a3' };
+const TRAIN_TUPLE = { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuId: 'cat-operaciones/cat-operaciones-ti-cc-sesiones-capacitacion' };
+const TRAIN_STATUS_ES = { scheduled: 'Programada', done: 'Realizada', cancelled: 'Cancelada' };
+const TRAIN_MODALITY_ES = { presencial: 'Presencial', virtual: 'Virtual' };
+const TRAIN_FIELD_KEYS = { department: 'main.colCapModulo', topic: 'main.colCapTema', startsAt: 'main.colCapCuando', durationMin: 'main.colCapDuracion', modality: 'main.colCapModalidad', trainer: 'main.colCapCapacita', notes: 'main.colCapNotas' };
+const saasTrainHasScreen = (req) => !!req.user.isSaasSuperAdmin || getSaasUserGrants(req.user.sub).some((g) => g.itemId === SAAS_TRAIN_ITEM);
+const saasTrainCan = (req, key) => !!req.user.isSaasSuperAdmin || hasSaasGrant(getSaasUserGrants(req.user.sub), SAAS_TRAIN_ITEM, SAAS_TRAIN_LEAVES[key]);
+const trainDeptEs = (key) => (key ? (HR_DEPARTMENT_NAMES_ES[key] || key) : 'General');
+const trainNamesEs = (list) => (list.length ? list.map((a) => a.name || a.username).join(', ') : 'Sin asistentes');
+// Cómo se ve cada dato en el historial (que es texto): el módulo por su nombre, la hora en la zona de la compañía.
+function trainValueEs(session, field) {
+    if (field === 'department') return trainDeptEs(session.department);
+    if (field === 'startsAt') return formatClientDateTime(session.clientId, session.startsAt);
+    if (field === 'durationMin') return `${session.durationMin} min`;
+    if (field === 'modality') return TRAIN_MODALITY_ES[session.modality] || session.modality;
+    return String(session[field] || '');
+}
+function trainLog(req, session, action, fieldKey, oldText, newText) {
+    const changedBy = changedByLabel(req);
+    logSaasTableChange({ tableKey: 'capacitacion-saas', recordId: session.id, recordLabel: `${session.label} · ${session.client}`, action, fieldKey, oldValue: oldText, newValue: newText, changedBy });
+    logTableChange({ clientId: session.clientId, tableKey: TRAIN_TABLE, recordId: session.id, recordLabel: session.label, action, fieldKey, oldValue: oldText, newValue: newText, changedBy: `SaaS · ${changedBy}` });
+}
+// A quién le avisa la campana: a quienes en la empresa tienen la pantalla Sesiones de capacitación (el administrador incluido) y, si se pasa, a quienes asistieron.
+function trainNotifyClient(req, session, event, extraUserIds) {
+    try {
+        const recipients = new Set(listUserIdsWithScreenGrant(session.clientId, false, TRAIN_TUPLE, []));
+        (extraUserIds || []).forEach((id) => recipients.add(id));
+        publishTrainingNotice({ recipientIds: [...recipients], event, session: { ...session, department: trainDeptEs(session.department), startsAt: formatClientDateTime(session.clientId, session.startsAt) }, actorUserId: req.user.sub, actorLabel: changedByLabel(req) });
+    } catch (err) { console.error('Capacitación: no se pudo avisar al cliente en la campana', err && err.message); }
+}
+// Lo que llega del formulario → datos validados; { data } o { error, code }. `partial` = solo lo que viene (editar). El módulo debe estar habilitado en la compañía (o ir vacío = general).
+function trainClean(body, clientId, partial) {
+    const data = {};
+    const has = (k) => body[k] !== undefined;
+    if (!partial || has('department')) {
+        const department = String(body.department || '').trim();
+        if (department && !listContractedDepartmentKeys(clientId).includes(department)) return { error: 'Ese módulo no está habilitado en la compañía.', code: 'DEPARTMENT' };
+        data.department = department;
+    }
+    if (!partial || has('topic')) {
+        const topic = String(body.topic || '').trim().slice(0, 160);
+        if (!topic) return { error: 'Escribe el tema de la sesión.', code: 'TOPIC' };
+        data.topic = topic;
+    }
+    if (!partial || has('startsAt')) {
+        const when = new Date(body.startsAt);
+        if (!body.startsAt || Number.isNaN(when.getTime()) || when.getFullYear() < 2020 || when.getFullYear() > 2100) return { error: 'Elige la fecha y la hora.', code: 'WHEN' };
+        data.startsAt = when.toISOString();
+    }
+    if (!partial || has('durationMin')) {
+        const minutes = Number(body.durationMin === undefined || body.durationMin === '' ? 60 : body.durationMin);
+        if (!Number.isInteger(minutes) || minutes < 15 || minutes > 480) return { error: 'La duración va de 15 a 480 minutos.', code: 'DURATION' };
+        data.durationMin = minutes;
+    }
+    if (!partial || has('modality')) {
+        const modality = String(body.modality || 'virtual');
+        if (!TRAINING_MODALITIES.includes(modality)) return { error: 'Elige la modalidad.', code: 'MODALITY' };
+        data.modality = modality;
+    }
+    if (!partial || has('trainer')) data.trainer = String(body.trainer || '').trim().slice(0, 120);
+    if (!partial || has('notes')) data.notes = String(body.notes || '').trim().slice(0, 600);
+    return { data };
+}
+// La sesión con las 13 columnas de Control Interno que lleva toda tabla (y el nombre del módulo).
+function trainMap(session) {
+    const client = getClientById(session.clientId);
+    return {
+        ...session,
+        departmentName: trainDeptEs(session.department),
+        ...getSystemColumnsForRecord({ companyName: client ? client.company_name : '', area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Sesiones de capacitación', centroCostos: '', createdAt: session.createdAt }),
+    };
+}
+app.get('/api/business/training-sessions', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ sessions: listTrainingSessions(req.user.clientId).map(trainMap) });
+});
+
+// Lado SaaS: el implementador ve las sesiones de TODAS las compañías y las maneja.
+function saasTrainPublic(req, s) {
+    const open = s.status === 'scheduled';
+    return {
+        ...trainMap(s), client: s.client,
+        actions: { edit: open && saasTrainCan(req, 'edit'), attendance: s.status !== 'cancelled' && saasTrainCan(req, 'attendance'), cancel: open && saasTrainCan(req, 'cancel') },
+    };
+}
+function saasTrainGate(req, res) {
+    if (!saasTrainHasScreen(req)) { res.status(403).json({ message: 'No tienes permiso para ver las sesiones de capacitación.' }); return null; }
+    const id = Number(req.params.id);
+    const rec = Number.isInteger(id) ? getTrainingSessionAny(id) : null;
+    if (!rec) { res.status(404).json({ message: 'Esa sesión no existe.' }); return null; }
+    return rec;
+}
+app.get('/api/admin/training-sessions', requireAuth, requireAdmin, (req, res) => {
+    if (!saasTrainHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver las sesiones de capacitación.' });
+    const sessions = listAllTrainingSessions().map((s) => saasTrainPublic(req, s));
+    const can = Object.fromEntries(Object.keys(SAAS_TRAIN_LEAVES).map((k) => [k, saasTrainCan(req, k)]));
+    // para programar: las compañías (no inactivas) con los departamentos que tienen habilitados
+    const clients = can.create ? listClients().filter((c) => c.status !== 'inactivo').map((c) => ({ id: c.id, name: c.company_name, departments: listContractedDepartmentKeys(c.id).map((key) => ({ key, name: trainDeptEs(key) })) })) : [];
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        sessions, clients, can,
+        counts: { scheduled: sessions.filter((s) => s.status === 'scheduled').length, done: sessions.filter((s) => s.status === 'done').length, cancelled: sessions.filter((s) => s.status === 'cancelled').length, all: sessions.length },
+    });
+});
+app.post('/api/admin/training-sessions', requireAuth, requireAdmin, (req, res) => {
+    if (!saasTrainHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver las sesiones de capacitación.' });
+    if (!saasTrainCan(req, 'create')) return res.status(403).json({ message: 'No tienes permiso para hacer esto.', code: 'FORBIDDEN' });
+    const body = req.body || {};
+    const client = Number.isInteger(Number(body.clientId)) ? getClientById(Number(body.clientId)) : null;
+    if (!client || client.status === 'inactivo') return res.status(400).json({ message: 'Elige la compañía.', code: 'CLIENT' });
+    const cleaned = trainClean(body, client.id, false);
+    if (cleaned.error) return res.status(400).json({ message: cleaned.error, code: cleaned.code });
+    const created = createTrainingSession({ clientId: client.id, ...cleaned.data, createdBy: changedByLabel(req) });
+    trainLog(req, created, 'create', '', '', '');
+    trainLog(req, created, 'update', TRAIN_FIELD_KEYS.topic, '', `${created.topic} · ${trainDeptEs(created.department)} · ${formatClientDateTime(created.clientId, created.startsAt)}`);
+    trainNotifyClient(req, created, 'scheduled');
+    res.status(201).json({ session: saasTrainPublic(req, created) });
+});
+app.put('/api/admin/training-sessions/:id', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasTrainGate(req, res);
+    if (!rec) return;
+    if (rec.status !== 'scheduled') return res.status(409).json({ message: 'Solo se edita una sesión programada.', code: 'STATE' });
+    if (!saasTrainCan(req, 'edit')) return res.status(403).json({ message: 'No tienes permiso para hacer esto.', code: 'FORBIDDEN' });
+    const cleaned = trainClean(req.body || {}, rec.clientId, true);
+    if (cleaned.error) return res.status(400).json({ message: cleaned.error, code: cleaned.code });
+    // solo lo que de verdad cambió
+    const changed = Object.keys(cleaned.data).filter((k) => (k === 'startsAt' ? new Date(cleaned.data[k]).getTime() !== new Date(rec.startsAt).getTime() : String(cleaned.data[k]) !== String(rec[k])));
+    if (!changed.length) return res.json({ session: saasTrainPublic(req, rec) });
+    const patch = Object.fromEntries(changed.map((k) => [k, cleaned.data[k]]));
+    const saved = updateTrainingSession(rec.id, patch);
+    changed.forEach((k) => trainLog(req, saved, 'update', TRAIN_FIELD_KEYS[k], trainValueEs(rec, k), trainValueEs(saved, k)));
+    trainNotifyClient(req, saved, 'updated');
+    res.json({ session: saasTrainPublic(req, saved) });
+});
+// Las personas de la compañía de esa sesión, para marcar quién asistió.
+app.get('/api/admin/training-sessions/:id/users', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasTrainGate(req, res);
+    if (!rec) return;
+    res.set('Cache-Control', 'no-store');
+    res.json({ users: listClientUsersForTraining(rec.clientId), attendees: rec.attendees.map((a) => a.userId) });
+});
+app.put('/api/admin/training-sessions/:id/attendance', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasTrainGate(req, res);
+    if (!rec) return;
+    if (rec.status === 'cancelled') return res.status(409).json({ message: 'Una sesión cancelada no lleva asistencia.', code: 'STATE' });
+    if (!saasTrainCan(req, 'attendance')) return res.status(403).json({ message: 'No tienes permiso para hacer esto.', code: 'FORBIDDEN' });
+    if (new Date(rec.startsAt).getTime() > Date.now()) return res.status(409).json({ message: 'La asistencia se marca cuando empieza la sesión.', code: 'FUTURE' });
+    const ids = Array.isArray((req.body || {}).userIds) ? [...new Set(req.body.userIds.map(Number))] : null;
+    if (!ids) return res.status(400).json({ message: 'Elige a quienes asistieron.', code: 'USERS' });
+    const pool = new Map(listClientUsersForTraining(rec.clientId).map((u) => [u.id, u]));
+    if (!ids.every((id) => pool.has(id))) return res.status(400).json({ message: 'Hay personas que no son de esta compañía.', code: 'USERS' });
+    const saved = setTrainingAttendance(rec.id, ids.map((id) => pool.get(id)), changedByLabel(req));
+    if (rec.status !== 'done') trainLog(req, saved, 'update', 'main.colCapEstatus', TRAIN_STATUS_ES[rec.status], TRAIN_STATUS_ES.done);
+    trainLog(req, saved, 'update', 'main.colCapAsistentes', trainNamesEs(rec.attendees), trainNamesEs(saved.attendees));
+    trainNotifyClient(req, saved, 'done', ids);
+    res.json({ session: saasTrainPublic(req, saved) });
+});
+app.post('/api/admin/training-sessions/:id/cancel', requireAuth, requireAdmin, (req, res) => {
+    const rec = saasTrainGate(req, res);
+    if (!rec) return;
+    if (rec.status !== 'scheduled') return res.status(409).json({ message: 'Solo se cancela una sesión programada.', code: 'STATE' });
+    if (!saasTrainCan(req, 'cancel')) return res.status(403).json({ message: 'No tienes permiso para hacer esto.', code: 'FORBIDDEN' });
+    const note = String((req.body || {}).note || '').trim().slice(0, 600);
+    if (!note) return res.status(400).json({ message: 'Escribe el motivo de la cancelación.', code: 'NOTE' });
+    const saved = cancelTrainingSession(rec.id, note);
+    trainLog(req, saved, 'update', 'main.colCapEstatus', TRAIN_STATUS_ES.scheduled, `${TRAIN_STATUS_ES.cancelled} · ${note}`);
+    trainNotifyClient(req, saved, 'cancelled');
+    res.json({ session: saasTrainPublic(req, saved) });
 });
 
 // --- SaaS admin: clients + per-client module entitlements ("Contrataciones") -
@@ -2761,7 +2938,7 @@ const SAAS_APP_STATUSES = ['active', 'inactive', 'development'];
 
 // Historial de cambios de las tablas de SaaS sin tabla propia (saas_table_changes):
 // Nuestras Apps, Nuestros Respaldos y Material de Apoyo. Con ?recordId=, solo esa fila.
-const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo', 'relacion-accesos', 'expansiones-saas'];
+const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo', 'relacion-accesos', 'expansiones-saas', 'capacitacion-saas'];
 function logSaasChange(req, tableKey, recordId, recordLabel, fieldKey, oldValue, newValue, action = 'update') {
     logSaasTableChange({ tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy: changedByLabel(req) });
 }

@@ -3417,6 +3417,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'solicitudes-codigo': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Solicitudes de alta de código' },
     'config-botones': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Configuración de botones' },
     'expansiones': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Expansiones' },
+    'sesiones-capacitacion': { area: 'Configuración Compañía', modulo: 'Tecnologías de la Información', pantalla: 'Sesiones de capacitación' },
     'pedir-alta-codigo': { area: '', modulo: 'Operaciones', pantalla: 'Pedir alta de código' },
     'soportes-cerrados': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Soportes cerrados' },
     'ayuda-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Errores y ayuda' },
@@ -3832,6 +3833,7 @@ const TABLE_GRANT_PATHS = {
     'habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },
     'solicitudes-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-solicitudes-codigo' },
     'expansiones': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-expansiones' },
+    'sesiones-capacitacion': { sectionId: 'information-technology', itemId: 'it-area-company-config', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-cc-sesiones-capacitacion' },
     'soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     'kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'ayuda-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },
@@ -11716,6 +11718,10 @@ const SAAS_TABLE_COLUMN_LEAVES = {
         screenItemId: 'saas-expansions', apartadoId: 'tabla',
         columns: ['folio', 'client', 'what', 'status', 'estimated', 'final', 'note'],
     },
+    'capacitacion-saas': {
+        screenItemId: 'saas-training', apartadoId: 'tabla',
+        columns: ['folio', 'client', 'module', 'topic', 'when', 'duration', 'modality', 'trainer', 'status', 'attendees', 'notes'],
+    },
     'admin-nuestros-respaldos': {
         screenItemId: 'saas-backups', apartadoId: 'tabla',
         columns: ['colBackupFileName', 'colBackupScreen', 'colBackupType', 'colBackupRecordDate'],
@@ -14930,6 +14936,136 @@ function createExpansionRequest({ clientId, forTestAccount = false, requestedBy,
     })();
 }
 
+// --- Sesiones de capacitación (TI › Configuración Compañía; las registra el implementador desde Servicio a Cliente › Sesiones de capacitación) -----------------------------------------------
+// Cada sesión es de UN módulo (departamento) de la compañía, o general (department ''), con su tema, su fecha y hora (se guarda en UTC y cada quien la ve en su hora), modalidad y quién capacita. Estatus: programada → realizada
+// (al registrar la asistencia: el implementador marca de la lista de usuarios de la compañía a quienes asistieron) o cancelada. De aquí saldrá el cumplimiento por módulo de Implementación Inicial.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS training_sessions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        folio        INTEGER NOT NULL,
+        department   TEXT NOT NULL DEFAULT '',
+        topic        TEXT NOT NULL,
+        starts_at    TEXT NOT NULL,
+        duration_min INTEGER NOT NULL DEFAULT 60,
+        modality     TEXT NOT NULL DEFAULT 'virtual',
+        trainer      TEXT NOT NULL DEFAULT '',
+        notes        TEXT NOT NULL DEFAULT '',
+        cancel_note  TEXT NOT NULL DEFAULT '',
+        status       TEXT NOT NULL DEFAULT 'scheduled',
+        created_by   TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (client_id, folio)
+    );
+    CREATE INDEX IF NOT EXISTS idx_training_sessions_client ON training_sessions (client_id);
+    CREATE TABLE IF NOT EXISTS training_session_attendees (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL REFERENCES training_sessions(id) ON DELETE CASCADE,
+        user_id    INTEGER NOT NULL,
+        name       TEXT NOT NULL DEFAULT '',
+        username   TEXT NOT NULL DEFAULT '',
+        marked_by  TEXT NOT NULL DEFAULT '',
+        marked_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (session_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_training_attendees_session ON training_session_attendees (session_id);
+`);
+const TRAINING_MODALITIES = ['presencial', 'virtual'];
+const TRAINING_STATUSES = ['scheduled', 'done', 'cancelled'];
+const toUtcStamp = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 19).replace('T', ' '); };
+const fromUtcStamp = (stamp) => `${String(stamp).replace(' ', 'T')}Z`;
+function deserializeTrainingSession(row, attendees) {
+    return {
+        id: row.id, folio: row.folio, label: `SES-${String(row.folio).padStart(4, '0')}`, clientId: row.client_id, department: row.department, topic: row.topic,
+        startsAt: fromUtcStamp(row.starts_at), durationMin: row.duration_min, modality: row.modality, trainer: row.trainer, notes: row.notes, cancelNote: row.cancel_note, status: row.status,
+        createdBy: row.created_by, createdAt: row.created_at, updatedAt: row.updated_at,
+        attendees: (attendees || []).map((a) => ({ userId: a.user_id, name: a.name, username: a.username, markedBy: a.marked_by, markedAt: a.marked_at })),
+    };
+}
+function trainingAttendeesBySession(ids) {
+    const map = new Map();
+    if (!ids.length) return map;
+    db.prepare(`SELECT * FROM training_session_attendees WHERE session_id IN (${ids.map(() => '?').join(',')}) ORDER BY name COLLATE NOCASE`).all(...ids)
+        .forEach((a) => { if (!map.has(a.session_id)) map.set(a.session_id, []); map.get(a.session_id).push(a); });
+    return map;
+}
+function listTrainingSessions(clientId) {
+    const rows = db.prepare('SELECT * FROM training_sessions WHERE client_id = ? ORDER BY starts_at DESC, id DESC').all(clientId);
+    const att = trainingAttendeesBySession(rows.map((r) => r.id));
+    return rows.map((row) => deserializeTrainingSession(row, att.get(row.id)));
+}
+function listAllTrainingSessions() {
+    const rows = db.prepare('SELECT s.*, c.company_name AS client_name FROM training_sessions s JOIN clients c ON c.id = s.client_id ORDER BY s.starts_at DESC, s.id DESC').all();
+    const att = trainingAttendeesBySession(rows.map((r) => r.id));
+    return rows.map((row) => ({ ...deserializeTrainingSession(row, att.get(row.id)), client: row.client_name }));
+}
+function getTrainingSessionAny(id) {
+    const row = db.prepare('SELECT s.*, c.company_name AS client_name FROM training_sessions s JOIN clients c ON c.id = s.client_id WHERE s.id = ?').get(id);
+    if (!row) return null;
+    return { ...deserializeTrainingSession(row, trainingAttendeesBySession([row.id]).get(row.id)), client: row.client_name };
+}
+// Las personas de la compañía que se pueden marcar como asistentes: sus usuarios activos de verdad (no la cuenta de pruebas de Capacitación).
+function listClientUsersForTraining(clientId) {
+    return listActiveUsersBrief(clientId, false);
+}
+// Los departamentos (módulos) que la compañía tiene habilitados: de ahí se elige el módulo de una sesión.
+function listContractedDepartmentKeys(clientId) {
+    const contracted = new Set(getClientModuleKeys(clientId));
+    return HR_DEPARTMENT_KEYS.filter((key) => contracted.has(key));
+}
+// Una fecha y hora en la zona horaria de la compañía (para el historial y los avisos, que son texto): «20 nov 2026, 10:00».
+function formatClientDateTime(clientId, iso) {
+    const client = getClientById(clientId);
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    let timeZone = (client && client.time_zone) || DEFAULT_CLIENT_TIME_ZONE;
+    if (!isValidTimeZone(timeZone)) timeZone = DEFAULT_CLIENT_TIME_ZONE;
+    return d.toLocaleString('es-MX', { timeZone, dateStyle: 'medium', timeStyle: 'short' });
+}
+function createTrainingSession({ clientId, department, topic, startsAt, durationMin, modality, trainer, notes, createdBy }) {
+    return db.transaction(() => {
+        const folio = (db.prepare('SELECT COALESCE(MAX(folio), 0) AS m FROM training_sessions WHERE client_id = ?').get(clientId).m || 0) + 1;
+        const result = db.prepare(`
+            INSERT INTO training_sessions (client_id, folio, department, topic, starts_at, duration_min, modality, trainer, notes, created_by)
+            VALUES (@clientId, @folio, @department, @topic, @startsAt, @durationMin, @modality, @trainer, @notes, @createdBy)
+        `).run({ clientId, folio, department: department || '', topic, startsAt: toUtcStamp(startsAt), durationMin, modality, trainer: trainer || '', notes: notes || '', createdBy: createdBy || '' });
+        return getTrainingSessionAny(result.lastInsertRowid);
+    })();
+}
+// Cambia los datos de la sesión (ya validados). Solo lo que llega.
+function updateTrainingSession(id, patch) {
+    const cols = { department: 'department', topic: 'topic', durationMin: 'duration_min', modality: 'modality', trainer: 'trainer', notes: 'notes' };
+    const sets = []; const params = { id };
+    Object.keys(cols).forEach((k) => { if (patch[k] !== undefined) { sets.push(`${cols[k]} = @${k}`); params[k] = patch[k]; } });
+    if (patch.startsAt !== undefined) { sets.push('starts_at = @startsAt'); params.startsAt = toUtcStamp(patch.startsAt); }
+    if (sets.length) db.prepare(`UPDATE training_sessions SET ${sets.join(', ')}, updated_at = datetime('now') WHERE id = @id`).run(params);
+    return getTrainingSessionAny(id);
+}
+// Registra la asistencia: reemplaza la lista por la que llega (usuarios ya validados de la compañía) y deja la sesión «realizada».
+function setTrainingAttendance(id, users, markedBy) {
+    db.transaction(() => {
+        db.prepare('DELETE FROM training_session_attendees WHERE session_id = ?').run(id);
+        const insert = db.prepare('INSERT INTO training_session_attendees (session_id, user_id, name, username, marked_by) VALUES (?, ?, ?, ?, ?)');
+        users.forEach((u) => insert.run(id, u.id, u.name || '', u.username || '', markedBy || ''));
+        db.prepare("UPDATE training_sessions SET status = 'done', updated_at = datetime('now') WHERE id = ?").run(id);
+    })();
+    return getTrainingSessionAny(id);
+}
+function cancelTrainingSession(id, note) {
+    db.prepare("UPDATE training_sessions SET status = 'cancelled', cancel_note = @note, updated_at = datetime('now') WHERE id = @id").run({ id, note: String(note || '').slice(0, 600) });
+    return getTrainingSessionAny(id);
+}
+// Aviso de la campana (kind 'training', scope 'data'; pestaña Avisos): se programó, cambió, se canceló o se realizó una sesión. Le llega a quienes tienen la pantalla en la compañía (y, al realizarse, a quienes asistieron).
+function publishTrainingNotice({ recipientIds, event, session, actorUserId, actorLabel }) {
+    const ids = [...new Set((recipientIds || []).filter((id) => id != null && id !== actorUserId))];
+    if (!ids.length) return [];
+    const payload = JSON.stringify({ event, sessionId: session.id, label: session.label, topic: String(session.topic || '').slice(0, 160), department: session.department || '', startsAt: session.startsAt, modality: session.modality });
+    const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'training', 'data', ?, ?, ?)");
+    db.transaction(() => ids.forEach((id) => insert.run(id, payload, actorUserId == null ? null : actorUserId, actorLabel || '')))();
+    return ids;
+}
+
 // --- Query helpers: permission grants (módulo / apartado / pantalla) ---------
 // (Perfiles/profiles removed -- Roles is now Puesto de Trabajo-based, see
 // job_position_grants/getJobPositionGrants above.)
@@ -17673,6 +17809,7 @@ module.exports = {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
+    TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
     setUserDefaults,
     getUserUiScale,
     setUserUiScale,
