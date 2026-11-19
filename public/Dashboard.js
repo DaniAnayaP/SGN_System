@@ -1478,7 +1478,7 @@ function applyScreenGrantFilter(data) {
 }
 
 // Inicio, Panel y Tablero (los tres de General) de un usuario o perfil del cliente salen solo si se los asignaron en su árbol, como todo lo demás: un usuario recién creado, sin nada asignado, no ve ninguna opción. El
-// administrador del cliente sin configuración propia los ve siempre (hasMainButtonPermission) y la cuenta SaaS arma su menú aparte (con sus propios permisos), así que no pasa por aquí.
+// administrador del cliente sin configuración propia los ve si se los asignó el contrato (hasMainButtonPermission → adminMainCovers) y la cuenta SaaS arma su menú aparte (con sus propios permisos), así que no pasa por aquí.
 const MAIN_NAV_ITEM_IDS = ['home', 'panel', 'dashboard'];
 function applyMainNavGrantFilter(data) {
     if (currentRole === 'admin') return data;
@@ -12660,11 +12660,31 @@ function availableAreasForDepartment(deptKey) {
 // access to this screen's fields."
 // Lo que se le asignó al cliente (el árbol de su plan más los adicionales de Nuestros Clientes): con eso se arma el menú del administrador del cliente,
 // que no tiene permisos propios. null cuando no aplica (cualquier otra cuenta) o cuando el cliente no tiene nada asignado en el árbol (los que se armaron
-// antes del árbol, solo con módulos): ahí el menú sigue siendo por departamento completo, como siempre. General (main) no entra en esto.
+// antes del árbol, solo con módulos): ahí el menú sigue siendo por departamento completo, como siempre. General (main) se mide aparte (adminMainCovers).
 function adminContractGrants() {
     if (!isUnrestrictedClientAdmin()) return null;
     const list = cachedBusinessProfile?.contractGrants;
     return Array.isArray(list) && list.length ? list : null;
+}
+// General (main) del administrador del cliente: solo lo que se le asignó (el plan más los adicionales), igual que lo demás del menú (Daniel, 2026-11-19: «se le habilitaron más permisos de los que se le asignaron»).
+// Antes veía TODO General (los botones de arriba, la rueda de Configuración con todos sus renglones, Inicio/Panel/Tablero) aunque el contrato trajera solo algunos. Sigue igual (todo) cuando el contrato no trae NADA de General
+// (los clientes armados antes de que el árbol llevara General: no hay con qué comparar). Siempre visibles: «Administración del Negocio» (con ella el administrador arma a su gente y sus perfiles) y los centros de costos (no son parte del plan).
+function adminMainAlwaysIncluded(itemId, submenuId) {
+    if (itemId === 'cc-list') return true;
+    return itemId === 'btn-configuracion' && (!submenuId || submenuId === 'btn-admin-negocio' || String(submenuId).startsWith('btn-admin-negocio/'));
+}
+function adminMainContract() {
+    const contract = adminContractGrants();
+    if (!contract) return null;
+    const main = contract.filter((g) => g.sectionId === 'main');
+    return main.length ? main : null;
+}
+// submenuId vacío = el botón o la opción completa: basta con que se le haya asignado ella o algo de lo que lleva dentro (la rueda de Configuración, por ejemplo, sale con un solo renglón asignado).
+function adminMainCovers(itemId, submenuId) {
+    const main = adminMainContract();
+    if (!main) return true;
+    if (adminMainAlwaysIncluded(itemId, submenuId)) return true;
+    return main.some((g) => !g.itemId || (g.itemId === itemId && (!submenuId || !g.submenuId || g.submenuId === submenuId || String(g.submenuId).startsWith(`${submenuId}/`))));
 }
 function grantsCoverScreen(grants, sectionId, itemId, submenuId) {
     return grants.some((g) => (
@@ -12678,7 +12698,8 @@ function hasScreenGrant(sectionId, itemId, submenuId) {
     if (!isEstatusVisible(sectionId, itemId, submenuId)) return false;
     if (isUnrestrictedClientAdmin()) {
         const contract = adminContractGrants();
-        if (!contract || sectionId === 'main') return true;
+        if (!contract) return true;
+        if (sectionId === 'main') return adminMainCovers(itemId, submenuId);
         return grantsCoverScreen(contract, sectionId, itemId, submenuId);
     }
     return grantsCoverScreen(cachedBusinessProfile?.effectiveGrants || [], sectionId, itemId, submenuId);
@@ -12693,7 +12714,7 @@ function hasScreenGrant(sectionId, itemId, submenuId) {
 // "nothing granted", for that one user.
 function hasMainButtonPermission(itemId) {
     if (!isEstatusVisible('main', itemId, null)) return false;
-    if (isUnrestrictedClientAdmin()) return true;
+    if (isUnrestrictedClientAdmin()) return adminMainCovers(itemId, null);
     return (cachedBusinessProfile?.effectiveGrants || []).some((g) => g.sectionId === 'main' && g.itemId === itemId);
 }
 
@@ -12767,7 +12788,7 @@ function hasNotificationTabPermission(tabKey) {
     if (currentRole === 'admin') return tabKey !== 'soporte';
     const nodeId = NOTIFICATION_TAB_NODES[tabKey];
     if (!isEstatusVisible('main', 'btn-notificaciones', nodeId)) return false;
-    if (isUnrestrictedClientAdmin()) return true;
+    if (isUnrestrictedClientAdmin()) return adminMainCovers('btn-notificaciones', nodeId);
     const grants = cachedBusinessProfile?.effectiveGrants || [];
     if (grants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-notificaciones' && !g.submenuId)) return true;
     return grants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-notificaciones' && g.submenuId === nodeId);
@@ -12863,7 +12884,7 @@ function syncSaasNavIconVisibility() {
 // saved before this breakdown shipped.
 function hasSettingsSubPermission(submenuId) {
     if (!isEstatusVisible('main', 'btn-configuracion', submenuId)) return false;
-    if (isUnrestrictedClientAdmin()) return true;
+    if (isUnrestrictedClientAdmin()) return adminMainCovers('btn-configuracion', submenuId);
     const grants = cachedBusinessProfile?.effectiveGrants || [];
     if (grants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-configuracion' && !g.submenuId)) return true;
     // "Administración del Negocio" nests its own 9 pantallas inside

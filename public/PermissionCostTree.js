@@ -309,10 +309,19 @@
             classificationOverrides.set(o.nodeKey, { classificationId: o.classificationId, classificationLabel: o.classificationLabel || null, from: o.from });
         });
         let grantSet = new TrackedSet(); // costEdit/grantReadonlyCost modes
-        // El conjunto del plan (verde); con mainIncluded, además toda llave de General cuenta como cubierta por el plan.
+        // El conjunto del plan (verde); con mainIncluded, además toda llave de General cuenta como cubierta por el plan, salvo que el plan o los adicionales traigan ALGO de General: entonces
+        // solo cuenta lo asignado (más «Administración del Negocio» y los centros de costos, que el administrador siempre tiene), igual que el menú del administrador (Dashboard.adminMainCovers).
+        let mainLimited = false;
+        const mainAlwaysIncluded = (key) => /^main::cc-list(::|$)/.test(key) || /^main::btn-configuracion::btn-admin-negocio(\/|$)/.test(key);
         class PlanSet extends Set {
             // excluded (solo «Otorgar Accesos» de una persona): lo que el puesto da y se le quitó a ella ya no cuenta como cubierto
-            has(key) { if (this.excluded && this.excluded.has(key)) return false; return super.has(key) || (mainIncluded && String(key).startsWith('main::')); }
+            has(key) {
+                if (this.excluded && this.excluded.has(key)) return false;
+                if (super.has(key)) return true;
+                if (!mainIncluded) return false;
+                const k = String(key);
+                return k.startsWith('main::') && (!mainLimited || mainAlwaysIncluded(k));
+            }
         }
         // Lo que hay «más abajo» de cada nivel (sus pantallas, columnas e iconos) depende solo de la forma del árbol, que no cambia mientras está abierto: se calcula una vez por nivel y no en cada dibujo
         // (cada clic en un nodo o casilla vuelve a dibujar todo y recorría el árbol completo de cada departamento, también de los cerrados). Se olvida si el árbol se vuelve a armar (init).
@@ -1933,6 +1942,7 @@
                     grantSet = new TrackedSet();
                     planGrantSet = new PlanSet(buildExpandedSet(initialGrants));
                     planRawGrants = initialGrants || [];
+                    mainLimited = mainIncluded && [...(initialGrants || []), ...(clientGrants || [])].some((g) => g.sectionId === 'main');
                     excludedKeys = new TrackedSet((allowRemove ? exclusions || [] : []).map((g) => keyOf(g.sectionId, g.itemId, g.submenuId)));
                     planGrantSet.excluded = excludedKeys;
                     clientGrantSet = buildExpandedSet(clientGrants);
