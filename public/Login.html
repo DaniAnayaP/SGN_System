@@ -39,15 +39,15 @@
         <button type="button" class="access-lang-toggle" id="access-lang-toggle" aria-label="Change language">
             <i class="bx bx-globe" aria-hidden="true"></i>
         </button>
-        <div class="access-mark">
+        <div class="access-mark" id="access-mark">
             <svg viewBox="0 0 1024 1024" width="100%" height="100%">
                 <path d="M320 700 L320 470 Q320 320 512 320 Q704 320 704 470" stroke="#FFFFFF" stroke-width="72" fill="none" stroke-linecap="round"/>
                 <circle cx="704" cy="560" r="62" fill="#FFFFFF"/>
                 <circle cx="320" cy="700" r="62" fill="#7FE1FF"/>
             </svg>
         </div>
-        <div class="access-name">SGN</div>
-        <div class="access-tag" data-i18n="login.accessTagline">Sistema de Gestión de Negocios</div>
+        <div class="access-name" id="access-name">SGN</div>
+        <div class="access-tag" id="access-tag" data-i18n="login.accessTagline">Sistema de Gestión de Negocios</div>
         <div class="access-spinner" id="access-spinner"></div>
         <button type="button" class="access-peek" id="access-peek" hidden aria-label="Show sign-in options">
             <i class="bx bx-chevron-up" aria-hidden="true"></i>
@@ -84,14 +84,14 @@
             <button type="button" class="access-pw-back" id="access-pw-back" aria-label="Back">
                 <i class="bx bx-chevron-left" aria-hidden="true"></i>
             </button>
-            <div class="access-mark access-pw-mark">
+            <div class="access-mark access-pw-mark" id="access-pw-mark">
                 <svg viewBox="0 0 1024 1024" width="100%" height="100%">
                     <path d="M320 700 L320 470 Q320 320 512 320 Q704 320 704 470" stroke="#FFFFFF" stroke-width="72" fill="none" stroke-linecap="round"/>
                     <circle cx="704" cy="560" r="62" fill="#FFFFFF"/>
                     <circle cx="320" cy="700" r="62" fill="#7FE1FF"/>
                 </svg>
             </div>
-            <p class="access-pw-title" data-i18n="login.loginHeading">Login</p>
+            <p class="access-pw-title" id="access-pw-title" data-i18n="login.loginHeading">Login</p>
             <form id="access-password-form" class="access-pw-form" novalidate>
                 <div class="access-pw-field">
                     <i class="bx bxs-user" aria-hidden="true"></i>
@@ -108,7 +108,7 @@
                 </div>
                 <p id="access-pw-error" class="access-pw-error" role="alert" hidden></p>
                 <button type="submit" class="access-btn" id="access-pw-submit">
-                    <span data-i18n="login.loginButton">Login</span>
+                    <span id="access-pw-submit-text" data-i18n="login.loginButton">Login</span>
                 </button>
             </form>
         </div>
@@ -219,6 +219,7 @@
 
     <script src="AppConfig.js"></script>
     <script src="login.js" defer></script>
+    <script src="AppClientBrand.js" defer></script>
     <script src="access-screen.js" defer></script>
 </body>
 </html>

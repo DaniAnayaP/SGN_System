@@ -822,3 +822,260 @@ margin: -15px 0 15px;
 
 
 }
+
+/* ---------------------------------------------------------------------------
+   Inicio PERSONALIZADO de cada cliente en la app (AppClientBrand.js, Apps Nuestros Clientes pieza 3).
+   access-screen.js / AppClientBrand.js ponen .cl-app en #access-screen y sus variables (--cl-bg, --cl-button,
+   --cl-primary, --cl-bg-image) cuando hay una empresa guardada en el celular. Sin ella nada de esto se usa.
+--------------------------------------------------------------------------- */
+.cl-off{ display: none !important; }
+.access-screen.cl-app{
+    background: var(--cl-bg);
+}
+/* franja diagonal de luz de la marca: detrás del contenido y delante del fondo */
+.access-screen.cl-app.cl-band::before{
+    content: "";
+    position: absolute;
+    z-index: -1;
+    width: 140%;
+    height: 7rem;
+    left: -20%;
+    top: 58%;
+    background: rgba(255, 255, 255, .1);
+    transform: rotate(-35deg);
+    pointer-events: none;
+}
+.access-screen.cl-app .access-mark.cl-mark{
+    width: auto;
+    height: auto;
+    min-width: 88px;
+    max-width: 210px;
+    padding: 10px 14px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, .92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.access-screen.cl-app .access-mark.cl-mark img{
+    display: block;
+    max-width: 180px;
+    max-height: 84px;
+    object-fit: contain;
+}
+.access-screen.cl-app .access-mark.cl-ring{
+    width: 88px;
+    height: 88px;
+    padding: 0;
+    border-radius: 50%;
+    background: transparent;
+    border: 10px solid #fff;
+}
+.access-screen.cl-app .access-pw-mark.cl-mark{ min-width: 64px; padding: 8px 12px; margin-bottom: 1rem; }
+.access-screen.cl-app .access-pw-mark.cl-mark img{ max-width: 130px; max-height: 52px; }
+.access-screen.cl-app .access-pw-mark.cl-ring{ width: 64px; height: 64px; border-width: 8px; }
+.access-screen.cl-app .access-name{
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-align: center;
+}
+.access-screen.cl-app .access-tag{ display: none; }
+.access-screen.cl-app .access-spinner{ border-top-color: #fff; }
+.cl-greet{
+    margin-top: 1.7rem;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: 1.6rem;
+    line-height: 1.2;
+    color: #fff;
+    text-align: center;
+}
+.cl-welcome{
+    margin-top: .35rem;
+    font-size: .92rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, .92);
+    text-align: center;
+    max-width: 20rem;
+}
+.cl-enter{
+    margin-top: auto;
+    width: 100%;
+    max-width: 20rem;
+    background: var(--cl-button);
+    color: #fff;
+    border: none;
+    border-radius: .9rem;
+    padding: .95rem;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: .95rem;
+    cursor: pointer;
+}
+.access-screen.cl-app .access-password-screen,
+.access-screen.cl-app .access-scan-screen{
+    background: var(--cl-bg);
+}
+.access-screen.cl-app .access-pw-title{ letter-spacing: .04em; }
+.access-screen.cl-app .access-pw-back{ background: rgba(255, 255, 255, .16); color: #fff; }
+.access-screen.cl-app .access-pw-field{
+    background: rgba(255, 255, 255, .14);
+    border-color: rgba(255, 255, 255, .3);
+}
+.access-screen.cl-app .access-pw-field i:first-child,
+.access-screen.cl-app .access-pw-toggle{ color: rgba(255, 255, 255, .75); }
+.access-screen.cl-app .access-pw-field input::placeholder{ color: rgba(255, 255, 255, .6); }
+.access-screen.cl-app .access-pw-error{ color: #ffd2cd; }
+.access-screen.cl-app #access-pw-submit{
+    background: var(--cl-button);
+    color: #fff;
+}
+.access-screen.cl-app .access-icon-opt.primary .access-icon-circle{
+    background: var(--cl-button);
+    border-color: var(--cl-button);
+    color: #fff;
+}
+
+/* menú (≡) para cambiar de empresa */
+/* las pantallas de Face ID y de usuario/contraseña tapan el botón del menú (viene después en la página) */
+.access-password-screen,
+.access-scan-screen{ z-index: 3; }
+.access-menu-btn{
+    position: absolute;
+    top: calc(1.2rem + env(safe-area-inset-top, 0px));
+    left: 1.2rem;
+    z-index: 2;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.cl-menu{
+    position: absolute;
+    top: calc(3.7rem + env(safe-area-inset-top, 0px));
+    left: 1.2rem;
+    z-index: 3;
+    min-width: 14rem;
+    max-width: calc(100vw - 2.4rem);
+    background: #12141f;
+    border: 1px solid #232640;
+    border-radius: .9rem;
+    padding: .4rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+    display: flex;
+    flex-direction: column;
+}
+.cl-menu[hidden]{ display: none; }
+.cl-menu-current{
+    padding: .5rem .7rem .55rem;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: #9BA3C4;
+    border-bottom: 1px solid #232640;
+    margin-bottom: .25rem;
+}
+.cl-menu-item{
+    background: none;
+    border: none;
+    text-align: left;
+    padding: .65rem .7rem;
+    border-radius: .6rem;
+    color: #fff;
+    font-family: 'Poppins', sans-serif;
+    font-size: .82rem;
+    cursor: pointer;
+}
+.cl-menu-item:active{ background: #171b2c; }
+
+/* pantalla del código de empresa */
+.access-company-screen{
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: radial-gradient(circle at 30% 20%, #2A3166, #0b0d14 70%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 5rem 1.6rem 2rem;
+}
+.access-company-screen .cl-company-icon{
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: #1c1f30;
+    border: 2px solid #2a3255;
+    color: #7FE1FF;
+    font-size: 1.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.2rem;
+}
+.access-company-screen .access-btn{ margin-top: .4rem; max-width: none; }
+.cl-secondary{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    width: 100%;
+    background: transparent;
+    border: 1px solid #2a3255;
+    border-radius: .9rem;
+    padding: .8rem;
+    color: #c7cce8;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    font-size: .85rem;
+    cursor: pointer;
+}
+.cl-link{
+    margin-top: 1.4rem;
+    background: none;
+    border: none;
+    color: #9BA3C4;
+    font-family: 'Poppins', sans-serif;
+    font-size: .8rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* lector de QR del código de empresa */
+.cl-scan{
+    position: fixed;
+    inset: 0;
+    z-index: 700;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+}
+.cl-scan video{
+    flex: 1;
+    width: 100%;
+    object-fit: cover;
+}
+.cl-scan-top{
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1;
+    padding: calc(1rem + env(safe-area-inset-top, 0px)) 1.2rem 1rem 4rem;
+    background: linear-gradient(rgba(0, 0, 0, .6), transparent);
+    color: #fff;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    font-size: .9rem;
+    min-height: 3.5rem;
+    display: flex;
+    align-items: center;
+}

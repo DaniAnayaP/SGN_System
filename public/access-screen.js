@@ -70,6 +70,16 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
     screen.hidden = false;
     hideNativeSplash(); // our overlay is already up — seamless handoff from the native splash
 
+    // Inicio personalizado de la empresa (AppClientBrand.js, Apps Nuestros Clientes): pinta lo guardado en el celular al instante, ofrece el menú (≡) para cambiar de empresa, pide el código
+    // la primera vez (solo a quien nunca ha iniciado sesión aquí) y en segundo plano se pone al día con el servidor. Sin ese archivo o sin empresa guardada todo queda como siempre.
+    const brandApi = window.SgnClientBrand || null;
+    if (brandApi) {
+        brandApi.applySaved(screen);
+        brandApi.setupMenu(screen);
+        if (brandApi.shouldAsk()) await brandApi.showCompanyScreen(screen, false);
+        brandApi.refresh();
+    }
+
     const t = (key, fallback, params) => (window.t ? window.t(key, params) : fallback) || fallback || key;
 
     const [sessionResult, biometryResult] = await Promise.allSettled([
@@ -149,8 +159,9 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
 
     spinner.classList.add('hidden');
     // No intermediate "Acceder" button anymore — the arrow is the whole
-    // affordance once loading finishes.
-    peek.hidden = false;
+    // affordance once loading finishes. Con una empresa guardada, el botón de entrada de su
+    // bienvenida (o directo a la siguiente pantalla) toma el lugar de la flecha.
+    if (!(brandApi && brandApi.decorateEntry({ peek, sheet, pwScreen, showSheet, showPasswordScreen }))) peek.hidden = false;
 
     function showSheet() {
         peek.hidden = true;
@@ -221,7 +232,7 @@ function waitForCapacitor(timeoutMs = 800, intervalMs = 50) {
     peek.addEventListener('click', showSheet);
     biometricBtn?.addEventListener('click', attemptBiometric);
     passwordBtn?.addEventListener('click', showPasswordScreen);
-    pwBackBtn?.addEventListener('click', showSheet);
+    pwBackBtn?.addEventListener('click', () => { if (!(brandApi && brandApi.handleBack({ pwScreen }))) showSheet(); });
 
     pwToggle?.addEventListener('click', () => {
         const isHidden = pwPassword.type === 'password';

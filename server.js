@@ -2001,10 +2001,18 @@ const clDarken = (hex, factor) => clHexOf(clRgb(hex).map((v) => v * (1 - factor)
 const clLighten = (hex, factor) => clHexOf(clRgb(hex).map((v) => v + (255 - v) * factor));
 const clHexOrEmpty = (value) => (typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : '');
 // Lo publicado de una clave para computadora, listo para pintar; null si no hay nada que mostrar.
-function clPublicView(slug) {
+// El fondo de la marca (el mismo que dibuja la vista previa). imageLayer = lo que va en lugar de la imagen: url("…") en la página, var(--cl-bg-image) en la app (ahí la imagen viaja dentro de los datos para tenerla sin conexión).
+function clBackgroundCss(type, color1, color2, imageLayer) {
+    if (type === 'solid') return color1;
+    if (type === 'image' && imageLayer) return `linear-gradient(rgba(0,0,0,.28), rgba(0,0,0,.28)), ${imageLayer} center/cover`;
+    if (type === 'pattern') return `repeating-linear-gradient(60deg, rgba(255,255,255,.07) 0 14px, transparent 14px 28px), repeating-linear-gradient(-60deg, rgba(255,255,255,.05) 0 14px, transparent 14px 28px), linear-gradient(160deg, ${color2}, ${color1} 60%, ${color2})`;
+    return `linear-gradient(160deg, ${color2}, ${color1} 55%, ${color2})`;
+}
+// channel: 'web' (la dirección …/c/<clave>) o 'app' (el celular): cada canal se publica por separado.
+function clPublicView(slug, channel = 'web') {
     if (!/^[a-z0-9-]{3,40}$/.test(String(slug || ''))) return null;
     const config = getClientLoginBySlug(slug);
-    if (!config || !config.live || !config.live.channels.web) return null;
+    if (!config || !config.live || !config.live.channels[channel]) return null;
     const company = getClientLoginCompany(config.clientId);
     if (!company || company.status === 'inactivo') return null;
     const live = config.live;
@@ -2017,23 +2025,47 @@ function clPublicView(slug) {
     const version = crypto.createHash('md5').update(logoData).update('|').update(imageData).digest('hex').slice(0, 10);
     const imageUrl = imageData ? `/c/${slug}/img/background?v=${version}` : '';
     const type = live.background.type;
-    let background;
-    if (type === 'solid') background = color1;
-    else if (type === 'image' && imageUrl) background = `linear-gradient(rgba(0,0,0,.28), rgba(0,0,0,.28)), url("${imageUrl}") center/cover`;
-    else if (type === 'pattern') background = `repeating-linear-gradient(60deg, rgba(255,255,255,.07) 0 14px, transparent 14px 28px), repeating-linear-gradient(-60deg, rgba(255,255,255,.05) 0 14px, transparent 14px 28px), linear-gradient(160deg, ${color2}, ${color1} 60%, ${color2})`;
-    else background = `linear-gradient(160deg, ${color2}, ${color1} 55%, ${color2})`;
+    const background = clBackgroundCss(type, color1, color2, imageUrl ? `url("${imageUrl}")` : '');
     return {
         slug, name: company.name, logoData, imageData, logoUrl: logoData ? `/c/${slug}/img/logo?v=${version}` : '',
-        colors: { primary, button, page: clLighten(primary, 0.9) }, background, diagonal: !!live.background.diagonal,
-        texts: { greeting: !!live.texts.greeting, welcome: live.texts.welcome, formTitle: live.texts.formTitle }, show: { forgot: !!live.show.forgot, register: !!live.show.register, social: !!live.show.social, language: !!live.show.language, appLink: !!live.show.appLink },
+        colors: { primary, button, page: clLighten(primary, 0.9), color1, color2 }, background, backgroundType: type, diagonal: !!live.background.diagonal,
+        texts: { greeting: !!live.texts.greeting, welcome: live.texts.welcome, formTitle: live.texts.formTitle, appButton: live.texts.appButton },
+        show: { forgot: !!live.show.forgot, register: !!live.show.register, social: !!live.show.social, language: !!live.show.language, appLink: !!live.show.appLink, welcomeScreen: !!live.show.welcomeScreen, faceId: !!live.show.faceId },
     };
 }
+// Lo que la APP del celular guarda de su empresa (Apps Nuestros Clientes, pieza 3): marca y textos de lo PUBLICADO para celular, con el logo y la imagen de fondo dentro (así la app los tiene aunque no haya señal).
+// Sin sesión y sin datos del cliente. `version` cambia cuando cambia cualquier cosa: la app la manda de vuelta y, si sigue igual, se le contesta «sin cambios» en lugar de todo otra vez.
+function clAppPayload(view) {
+    const payload = {
+        slug: view.slug, name: view.name, logo: view.logoData, bgImage: view.imageData,
+        colors: { primary: view.colors.primary, button: view.colors.button },
+        bgCss: clBackgroundCss(view.backgroundType, view.colors.color1, view.colors.color2, view.imageData ? 'var(--cl-bg-image)' : ''),
+        bgCssPlain: clBackgroundCss(view.backgroundType === 'image' ? 'gradient' : view.backgroundType, view.colors.color1, view.colors.color2, ''),
+        diagonal: view.diagonal,
+        texts: { greeting: view.texts.greeting, welcome: view.texts.welcome, formTitle: view.texts.formTitle, appButton: view.texts.appButton },
+        show: { welcomeScreen: view.show.welcomeScreen, faceId: view.show.faceId },
+    };
+    payload.version = crypto.createHash('md5').update(JSON.stringify(payload)).digest('hex').slice(0, 12);
+    return payload;
+}
+app.get('/api/public/client-login/:slug', publicClientLoginLimiter, (req, res) => {
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    const view = clPublicView(req.params.slug, 'app');
+    if (!view) return res.status(404).json({ message: 'Not found.', code: 'NOT_FOUND' });
+    const payload = clAppPayload(view);
+    if (String(req.query.v || '') === payload.version) return res.json({ slug: view.slug, version: payload.version, unchanged: true });
+    res.json(payload);
+});
 // Login.html tal cual, pero con las direcciones de sus archivos desde la raíz (la página vive en /c/<clave>, no en /) y con lo de la marca metido: colores, fondo y los datos que ClientLogin.css y client-login.js usan.
 let clPageTemplate = null;
 const clEscHtml = (text) => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 function clPageHtml(view) {
     if (!clPageTemplate) clPageTemplate = fs.readFileSync(path.join(PUBLIC_DIR, 'Login.html'), 'utf8').replace(/(\s(?:src|href))="(?!\/|#|[a-z][a-z0-9+.-]*:)([^"]*)"/gi, '$1="/$2"');
-    const data = { slug: view.slug, name: view.name, logoUrl: view.logoUrl, diagonal: view.diagonal, texts: view.texts, show: view.show };
+    const data = {
+        slug: view.slug, name: view.name, logoUrl: view.logoUrl, diagonal: view.diagonal,
+        texts: { greeting: view.texts.greeting, welcome: view.texts.welcome, formTitle: view.texts.formTitle },
+        show: { forgot: view.show.forgot, register: view.show.register, social: view.show.social, language: view.show.language, appLink: view.show.appLink },
+    };
     const json = JSON.stringify(data).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
     const vars = `:root{--cl-primary:${view.colors.primary};--cl-button:${view.colors.button};--cl-page:${view.colors.page};--cl-bg:${view.background};}`;
     // Quien entra por primera vez con el aparato en español ve la página en español (después manda el idioma que elija).
