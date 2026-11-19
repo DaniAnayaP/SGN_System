@@ -182,9 +182,12 @@ async function loadCostCentersForTree() {
 // pantalla; el servidor igual quita lo que no cabe y avisa.
 const GRANT_COLUMN_LEVEL_SUFFIX = /\/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio|notificar|buscar-filtrar|buscar-reordenar|buscar-ordenar)$/;
 const GRANT_ICON_NOTIFY_SUFFIX = /\/icon[A-Za-z]+\/notificar$/;
-function buildAppGrantLimits(contractGrants, visibleStatuses, statusOverrides) {
+// mainContractGrants: lo de General que trae el contrato (igual que Dashboard.buildGrantLimits): el administrador solo da de General lo que ahí está; vacío = sin límite.
+function buildAppGrantLimits(contractGrants, visibleStatuses, statusOverrides, mainContractGrants) {
     const keyOf = (s, i, sub) => `${s}::${i || ''}::${sub || ''}`;
     const contract = Array.isArray(contractGrants) ? contractGrants : null;
+    const main = Array.isArray(mainContractGrants) && mainContractGrants.length ? mainContractGrants : null;
+    const mainCovered = (itemId, submenuId) => main.some((c) => !c.itemId || (c.itemId === itemId && (!submenuId || !c.submenuId || c.submenuId === submenuId || String(submenuId).startsWith(`${c.submenuId}/`) || String(c.submenuId).startsWith(`${submenuId}/`))));
     const rawSet = contract ? new Set(contract.map((g) => keyOf(g.sectionId, g.itemId, g.submenuId))) : null;
     const covered = (s, i, sub) => rawSet.has(keyOf(s, i, sub)) || (!!i && rawSet.has(keyOf(s, i, null))) || rawSet.has(keyOf(s, null, null));
     const visible = new Set(visibleStatuses && visibleStatuses.length ? visibleStatuses : ['habilitado']);
@@ -209,6 +212,7 @@ function buildAppGrantLimits(contractGrants, visibleStatuses, statusOverrides) {
     return {
         reason(sectionId, itemId, submenuId) {
             if (!visible.has(nodeStatus(sectionId, itemId, submenuId))) return 'status';
+            if (main && sectionId === 'main' && itemId !== 'cc-list' && !String(submenuId || '').startsWith('cc-')) return mainCovered(itemId, submenuId) ? null : 'contract';
             if (!rawSet || sectionId === 'main' || !submenuId) return null;
             if (itemId === 'cc-list' || String(submenuId).startsWith('cc-')) return null;
             const base = String(submenuId).replace(/#app$/, '');
@@ -226,8 +230,8 @@ async function loadGrantLimits() {
         ]);
         if (!profileRes.ok) throw new Error('no profile');
         const { profile } = await profileRes.json();
-        const contract = contractRes.ok ? (await contractRes.json()).contractGrants : null;
-        grantLimits = buildAppGrantLimits(contract, profile.visibleStatuses, profile.masterStatusOverrides);
+        const contractData = contractRes.ok ? await contractRes.json() : null;
+        grantLimits = buildAppGrantLimits(contractData ? contractData.contractGrants : null, profile.visibleStatuses, profile.masterStatusOverrides, contractData ? contractData.mainContractGrants : null);
     } catch {
         grantLimits = null;
     }

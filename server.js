@@ -484,6 +484,7 @@ const {
     renameClientsPlan,
     getClientContractGrants,
     getClientAdminContractGrants,
+    getClientMainContractGrants,
     clampNewGrantsToLimits,
     getHrAssignedCenterIds,
     getHrAssignedCenterGrants,
@@ -5830,7 +5831,8 @@ app.get('/api/business/me/grants', requireAuth, (req, res) => {
 // Lo contratado por la empresa del administrador (plan + adicionales; null sin plan): los editores de Perfil y Usuario lo usan para mostrar con
 // candado lo que no se puede dar (las mismas reglas que clampNewGrantsToLimits aplica al guardar).
 app.get('/api/business/contract-grants', requireAuth, requireClientAdmin, (req, res) => {
-    res.json({ contractGrants: getClientContractGrants(req.user.clientId) });
+    // mainContractGrants: lo de General que el contrato trae (vacía = nada de General asignado, sin límite); el administrador solo puede dar de General lo que ahí está
+    res.json({ contractGrants: getClientContractGrants(req.user.clientId), mainContractGrants: getClientMainContractGrants(req.user.clientId) });
 });
 
 // "Cambios" por nodo del árbol contratado del administrador (Mis Accesos): el historial del contrato de SU cliente, nunca el de otro.
@@ -5879,6 +5881,7 @@ app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
         assignableStatuses: getUserVisibleStatuses(req.user.sub),
         // Lo contratado por la empresa: "Permisos Activados" deja en el árbol solo eso (lo no contratado no se muestra).
         contractGrants: getClientContractGrants(req.user.clientId),
+        mainContractGrants: getClientMainContractGrants(req.user.clientId),
         // Los centros de costos de su «Asignación a laborar» (Mi Recurso Humano): el árbol bloquea, con su motivo, los que no están. null = esa persona no tiene asignación (sin límite).
         assignedCostCenterIds: getHrAssignedCenterIds(req.params.id),
     });
@@ -5893,7 +5896,7 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     if (error) return res.status(400).json({ message: error });
     const grantsBefore = getUserGrants(req.params.id);
     if (rejectUncontractedNewGrants(res, req.user.clientId, grantsBefore, grants)) return;
-    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: grantsBefore, after: grants, allowedCenterIds: getHrAssignedCenterIds(req.params.id) });
+    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: grantsBefore, after: grants, allowedCenterIds: getHrAssignedCenterIds(req.params.id), limitMain: true });
     const savedGrants = setUserGrants(req.params.id, limited.allowed, changedByLabel(req));
     // Quitar a esta persona lo que le da su puesto: llega la lista completa de exclusiones y lo que se conserva de un permiso de contenedor (ver applyUserExclusions). Sin la lista, se deja como estaba.
     let exclusionsChanged = false;
@@ -6008,7 +6011,7 @@ app.put('/api/business/job-positions/:id/grants', requireAuth, requireClientAdmi
     if (error) return res.status(400).json({ message: error });
     const roleGrantsBefore = getJobPositionGrants(req.params.id);
     if (rejectUncontractedNewGrants(res, req.user.clientId, roleGrantsBefore, grants)) return;
-    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: roleGrantsBefore, after: grants });
+    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: roleGrantsBefore, after: grants, limitMain: true });
     const savedRoleGrants = setJobPositionGrants(req.params.id, limited.allowed);
     if (grantsSignature(roleGrantsBefore) !== grantsSignature(savedRoleGrants)) {
         logBusinessChange(req, 'business-roles', existing.id, existing.name, 'business.historyRoleGrants', roleGrantsBefore.length, savedRoleGrants.length);

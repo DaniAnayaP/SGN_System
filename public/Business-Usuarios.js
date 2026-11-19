@@ -101,7 +101,7 @@ let pendingVisibleStatuses = ['habilitado'];
 // Los límites de siempre (Estatus y contrato) y uno más de esta persona: un centro de costos que no está en su «Asignación a laborar» (Mi Recurso Humano) no se puede dar aquí; sale con candado y su motivo.
 // Sin asignación (assignedCostCenterIds null) no hay límite. El servidor aplica la misma regla al guardar (clampNewGrantsToLimits).
 function grantLimitsForUser(data) {
-    const base = Dashboard.buildGrantLimits(data.contractGrants);
+    const base = Dashboard.buildGrantLimits(data.contractGrants, data.mainContractGrants);
     const assigned = Array.isArray(data.assignedCostCenterIds) ? data.assignedCostCenterIds : null;
     if (!assigned) return base;
     return {

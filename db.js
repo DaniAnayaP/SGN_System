@@ -14386,6 +14386,15 @@ function getClientAdminContractGrants(clientId) {
     const plan = client.plan ? getPlanByName(client.plan) : null;
     return [...(plan ? getPlanGrants(plan.id) : []), ...getClientPermissionGrants(clientId)];
 }
+// General (main) que el administrador del cliente puede DAR a su gente (Daniel, 2026-11-19: «limita también lo que puede dar»): solo lo que su contrato (plan + adicionales) trae de General, la misma medida con la que se arma SU menú
+// (Dashboard.adminMainCovers). Vacía = el contrato no trae nada de General (clientes armados antes de que el árbol lo llevara): ahí no hay límite. Los centros de costos no cuentan.
+function getClientMainContractGrants(clientId) {
+    return getClientAdminContractGrants(clientId).filter((g) => g.sectionId === 'main');
+}
+// ¿Algo de lo asignado cubre este permiso de General? Cubre lo mismo (misma opción o renglón) o algo más amplio (el botón completo o toda General). Un permiso sin renglón (el botón completo) solo lo cubre el botón completo.
+function mainContractCovers(main, g) {
+    return main.some((c) => !c.itemId || (c.itemId === g.itemId && (!c.submenuId || (!!g.submenuId && (c.submenuId === g.submenuId || String(g.submenuId).startsWith(`${c.submenuId}/`))))));
+}
 
 // Reglas de límites 2 y 3 al GUARDAR permisos (la 1, departamento no contratado, la hace server.js y rechaza todo el guardado):
 //   status   : el nodo está en un Estatus que quien da el permiso no ve (visibleStatuses) -- un nivel no da más de lo que ve el de arriba.
@@ -14395,12 +14404,14 @@ function getClientAdminContractGrants(clientId) {
 // quita del guardado y se avisa, porque un "marcar todo" de un departamento trae también lo que está fuera del contrato o en otro Estatus, y
 // el resto sí debe guardarse. Devuelve { allowed, dropped } con dropped = [{ sectionId, itemId, submenuId, kinds }].
 // allowedCenterIds (solo al dar permisos a UN usuario): los centros de costos de su «Asignación a laborar» (getHrAssignedCenterIds); un centro nuevo que no está ahí se quita ('assignment'). null = sin límite.
-function clampNewGrantsToLimits({ clientId, visibleStatuses, before, after, allowedCenterIds = null }) {
+// limitMain (solo cuando quien da el permiso es el administrador del cliente, no el equipo SaaS): General también se mide contra lo que el contrato trae de General (getClientMainContractGrants).
+function clampNewGrantsToLimits({ clientId, visibleStatuses, before, after, allowedCenterIds = null, limitMain = false }) {
     const keyOf = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
     const had = new Set(before.map(keyOf));
     const visible = new Set(visibleStatuses);
     const statusOverrides = buildMasterStatusOverrideMap(getMasterPermissionStatuses());
     const contract = getClientContractGrants(clientId);
+    const mainContract = limitMain ? getClientMainContractGrants(clientId) : [];
     const allowed = [];
     const dropped = [];
     for (const g of after) {
@@ -14408,6 +14419,7 @@ function clampNewGrantsToLimits({ clientId, visibleStatuses, before, after, allo
         const kinds = [];
         if (!visible.has(resolveMasterNodeStatus(g.sectionId, g.itemId, g.submenuId, statusOverrides))) kinds.push('status');
         if (contract && g.sectionId !== 'main' && g.submenuId && !isCostCenterGrant(g) && !isTupleGranted(contract, g.sectionId, g.itemId, contractKeyForGrant(g.submenuId))) kinds.push('contract');
+        if (mainContract.length && g.sectionId === 'main' && !isCostCenterGrant(g) && !mainContractCovers(mainContract, g)) kinds.push('contract');
         if (allowedCenterIds && g.sectionId === 'main' && g.itemId === 'cc-list' && /^cc-\d+$/.test(String(g.submenuId || '')) && !allowedCenterIds.includes(Number(String(g.submenuId).slice(3)))) kinds.push('assignment');
         if (kinds.length) dropped.push({ sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null, kinds });
         else allowed.push(g);
@@ -19762,6 +19774,7 @@ module.exports = {
     scanLimitViolations,
     getClientContractGrants,
     getClientAdminContractGrants,
+    getClientMainContractGrants,
     clampNewGrantsToLimits,
     getUserEffectiveGrantsRaw,
     resetLimitsCache,

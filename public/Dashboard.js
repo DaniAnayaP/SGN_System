@@ -119,14 +119,19 @@ function limitErrorMessage(body) {
 const GRANT_COLUMN_LEVEL_SUFFIX = /\/(solo-ver|ver-y-operar|editar|autorizar|eliminar|notificar-llenado|notificar-cambio|notificar|buscar-filtrar|buscar-reordenar|buscar-ordenar)$/;
 // El Notificar de un ÍCONO (<pantalla>/<ícono>/notificar) se compara contra el propio ícono, no contra un solo-ver.
 const GRANT_ICON_NOTIFY_SUFFIX = /\/icon[A-Za-z]+\/notificar$/;
-function buildGrantLimits(contractGrants) {
+// mainContractGrants (2026-11-19, «limita también lo que puede dar»): lo de General (main) que el contrato del cliente trae, tal como lo manda el servidor (mainContractGrants). El administrador solo puede dar de General lo que ahí está;
+// vacío o sin lista = el contrato no trae nada de General y no hay límite. Los centros de costos no cuentan. Un botón con renglones (Configuración) se puede abrir si el contrato trae algo de él; sus renglones se miden uno por uno.
+function buildGrantLimits(contractGrants, mainContractGrants) {
     const contract = Array.isArray(contractGrants) ? contractGrants : null;
+    const main = Array.isArray(mainContractGrants) && mainContractGrants.length ? mainContractGrants : null;
     const keyOf = (s, i, sub) => `${s}::${i || ''}::${sub || ''}`;
     const rawSet = contract ? new Set(contract.map((g) => keyOf(g.sectionId, g.itemId, g.submenuId))) : null;
     const covered = (s, i, sub) => rawSet.has(keyOf(s, i, sub)) || (!!i && rawSet.has(keyOf(s, i, null))) || rawSet.has(keyOf(s, null, null));
+    const mainCovered = (itemId, submenuId) => main.some((c) => !c.itemId || (c.itemId === itemId && (!submenuId || !c.submenuId || c.submenuId === submenuId || String(submenuId).startsWith(`${c.submenuId}/`) || String(c.submenuId).startsWith(`${submenuId}/`))));
     return {
         reason(sectionId, itemId, submenuId) {
             if (!isEstatusVisible(sectionId, itemId, submenuId)) return 'status';
+            if (main && sectionId === 'main' && itemId !== 'cc-list' && !String(submenuId || '').startsWith('cc-')) return mainCovered(itemId, submenuId) ? null : 'contract';
             if (!rawSet || sectionId === 'main' || !submenuId) return null;
             if (itemId === 'cc-list' || String(submenuId).startsWith('cc-')) return null;
             const base = String(submenuId).replace(/#app$/, '');
