@@ -153,6 +153,7 @@ const WEB_SCREEN_PAGES = {
     'roles': { href: 'AppRoles.html', icon: 'bx-shield' },
     'nuestros-articulos': { href: 'AppNuestrosArticulos.html', icon: 'bx-package' },
     'relacion-codigo': { href: 'AppRelacionCodigo.html', icon: 'bx-map-pin' },
+    'pedir-alta-codigo': { href: 'AppPedirAltaCodigo.html', icon: 'bx-barcode' },
     'categorias-inventario': { href: 'AppCategoriasInventario.html', icon: 'bx-package' },
     'categorias-compra': { href: 'AppCategoriasCompra.html', icon: 'bx-cart-alt' },
     'categorias-almacenamiento': { href: 'AppCategoriasAlmacenamiento.html', icon: 'bx-buildings' },
@@ -184,6 +185,7 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-operaciones-transporte-vol-nuestras-unidades': 'nuestras-unidades',
     'cat-operaciones-centro-dist-alta-articulos': 'nuestros-articulos',
     'cat-operaciones-centro-dist-relacion-codigo': 'relacion-codigo',
+    'cat-operaciones-pedir-alta-codigo': 'pedir-alta-codigo', // existe en cada área: se abre desde el área elegida arriba (no es acceso rápido)
     'cat-catalogos-centro-dist-categorias-inventario': 'categorias-inventario',
     'cat-catalogos-centro-dist-categorias-compra': 'categorias-compra',
     'cat-catalogos-centro-dist-categorias-almacenamiento': 'categorias-almacenamiento',
@@ -238,7 +240,8 @@ function renderTiles(screens) {
     const tilesEl = document.getElementById('home-tiles');
     const emptyEl = document.getElementById('home-empty');
     tilesEl.innerHTML = '';
-    const visibleScreens = screens.filter(isAppScreenGrantedForTile);
+    // las pantallas que existen en cada área (areaScoped) se abren desde el área elegida arriba, no como acceso rápido
+    const visibleScreens = screens.filter((screen) => !screen.areaScoped).filter(isAppScreenGrantedForTile);
     if (!visibleScreens.length) {
         tilesEl.hidden = true;
         emptyEl.hidden = false;

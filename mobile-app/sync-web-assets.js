@@ -26,6 +26,7 @@ const FILES = [
     'AppRoles.html', 'AppRoles.js', 'Admin.css',
     'AppNuestrosArticulos.html', 'AppNuestrosArticulos.js', 'AppNuestrosArticulosPlantilla.js', 'SimpleXlsx.js', 'SkuTemplate.js',
     'AppRelacionCodigo.html', 'AppRelacionCodigo.js',
+    'AppPedirAltaCodigo.html', 'AppPedirAltaCodigo.js',
     'AppCategoriaArticulo.js',
     'AppCategoriasInventario.html',
     'AppCategoriasCompra.html',

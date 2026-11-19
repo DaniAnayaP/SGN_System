@@ -10361,6 +10361,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'reglas-orden-llenado', labelKey: 'menu.fieldRulesGroup' },
     { key: 'roles', labelKey: 'menu.roles' },
     { key: 'nuestros-articulos', labelKey: 'menu.opCentroDistAltaArticulos' },
+    { key: 'pedir-alta-codigo', labelKey: 'menu.opPedirAltaCodigo' },
     { key: 'layout', labelKey: 'menu.opCentroDistLayout' },
     { key: 'relacion-codigo', labelKey: 'menu.opCentroDistRelacionCodigo' },
     { key: 'categorias-inventario', labelKey: 'menu.catCentroDistCategoriasInventario' },
@@ -10389,6 +10390,20 @@ const WEB_SCREEN_CATALOG = [
     { key: 'nuestros-traslados', labelKey: 'menu.opTransVolNuestrosTraslados' },
     { key: 'tipos-cliente', labelKey: 'menu.catTransVolTiposCliente' },
 ];
+
+// Pantallas que existen en CADA área (el mismo nodo del menú dentro de muchos departamentos › áreas, p. ej. «Pedir alta de código»): no caben en un solo TABLE_GRANT_PATHS.
+// Para la App cada una cuenta una vez por área donde existe (así el árbol de permisos deja dar «Visión APP» en cada área); `sample` es el área de la que se toma la lista de sus columnas e iconos (son los mismos en todas).
+const MULTI_AREA_APP_SCREENS = {
+    'pedir-alta-codigo': { submenuId: 'cat-operaciones/cat-operaciones-pedir-alta-codigo', sample: { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center' } },
+};
+function multiAreaScreenPaths(webScreenKey) {
+    const def = MULTI_AREA_APP_SCREENS[webScreenKey];
+    if (!def) return null;
+    const suffix = `::${def.submenuId}`;
+    return buildAccessCatalog().nodes
+        .filter((n) => n.ty === 'pantalla' && n.k.endsWith(suffix))
+        .map((n) => { const [sectionId, itemId] = n.k.split('::'); return { sectionId, itemId, submenuPrefix: def.submenuId }; });
+}
 
 function deserializeSaasApp(row) {
     if (!row) return row;
@@ -10454,10 +10469,10 @@ function getClientAppScreens(clientId) {
     const rawScreens = db
         .prepare('SELECT id, name, web_screen_key AS webScreenKey, position FROM saas_app_screens WHERE app_id = ? ORDER BY position ASC, id ASC')
         .all(app.id);
-    const screens = rawScreens.map((s) => {
+    const screens = rawScreens.flatMap((s) => {
         const catalogEntry = WEB_SCREEN_CATALOG.find((w) => w.key === s.webScreenKey);
         const path = TABLE_GRANT_PATHS[s.webScreenKey];
-        return {
+        const screen = {
             ...s,
             webScreenLabelKey: catalogEntry ? catalogEntry.labelKey : s.webScreenKey,
             sectionId: path ? path.sectionId : null,
@@ -10469,6 +10484,9 @@ function getClientAppScreens(clientId) {
             // only narrows eligibility down to this list once it's non-empty.
             enabledFields: getSaasAppScreenFields(s.id),
         };
+        // una pantalla que existe en cada área: una entrada por área (areaScoped; la App la ofrece dentro del área elegida, no como acceso rápido)
+        const perArea = multiAreaScreenPaths(s.webScreenKey);
+        return perArea ? perArea.map((p) => ({ ...screen, ...p, areaScoped: true })) : [screen];
     });
     const generalButtonScreens = APP_GENERAL_BUTTONS.map((b) => ({
         id: b.itemId, name: b.name, webScreenKey: b.itemId,
@@ -10567,7 +10585,8 @@ function findMenuPantallaNode(sectionId, itemId, submenuPrefix) {
 // the tree doesn't resolve one (defensive — every real catalog key should
 // resolve).
 function getWebScreenFieldsCatalog(webScreenKey) {
-    const grantPath = TABLE_GRANT_PATHS[webScreenKey];
+    const multi = MULTI_AREA_APP_SCREENS[webScreenKey];
+    const grantPath = TABLE_GRANT_PATHS[webScreenKey] || (multi ? { ...multi.sample, submenuPrefix: multi.submenuId } : null);
     if (!grantPath) return { columns: [], icons: [] };
     const node = findMenuPantallaNode(grantPath.sectionId, grantPath.itemId, grantPath.submenuPrefix);
     if (!node) return { columns: [], icons: [] };
