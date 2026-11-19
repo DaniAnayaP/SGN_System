@@ -13492,6 +13492,8 @@ function buildAccessRules(labelFn) {
             web: unique(minimum.flatMap((k) => accessMinimumTuples(k, '').map(keyOf))),
             app: unique(minimum.flatMap((k) => accessMinimumTuples(k, ACCESS_APP_SUFFIX).map(keyOf))),
             touches: v.touches.filter((k) => catalog.index.has(k)),
+            // lo que toca, ya expandido a las llaves que marcaría el árbol (para poner precio a lo recomendado)
+            touchWeb: Object.fromEntries(v.touches.filter((k) => catalog.index.has(k)).map((k) => [k, unique(accessMinimumTuples(k, '').map(keyOf))])),
         });
     });
     return rules;

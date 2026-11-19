@@ -1235,6 +1235,8 @@
     "minLockedTitle": "Minimum of \"{access}\": it cannot be removed while that access is enabled",
     "minRecommended": "Recommended",
     "minRecommendedTitle": "Recommended by \"{access}\": only add it if needed",
+    "minCostMin": "Minimums included: {amount}",
+    "minCostRec": "Recommended available: +{amount} (added as an extra)",
     "minAutoEnabled": "Minimums that were enabled on their own ({count}): {list}.",
     "minAutoBlocked": "Minimums that could not be enabled because they are not enabled for service in the Master Tree ({count}): {list}.",
     "relAccSubtitle": "For each access (a screen, a column, a button or an icon) you mark the minimum it needs to operate and which other accesses it touches. The minimum will be enabled on its own and locked from the Business Line; what it touches is only recommended. Whatever is unmarked is optional, for customizing.",

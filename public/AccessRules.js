@@ -4,7 +4,7 @@
 // y, dada la lista de llaves marcadas en un árbol («sección::área::ruta», con #app para App), dice:
 //   · added: qué llaves del MÍNIMO INDISPENSABLE faltan y deben entrar solas (y la cadena: el mínimo del mínimo); addedBy: nombres de los accesos que las trajeron;
 //   · required: qué llaves quedan BLOQUEADAS porque las necesita un acceso habilitado (llave → nombres de esos accesos);
-//   · touched: qué accesos se RECOMIENDAN (llave del acceso que se toca → nombres de quien lo recomienda);
+//   · touched: qué accesos se RECOMIENDAN (llave del acceso que se toca → nombres de quien lo recomienda); touchedKeys: lo recomendado ya expandido a las llaves del árbol (para ponerle precio);
 //   · blocked: nombres de los accesos cuyo mínimo no se pudo agregar (canAdd dijo que no).
 // Las mismas reglas que db.js (expandAccessMinimums): un acceso está habilitado si cualquier cosa suya lo está (su llave, algo que lo contiene o una hoja de adentro) en esa plataforma, y no se agrega lo que otro permiso (misma
 // llave, su pantalla, su área o su departamento) ya cubre. Los árboles marcan HOJAS: las llaves de las reglas ya vienen expandidas a hojas por el servidor.
@@ -46,6 +46,7 @@
             web: (r.web || []).map(parse),
             app: (r.app || []).map(parse),
             touches: r.touches || [],
+            touchWeb: r.touchWeb || {},
         })).filter((r) => r.web.length || r.app.length || r.touches.length);
 
         // opciones: canAdd(llave) → false si no se puede agregar; coverKeys: llaves que ya da otro nivel (no se agregan). Regresa { added, required, touched, blocked }.
@@ -75,6 +76,7 @@
             // lo bloqueado y lo recomendado salen de lo que quedó habilitado al final (con lo que acaba de entrar)
             const required = new Map();
             const touched = new Map();
+            const touchedKeys = new Set(); // lo recomendado, expandido a las llaves que marcaría el árbol
             rules.forEach((rule) => {
                 [['web', false], ['app', true]].forEach(([platform, isApp]) => {
                     if (!rule[platform].length || !enables(grants, rule.access, isApp)) return;
@@ -87,10 +89,11 @@
                     rule.touches.forEach((key) => {
                         if (!touched.has(key)) touched.set(key, []);
                         if (!touched.get(key).includes(rule.label)) touched.get(key).push(rule.label);
+                        (rule.touchWeb[key] || []).forEach((k) => touchedKeys.add(k));
                     });
                 }
             });
-            return { added, addedBy: [...addedBy], required, touched, blocked: [...blocked] };
+            return { added, addedBy: [...addedBy], required, touched, touchedKeys: [...touchedKeys], blocked: [...blocked] };
         }
         return { resolve, hasRules: rules.length > 0 };
     }

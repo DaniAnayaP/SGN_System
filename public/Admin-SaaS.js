@@ -1249,6 +1249,7 @@ async function openPermisosAdicionalesModal(client) {
         await adicionalesTree.init(planGrants || [], costs, grants || []);
         updateAdicionalesTotal();
         permisosAdicionalesContainer.addEventListener('click', updateAdicionalesTotal);
+        permisosAdicionalesContainer.addEventListener('perm-tree:changed', updateAdicionalesTotal); // el marcador amarillo no deja subir el clic: el árbol avisa con este evento
         permisosAdicionalesModal.hidden = false;
     } catch {
         showError(Dashboard.t('admin.loadError'));

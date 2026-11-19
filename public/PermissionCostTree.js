@@ -201,6 +201,7 @@
         let accessRequired = new Map(); // llave -> nombres de los accesos habilitados que la necesitan
         let accessTouched = new Map(); // llave del acceso que se toca -> nombres de quien lo recomienda
         let accessReady = false; // después de abrir el árbol, lo que entra solo se avisa
+        let accessTouchedKeys = []; // lo recomendado, expandido a las llaves del árbol (para ponerle precio)
         const accessNamesText = (names) => { const list = [...new Set(names)]; return `${list.slice(0, 2).join(', ')}${list.length > 2 ? ` +${list.length - 2}` : ''}`; };
         const accessToast = (message, kind) => { if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, kind); };
         // Recalcula lo bloqueado y lo recomendado y marca lo que falta del mínimo: en el plan en su conjunto de permisos; en el cliente como adicionales por agregar (lo que el plan ya da no se repite).
@@ -217,8 +218,40 @@
             const settled = first.added.length ? accessEngine.resolve(triggers(), options) : first;
             accessRequired = settled.required;
             // lo recomendado también sale de lo que el PLAN ya tiene habilitado (el cliente lo puede agregar como adicional)
-            accessTouched = isClient ? accessEngine.resolve(new Set([...planGrantSet, ...triggers()])).touched : settled.touched;
+            const touchedResult = isClient ? accessEngine.resolve(new Set([...planGrantSet, ...triggers()])) : settled;
+            accessTouched = touchedResult.touched;
+            accessTouchedKeys = touchedResult.touchedKeys;
             return { added: first.added, addedBy: first.addedBy, blocked: first.blocked };
+        }
+        // Lo que cuesta lo mínimo que entró solo (ya va sumado en el contrato o en los adicionales) y lo que costaría lo recomendado si se agrega. Regresa null si no hay nada de Relación de Accesos que mostrar.
+        function computeAccessCostSummary() {
+            if (!accessEngine || !accessEngine.hasRules) return null;
+            const isClient = mode === 'clientTricolor';
+            const mine = isClient ? effectiveClientSet() : grantSet;
+            const requiredOwn = [...accessRequired.keys()].filter((k) => mine.has(k) && !(isClient && planGrantSet.has(k)));
+            const minimumNames = new Set();
+            requiredOwn.forEach((k) => (accessRequired.get(k) || []).forEach((n) => minimumNames.add(n)));
+            const recommended = accessTouchedKeys.filter((k) => !planGrantSet.has(k) && !mine.has(k) && !(isClient ? isLimitLocked(k) : isServiceLocked(k)));
+            if (!requiredOwn.length && !recommended.length) return null;
+            return {
+                minimumCount: minimumNames.size,
+                minimumCost: requiredOwn.length ? computeCostForSet(new Set(requiredOwn)) : 0,
+                recommendedCount: recommended.length ? accessTouched.size : 0,
+                recommendedCost: recommended.length ? computeCostForSet(new Set(recommended)) : 0,
+            };
+        }
+        function renderAccessSummary() {
+            const sum = computeAccessCostSummary();
+            if (!sum) return;
+            const money = (n) => (window.Dashboard && window.Dashboard.formatCurrency ? window.Dashboard.formatCurrency(n, currency) : String(n));
+            const parts = [];
+            if (sum.minimumCount) parts.push(`<span class="perm-tree-access-summary-min">${t('admin.minCostMin', { amount: money(sum.minimumCost) })}</span>`);
+            if (sum.recommendedCount && sum.recommendedCost > 0) parts.push(`<span class="perm-tree-access-summary-touch">${t('admin.minCostRec', { amount: money(sum.recommendedCost) })}</span>`);
+            if (!parts.length) return;
+            const box = document.createElement('div');
+            box.className = 'perm-tree-access-summary';
+            box.innerHTML = parts.join('');
+            container.appendChild(box);
         }
         // Lo que no se pudo quitar por ser mínimo de un acceso habilitado: un solo aviso aunque se intenten varias llaves a la vez.
         let lockedNames = [];
@@ -509,7 +542,8 @@
             icon.className = `bx ${iconClass || (kind === 'green' ? 'bx-check' : (kind === 'mixed' ? 'bx-minus' : 'bx-plus-circle'))}`;
             icon.setAttribute('aria-hidden', 'true');
             btn.appendChild(icon);
-            btn.addEventListener('click', (event) => { event.stopPropagation(); onClick(); render(); });
+            // El clic no sube al contenedor (para no tocar la fila), así que se avisa aparte: la pantalla que muestra el total lo recalcula con este evento.
+            btn.addEventListener('click', (event) => { event.stopPropagation(); onClick(); render(); container.dispatchEvent(new CustomEvent('perm-tree:changed', { bubbles: true })); });
             return btn;
         }
 
@@ -1544,6 +1578,7 @@
                 if (accessReady && live.blocked.length) accessToast(t('admin.minAutoBlockedLive', { access: accessNamesText(live.blocked) }), 'warning');
             }
             container.innerHTML = '';
+            if (accessEngine) renderAccessSummary();
             if (mode === 'grantReadonlyCost') {
                 const header = document.createElement('div');
                 header.className = 'perm-tree-app-header';
@@ -1663,7 +1698,10 @@
         // nor the client already cover it, so nothing summed here was ever
         // already counted in the plan's own cost.
         function computeAdditionalCostTotal() {
-            const set = effectiveClientSet();
+            return computeCostForSet(effectiveClientSet());
+        }
+        // El precio de un conjunto de llaves con la misma regla del servidor (computeCostTotalForGrantSet): un contenedor cuenta si todas sus hojas están, la pantalla y la columna con que haya una llave suya.
+        function computeCostForSet(set) {
             const costOf = (k) => costMap.get(k) || 0;
             let total = 0;
             sectionsData.forEach((section) => {
