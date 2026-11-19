@@ -13549,6 +13549,8 @@ function ensureBreadcrumbBar() {
     bar.append(list, toggle);
     topBar.insertAdjacentElement('afterend', bar);
     wrapPageScrollArea(bar);
+    // la ruta cambia de ancho con la ventana, la barra lateral y al abrir/cerrar la ruta: se vuelve a ajustar (ver fitBreadcrumbTrail)
+    new ResizeObserver(scheduleBreadcrumbFit).observe(list);
     return bar;
 }
 
@@ -13569,16 +13571,56 @@ function renderBreadcrumbBar() {
             const a = document.createElement('a');
             a.href = crumb.href;
             a.textContent = crumb.label;
+            a.dataset.crumbFull = crumb.label;
             li.appendChild(a);
         } else {
             const span = document.createElement('span');
             span.textContent = crumb.label;
+            span.dataset.crumbFull = crumb.label;
             if (isCurrent) span.setAttribute('aria-current', 'page');
             li.appendChild(span);
         }
         list.appendChild(li);
     });
     setBreadcrumbCollapsed(isBreadcrumbCollapsed());
+    fitBreadcrumbTrail();
+}
+
+// Regla de todo el sistema (Daniel, 2026-11-19): si un nombre no cabe, se ABREVIA y al sobreponer se ve el nombre completo. La ruta de arriba antes solo se desplazaba de lado (sin barra) y la
+// pantalla donde estás quedaba escondida a la derecha. Ahora, si la ruta no cabe, se abrevian primero las partes de en medio (la más larga primero, con la escalera automática de la barra lateral) y,
+// solo si aún no cabe, el nombre de la pantalla; cada nombre abreviado lleva el completo en title y aria-label. Cada vez se parte de los nombres completos, así que con más ancho (o con la barra lateral
+// cerrada) vuelven solos. Se mide con el propio diseño (la ruta tiene cinco partes como mucho). Si ni todo abreviado cabe, la ruta se desplaza al final para que se vea la pantalla actual.
+function fitBreadcrumbTrail() {
+    const list = document.getElementById('breadcrumb-list');
+    if (!list || !list.clientWidth) return; // la ruta cerrada se vuelve a ajustar al abrirse (su tamaño cambia y lo avisa el observador)
+    const entries = Array.from(list.querySelectorAll('[data-crumb-full]')).map((el) => ({ el, full: el.dataset.crumbFull, ladder: autoAbbrLadder(el.dataset.crumbFull), step: 0 }));
+    if (!entries.length) return;
+    const show = (e) => { e.el.textContent = e.ladder[e.step]; };
+    entries.forEach(show);
+    const overflows = () => list.scrollWidth > list.clientWidth + 0.5;
+    const middle = entries.slice(0, -1);
+    for (const group of [middle, entries.slice(-1)]) {
+        while (overflows()) {
+            const next = group.filter((e) => e.step < e.ladder.length - 1).sort((a, b) => b.ladder[b.step].length - a.ladder[a.step].length)[0];
+            if (!next) break;
+            next.step += 1;
+            show(next);
+        }
+        if (!overflows()) break;
+    }
+    entries.forEach((e) => {
+        if (e.step > 0) { e.el.title = e.full; e.el.setAttribute('aria-label', e.full); } else { e.el.removeAttribute('title'); e.el.removeAttribute('aria-label'); }
+    });
+    if (overflows()) list.scrollLeft = list.scrollWidth;
+}
+let breadcrumbFitTimer = 0;
+function scheduleBreadcrumbFit() {
+    clearTimeout(breadcrumbFitTimer);
+    breadcrumbFitTimer = setTimeout(fitBreadcrumbTrail, 40); // setTimeout y no requestAnimationFrame: una pestaña en segundo plano no dibuja cuadros
+}
+if (document.fonts) {
+    if (document.fonts.ready) document.fonts.ready.then(scheduleBreadcrumbFit);
+    if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', scheduleBreadcrumbFit);
 }
 
 // --- Collapsible top bar -------------------------------------------------
