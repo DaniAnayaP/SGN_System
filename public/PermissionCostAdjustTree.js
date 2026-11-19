@@ -307,7 +307,7 @@
             async init(data) {
                 const { sections: allSections, areaCategories, areaOverrides, areas } = await loadMenuData();
                 const mainSection = allSections.find((s) => s.id === 'main');
-                const generalItems = (mainSection?.items || []).filter((i) => ['home', 'panel', 'dashboard', 'planes-trabajo'].includes(i.id));
+                const generalItems = (mainSection?.items || []).filter((i) => ['home', 'panel', 'dashboard'].includes(i.id));
                 const adminBusinessItem = mainSection?.items.find((i) => i.id === 'admin-business');
                 const BUTTON_CONFIG_ITEM_IDS = ['btn-salir', 'btn-departamento', 'btn-area', 'btn-cc'];
                 const buttonConfigItems = BUTTON_CONFIG_ITEM_IDS

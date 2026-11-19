@@ -1479,7 +1479,7 @@ function applyScreenGrantFilter(data) {
 
 // Inicio, Panel y Tablero (los tres de General) de un usuario o perfil del cliente salen solo si se los asignaron en su árbol, como todo lo demás: un usuario recién creado, sin nada asignado, no ve ninguna opción. El
 // administrador del cliente sin configuración propia los ve siempre (hasMainButtonPermission) y la cuenta SaaS arma su menú aparte (con sus propios permisos), así que no pasa por aquí.
-const MAIN_NAV_ITEM_IDS = ['home', 'panel', 'dashboard', 'planes-trabajo'];
+const MAIN_NAV_ITEM_IDS = ['home', 'panel', 'dashboard'];
 function applyMainNavGrantFilter(data) {
     if (currentRole === 'admin') return data;
     return {
@@ -9822,6 +9822,34 @@ document.querySelectorAll('.top-bar-actions').forEach((container) => {
     }
 });
 
+// Planes de trabajo: un solo icono en la barra de arriba, después de Notificaciones (no un renglón en cada área de la barra lateral). Nace escondido y syncTopBarButtonVisibility lo muestra
+// solo a quien tiene la hoja de la pantalla en su árbol (y su Estatus habilitado); la cuenta SaaS no lo ve.
+document.querySelectorAll('.top-bar-actions').forEach((container) => {
+    if (container.querySelector('#work-plans-btn')) return;
+    const workPlansBtn = document.createElement('button');
+    workPlansBtn.type = 'button';
+    workPlansBtn.id = 'work-plans-btn';
+    workPlansBtn.className = 'top-bar-btn-hidden';
+    workPlansBtn.setAttribute('data-i18n-aria', 'menu.workPlans');
+    workPlansBtn.setAttribute('data-help-key', 'workPlansButton');
+    workPlansBtn.setAttribute('aria-label', 'Work plans');
+    workPlansBtn.innerHTML = '<i class="bx bx-calendar-check" aria-hidden="true"></i>';
+    if (document.body.dataset.activePage === 'planes-trabajo') workPlansBtn.setAttribute('aria-current', 'page');
+    workPlansBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (document.body.dataset.activePage !== 'planes-trabajo') location.href = 'PlanesTrabajo.html';
+    });
+    container.appendChild(workPlansBtn);
+    placeWorkPlansButton();
+});
+// El icono va justo después de Notificaciones. La lista de iconos se arma más tarde que este script, así que se vuelve a colocar cada vez que se sincronizan los iconos (no hace nada si ya está en su lugar).
+function placeWorkPlansButton() {
+    document.querySelectorAll('#work-plans-btn').forEach((btn) => {
+        const menu = btn.closest('.top-bar-actions')?.querySelector('#notifications-menu');
+        if (menu && menu.nextElementSibling !== btn) menu.insertAdjacentElement('afterend', btn);
+    });
+}
+
 // --- System-wide UI scale ("aumentar/disminuir el tamaño de todo el
 // sistema") — unlike lang/style/dataTableFontSize/etc., which are plain
 // localStorage keys shared by whoever is using this browser, this is
@@ -12724,6 +12752,8 @@ const TOP_BAR_BUTTONS = [
     { moduleKey: 'btn-mensajes', elementId: 'messages-btn', check: () => hasMainButtonPermission('btn-mensajes') },
     { moduleKey: 'btn-chatbot', elementId: 'chatbot-btn', check: () => hasMainButtonPermission('btn-chatbot') },
     { moduleKey: 'btn-notificaciones', elementId: 'notifications-menu', check: () => hasMainButtonPermission('btn-notificaciones') },
+    // Planes de trabajo no depende del contrato (como Inicio/Panel/Tablero): solo de su hoja del árbol y su Estatus
+    { moduleKey: 'planes-trabajo', elementId: 'work-plans-btn', noContract: true, check: () => hasMainButtonPermission('planes-trabajo') },
     { moduleKey: 'btn-marcadores', elementId: 'bookmarks-btn', check: () => hasMainButtonPermission('btn-marcadores') },
     { moduleKey: 'btn-configuracion', elementId: 'settings-menu', check: hasSettingsAccess },
     { moduleKey: 'btn-datos-usuario', elementId: 'user-info-menu', check: () => hasMainButtonPermission('btn-datos-usuario') },
@@ -12754,12 +12784,13 @@ function syncNotificationTabs() {
     if (notificationsListEl && currentRole !== 'admin') loadNotifications();
 }
 function syncTopBarButtonVisibility() {
+    placeWorkPlansButton();
     syncNotificationTabs();
     if (currentRole === 'admin') return;
-    TOP_BAR_BUTTONS.forEach(({ moduleKey, elementId, check }) => {
+    TOP_BAR_BUTTONS.forEach(({ moduleKey, elementId, check, noContract }) => {
         const el = document.getElementById(elementId);
         if (!el) return;
-        const visible = contractedModuleKeys.includes(moduleKey) && check();
+        const visible = (noContract || contractedModuleKeys.includes(moduleKey)) && check();
         // A plain `hidden` attribute loses to ".top-bar-actions button"
         // (higher specificity, forces display:flex) in some browsers — a
         // dedicated !important class sidesteps that instead of relying on
@@ -12791,6 +12822,7 @@ const SAAS_NAV_ICON_GATES = {
 };
 function syncSaasNavIconVisibility() {
     if (currentUser?.role !== 'admin') return;
+    document.querySelectorAll('#work-plans-btn').forEach((btn) => btn.classList.add('top-bar-btn-hidden'));
     Object.entries(SAAS_NAV_ICON_GATES).forEach(([elementId, itemId]) => {
         const el = document.getElementById(elementId);
         if (!el) return;

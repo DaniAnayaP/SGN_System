@@ -141,7 +141,7 @@
     // alongside its real áreas (see generalItems below), but core
     // navigation rather than a Giro/Plan-facing "Área", so never
     // draggable/reorderable (see isRealArea in renderStatusTree).
-    const GENERAL_ITEM_IDS = ['home', 'panel', 'dashboard', 'planes-trabajo'];
+    const GENERAL_ITEM_IDS = ['home', 'panel', 'dashboard'];
     // Top-bar buttons (Mensajes/Chatbot/Notificaciones/Marcadores/
     // Configuración/Datos de Usuario/Datos de Usuario del Negocio) -- 'main'
     // section items that used to render as flat top-level "Área" rows
@@ -155,7 +155,7 @@
     // for how that nested content shifts down with it. Same itemId/leaf keys
     // as before, only where they render moves, so no already-saved grant/
     // status is lost.
-    const NAV_ICON_ITEM_IDS = ['btn-mensajes', 'btn-chatbot', 'btn-notificaciones', 'btn-marcadores', 'btn-configuracion', 'btn-datos-usuario', 'btn-datos-usuario-negocio'];
+    const NAV_ICON_ITEM_IDS = ['btn-mensajes', 'btn-chatbot', 'btn-notificaciones', 'planes-trabajo', 'btn-marcadores', 'btn-configuracion', 'btn-datos-usuario', 'btn-datos-usuario-negocio'];
 
     // Reorders `list` (in place) to match `orderIds` as closely as
     // possible: anything named in orderIds comes first, in that order;

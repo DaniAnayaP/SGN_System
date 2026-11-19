@@ -63,6 +63,8 @@ const TABLES = {
     implementation_activities: { action: WIPE, group: 'captures' }, // las actividades que se agregan a cada nivel del Cronograma
     work_plans: { action: WIPE, group: 'captures' }, // Planes de trabajo: los planes privados de cada persona (2026-11-19)
     work_plan_items: { action: WIPE, group: 'captures' }, // y sus renglones (niveles, actividades y subactividades)
+    work_plan_members: { action: WIPE, group: 'captures' }, // con quién se comparte cada plan y su rol (2a)
+    work_plan_user_prefs: { action: WIPE, group: 'captures' }, // fijado propio y «ya lo vi» de quien no es dueño del plan (2a)
     client_login_configs: { action: WIPE, group: 'captures' }, // Apps Nuestros Clientes: el inicio de sesión personalizado de cada cliente
     sku_requests: { action: WIPE, group: 'captures' },
     sku_request_events: { action: WIPE, group: 'captures' },

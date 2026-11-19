@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Planes de trabajo (pieza 1): cada persona arma sus propios planes con el estilo del Cronograma de Implementación. El plan es un árbol de renglones cuyos NIVELES nombra quien lo arma (hasta 4, por ejemplo Fase › Actividad ›
+// Planes de trabajo (pieza 1): cada persona arma sus propios planes con el estilo del Cronograma de Implementación. El plan es un árbol de renglones cuyos NIVELES nombra quien lo arma (sin límite; por defecto Nivel › Clasificación › Proceso › Actividad ›
 // Subactividad); cada renglón lleva responsable, fechas, estado y una nota. Los planes son privados de su dueño (compartir, Mensajes y comentarios llegan en las piezas siguientes). La pantalla tiene una primera pestaña con la
 // lista de planes (tarjetas, filtros, buscador y estrella para fijar) y, junto a ella, una pestaña por cada plan abierto; las pestañas abiertas se recuerdan en este navegador. El servidor decide todo (server.js, rutas
 // /api/business/work-plans): aquí solo se dibuja. Las fechas son de calendario (sin hora). Se carga después de Dashboard.js.
@@ -38,7 +38,7 @@ let plans = [];                 // resúmenes de todos mis planes (activos y cer
 const cache = new Map();        // id → { plan, items, people, canEdit }
 let canCreate = true;
 let tabs = { open: [], active: 'list' };
-let listFilter = 'active';      // 'active' | 'closed'
+let listFilter = 'all';         // 'all' (activos de cualquier origen) | 'own' | 'shared' (compartidos conmigo y del equipo) | 'closed'
 let listQuery = '';
 let form = null;                // el formulario en línea abierto (uno a la vez): { mode: 'add'|'edit', planId, parentId, id, depth, values, error, busy }
 let planLoading = null;         // id del plan que se está leyendo
@@ -67,7 +67,7 @@ function errText(err) {
     return t('main.wpErr_default');
 }
 // Estos errores quieren decir que lo que se ve ya no es lo que hay: se cierra el formulario y se vuelve a leer.
-const STALE_CODES = ['WORK_PLAN_NOT_FOUND', 'WORK_PLAN_ITEM_NOT_FOUND', 'WORK_PLAN_CLOSED', 'WORK_PLAN_FORBIDDEN'];
+const STALE_CODES = ['WORK_PLAN_NOT_FOUND', 'WORK_PLAN_ITEM_NOT_FOUND', 'WORK_PLAN_CLOSED', 'WORK_PLAN_FORBIDDEN', 'WORK_PLAN_NOT_ALLOWED'];
 function failed(err, planId) {
     if (!(err && err.body)) console.error('Planes de trabajo:', err);
     if (err && err.body && STALE_CODES.includes(err.body.code)) { form = null; refreshAll(planId).catch(() => {}); }
@@ -82,7 +82,9 @@ async function loadPlan(id) {
     const out = await api('GET', `/${id}`);
     cache.set(id, out);
     const at = plans.findIndex((p) => p.id === id);
-    if (at >= 0) plans[at] = out.plan; else plans.push(out.plan);
+    // abrir un plan compartido le quita el «Nuevo» (el servidor lo marca como visto al leerlo)
+    const summary = { ...out.plan, isNew: false };
+    if (at >= 0) plans[at] = summary; else plans.push(summary);
     return out;
 }
 // Vuelve a leer la lista y, si hay uno abierto, ese plan (un plan que ya no existe se quita de las pestañas).
@@ -138,12 +140,12 @@ function weekText(startDate, endDate) {
 function renderTabs() {
     const el = $('wp-tabs');
     const listActive = tabs.active === 'list';
-    let html = `<div class="wp-tab wp-tab-list${listActive ? ' active' : ''}" role="tab" tabindex="0" aria-selected="${listActive}" data-wp-tab="list" data-help-key="wpTabs"><i class="bx bx-list-ul" aria-hidden="true"></i><span class="wp-tab-nm">${esc(t('main.wpTabAll'))}</span><span class="wp-count">${plans.filter((p) => p.status !== 'closed').length}</span></div>`;
+    let html = `<div class="wp-tab wp-tab-list${listActive ? ' active' : ''}" role="tab" tabindex="0" aria-selected="${listActive}" data-wp-tab="list" data-help-key="wpTabs"><i class="bx bx-list-ul" aria-hidden="true"></i><span class="wp-tab-nm">${esc(t('main.wpTabAll'))}</span><span class="wp-count">${plans.filter(isLive).length}</span></div>`;
     tabs.open.forEach((id) => {
         const p = plans.find((x) => x.id === id);
         if (!p) return;
         const active = tabs.active === id;
-        html += `<div class="wp-tab${active ? ' active' : ''}${p.status === 'closed' ? ' wp-tab-closed' : ''}" role="tab" tabindex="0" aria-selected="${active}" data-wp-tab="${id}" title="${esc(planName(p))}"><span class="wp-dot wp-dot-${p.status === 'closed' ? 'closed' : 'own'}" aria-hidden="true"></span><span class="wp-tab-nm">${esc(planName(p))}</span><button type="button" class="wp-tab-x" data-wp-close="${id}" aria-label="${esc(t('main.wpTabClose', { name: planName(p) }))}" title="${esc(t('main.wpTabClose', { name: planName(p) }))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>`;
+        html += `<div class="wp-tab${active ? ' active' : ''}${!isLive(p) ? ' wp-tab-closed' : ''}" role="tab" tabindex="0" aria-selected="${active}" data-wp-tab="${id}" title="${esc(planName(p))}"><span class="wp-dot wp-dot-${!isLive(p) ? 'closed' : (p.origin || 'own')}" aria-hidden="true"></span><span class="wp-tab-nm">${esc(planName(p))}</span><button type="button" class="wp-tab-x" data-wp-close="${id}" aria-label="${esc(t('main.wpTabClose', { name: planName(p) }))}" title="${esc(t('main.wpTabClose', { name: planName(p) }))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>`;
     });
     if (canCreate) html += `<button type="button" class="wp-tab wp-tab-add" data-wp-new="1" data-help-key="wpNew"><i class="bx bx-plus" aria-hidden="true"></i><span class="wp-tab-nm">${esc(t('main.wpNew'))}</span></button>`;
     el.innerHTML = html;
@@ -178,13 +180,37 @@ function dueText(p, today) {
     const late = p.nextDue.endDate < today;
     return { text: t(late ? 'main.wpLateItem' : 'main.wpNextItem', { title: p.nextDue.title, date: shortDate(p.nextDue.endDate) }), late };
 }
+// un plan está «vivo» (se puede trabajar) solo mientras está activo; finalizado, inactivo y cancelado son de solo consulta
+const isLive = (p) => !p.status || p.status === 'active';
+const STATE_CHIP_KEY = { closed: 'main.wpClosedChip', inactive: 'main.wpInactiveChip', cancelled: 'main.wpCancelledChip' };
+const stateChip = (status) => `<span class="wp-chip wp-chip-closed wp-chip-${esc(status)}">${esc(t(STATE_CHIP_KEY[status] || 'main.wpClosedChip'))}</span>`;
+const originOf = (p) => p.origin || 'own';
+const roleText = (role) => t(`main.wpRole_${role}`);
+// las etiquetas de una tarjeta según de dónde viene el plan: mío (privado o compartido con N), compartido conmigo (con mi rol) o del equipo (mi jefe lo enciende en su plan: solo lectura)
+function cardChips(p) {
+    const origin = originOf(p);
+    const chips = [];
+    if (origin === 'own') {
+        chips.push(`<span class="wp-chip wp-chip-own">${esc(t('main.wpOriginOwn'))}</span>`);
+        chips.push(`<span class="wp-chip">${esc(p.memberCount ? t('main.wpSharedWith', { n: p.memberCount }) : t('main.wpPrivate'))}</span>`);
+    } else if (origin === 'shared') {
+        chips.push(`<span class="wp-chip wp-chip-shared">${esc(t('main.wpOriginShared'))}</span>`);
+        chips.push(`<span class="wp-chip">${esc(roleText(p.myRole || 'view'))}</span>`);
+    } else {
+        chips.push(`<span class="wp-chip wp-chip-team">${esc(t('main.wpOriginTeam'))}</span>`);
+        chips.push(`<span class="wp-chip">${esc(t('main.wpReadOnly'))}</span>`);
+    }
+    if (p.isNew) chips.push(`<span class="wp-chip wp-chip-new">${esc(t('main.wpNewChip'))}</span>`);
+    if (!isLive(p)) chips.push(stateChip(p.status));
+    return chips.join('');
+}
 function card(p, today) {
     const due = dueText(p, today);
-    const closed = p.status === 'closed';
-    const chips = [`<span class="wp-chip wp-chip-own">${esc(t('main.wpOriginOwn'))}</span>`, `<span class="wp-chip">${esc(t('main.wpPrivate'))}</span>`];
-    if (closed) chips.push(`<span class="wp-chip wp-chip-closed">${esc(t('main.wpClosedChip'))}</span>`);
-    return `<div class="wp-card${closed ? ' wp-card-closed' : ''}" data-wp-card="${p.id}" role="group" aria-label="${esc(planName(p))}" data-help-key="wpCard">
-        <div class="wp-card-top"><span class="wp-avatar" aria-hidden="true">${esc(initials(p.title))}</span><div class="wp-card-title"><b>${esc(planName(p))}</b><small>${esc(weekText(p.startDate, p.endDate))}</small></div>
+    const closed = !isLive(p);
+    const chips = [cardChips(p)];
+    const sub = originOf(p) === 'own' ? weekText(p.startDate, p.endDate) : `${t('main.wpFromOwner', { name: p.ownerName || '—' })} · ${weekText(p.startDate, p.endDate)}`;
+    return `<div class="wp-card${closed ? ' wp-card-closed' : ''}${p.isNew ? ' wp-card-new' : ''}" data-wp-card="${p.id}" role="group" aria-label="${esc(planName(p))}" data-help-key="wpCard">
+        <div class="wp-card-top"><span class="wp-avatar" aria-hidden="true">${esc(initials(p.title))}</span><div class="wp-card-title"><b>${esc(planName(p))}</b><small>${esc(sub)}</small></div>
             <button type="button" class="wp-star${p.pinned ? ' on' : ''}" data-wp-pin="${p.id}" aria-pressed="${!!p.pinned}" aria-label="${esc(t(p.pinned ? 'main.wpUnpin' : 'main.wpPin'))}" title="${esc(t(p.pinned ? 'main.wpUnpin' : 'main.wpPin'))}" data-help-key="wpPin"><i class="bx ${p.pinned ? 'bxs-star' : 'bx-star'}" aria-hidden="true"></i></button></div>
         ${p.description ? `<p class="wp-card-desc">${esc(p.description)}</p>` : ''}
         <div class="wp-chips">${chips.join('')}</div>
@@ -196,22 +222,36 @@ function card(p, today) {
 function renderList(partial) {
     const root = $('wp-root');
     const today = todayYmd();
-    const active = plans.filter((p) => p.status !== 'closed');
+    const active = plans.filter(isLive);
     const closed = plans.filter((p) => p.status === 'closed');
-    const shown = (listFilter === 'closed' ? closed : active).filter((p) => planMatches(p, listQuery));
-    const filters = `<div class="wp-filters" role="group" data-help-key="wpFilter"><button type="button" class="wp-pill${listFilter === 'active' ? ' active' : ''}" data-wp-filter="active" aria-pressed="${listFilter === 'active'}">${esc(t('main.wpFilterActive'))} · ${active.length}</button><button type="button" class="wp-pill${listFilter === 'closed' ? ' active' : ''}" data-wp-filter="closed" aria-pressed="${listFilter === 'closed'}">${esc(t('main.wpFilterClosed'))} · ${closed.length}</button></div>`;
+    const inactive = plans.filter((p) => p.status === 'inactive');
+    const cancelled = plans.filter((p) => p.status === 'cancelled');
+    const own = active.filter((p) => originOf(p) === 'own');
+    const sharedWithMe = active.filter((p) => originOf(p) !== 'own');
+    const pool = { all: active, own, shared: sharedWithMe, closed, inactive, cancelled }[listFilter] || active;
+    const shown = pool.filter((p) => planMatches(p, listQuery));
+    // «Compartidos conmigo» solo sale si hay (o si se estaba mirando), para que quien no comparte nada no vea un filtro vacío
+    const filterList = [['all', 'main.wpFilterAll', active.length], ['own', 'main.wpFilterOwn', own.length]];
+    if (sharedWithMe.length || listFilter === 'shared') filterList.push(['shared', 'main.wpFilterShared', sharedWithMe.length]);
+    filterList.push(['closed', 'main.wpFilterClosed', closed.length]);
+    // Inactivos y Cancelados solo salen si hay (o si se estaba mirando), para no llenar la fila de filtros vacíos
+    if (inactive.length || listFilter === 'inactive') filterList.push(['inactive', 'main.wpFilterInactive', inactive.length]);
+    if (cancelled.length || listFilter === 'cancelled') filterList.push(['cancelled', 'main.wpFilterCancelled', cancelled.length]);
+    const filters = `<div class="wp-filters" role="group" data-help-key="wpFilter">${filterList.map(([key, label, n]) => `<button type="button" class="wp-pill${listFilter === key ? ' active' : ''}" data-wp-filter="${key}" aria-pressed="${listFilter === key}">${esc(t(label))} · ${n}</button>`).join('')}</div>`;
     const search = `<div class="wp-search" data-help-key="wpSearch"><i class="bx bx-search" aria-hidden="true"></i><input id="wp-search" type="search" value="${esc(listQuery)}" placeholder="${esc(t('main.wpSearchPlaceholder'))}" aria-label="${esc(t('main.wpSearchPlaceholder'))}" autocomplete="off"></div>`;
     const create = canCreate ? `<button type="button" class="btn" data-wp-new="1" data-help-key="wpNew"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.wpNew'))}</button>` : '';
     let body = '';
     if (!plans.length) {
         body = `<div class="wp-empty"><i class="bx bx-calendar-check" aria-hidden="true"></i><h3>${esc(t('main.wpEmptyTitle'))}</h3><p>${esc(t('main.wpEmptyText'))}</p>${create ? `<p>${create}</p>` : ''}</div>`;
     } else if (!shown.length) {
-        body = `<p class="wp-none">${esc(t(listQuery.trim() ? 'main.wpNoMatches' : (listFilter === 'closed' ? 'main.wpNoClosed' : 'main.wpNoActive')))}</p>`;
+        body = `<p class="wp-none">${esc(t(listQuery.trim() ? 'main.wpNoMatches' : ({ closed: 'main.wpNoClosed', inactive: 'main.wpNoInactive', cancelled: 'main.wpNoCancelled' }[listFilter] || 'main.wpNoActive')))}</p>`;
     } else {
+        // fijados arriba; luego mis planes, los compartidos conmigo y los del equipo (cada grupo solo se nombra si hay más de uno)
         const pinned = shown.filter((p) => p.pinned);
         const rest = shown.filter((p) => !p.pinned);
-        const group = (labelKey, list) => (list.length ? `<h4 class="wp-group">${esc(t(labelKey))}</h4><div class="wp-cards">${list.map((p) => card(p, today)).join('')}</div>` : '');
-        body = group('main.wpGroupPinned', pinned) + (pinned.length ? group('main.wpGroupOwn', rest) : `<div class="wp-cards">${rest.map((p) => card(p, today)).join('')}</div>`);
+        const groups = [['main.wpGroupPinned', pinned], ['main.wpGroupOwn', rest.filter((p) => originOf(p) === 'own')], ['main.wpGroupShared', rest.filter((p) => originOf(p) === 'shared')], ['main.wpGroupTeam', rest.filter((p) => originOf(p) === 'team')]].filter(([, list]) => list.length);
+        const grid = (list) => `<div class="wp-cards">${list.map((p) => card(p, today)).join('')}</div>`;
+        body = groups.length === 1 && groups[0][0] !== 'main.wpGroupPinned' ? grid(groups[0][1]) : groups.map(([key, list]) => `<h4 class="wp-group">${esc(t(key))}</h4>${grid(list)}`).join('');
     }
     // el buscador no se reemplaza mientras se escribe: si ya está en pantalla solo se cambia lo de abajo
     const existing = root.querySelector('#wp-list-body');
@@ -230,52 +270,68 @@ function kpis(plan, items, today) {
 }
 function levelStrip(plan, canEdit) {
     const names = plan.levelNames || [];
-    const chips = names.map((name, i) => `<span class="wp-lvl-chip wp-lvl-chip-${Math.min(i + 1, 4)}"><i>${i + 1}</i>${esc(name)}</span>`).join('<span class="wp-lvl-arrow" aria-hidden="true">›</span>');
+    const chips = names.map((name, i) => `<span class="wp-lvl-chip wp-lvl-chip-${(i % 4) + 1}"><i>${i + 1}</i>${esc(name)}</span>`).join('<span class="wp-lvl-arrow" aria-hidden="true">›</span>');
     return `<div class="wp-levels" role="group" aria-label="${esc(t('main.wpLevelsOfPlan'))}" data-help-key="wpLevels"><b>${esc(t('main.wpLevelsOfPlan'))}</b>${chips}${canEdit ? `<button type="button" class="btn btn-secondary wp-small" data-wp-act="edit-plan">${esc(t('main.wpChangeNames'))}</button>` : ''}</div>`;
 }
-function planActions(plan, canEdit) {
+// De quién es el plan y con quién se comparte: «Privado», «Compartido con 3 personas» o «De Marco Ríos · Tu rol: Colaborar».
+function accessLine(plan) {
+    const origin = originOf(plan);
+    if (origin === 'own') return plan.memberCount ? t('main.wpSharedWith', { n: plan.memberCount }) + (plan.bossCanView ? ` · ${t('main.wpBossSees')}` : '') : (plan.bossCanView ? `${t('main.wpPrivate')} · ${t('main.wpBossSees')}` : t('main.wpPrivate'));
+    return `${t('main.wpFromOwner', { name: plan.ownerName || '—' })} · ${t('main.wpYourRole', { role: roleText(origin === 'team' ? 'team' : (plan.myRole || 'view')) })}`;
+}
+// Lo que cada quien puede hacer con el plan lo decide el servidor según su rol (plan.can); aquí solo se dibujan los botones que vienen permitidos.
+function planActions(plan) {
+    const can = plan.can || {};
     const closed = plan.status === 'closed';
-    const btn = (op, icon, labelKey, extra) => `<button type="button" class="btn btn-secondary wp-small${extra ? ` ${extra}` : ''}" data-wp-act="${op}" data-help-key="${{ pin: 'wpPin', history: 'wpHistory', close: 'wpClose', reopen: 'wpClose', delete: 'wpDelete', 'edit-plan': 'wpEditPlan' }[op] || 'wpPlanActions'}"><i class="bx ${icon}" aria-hidden="true"></i> ${esc(t(labelKey))}</button>`;
-    const out = [];
-    if (canEdit) {
-        out.push(btn('pin', plan.pinned ? 'bxs-star' : 'bx-star', plan.pinned ? 'main.wpUnpin' : 'main.wpPin'));
-        if (!closed) out.push(btn('edit-plan', 'bx-edit-alt', 'main.wpEditPlan'));
-        out.push(btn(closed ? 'reopen' : 'close', closed ? 'bx-lock-open-alt' : 'bx-lock-alt', closed ? 'main.wpReopen' : 'main.wpClosePlan'));
-    }
+    const live = isLive(plan);
+    const btn = (op, icon, labelKey, extra) => `<button type="button" class="btn btn-secondary wp-small${extra ? ` ${extra}` : ''}" data-wp-act="${op}" data-help-key="${{ pin: 'wpPin', history: 'wpHistory', close: 'wpClose', reopen: 'wpClose', inactivate: 'wpInactivate', reactivate: 'wpInactivate', cancel: 'wpCancel', delete: 'wpDelete', 'edit-plan': 'wpEditPlan', share: 'wpShare', people: 'wpShare', leave: 'wpLeave' }[op] || 'wpPlanActions'}"><i class="bx ${icon}" aria-hidden="true"></i> ${esc(t(labelKey))}</button>`;
+    const out = [btn('pin', plan.pinned ? 'bxs-star' : 'bx-star', plan.pinned ? 'main.wpUnpin' : 'main.wpPin')];
+    if (can.edit && live) out.push(btn('edit-plan', 'bx-edit-alt', 'main.wpEditPlan'));
+    out.push(can.share && live ? btn('share', 'bx-share-alt', 'main.wpShare') : btn('people', 'bx-group', 'main.wpPeople'));
+    if (can.close && (closed || live)) out.push(btn(closed ? 'reopen' : 'close', closed ? 'bx-lock-open-alt' : 'bx-lock-alt', closed ? 'main.wpReopen' : 'main.wpClosePlan'));
+    if (can.inactivate) out.push(btn('inactivate', 'bx-pause-circle', 'main.wpInactivatePlan'));
+    if (can.reactivate) out.push(btn('reactivate', 'bx-play-circle', 'main.wpReactivatePlan'));
+    if (can.cancel) out.push(btn('cancel', 'bx-block', 'main.wpCancelPlan', 'wp-danger'));
+    if (can.delete) out.push(btn('delete', 'bx-trash', 'main.wpDeletePlan', 'wp-danger'));
     out.push(btn('history', 'bx-history', 'main.wpHistory'));
-    if (canEdit) out.push(btn('delete', 'bx-trash', 'main.wpDeletePlan', 'wp-danger'));
+    if (can.leave) out.push(btn('leave', 'bx-log-out-circle', 'main.wpLeave'));
     return `<div class="wp-actions">${out.join('')}</div>`;
 }
-// Los iconos de lo que se puede hacer con un renglón (según el plan esté abierto para escribir).
+// Los iconos de lo que se puede hacer con un renglón (item.can lo manda el servidor para quien mira).
 function rowButtons(plan, item) {
-    const levels = (plan.levelNames || []).length;
+    const can = item.can || {};
     const btn = (op, icon, labelKey, extra) => `<button type="button" class="admin-icon-btn impl-act-btn${op === 'remove' ? ' admin-icon-btn-danger' : ''}" data-wp-row="${op}" data-id="${item.id}"${extra || ''} aria-label="${esc(t(labelKey))}" title="${esc(t(labelKey))}"><i class="bx ${icon}" aria-hidden="true"></i></button>`;
     const out = [];
-    if (!item.childCount) {
+    if (can.status && !item.childCount) {
         if (item.status === 'pending') out.push(btn('status', 'bx-play', 'main.wpMarkRunning', ' data-status="in_progress"'));
         if (item.status !== 'done') out.push(btn('status', 'bx-check', 'main.wpMarkDone', ' data-status="done"'));
         if (item.status !== 'pending') out.push(btn('status', 'bx-undo', 'main.wpMarkPending', ' data-status="pending"'));
     }
-    if (item.depth < levels) out.push(btn('add-child', 'bx-subdirectory-right', 'main.wpAddChild', ` data-child-label="${esc(levelLabel(plan, item.depth + 1))}"`));
-    out.push(btn('edit', 'bx-edit-alt', 'main.wpEditItem'));
-    out.push(btn('up', 'bx-up-arrow-alt', 'main.wpMoveUp'));
-    out.push(btn('down', 'bx-down-arrow-alt', 'main.wpMoveDown'));
-    out.push(btn('remove', 'bx-trash', 'main.wpRemoveItem'));
-    return `<span class="impl-act-btns" role="group" aria-label="${esc(t('main.wpNameActions'))}" data-help-key="wpItemActions">${out.join('')}</span>`;
+    if (can.addChild) out.push(btn('add-child', 'bx-subdirectory-right', 'main.wpAddChild', ` data-child-label="${esc(levelLabel(plan, item.depth + 1))}"`));
+    if (can.edit) out.push(btn('edit', 'bx-edit-alt', 'main.wpEditItem'));
+    if (can.move) { out.push(btn('up', 'bx-up-arrow-alt', 'main.wpMoveUp')); out.push(btn('down', 'bx-down-arrow-alt', 'main.wpMoveDown')); }
+    if (can.remove) out.push(btn('remove', 'bx-trash', 'main.wpRemoveItem'));
+    return out.length ? `<span class="impl-act-btns" role="group" aria-label="${esc(t('main.wpNameActions'))}" data-help-key="wpItemActions">${out.join('')}</span>` : '';
 }
 const statusText = (status) => t(`main.wpStatus_${status}`);
 const dot = (status) => `<span class="impl-dot impl-dot-${status === 'in_progress' ? 'running' : status}" role="img" aria-label="${esc(statusText(status))}" title="${esc(statusText(status))}"></span>`;
 const TONE = { pending: 'cancelled', in_progress: 'negotiating', done: 'approved' };
-function nameCell(plan, item, canEdit, collapsed) {
+// Quién responde por el renglón (responsable) y quién lo hace (ejecuta): los dos se ven en cada renglón
+function whoCell(item) {
+    const resp = item.responsibleName ? `<span class="wp-who wp-who-resp" title="${esc(t('main.wpFieldResponsible'))}"><i class="bx bx-user-check" aria-hidden="true"></i>${esc(t('main.wpWhoResp', { name: item.responsibleName }))}</span>` : '';
+    const exec = item.executorName ? `<span class="wp-who wp-who-exec" title="${esc(t('main.wpFieldExecutor'))}"><i class="bx bx-hard-hat" aria-hidden="true"></i>${esc(t('main.wpWhoExec', { name: item.executorName }))}</span>` : '';
+    return `<span class="impl-act-who wp-whos">${resp}${exec}${resp || exec ? '' : `<span class="wp-who wp-who-none">${esc(t('main.wpNoResponsible'))}</span>`}</span>`;
+}
+function nameCell(plan, item, collapsed) {
     const status = statusOf(item);
-    const pad = 0.5 + (item.depth - 1) * 1.25;
+    const pad = 0.5 + Math.min(item.depth - 1, 10) * 1.25; // la sangría deja de crecer pasado el nivel 11 para que el nombre siga cabiendo
     const toggle = item.childCount
         ? `<button type="button" class="impl-chev" data-wp-toggle="${item.id}" aria-expanded="${!collapsed}" aria-label="${esc(t(collapsed ? 'main.wpExpand' : 'main.wpCollapse'))}" title="${esc(t(collapsed ? 'main.wpExpand' : 'main.wpCollapse'))}"><i class="bx bx-chevron-right" aria-hidden="true"></i></button>`
         : '<span class="impl-chev impl-chev-none" aria-hidden="true"></span>';
     const note = item.note ? `<i class="bx bx-note wp-note-ico" role="img" aria-label="${esc(t('main.wpHasNote'))}" title="${esc(item.note)}"></i>` : '';
     const count = item.childCount ? `<span class="impl-cnt">${esc(t('main.wpChildCount', { n: item.childCount }))}</span>` : '';
     return `<div class="impl-nm impl-act-nm wp-nm${item.childCount ? ' wp-node' : ''}" style="padding-left:${pad}rem" role="group" aria-label="${esc(item.title)}" data-help-key="wpItemRow"><span class="impl-act-line"><span class="impl-act-t">${toggle}${dot(status)}<span class="impl-act-name"><b>${esc(item.title)}</b> <span class="wp-lvl-tag">${esc(levelLabel(plan, item.depth))}</span> ${count}${note}</span></span></span>
-        <span class="impl-act-line impl-act-sub"><span class="impl-act-who">${esc(item.responsibleName || t('main.wpNoResponsible'))}</span>${canEdit ? rowButtons(plan, item) : ''}</span></div>`;
+        <span class="impl-act-line impl-act-sub">${whoCell(item)}${rowButtons(plan, item)}</span></div>`;
 }
 function barCells(item, axis, today) {
     const weeks = axis.weeks;
@@ -316,6 +372,7 @@ function itemForm(plan, data) {
         <div class="impl-form-grid">
             <div class="admin-field impl-f-wide"><label for="wp-f-title">${esc(t('main.wpFieldTitle'))}</label><input id="wp-f-title" name="title" type="text" maxlength="120" required autocomplete="off" value="${esc(v.title)}"></div>
             <div class="admin-field impl-f-resp"><label for="wp-f-resp">${esc(t('main.wpFieldResponsible'))}</label><input id="wp-f-resp" name="responsible" type="text" maxlength="80" list="wp-f-people" autocomplete="off" placeholder="${esc(t('main.wpResponsibleHint'))}" value="${esc(v.responsible)}"><datalist id="wp-f-people">${(data.people || []).map((p) => `<option value="${esc(p.name)}"></option>`).join('')}</datalist></div>
+            <div class="admin-field impl-f-resp"><label for="wp-f-exec">${esc(t('main.wpFieldExecutor'))}</label><input id="wp-f-exec" name="executor" type="text" maxlength="80" list="wp-f-people" autocomplete="off" placeholder="${esc(t('main.wpExecutorHint'))}" value="${esc(v.executor)}"></div>
             <div class="admin-field"><label for="wp-f-from">${esc(t('main.wpFieldFrom'))}</label><input id="wp-f-from" name="startDate" type="date" value="${esc(v.startDate)}"></div>
             <div class="admin-field"><label for="wp-f-to">${esc(t('main.wpFieldTo'))}</label><input id="wp-f-to" name="endDate" type="date" value="${esc(v.endDate)}"></div>
             <div class="admin-field impl-f-wide"><label for="wp-f-note">${esc(t('main.wpFieldNote'))}</label><textarea id="wp-f-note" name="note" rows="2" maxlength="1000">${esc(v.note)}</textarea></div>
@@ -324,7 +381,7 @@ function itemForm(plan, data) {
         <div class="admin-form-actions"><button type="submit" class="btn"${f.busy ? ' disabled' : ''}>${esc(t('main.wpSave'))}</button><button type="button" class="btn btn-secondary" data-wp-act="cancel-form">${esc(t('main.wpCancel'))}</button></div>
     </form>`;
 }
-function gantt(plan, items, canEdit, data) {
+function gantt(plan, items, data) {
     const today = todayYmd();
     const axis = axisFor(items);
     const weeks = axis.weeks;
@@ -354,13 +411,13 @@ function gantt(plan, items, canEdit, data) {
         hideBelow = 0;
         const collapsed = item.childCount > 0 && isCollapsed(plan.id, item.id) && !(formHere && form.parentId === item.id);
         if (collapsed) hideBelow = item.depth;
-        html += nameCell(plan, item, canEdit, collapsed) + barCells(item, axis, today) + stateCell(item, today);
+        html += nameCell(plan, item, collapsed) + barCells(item, axis, today) + stateCell(item, today);
         if (index === formAfter) html += formRow();
     });
     const rootForm = formHere && form.mode === 'add' && !form.parentId;
     if (!items.length && !rootForm) html += `<div class="impl-detail-row wp-gantt-empty"><p>${esc(t('main.wpNoItems'))}</p></div>`;
     if (rootForm) html += formRow();
-    else if (canEdit) html += `<div class="impl-detail-row"><div class="impl-add-wrap"><button type="button" class="impl-add" data-wp-act="add-root" data-help-key="wpAddItem"><span class="impl-plus" aria-hidden="true">+</span>${esc(t('main.wpAddRoot', { level: levelLabel(plan, 1) }))}</button></div></div>`;
+    else if (plan.can && plan.can.addRoot && isLive(plan)) html += `<div class="impl-detail-row"><div class="impl-add-wrap"><button type="button" class="impl-add" data-wp-act="add-root" data-help-key="wpAddItem"><span class="impl-plus" aria-hidden="true">+</span>${esc(t('main.wpAddRoot', { level: levelLabel(plan, 1) }))}</button></div></div>`;
     return `${html}</div>`;
 }
 function renderPlan(id) {
@@ -369,15 +426,14 @@ function renderPlan(id) {
     const data = cache.get(id);
     if (!data) { root.innerHTML = `<p class="wp-none">${esc(t('main.wpLoading'))}</p>`; return; }
     const { plan, items } = data;
-    const canEdit = !!data.canEdit && plan.status !== 'closed';
     const frame = root.querySelector('.impl-frame');
     const scrolled = frame ? frame.scrollLeft : 0; // al abrir o cerrar una rama el cronograma no se corre de lugar
     const today = todayYmd();
     const range = plan.startDate ? t('main.wpRange', { from: longDate(plan.startDate), to: longDate(plan.endDate) }) : t('main.wpNoDates');
-    root.innerHTML = `<div class="impl-head wp-head"><div><h3>${esc(planName(plan))}${plan.status === 'closed' ? ` <span class="exp-chip exp-chip-cancelled">${esc(t('main.wpClosedChip'))}</span>` : ''}</h3>${plan.description ? `<span class="impl-sub">${esc(plan.description)}</span>` : ''}<span class="impl-sub">${esc(range)}</span></div>${kpis(plan, items, today)}</div>
-        ${planActions(plan, plan.isOwner !== false)}
-        ${levelStrip(plan, canEdit)}
-        <div class="impl-frame" role="region" aria-label="${esc(t('main.wpNameGantt'))}" data-help-key="wpGantt">${gantt(plan, items, canEdit, data)}</div>`;
+    root.innerHTML = `<div class="impl-head wp-head"><div><h3>${esc(planName(plan))}${!isLive(plan) ? ` ${stateChip(plan.status)}` : ''}</h3>${plan.status === 'cancelled' && plan.cancelReason ? `<span class="impl-sub wp-cancel-reason">${esc(t('main.wpCancelReasonLine', { reason: plan.cancelReason }))}</span>` : ''}${plan.description ? `<span class="impl-sub">${esc(plan.description)}</span>` : ''}<span class="impl-sub">${esc(range)}</span><span class="impl-sub wp-access">${esc(accessLine(plan))}</span></div>${kpis(plan, items, today)}</div>
+        ${planActions(plan)}
+        ${levelStrip(plan, !!(plan.can && plan.can.edit) && isLive(plan))}
+        <div class="impl-frame" role="region" aria-label="${esc(t('main.wpNameGantt'))}" data-help-key="wpGantt">${gantt(plan, items, data)}</div>`;
     const framed = root.querySelector('.impl-frame');
     if (framed && scrolled) framed.scrollLeft = scrolled;
     if (form && form.planId === plan.id) setTimeout(() => { const el = $('wp-f-title'); if (el && document.activeElement !== el && !form.focused) { el.focus(); form.focused = true; } }, 0);
@@ -402,14 +458,54 @@ async function togglePin(id) {
         render();
     } catch (err) { failed(err, id); }
 }
-async function setStatus(id, status) {
+async function simpleState(id, status, confirmKey, toastKey) {
     const plan = plans.find((p) => p.id === id);
     if (!plan) return;
-    const key = status === 'closed' ? 'main.wpCloseConfirm' : 'main.wpReopenConfirm';
-    if (!(await Dashboard.confirm(t(key, { title: plan.title })))) return;
-    if (await planWrite(id, () => api('PATCH', `/${id}`, { status }))) Dashboard.showToast(t(status === 'closed' ? 'main.wpClosedToast' : 'main.wpReopenedToast'), 'success');
+    if (!(await Dashboard.confirm(t(confirmKey, { title: plan.title })))) return;
+    if (await planWrite(id, () => api('PATCH', `/${id}`, { status }))) Dashboard.showToast(t(toastKey), 'success');
 }
-async function deletePlan(id) {
+// Cancelar es definitivo y pide el motivo (queda en el historial y a la vista en el plan)
+function openCancelModal(planId) {
+    const plan = plans.find((p) => p.id === planId);
+    if (!plan) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal" role="dialog" aria-modal="true" aria-label="${esc(t('main.wpCancelTitle', { title: plan.title }))}" data-help-key="wpCancel"><h3>${esc(t('main.wpCancelTitle', { title: plan.title }))}</h3>
+        <p class="admin-hint">${esc(t('main.wpCancelHint'))}</p>
+        <div class="admin-field"><label for="wp-c-reason">${esc(t('main.wpCancelReason'))}</label><textarea id="wp-c-reason" rows="3" maxlength="500"></textarea></div>
+        <p class="admin-error" id="wp-c-error" role="alert" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn wp-danger-btn" data-wp-c="ok">${esc(t('main.wpCancelConfirmBtn'))}</button><button type="button" class="btn btn-secondary" data-wp-c="back">${esc(t('main.wpCancelBack'))}</button></div></div>`;
+    document.body.appendChild(overlay);
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) close(); });
+    setTimeout(() => overlay.querySelector('#wp-c-reason').focus(), 0);
+    overlay.addEventListener('click', async (event) => {
+        const btn = event.target.closest('[data-wp-c]');
+        if (!btn) return;
+        if (btn.dataset.wpC === 'back') { close(); return; }
+        const reason = overlay.querySelector('#wp-c-reason').value.trim();
+        const errorEl = overlay.querySelector('#wp-c-error');
+        if (!reason) { errorEl.textContent = t('main.wpErr_WORK_PLAN_REASON_REQUIRED'); errorEl.hidden = false; return; }
+        btn.disabled = true;
+        try {
+            await api('PATCH', `/${planId}`, { status: 'cancelled', reason });
+            close();
+            await loadList();
+            await loadPlan(planId);
+            Dashboard.showToast(t('main.wpCancelledToast'), 'success');
+            render();
+        } catch (err) {
+            errorEl.textContent = errText(err);
+            errorEl.hidden = false;
+            btn.disabled = false;
+            if (err && err.body && STALE_CODES.includes(err.body.code)) { close(); failed(err, planId); }
+        }
+    });
+}
+// Eliminar solo existe para un plan VACÍO (sin ningún renglón); el servidor lo vuelve a revisar
+async function deleteEmptyPlan(id) {
     const plan = plans.find((p) => p.id === id);
     if (!plan) return;
     if (!(await Dashboard.confirm(t('main.wpDeleteConfirm', { title: plan.title })))) return;
@@ -421,6 +517,13 @@ async function deletePlan(id) {
         closeTab(id);
     } catch (err) { failed(err, id); }
 }
+async function setStatus(id, status) {
+    const plan = plans.find((p) => p.id === id);
+    if (!plan) return;
+    const key = status === 'closed' ? 'main.wpCloseConfirm' : 'main.wpReopenConfirm';
+    if (!(await Dashboard.confirm(t(key, { title: plan.title })))) return;
+    if (await planWrite(id, () => api('PATCH', `/${id}`, { status }))) Dashboard.showToast(t(status === 'closed' ? 'main.wpClosedToast' : 'main.wpReopenedToast'), 'success');
+}
 // ---- renglones ---------------------------------------------------------------------------------------------------------------------------------------
 function openForm(mode, planId, options) {
     const data = cache.get(planId);
@@ -430,7 +533,7 @@ function openForm(mode, planId, options) {
     if (options.parentId) setCollapsed(planId, options.parentId, false);
     form = {
         mode, planId, parentId: mode === 'edit' ? item.parentId : (options.parentId || null), id: item ? item.id : null, depth,
-        values: { title: item ? item.title : '', responsible: item ? item.responsibleName : '', startDate: item ? (item.startDate || '') : '', endDate: item ? (item.endDate || '') : '', note: item ? (item.note || '') : '' },
+        values: { title: item ? item.title : '', responsible: item ? item.responsibleName : '', executor: item ? (item.executorName || '') : '', startDate: item ? (item.startDate || '') : '', endDate: item ? (item.endDate || '') : '', note: item ? (item.note || '') : '' },
         error: '', busy: false, focused: false,
     };
     render();
@@ -452,13 +555,14 @@ async function submitForm(formEl) {
     if (!form || form.busy) return;
     const planId = form.planId;
     const data = cache.get(planId);
-    const f = { title: formEl.elements.title.value, responsible: formEl.elements.responsible.value, startDate: formEl.elements.startDate.value, endDate: formEl.elements.endDate.value, note: formEl.elements.note.value };
+    const f = { title: formEl.elements.title.value, responsible: formEl.elements.responsible.value, executor: formEl.elements.executor.value, startDate: formEl.elements.startDate.value, endDate: formEl.elements.endDate.value, note: formEl.elements.note.value };
     form.values = { ...f };
     const problem = localProblem(f);
     if (problem) { showFormError(t(`main.wpFormErr_${problem}`)); return; }
     // un nombre de la lista de la compañía queda ligado a esa persona; cualquier otro texto queda como responsable libre
     const person = (data.people || []).find((p) => fold(p.name) === fold(f.responsible));
-    const body = { title: f.title.trim(), responsibleUserId: person ? person.id : null, responsibleName: person ? '' : f.responsible.trim(), startDate: f.startDate || null, endDate: f.endDate || null, note: f.note.trim() };
+    const doer = (data.people || []).find((p) => fold(p.name) === fold(f.executor));
+    const body = { title: f.title.trim(), responsibleUserId: person ? person.id : null, responsibleName: person ? '' : f.responsible.trim(), executorUserId: doer ? doer.id : null, executorName: doer ? '' : f.executor.trim(), startDate: f.startDate || null, endDate: f.endDate || null, note: f.note.trim() };
     form.busy = true;
     form.error = '';
     const submit = formEl.querySelector('button[type="submit"]');
@@ -496,7 +600,8 @@ async function rowAction(op, itemId, button) {
 }
 
 // ---- crear o editar un plan (nombre, descripción y niveles) -------------------------------------------------------------------------------------------
-const DEFAULT_LEVELS = () => [t('main.wpLevelDefaultName_1'), t('main.wpLevelDefaultName_2'), t('main.wpLevelDefaultName_3')];
+const MAX_LEVELS = 50; // tope técnico (el mismo del servidor); en la práctica no hay límite
+const DEFAULT_LEVELS = () => [1, 2, 3, 4, 5].map((n) => t(`main.wpLevelDefaultName_${n}`));
 function openPlanModal(planId) {
     const data = planId ? cache.get(planId) : null;
     const plan = data ? data.plan : null;
@@ -507,7 +612,7 @@ function openPlanModal(planId) {
     const levelsHtml = () => names.map((name, i) => `<div class="wp-lvl-row"><span class="wp-lvl-n">${i + 1}</span><input type="text" name="level" maxlength="30" value="${esc(name)}" aria-label="${esc(t('main.wpLevelField', { n: i + 1 }))}" autocomplete="off"></div>`).join('');
     const drawLevels = () => {
         overlay.querySelector('#wp-m-levels').innerHTML = levelsHtml();
-        overlay.querySelector('[data-wp-m="add-level"]').disabled = names.length >= 4;
+        overlay.querySelector('[data-wp-m="add-level"]').disabled = names.length >= MAX_LEVELS;
         overlay.querySelector('[data-wp-m="del-level"]').disabled = names.length <= 1 || names.length <= usedDepth;
     };
     overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal" role="dialog" aria-modal="true" aria-labelledby="wp-m-title" aria-label="${esc(t(plan ? 'main.wpModalEdit' : 'main.wpModalNew'))}" data-help-key="wpPlanForm"><h3 id="wp-m-title">${esc(t(plan ? 'main.wpModalEdit' : 'main.wpModalNew'))}</h3>
@@ -563,6 +668,109 @@ function openPlanModal(planId) {
     });
 }
 
+// ---- compartir un plan y quitarlo de mi lista ----------------------------------------------------------------------------------------------------------
+// Quien puede compartir (el dueño y quien tiene el rol Administrar) agrega personas de la compañía con un rol (Ver, Colaborar o Administrar), cambia roles y quita personas; el dueño además enciende que su jefe directo lo vea.
+// El resto ve quién lo tiene, sin poder cambiar nada. Cada cambio se guarda al momento (no hay botón de guardar) y el servidor decide quién puede qué.
+const ROLES = ['view', 'collaborate', 'admin'];
+function openShareModal(planId) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    document.body.appendChild(overlay);
+    let busy = false;
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) close(); });
+    const roleSelect = (name, value, label) => `<select name="${name}" aria-label="${esc(label)}">${ROLES.map((r) => `<option value="${r}"${r === value ? ' selected' : ''}>${esc(roleText(r))}</option>`).join('')}</select>`;
+    const paint = () => {
+        const data = cache.get(planId);
+        if (!data) { close(); return; }
+        const { plan } = data;
+        const canShare = !!(plan.can && plan.can.share) && isLive(plan);
+        const members = plan.members || [];
+        const known = new Map((data.people || []).map((p) => [p.id, p]));
+        const taken = new Set([plan.ownerId, ...members.map((m) => m.userId)]);
+        const free = (data.people || []).filter((p) => !taken.has(p.id));
+        const ownerName = plan.ownerName || (plan.owner && plan.owner.name) || '—';
+        const memberRows = members.map((m) => {
+            const warn = known.get(m.userId) && known.get(m.userId).hasScreen === false ? `<span class="wp-chip wp-chip-warn" title="${esc(t('main.wpShareNoScreen'))}">${esc(t('main.wpShareNoScreen'))}</span>` : '';
+            return `<div class="wp-share-row"><span class="wp-avatar wp-avatar-sm" aria-hidden="true">${esc(initials(m.name))}</span><div class="wp-share-who"><b>${esc(m.name)}</b>${warn}</div>
+                <div class="wp-share-ctl">${canShare ? `${roleSelect('role', m.role, t('main.wpShareRoleOf', { name: m.name }))}<button type="button" class="admin-icon-btn admin-icon-btn-danger" data-wp-s="remove" data-user="${m.userId}" aria-label="${esc(t('main.wpShareRemove', { name: m.name }))}" title="${esc(t('main.wpShareRemove', { name: m.name }))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : `<span class="wp-chip">${esc(roleText(m.role))}</span>`}</div></div>`;
+        }).join('');
+        const add = canShare ? `<div class="wp-share-add"><div class="admin-field"><label for="wp-s-name">${esc(t('main.wpShareAddLabel'))}</label><input id="wp-s-name" type="text" list="wp-s-people" autocomplete="off" placeholder="${esc(t('main.wpShareAddHint'))}"><datalist id="wp-s-people">${free.map((p) => `<option value="${esc(p.name)}"></option>`).join('')}</datalist></div>
+            <div class="admin-field"><label for="wp-s-role">${esc(t('main.wpShareRoleLabel'))}</label><select id="wp-s-role">${ROLES.map((r) => `<option value="${r}">${esc(roleText(r))}</option>`).join('')}</select></div>
+            <button type="button" class="btn" data-wp-s="add">${esc(t('main.wpShareAdd'))}</button></div><p class="admin-error" id="wp-s-error" role="alert" hidden></p>` : '';
+        const boss = plan.isOwner !== false && originOf(plan) === 'own' && isLive(plan)
+            ? `<label class="wp-switch"><input type="checkbox" data-wp-s="boss"${plan.bossCanView ? ' checked' : ''}><span class="wp-switch-track" aria-hidden="true"></span><span class="wp-switch-text"><b>${esc(t('main.wpShareBossTitle'))}</b><small>${esc(t('main.wpShareBossHint'))}</small></span></label>` : '';
+        overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal wp-share" role="dialog" aria-modal="true" aria-label="${esc(t(canShare ? 'main.wpShareTitle' : 'main.wpPeopleTitle', { title: plan.title }))}" data-help-key="wpShare">
+            <h3>${esc(t(canShare ? 'main.wpShareTitle' : 'main.wpPeopleTitle', { title: plan.title }))}</h3>
+            ${canShare ? `<p class="admin-hint">${esc(t('main.wpShareHint'))}</p>` : ''}
+            ${add}
+            <h4 class="wp-group">${esc(t('main.wpShareMembers'))}</h4>
+            <div class="wp-share-list"><div class="wp-share-row"><span class="wp-avatar wp-avatar-sm" aria-hidden="true">${esc(initials(ownerName))}</span><div class="wp-share-who"><b>${esc(ownerName)}</b></div><div class="wp-share-ctl"><span class="wp-chip wp-chip-own">${esc(t('main.wpShareOwnerRow'))}</span></div></div>${memberRows}</div>
+            ${members.length ? '' : `<p class="wp-none">${esc(t('main.wpShareNobody'))}</p>`}
+            ${boss}
+            <div class="admin-form-actions"><button type="button" class="btn" data-wp-s="done">${esc(t('main.wpShareDone'))}</button></div></div>`;
+    };
+    const showError = (text) => { const el = overlay.querySelector('#wp-s-error'); if (el) { el.textContent = text; el.hidden = !text; } };
+    // el cambio se guarda, se vuelve a leer el plan y la lista, y se dibuja de nuevo el cuadro y la pantalla de atrás
+    const apply = async (operation, toast) => {
+        if (busy) return;
+        busy = true;
+        try {
+            await operation();
+            await loadList();
+            await loadPlan(planId);
+            paint();
+            render();
+            if (toast) Dashboard.showToast(toast, 'success');
+        } catch (err) {
+            if (err && err.body && STALE_CODES.includes(err.body.code)) { close(); failed(err, planId); } else showError(errText(err));
+        } finally { busy = false; }
+    };
+    overlay.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-wp-s]');
+        if (!btn || btn.dataset.wpS === 'boss') return;
+        const op = btn.dataset.wpS;
+        if (op === 'done') { close(); return; }
+        const data = cache.get(planId);
+        if (op === 'remove') {
+            const userId = Number(btn.dataset.user);
+            const member = ((data.plan.members) || []).find((m) => m.userId === userId);
+            apply(() => api('DELETE', `/${planId}/members/${userId}`), t('main.wpShareRemoved', { name: member ? member.name : '' }));
+        } else if (op === 'add') {
+            const name = overlay.querySelector('#wp-s-name').value;
+            const person = (data.people || []).find((p) => fold(p.name) === fold(name));
+            if (!person) { showError(t('main.wpShareNobodyPick')); return; }
+            const role = overlay.querySelector('#wp-s-role').value;
+            apply(() => api('POST', `/${planId}/members`, { userId: person.id, role }), t('main.wpShareAdded', { name: person.name }));
+        }
+    });
+    overlay.addEventListener('change', (event) => {
+        const el = event.target;
+        if (el.matches('[data-wp-s="boss"]')) { apply(() => api('PATCH', `/${planId}`, { bossCanView: el.checked }), t(el.checked ? 'main.wpShareBossOn' : 'main.wpShareBossOff')); return; }
+        const row = el.closest('.wp-share-row');
+        if (el.name === 'role' && row) {
+            const userId = Number(row.querySelector('[data-wp-s="remove"]').dataset.user);
+            apply(() => api('PATCH', `/${planId}/members/${userId}`, { role: el.value }), t('main.wpShareRoleChanged'));
+        }
+    });
+    paint();
+    setTimeout(() => { const el = overlay.querySelector('#wp-s-name') || overlay.querySelector('[data-wp-s="done"]'); if (el) el.focus(); }, 0);
+}
+async function leavePlan(id) {
+    const plan = plans.find((p) => p.id === id);
+    if (!plan) return;
+    if (!(await Dashboard.confirm(t('main.wpLeaveConfirm', { title: plan.title })))) return;
+    try {
+        await api('POST', `/${id}/leave`);
+        cache.delete(id);
+        Dashboard.showToast(t('main.wpLeftToast'), 'success');
+        await loadList();
+        closeTab(id);
+    } catch (err) { failed(err, id); }
+}
+
 // ---- eventos ------------------------------------------------------------------------------------------------------------------------------------------
 document.addEventListener('click', (event) => {
     const el = event.target;
@@ -601,8 +809,13 @@ document.addEventListener('click', (event) => {
     else if (op === 'edit-plan') openPlanModal(planId);
     else if (op === 'close') setStatus(planId, 'closed');
     else if (op === 'reopen') setStatus(planId, 'active');
-    else if (op === 'delete') deletePlan(planId);
+    else if (op === 'inactivate') simpleState(planId, 'inactive', 'main.wpInactivateConfirm', 'main.wpInactivatedToast');
+    else if (op === 'reactivate') simpleState(planId, 'active', 'main.wpReactivateConfirm', 'main.wpReactivatedToast');
+    else if (op === 'cancel') openCancelModal(planId);
+    else if (op === 'delete') deleteEmptyPlan(planId);
     else if (op === 'history') Dashboard.openChangeHistory('work_plans', planId);
+    else if (op === 'share' || op === 'people') openShareModal(planId);
+    else if (op === 'leave') leavePlan(planId);
 });
 document.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;

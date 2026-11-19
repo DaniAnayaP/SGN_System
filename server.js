@@ -615,7 +615,7 @@ const {
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listOwnedWorkPlanIds, listWorkPlans, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -1903,16 +1903,29 @@ app.get('/api/business/implementation/training', requireAuth, (req, res) => {
         }),
     });
 });
-// ---- Planes de trabajo (pieza 1): el plan PRIVADO de su dueño ----
+// ---- Planes de trabajo (piezas 1 y 2a): el plan de su dueño, que puede compartir ----
 // Pantalla general (sección main, junto a Inicio, Panel y Tablero): entra quien tiene la hoja main/planes-trabajo en su árbol (el administrador del cliente, siempre). Las cuentas de SaaS (sin compañía) no tienen planes.
-// Solo el DUEÑO ve y modifica su plan: el de otra persona (de su misma compañía o de otra) responde 404 igual que uno que no existe. Cada cambio queda en el historial (table_key 'work_plans', record_id = id del plan, también para
-// sus renglones); ese historial es privado: solo lo ve el dueño (ver las rutas de table-changes más abajo).
+// Un plan es privado de su dueño; lo puede compartir con personas de su compañía (rol Ver / Colaborar / Administrar) y encender que su jefa directa lo vea (solo lectura). Quien no tiene acceso recibe 404, igual que si no existiera;
+// quien lo tiene pero su rol no alcanza para esa acción recibe 403 WORK_PLAN_NOT_ALLOWED (db.js decide todo: workPlanAccess / workPlanPlanCan / workPlanItemRights). Ciclo de vida (Daniel, 2026-11-19): un plan VACÍO se elimina (DELETE, solo la dueña;
+// su historial se queda); con renglones y sin trabajo registrado solo se INACTIVA ('inactive', reactivable); con trabajo registrado solo se CANCELA ('cancelled', con motivo, definitivo); además se FINALIZA y se reabre ('closed'). PATCH /:id {status, reason?}.
+// Cada cambio queda en el historial (table_key 'work_plans', record_id = id del plan, también para sus renglones y para quién se agrega o se quita); lo ve cualquiera con acceso al plan (ver las rutas de table-changes más abajo).
 const WORK_PLAN_HTTP = {
-    WORK_PLAN_NOT_FOUND: 404, WORK_PLAN_ITEM_NOT_FOUND: 404, WORK_PLAN_FORBIDDEN: 403, WORK_PLAN_CLOSED: 409, WORK_PLAN_LEVELS_IN_USE: 409, WORK_PLAN_LIMIT_PLANS: 409, WORK_PLAN_LIMIT_ITEMS: 409, WORK_PLAN_STATUS_INVALID: 400,
+    WORK_PLAN_NOT_FOUND: 404, WORK_PLAN_ITEM_NOT_FOUND: 404, WORK_PLAN_MEMBER_NOT_FOUND: 404, WORK_PLAN_FORBIDDEN: 403, WORK_PLAN_NOT_ALLOWED: 403, WORK_PLAN_CLOSED: 409, WORK_PLAN_LEVELS_IN_USE: 409, WORK_PLAN_LIMIT_PLANS: 409, WORK_PLAN_LIMIT_ITEMS: 409,
+    WORK_PLAN_LIMIT_MEMBERS: 409, WORK_PLAN_NOT_EMPTY: 409, WORK_PLAN_EMPTY: 409, WORK_PLAN_HAS_WORK: 409, WORK_PLAN_NO_WORK: 409, WORK_PLAN_INACTIVE: 409, WORK_PLAN_CANCELLED: 409, WORK_PLAN_REASON_REQUIRED: 400, WORK_PLAN_MEMBER_EXISTS: 409, WORK_PLAN_MEMBER_INVALID: 400, WORK_PLAN_ROLE_INVALID: 400, WORK_PLAN_STATUS_INVALID: 400,
 };
 const WORK_PLAN_MESSAGES = {
     WORK_PLAN_NOT_FOUND: 'Ese plan no existe.', WORK_PLAN_ITEM_NOT_FOUND: 'Ese renglón no existe en este plan.', WORK_PLAN_FORBIDDEN: 'No tienes permiso para usar los planes de trabajo.',
-    WORK_PLAN_CLOSED: 'El plan está cerrado: ábrelo de nuevo para cambiarlo.', WORK_PLAN_TITLE_REQUIRED: 'Escribe un nombre.', WORK_PLAN_TITLE_TOO_LONG: `El nombre no puede pasar de ${WORK_PLAN_LIMITS.title} letras.`,
+    WORK_PLAN_CLOSED: 'El plan está finalizado: reábrelo para cambiarlo.',
+    WORK_PLAN_NOT_ALLOWED: 'Tu rol en este plan no permite hacer eso.', WORK_PLAN_MEMBER_NOT_FOUND: 'Esa persona no está en este plan.', WORK_PLAN_MEMBER_EXISTS: 'Esa persona ya está en este plan.',
+    WORK_PLAN_MEMBER_INVALID: 'Esa persona no se puede agregar: elige a alguien activo de tu compañía que no sea la dueña del plan.', WORK_PLAN_ROLE_INVALID: 'El rol no es válido: Ver, Colaborar o Administrar.',
+    WORK_PLAN_LIMIT_MEMBERS: `Un plan no se puede compartir con más de ${WORK_PLAN_LIMITS.membersPerPlan} personas.`,
+    WORK_PLAN_NOT_EMPTY: 'Este plan ya tiene renglones: no se puede eliminar. Si todavía no se ha trabajado en él, inactívalo; si ya hay trabajo registrado, cancélalo.',
+    WORK_PLAN_EMPTY: 'Este plan está vacío: solo se puede eliminar.',
+    WORK_PLAN_HAS_WORK: 'Este plan ya tiene trabajo registrado: solo se puede cancelar.',
+    WORK_PLAN_NO_WORK: 'Este plan no tiene trabajo registrado: solo se puede inactivar (o eliminar, si está vacío).',
+    WORK_PLAN_INACTIVE: 'El plan está inactivo: reactívalo para cambiarlo.',
+    WORK_PLAN_CANCELLED: 'El plan está cancelado: ya no se puede cambiar ni reactivar.',
+    WORK_PLAN_REASON_REQUIRED: 'Escribe el motivo de la cancelación.', WORK_PLAN_TITLE_REQUIRED: 'Escribe un nombre.', WORK_PLAN_TITLE_TOO_LONG: `El nombre no puede pasar de ${WORK_PLAN_LIMITS.title} letras.`,
     WORK_PLAN_TEXT_TOO_LONG: 'El texto es demasiado largo.', WORK_PLAN_LEVELS_INVALID: `Los niveles son de 1 a ${WORK_PLAN_LIMITS.levels}, cada uno con un nombre de hasta ${WORK_PLAN_LIMITS.level} letras.`,
     WORK_PLAN_LEVELS_IN_USE: 'No se puede quitar un nivel que ya tiene renglones.', WORK_PLAN_DEPTH_EXCEEDED: 'Ese renglón ya está en el último nivel del plan.', WORK_PLAN_DATES_INVALID: 'Pon las dos fechas (inicio y fin) o ninguna, y que el fin no sea antes del inicio.',
     WORK_PLAN_RESPONSIBLE_INVALID: 'Ese responsable no es válido.', WORK_PLAN_LIMIT_PLANS: `Ya tienes ${WORK_PLAN_LIMITS.plansPerUser} planes: elimina alguno para crear otro.`,
@@ -1932,8 +1945,8 @@ function workPlanGate(req, res) {
     return false;
 }
 const workPlanPick = (body, keys) => { const b = body && typeof body === 'object' ? body : {}; const out = {}; keys.forEach((k) => { if (Object.prototype.hasOwnProperty.call(b, k)) out[k] = b[k]; }); return out; };
-const WORK_PLAN_KEYS = ['title', 'description', 'levelNames', 'pinned', 'status'];
-const WORK_PLAN_ITEM_KEYS = ['parentId', 'title', 'responsibleUserId', 'responsibleName', 'startDate', 'endDate', 'note', 'status'];
+const WORK_PLAN_KEYS = ['title', 'description', 'levelNames', 'pinned', 'status', 'bossCanView', 'reason'];
+const WORK_PLAN_ITEM_KEYS = ['parentId', 'title', 'responsibleUserId', 'responsibleName', 'executorUserId', 'executorName', 'startDate', 'endDate', 'note', 'status'];
 function workPlanLog(req, planId, changes) {
     (changes || []).forEach((c) => logTableChange({
         clientId: req.user.clientId, tableKey: WORK_PLAN_TABLE, recordId: planId, recordLabel: c.recordLabel, action: c.action,
@@ -1954,21 +1967,31 @@ app.get('/api/business/work-plans', requireAuth, (req, res) => {
     const result = listWorkPlans(req.user.clientId, req.user.sub, req.query.status === undefined ? 'active' : String(req.query.status));
     if (result.error) return workPlanFail(res, result);
     res.set('Cache-Control', 'no-store');
-    res.json({ plans: result.plans, closedCount: result.closedCount, canCreate: result.canCreate });
+    res.json({ plans: result.plans, closedCount: result.closedCount, counts: result.counts, canCreate: result.canCreate });
 });
 app.post('/api/business/work-plans', requireAuth, (req, res) => workPlanRun(req, res,
     () => createWorkPlan(req.user.clientId, req.user.sub, workPlanPick(req.body, ['title', 'description', 'levelNames'])), 201, (r) => ({ plan: r.plan })));
 app.get('/api/business/work-plans/:id', requireAuth, (req, res) => {
     if (!workPlanGate(req, res)) return;
-    const result = getWorkPlanDetail(req.user.clientId, req.user.sub, req.params.id);
+    const result = getWorkPlanDetail(req.user.clientId, req.user.sub, req.user.isTestAccount, req.params.id);
     if (result.error) return workPlanFail(res, result);
     res.set('Cache-Control', 'no-store');
-    res.json({ plan: result.plan, items: result.items, people: listWorkPlanPeople(req.user.clientId, req.user.isTestAccount), canEdit: result.canEdit });
+    res.json({ plan: result.plan, items: result.items, people: result.people, canEdit: result.canEdit });
 });
 app.patch('/api/business/work-plans/:id', requireAuth, (req, res) => workPlanRun(req, res,
     () => updateWorkPlan(req.user.clientId, req.user.sub, req.params.id, workPlanPick(req.body, WORK_PLAN_KEYS)), 200, (r) => ({ plan: r.plan })));
+// Eliminar un plan: solo la dueña y solo si está vacío (409 WORK_PLAN_NOT_EMPTY si tiene renglones). Su historial se queda (con un registro «Plan eliminado»), invisible en las listas.
 app.delete('/api/business/work-plans/:id', requireAuth, (req, res) => workPlanRun(req, res,
     () => deleteWorkPlan(req.user.clientId, req.user.sub, req.params.id), 200, () => ({ ok: true })));
+// Compartir: agregar una persona con un rol, cambiarle el rol, quitarla (o quitarse: «quitar de mi lista», también en POST /leave).
+app.post('/api/business/work-plans/:id/members', requireAuth, (req, res) => workPlanRun(req, res,
+    () => addWorkPlanMember(req.user.clientId, req.user.sub, req.user.isTestAccount, req.params.id, workPlanPick(req.body, ['userId', 'role'])), 201, (r) => ({ member: r.member, plan: r.plan })));
+app.patch('/api/business/work-plans/:id/members/:userId', requireAuth, (req, res) => workPlanRun(req, res,
+    () => updateWorkPlanMember(req.user.clientId, req.user.sub, req.params.id, req.params.userId, workPlanPick(req.body, ['role'])), 200, (r) => ({ member: r.member, plan: r.plan })));
+app.delete('/api/business/work-plans/:id/members/:userId', requireAuth, (req, res) => workPlanRun(req, res,
+    () => removeWorkPlanMember(req.user.clientId, req.user.sub, req.params.id, req.params.userId), 200, (r) => (r.plan ? { ok: true, plan: r.plan } : { ok: true })));
+app.post('/api/business/work-plans/:id/leave', requireAuth, (req, res) => workPlanRun(req, res,
+    () => leaveWorkPlan(req.user.clientId, req.user.sub, req.params.id), 200, () => ({ ok: true })));
 app.post('/api/business/work-plans/:id/items', requireAuth, (req, res) => workPlanRun(req, res,
     () => addWorkPlanItem(req.user.clientId, req.user.sub, req.user.isTestAccount, req.params.id, workPlanPick(req.body, WORK_PLAN_ITEM_KEYS), changedByLabel(req)), 201, (r) => ({ item: r.item, plan: r.plan })));
 app.patch('/api/business/work-plans/:id/items/:itemId', requireAuth, (req, res) => workPlanRun(req, res,
@@ -1977,8 +2000,8 @@ app.post('/api/business/work-plans/:id/items/:itemId/move', requireAuth, (req, r
     () => moveWorkPlanItem(req.user.clientId, req.user.sub, req.params.id, req.params.itemId, (req.body || {}).direction), 200, (r) => ({ ok: true, moved: r.moved, plan: r.plan })));
 app.delete('/api/business/work-plans/:id/items/:itemId', requireAuth, (req, res) => workPlanRun(req, res,
     () => removeWorkPlanItem(req.user.clientId, req.user.sub, req.params.id, req.params.itemId), 200, (r) => ({ ok: true, removedCount: r.removedCount, plan: r.plan })));
-// El historial de los planes es privado de su dueño: los renglones de work_plans que no son de un plan suyo se quitan de cualquier lista de cambios.
-const workPlanChangeFilter = (req) => { const own = listOwnedWorkPlanIds(req.user.clientId, req.user.sub); return (change) => change.table_key !== WORK_PLAN_TABLE || own.has(change.record_id); };
+// El historial de un plan lo ve cualquiera con acceso al plan (la dueña, las personas con quien se comparte y la jefa si la dueña lo encendió): los renglones de work_plans de planes a los que no se tiene acceso se quitan de cualquier lista de cambios.
+const workPlanChangeFilter = (req) => { const access = listAccessibleWorkPlanIds(req.user.clientId, req.user.sub); return (change) => change.table_key !== WORK_PLAN_TABLE || access.has(change.record_id); };
 app.get('/api/admin/implementations', requireAuth, requireAdmin, (req, res) => {
     if (!saasImplHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver las implementaciones.' });
     const rows = listImplementationsSummary();
