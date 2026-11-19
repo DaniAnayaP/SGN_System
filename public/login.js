@@ -8,6 +8,8 @@
 // ---------------------------------------------------------------------------
 
 const API_BASE = window.APP_CONFIG?.apiBase || '/api';
+// En …/c/<clave> (inicio personalizado de un cliente) la página vive un nivel adentro: sus archivos se piden desde la raíz.
+const ASSET_BASE = window.location.pathname.startsWith('/c/') ? '/' : '';
 const SUPPORTED_LANGS = ['en', 'es'];
 const DEFAULT_LANG = 'en';
 
@@ -83,7 +85,7 @@ function t(key, params = {}) {
 async function loadLanguage(lang) {
     let loaded = null;
     try {
-        const res = await fetch(`i18n/${lang}.json`);
+        const res = await fetch(`${ASSET_BASE}i18n/${lang}.json`);
         if (res.ok) loaded = await res.json();
     } catch {
         // fetch blocked (e.g. file:// protocol) — fall through to embedded copy

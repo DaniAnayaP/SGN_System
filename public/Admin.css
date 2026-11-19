@@ -9549,6 +9549,9 @@ body.dark-mode .impl-rejected{ color: #ff8f80; }
 input[type="color"].cli-company{ opacity: 0.55; }
 .cli-thumb{ width: 2.4rem; height: 1.6rem; object-fit: contain; border-radius: 0.3rem; background: var(--color-bg); box-shadow: inset 0 0 0 1px var(--color-border); }
 .cli-addr{ font-size: 0.74rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 0.4rem; padding: 0.15rem 0.5rem; word-break: break-all; }
+.cli-linkbtns{ gap: 0.4rem; flex-wrap: wrap; }
+.cli-qr{ width: 9rem; }
+.cli-qr svg{ width: 100%; height: auto; display: block; border-radius: 0.4rem; box-shadow: 0 0 0 1px var(--color-border); }
 .cli-prev{ display: grid; gap: 1rem; align-content: start; min-width: 0; }
 .cli-prev-cap{ display: block; font-size: 0.64rem; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; opacity: 0.7; margin-bottom: 0.35rem; }
 .cli-off{ opacity: 0.4; filter: grayscale(0.6); }

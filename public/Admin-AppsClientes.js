@@ -229,11 +229,16 @@ function buildEditor() {
             <div class="cli-row"><span>${esc(t('admin.saasCliKeyAddress'))}</span><code class="cli-addr" id="cli-address"></code></div>
             <div class="cli-row"><span>${esc(t('admin.saasCliKeyCode'))}</span><code class="cli-addr" id="cli-code"></code></div>
             <p class="cli-sub" id="cli-slug-warn" hidden>${esc(t('admin.saasCliKeyWarn'))}</p></div>
+        ${state.can.link ? `<div class="cli-grp" data-help-key="cliLink" id="cli-link-grp"><h4>${esc(t('admin.saasCliLink'))} ${badge('web')}</h4>
+            <p class="cli-sub" id="cli-link-state"></p>
+            <div class="cli-row"><code class="cli-addr" id="cli-link-url"></code></div>
+            <div class="cli-inline cli-linkbtns"><button type="button" class="btn btn-secondary sc-mini" id="cli-link-copy">${esc(t('admin.saasCliLinkCopy'))}</button><button type="button" class="btn btn-secondary sc-mini" id="cli-link-open">${esc(t('admin.saasCliLinkOpen'))}</button><button type="button" class="btn btn-secondary sc-mini" id="cli-link-qr">${esc(t('admin.saasCliLinkQr'))}</button></div>
+            <div class="cli-qr" id="cli-qr"></div></div>` : ''}
         </div><div class="cli-prev" id="cli-previews"></div></div>`;
     // se pone lo del borrador en los controles
     syncControls();
     const disabled = !can;
-    document.querySelectorAll('#cli-body input, #cli-body button').forEach((el) => { if (el.id === 'cli-slug' || el.id === 'cli-slug-save') return; if (disabled) el.disabled = true; });
+    document.querySelectorAll('#cli-body input, #cli-body button').forEach((el) => { if (el.id === 'cli-slug' || el.id === 'cli-slug-save' || el.closest('#cli-link-grp')) return; if (disabled) el.disabled = true; });
     const slugInput = $('#cli-slug'); const slugSave = $('#cli-slug-save');
     slugInput.disabled = !state.can.slug; slugSave.disabled = !state.can.slug;
 }
@@ -295,7 +300,56 @@ function bindEditor() {
         else if (btn.id === 'cli-bg-pick') $('#cli-bg-file').click();
         else if (btn.id === 'cli-bg-reset') { ed.work.background.image = ''; touch(); }
         else if (btn.id === 'cli-slug-save') saveSlug();
+        else if (btn.id === 'cli-link-copy') copyLink();
+        else if (btn.id === 'cli-link-open' && ed.link) window.open(ed.link.url, '_blank', 'noopener');
+        else if (btn.id === 'cli-link-qr' && ed.link) downloadQr(ed.link.qrRows, ed.link.slug);
     });
+}
+// ---- Enlace y QR: la dirección del cliente y su QR (la cuadrícula viene del servidor; aquí solo se dibuja) ----
+function qrSvg(rows) {
+    const n = rows.length; const quiet = 4; const size = n + quiet * 2;
+    let d = '';
+    rows.forEach((row, y) => { let x = 0; while (x < n) { if (row[x] === '1') { let end = x; while (end < n && row[end] === '1') end += 1; d += `M${x + quiet} ${y + quiet}h${end - x}v1h-${end - x}z`; x = end; } else x += 1; } });
+    return `<svg viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" role="img" aria-label="QR"><rect width="${size}" height="${size}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+}
+function downloadQr(rows, slug) {
+    const n = rows.length; const quiet = 4; const scale = 12; const size = (n + quiet * 2) * scale;
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size); ctx.fillStyle = '#000';
+    rows.forEach((row, y) => { for (let x = 0; x < n; x += 1) if (row[x] === '1') ctx.fillRect((x + quiet) * scale, (y + quiet) * scale, scale, scale); });
+    canvas.toBlob((blob) => {
+        if (!blob) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = `qr-${slug}.png`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+}
+async function loadLink() {
+    const ed = state.editor;
+    if (!ed || !state.can.link || !$('#cli-link-grp')) return;
+    try {
+        const link = await call('GET', `${API}/${ed.clientId}/link`);
+        if (state.editor !== ed) return;
+        ed.link = link;
+        $('#cli-link-url').textContent = link.url;
+        $('#cli-link-state').textContent = t(link.live ? 'admin.saasCliLinkLive' : 'admin.saasCliLinkNotLive');
+        $('#cli-qr').innerHTML = qrSvg(link.qrRows);
+    } catch (err) {
+        $('#cli-link-state').textContent = t('admin.saasCliLinkError');
+    }
+}
+async function copyLink() {
+    const url = state.editor && state.editor.link && state.editor.link.url;
+    if (!url) return;
+    try { await navigator.clipboard.writeText(url); } catch {
+        const probe = document.createElement('textarea'); probe.value = url; document.body.appendChild(probe); probe.select();
+        try { document.execCommand('copy'); } catch { /* sin portapapeles */ }
+        probe.remove();
+    }
+    Dashboard.showToast(t('admin.saasCliLinkCopied'), 'success');
 }
 // ---- guardar, publicar, quitar ----
 function adopt(detail, keepWork) {
@@ -324,7 +378,7 @@ const doPublish = () => guarded(async () => {
     if (JSON.stringify(ed.work) !== ed.savedJson) await saveDraft();
     const detail = await call('POST', `${API}/${ed.clientId}/publish`, {});
     adopt(detail, false);
-    syncControls(); renderPreviews();
+    syncControls(); renderPreviews(); loadLink();
     Dashboard.showToast(t('admin.saasCliPublished'), 'success');
     loadList();
 });
@@ -333,7 +387,7 @@ function saveSlug() {
         const ed = state.editor;
         const detail = await call('PUT', `${API}/${ed.clientId}/slug`, { slug: $('#cli-slug').value });
         adopt(detail, true);
-        syncControls(); renderPreviews();
+        syncControls(); renderPreviews(); loadLink();
         Dashboard.showToast(t('admin.saasCliDone'), 'success');
         loadList();
     });
@@ -379,6 +433,7 @@ async function openEditor(clientId) {
     root.hidden = false;
     buildEditor();
     renderPreviews();
+    loadLink();
     document.getElementById('cli-back').addEventListener('click', () => { closeEditor(); loadList(); });
     document.getElementById('cli-save').addEventListener('click', doSave);
     document.getElementById('cli-publish').addEventListener('click', doPublish);

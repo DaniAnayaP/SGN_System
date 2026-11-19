@@ -1883,7 +1883,7 @@ app.post('/api/admin/implementations/:clientId/levels/:key/:action', requireAuth
 // dirección (…/c/<clave>) y de código de empresa de la app. Cada botón se da en el árbol de accesos de la cuenta (Equipo SaaS); posición de cada botón (a) en SaasAdminCatalog.js: no cambiar el orden.
 // Pieza 1: la pantalla y sus datos. La dirección pública y la app del celular son las piezas siguientes.
 const SAAS_CL_ITEM = 'saas-client-logins';
-const SAAS_CL_LEAVES = { edit: 'tabla::a0', publish: 'tabla::a1', remove: 'tabla::a2', slug: 'tabla::a3' };
+const SAAS_CL_LEAVES = { edit: 'tabla::a0', publish: 'tabla::a1', remove: 'tabla::a2', slug: 'tabla::a3', link: 'tabla::a4' };
 const CL_ERRORS = {
     NOT_FOUND: [404, 'Ese cliente todavía no tiene inicio personalizado.'], EXISTS: [409, 'Ese cliente ya tiene inicio personalizado.'], NO_CHANNEL: [409, 'Enciende computadora o celular antes de publicar.'],
     FORMAT: [400, 'La clave usa de 3 a 40 letras minúsculas sin acentos, números y guiones.'], RESERVED: [400, 'Esa clave está reservada por el sistema.'], TAKEN: [409, 'Esa clave ya la tiene otro cliente.'],
@@ -1989,6 +1989,90 @@ app.delete('/api/admin/client-logins/:clientId', requireAuth, requireAdmin, (req
     if (result.error) return clFail(res, result);
     clLog(req, company.id, 'delete', 'main.cliHistRemove', result.before.slug, '');
     res.json(saasClDetail(req, company.id));
+});
+
+// Pieza 2: la dirección pública. …/c/<clave> abre el Login con la marca PUBLICADA del cliente (el borrador nunca sale). Sin sesión, de aquí solo sale marca (logo, colores, fondo, textos y qué se muestra), nunca datos del cliente.
+// Una clave que no existe, que no está publicada para computadora o de una compañía inactiva lleva igual al inicio de siempre: no se distingue una de otra (así nadie puede ir probando claves). El celular (pieza 3) usará la
+// misma clave como código de empresa. La vista previa del editor (Admin-AppsClientes.js: palette/backgroundCss) y esta página arman los colores y el fondo igual: si cambia uno, cambia el otro.
+const publicClientLoginLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } });
+const clRgb = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+const clHexOf = (rgb) => `#${rgb.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`;
+const clDarken = (hex, factor) => clHexOf(clRgb(hex).map((v) => v * (1 - factor)));
+const clLighten = (hex, factor) => clHexOf(clRgb(hex).map((v) => v + (255 - v) * factor));
+const clHexOrEmpty = (value) => (typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : '');
+// Lo publicado de una clave para computadora, listo para pintar; null si no hay nada que mostrar.
+function clPublicView(slug) {
+    if (!/^[a-z0-9-]{3,40}$/.test(String(slug || ''))) return null;
+    const config = getClientLoginBySlug(slug);
+    if (!config || !config.live || !config.live.channels.web) return null;
+    const company = getClientLoginCompany(config.clientId);
+    if (!company || company.status === 'inactivo') return null;
+    const live = config.live;
+    const primary = live.brand.primary || clHexOrEmpty(company.primaryColor) || '#3a4bc9';
+    const color1 = live.background.color1 || primary;
+    const color2 = live.background.color2 || clHexOrEmpty(company.secondaryColor) || clDarken(color1, 0.42);
+    const button = live.brand.button || clLighten(primary, 0.12);
+    const logoData = live.brand.logo || company.logo || '';
+    const imageData = live.background.image || '';
+    const version = crypto.createHash('md5').update(logoData).update('|').update(imageData).digest('hex').slice(0, 10);
+    const imageUrl = imageData ? `/c/${slug}/img/background?v=${version}` : '';
+    const type = live.background.type;
+    let background;
+    if (type === 'solid') background = color1;
+    else if (type === 'image' && imageUrl) background = `linear-gradient(rgba(0,0,0,.28), rgba(0,0,0,.28)), url("${imageUrl}") center/cover`;
+    else if (type === 'pattern') background = `repeating-linear-gradient(60deg, rgba(255,255,255,.07) 0 14px, transparent 14px 28px), repeating-linear-gradient(-60deg, rgba(255,255,255,.05) 0 14px, transparent 14px 28px), linear-gradient(160deg, ${color2}, ${color1} 60%, ${color2})`;
+    else background = `linear-gradient(160deg, ${color2}, ${color1} 55%, ${color2})`;
+    return {
+        slug, name: company.name, logoData, imageData, logoUrl: logoData ? `/c/${slug}/img/logo?v=${version}` : '',
+        colors: { primary, button, page: clLighten(primary, 0.9) }, background, diagonal: !!live.background.diagonal,
+        texts: { greeting: !!live.texts.greeting, welcome: live.texts.welcome, formTitle: live.texts.formTitle }, show: { forgot: !!live.show.forgot, register: !!live.show.register, social: !!live.show.social, language: !!live.show.language, appLink: !!live.show.appLink },
+    };
+}
+// Login.html tal cual, pero con las direcciones de sus archivos desde la raíz (la página vive en /c/<clave>, no en /) y con lo de la marca metido: colores, fondo y los datos que ClientLogin.css y client-login.js usan.
+let clPageTemplate = null;
+const clEscHtml = (text) => String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function clPageHtml(view) {
+    if (!clPageTemplate) clPageTemplate = fs.readFileSync(path.join(PUBLIC_DIR, 'Login.html'), 'utf8').replace(/(\s(?:src|href))="(?!\/|#|[a-z][a-z0-9+.-]*:)([^"]*)"/gi, '$1="/$2"');
+    const data = { slug: view.slug, name: view.name, logoUrl: view.logoUrl, diagonal: view.diagonal, texts: view.texts, show: view.show };
+    const json = JSON.stringify(data).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+    const vars = `:root{--cl-primary:${view.colors.primary};--cl-button:${view.colors.button};--cl-page:${view.colors.page};--cl-bg:${view.background};}`;
+    // Quien entra por primera vez con el aparato en español ve la página en español (después manda el idioma que elija).
+    const head = `<style id="cl-vars">${vars}</style><link rel="stylesheet" href="/ClientLogin.css"><script>try{if(!localStorage.getItem('lang')&&/^es/i.test(navigator.language||''))localStorage.setItem('lang','es');}catch(e){}window.SGN_CLIENT_LOGIN=${json};</script>`;
+    return clPageTemplate
+        // (con función, no con texto: el nombre de la compañía puede traer «$&» u otros símbolos que replace() leería como instrucciones)
+        .replace(/<title[^>]*>[^<]*<\/title>/, () => `<title>${clEscHtml(view.name)}</title>`)
+        .replace(/<link rel="icon"[^>]*>/, (tag) => (view.logoUrl ? `<link rel="icon" href="${view.logoUrl}">` : tag))
+        .replace('</head>', () => `${head}</head>`)
+        .replace('<body>', () => '<body class="cl-mode">')
+        .replace('</body>', () => '<script src="/client-login.js" defer></script></body>');
+}
+app.get('/c/:slug', publicClientLoginLimiter, (req, res) => {
+    const view = clPublicView(req.params.slug);
+    if (!view) return res.redirect(302, '/');
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' });
+    res.type('html').send(clPageHtml(view));
+});
+// El logo y la imagen de fondo de la marca publicada, como imagen (no van metidos en la página: así el navegador los guarda 5 minutos; la dirección lleva una versión y cambia sola al cambiar la imagen).
+app.get('/c/:slug/img/:kind', publicClientLoginLimiter, (req, res) => {
+    const view = clPublicView(req.params.slug);
+    const data = !view ? '' : (req.params.kind === 'logo' ? view.logoData : (req.params.kind === 'background' ? view.imageData : ''));
+    const match = String(data).match(/^data:(image\/(?:png|jpe?g|webp|gif|svg\+xml))((?:;[A-Za-z0-9=._-]+)*),(.+)$/);
+    if (!match) return res.status(404).end();
+    let body;
+    try { body = /;base64$/i.test(match[2]) ? Buffer.from(match[3], 'base64') : Buffer.from(decodeURIComponent(match[3])); } catch { return res.status(404).end(); }
+    // Un SVG sirve como imagen dentro de la página, pero si alguien abre esta dirección sola no debe poder ejecutar nada: sandbox y sin sniffing.
+    res.set({ 'Content-Type': match[1], 'Cache-Control': 'public, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox" });
+    res.send(body);
+});
+// «Enlace y QR» (pantalla del SaaS): la dirección completa del cliente y la cuadrícula de su QR para dibujarlo. El QR lleva solo la dirección fija: lo que se ve al escanearlo se lee en ese momento, así que un QR impreso sigue sirviendo.
+app.get('/api/admin/client-logins/:clientId/link', requireAuth, requireAdmin, (req, res) => {
+    const company = clGate(req, res, 'link');
+    if (!company) return;
+    const config = getClientLogin(company.id);
+    if (!config) return res.status(404).json({ message: CL_ERRORS.NOT_FOUND[1], code: 'NOT_FOUND' });
+    const url = `${req.protocol}://${req.get('host')}/c/${config.slug}`;
+    res.set('Cache-Control', 'no-store');
+    res.json({ url, qrRows: layoutQrRows(url), slug: config.slug, live: config.web === 'published' || config.web === 'published_changes' });
 });
 
 // --- SaaS admin: clients + per-client module entitlements ("Contrataciones") -

@@ -1,0 +1,134 @@
+/* ---------------------------------------------------------------------------
+   Inicio de sesión PERSONALIZADO de un cliente (…/c/<clave>, Apps Nuestros Clientes).
+   server.js sirve Login.html con <body class="cl-mode"> y mete en <style id="cl-vars"> los colores y el fondo
+   de la marca publicada (--cl-primary, --cl-button, --cl-page, --cl-bg); client-login.js arma el panel de marca
+   (logo, nombre, saludo y frase) y aplica qué se muestra. Todo va bajo .cl-mode: el Login de siempre no cambia.
+   Se ve igual que la vista previa del editor (Admin.css: .cli-*): panel de marca a la izquierda y formulario
+   a la derecha; en celular, uno sobre otro. Este archivo NO va en la app del celular (solo lo carga el servidor).
+--------------------------------------------------------------------------- */
+body.cl-mode{
+    background: var(--cl-page, #eef0f6);
+    animation: none;
+    padding: 16px 0;
+}
+/* Mientras client-login.js arma el panel no se ve nada a medias; si el script no llegara a correr, a los 1.5 s se muestra igual. */
+body.cl-mode:not(.cl-ready){
+    visibility: hidden;
+    animation: clReveal 0s linear 1.5s forwards;
+}
+@keyframes clReveal{ to{ visibility: visible; } }
+
+.cl-mode .container{
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    width: min(900px, calc(100vw - 32px));
+    height: auto;
+    min-height: 540px;
+    margin: 16px;
+    border-radius: 24px;
+}
+.cl-mode .toggle-box{ display: none; }
+.cl-mode .form-box,
+.cl-mode .container.active .form-box{
+    position: static;
+    right: auto;
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    height: auto;
+    transition: none;
+    padding: 40px 44px;
+}
+.cl-mode .form-box.register{ display: none; visibility: visible; }
+.cl-mode.cl-register .form-box.login{ display: none; }
+.cl-mode.cl-register .form-box.register{ display: flex; }
+
+/* el panel de marca */
+.cl-brand{
+    grid-column: 1;
+    grid-row: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--cl-bg);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 10px;
+    padding: 44px 40px;
+}
+.cl-brand > *{ position: relative; z-index: 1; }
+.cl-brand.cl-band::before{
+    content: "";
+    position: absolute;
+    width: 140%;
+    height: 96px;
+    background: rgba(255, 255, 255, .12);
+    transform: rotate(-35deg);
+    left: -20%;
+    top: 46%;
+    pointer-events: none;
+    z-index: 0;
+}
+.cl-logo{
+    display: block;
+    object-fit: contain;
+    max-width: 220px;
+    max-height: 110px;
+    background: rgba(255, 255, 255, .9);
+    border-radius: 12px;
+    padding: 6px;
+}
+.cl-mark{
+    display: block;
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    border: 9px solid #fff;
+    box-sizing: border-box;
+}
+.cl-name{ font-weight: 700; letter-spacing: .02em; font-size: 15px; margin-top: 4px; }
+.cl-brand .cl-greet{ font-size: 30px; font-weight: 700; line-height: 1.2; }
+.cl-brand .cl-sub{ font-size: 16px; opacity: .92; line-height: 1.4; }
+
+/* el formulario, con los colores del cliente */
+.cl-mode .form-box h1{ font-size: 32px; margin: 0 0 6px; }
+.cl-mode .input-box input:focus{
+    outline-color: var(--cl-primary);
+    box-shadow: 0 0 5px color-mix(in srgb, var(--cl-primary) 40%, transparent);
+}
+.cl-mode .forgot-link a{ color: var(--cl-primary); }
+.cl-mode #login-submit,
+.cl-mode #register-submit{ background: var(--cl-button); }
+.cl-mode .form-box p{ color: #6a6e86; }
+.cl-mode .cl-swap{ margin: 14px 0 0; font-size: 14px; }
+.cl-mode .cl-swap button{
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+    color: var(--cl-primary);
+}
+.cl-mode .cl-swap button:hover{ text-decoration: underline; }
+.cl-mode .cl-off{ display: none !important; }
+
+/* celular: el panel de marca arriba y el formulario abajo */
+@media screen and (max-width: 700px){
+    body.cl-mode{ align-items: flex-start; }
+    .cl-mode .container{
+        grid-template-columns: 1fr;
+        width: calc(100vw - 24px);
+        margin: 12px;
+        min-height: 0;
+        height: auto;
+    }
+    .cl-brand{ grid-column: 1; grid-row: 1; align-items: center; text-align: center; padding: 30px 24px; }
+    .cl-mode .form-box,
+    .cl-mode .container.active .form-box{ grid-column: 1; grid-row: 2; padding: 28px 24px 34px; }
+    .cl-brand .cl-greet{ font-size: 24px; }
+    .cl-logo{ max-width: 180px; max-height: 84px; }
+    .cl-mark{ width: 64px; height: 64px; border-width: 7px; }
+}
