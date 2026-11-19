@@ -1479,7 +1479,7 @@ function applyScreenGrantFilter(data) {
 
 // Inicio, Panel y Tablero (los tres de General) de un usuario o perfil del cliente salen solo si se los asignaron en su árbol, como todo lo demás: un usuario recién creado, sin nada asignado, no ve ninguna opción. El
 // administrador del cliente sin configuración propia los ve siempre (hasMainButtonPermission) y la cuenta SaaS arma su menú aparte (con sus propios permisos), así que no pasa por aquí.
-const MAIN_NAV_ITEM_IDS = ['home', 'panel', 'dashboard'];
+const MAIN_NAV_ITEM_IDS = ['home', 'panel', 'dashboard', 'planes-trabajo'];
 function applyMainNavGrantFilter(data) {
     if (currentRole === 'admin') return data;
     return {
@@ -10152,6 +10152,7 @@ const SCREEN_DESCRIPTION_KEYS = {
     'Business-ReglasOrden.html': 'main.fieldRulesSubtitle',
     'Business-Roles.html': 'business.rolesSubtitle',
     'Business-Usuarios.html': 'business.usersSubtitle',
+    'PlanesTrabajo.html': 'main.wpSubtitle',
     'TrazTransVolCombustible.html': 'main.trazSubtitle',
 };
 function sidebarScreenDescription(link) {
@@ -14340,6 +14341,8 @@ function hasScreenAccess(activePage) {
     // Panel.html: igual que en el menú, solo con el permiso Panel del árbol (el administrador del cliente sin configuración propia siempre). Inicio-en.html NO se bloquea: es la página a la que se llega al entrar
     // (vacía, sin datos) y desde ella se llega a lo que la cuenta sí tiene.
     if (activePage === 'panel') return hasMainButtonPermission('panel');
+    // Planes de trabajo (pantalla general, personal): con el permiso de su Estatus del árbol, como Panel.
+    if (activePage === 'planes-trabajo') return hasMainButtonPermission('planes-trabajo');
     // Soporte.html (la página completa de la pestaña Soporte de la campana): con el permiso de esa pestaña en el árbol (Notificaciones › Soporte).
     if (activePage === 'support') return currentRole === 'admin' ? false : (hasMainButtonPermission('btn-notificaciones') && hasNotificationTabPermission('soporte'));
     // La pantalla de UN caso de soporte (OpTISoporteCaso.html) la abre quien reportó el caso (desde «Soporte», sin ninguna hoja del árbol), el equipo y quien ve Soportes cerrados: el servidor decide quién abre cada caso.

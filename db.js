@@ -3449,6 +3449,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'surtido-pedido-manual': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Surtido Pedido Manual' },
     'capacidad-almacenamiento': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Capacidad Almacenamiento' },
     'incidentes': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Incidentes' },
+    'work_plans': { area: '', modulo: 'General', pantalla: 'Planes de trabajo' },
 };
 
 // "Nuestros Cambios" — every row any pantalla has ever logged via
@@ -3852,6 +3853,8 @@ const TABLE_GRANT_PATHS = {
     'nuestras-cotizaciones': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-cotizaciones' },
     'nuestros-traslados': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-nuestros-traslados' },
     'tipos-cliente': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-cliente' },
+    // Planes de trabajo: pantalla GENERAL (sección main, junto a Inicio, Panel y Tablero), sin submenú: se entra con la hoja main/planes-trabajo
+    'work_plans': { sectionId: 'main', itemId: 'planes-trabajo', submenuPrefix: '' },
 };
 
 // menu.json is the single source of truth for where a column actually
@@ -3896,7 +3899,8 @@ function categoryPantallasFor(sectionId, areaId, apartadoId) {
 // perdía (null) y Roles, Usuarios y demás no tenían clasificación ni llave de columna correctas. Ver
 // findPantallaNode, que cae a ese árbol injertado cuando no la encuentra aquí.
 function findPantallaNodeInMenu(sectionId, itemId, submenuPrefix) {
-    const segments = submenuPrefix.split('/');
+    // una pantalla general sin submenú (Planes de trabajo: main/planes-trabajo) trae el prefijo vacío: no hay segmentos que recorrer
+    const segments = submenuPrefix.split('/').filter(Boolean);
     let node;
     let rest;
     if (sectionId === 'main') {
@@ -15632,7 +15636,417 @@ function removeImplementationActivity(clientId, activityId, byLabel) {
     return { before: impl, activityId: activity.id, levelKey: level.key, implementation: getImplementation(clientId) };
 }
 
-// --- Implementación Inicial · nivel 1 «Contratado»: lo que la compañía contrató y lo que YA USA ---------------------------------------------------------------------------------------------------
+// --- Planes de trabajo (pieza 1: el plan PRIVADO de su dueño) ---------------------------------------------------------------------------------
+// Cada persona arma sus planes con el estilo del Cronograma: un árbol de renglones de hasta 4 niveles cuyos NOMBRES pone ella (por defecto Fase › Actividad › Subactividad). Cada renglón lleva responsable, fechas (las dos o ninguna),
+// estado y una nota. El estado se escribe a mano solo en las HOJAS; el de un renglón con hijos se calcula (effectiveStatus) igual que su avance y su rango de fechas. Un plan cerrado queda de solo lectura (se puede reabrir, fijar o eliminar).
+// Solo el dueño ve y modifica su plan (compartir, roles y Mensajes son las piezas siguientes: por eso todo recibe el usuario y la columna owner_user_id). Las reglas de quién puede entrar a la pantalla las decide server.js.
+// El historial (data_table_changes) usa table_key 'work_plans' y record_id = id del PLAN, también para los cambios de sus renglones (cada fila lleva en record_label el renglón: «Actividad «Licencia sanitaria»»).
+const WORK_PLAN_TABLE = 'work_plans';
+const WORK_PLAN_LIMITS = { title: 120, description: 500, note: 1000, level: 30, levels: 4, responsible: 80, plansPerUser: 100, itemsPerPlan: 1000 };
+const WORK_PLAN_DEFAULT_LEVELS = ['Fase', 'Actividad', 'Subactividad'];
+const WORK_PLAN_ITEM_STATUSES = ['pending', 'in_progress', 'done'];
+const WORK_PLAN_ITEM_STATUS_ES = { pending: 'Pendiente', in_progress: 'En curso', done: 'Hecha' };
+const WORK_PLAN_STATUS_ES = { active: 'Activo', closed: 'Cerrado' };
+db.exec(`
+    CREATE TABLE IF NOT EXISTS work_plans (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id        INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        owner_user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title            TEXT NOT NULL,
+        description      TEXT NOT NULL DEFAULT '',
+        level_names      TEXT NOT NULL DEFAULT '[]',
+        status           TEXT NOT NULL DEFAULT 'active',
+        pinned           INTEGER NOT NULL DEFAULT 0,
+        closed_at        TEXT,
+        created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
+        last_activity_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_work_plans_owner ON work_plans (client_id, owner_user_id);
+    CREATE TABLE IF NOT EXISTS work_plan_items (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_id             INTEGER NOT NULL REFERENCES work_plans(id) ON DELETE CASCADE,
+        parent_id           INTEGER REFERENCES work_plan_items(id) ON DELETE CASCADE,
+        depth               INTEGER NOT NULL,
+        position            INTEGER NOT NULL,
+        title               TEXT NOT NULL,
+        responsible_user_id INTEGER,
+        responsible_name    TEXT NOT NULL DEFAULT '',
+        start_date          TEXT,
+        end_date            TEXT,
+        status              TEXT NOT NULL DEFAULT 'pending',
+        note                TEXT NOT NULL DEFAULT '',
+        created_by          TEXT NOT NULL DEFAULT '',
+        created_by_user_id  INTEGER,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_work_plan_items_plan ON work_plan_items (plan_id, parent_id);
+`);
+// UTC con milisegundos ('YYYY-MM-DD HH:MM:SS.mmm'): así «último movimiento» ordena bien aunque dos cambios caigan en el mismo segundo. El front lo lee con parseUtcStamp.
+const workPlanNow = () => new Date().toISOString().replace('T', ' ').replace('Z', '');
+const workPlanLen = (text) => Array.from(String(text)).length;
+// Texto de varias líneas (descripción, nota): sin caracteres de control (menos el salto de línea), espacios de los extremos quitados.
+const workPlanText = (value) => String(value == null ? '' : value).replace(/\r\n?/g, '\n').replace(/[\u0000-\u0009\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
+const workPlanHas = (obj, key) => !!obj && typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, key);
+const workPlanLevelsOf = (row) => { try { const v = JSON.parse(row.level_names); if (Array.isArray(v) && v.length) return v.map(String); } catch { /* se usan los de siempre */ } return [...WORK_PLAN_DEFAULT_LEVELS]; };
+const workPlanItemLabel = (levels, depth, title) => `${levels[depth - 1] || ''} «${title}»`.trim();
+const workPlanLabel = (title) => `Plan «${title}»`;
+// Revisa un título: { value } o { error }.
+function cleanWorkPlanTitle(value) {
+    if (typeof value !== 'string') return { error: 'WORK_PLAN_TITLE_REQUIRED' };
+    const title = implementationLine(value);
+    if (!title) return { error: 'WORK_PLAN_TITLE_REQUIRED' };
+    if (workPlanLen(title) > WORK_PLAN_LIMITS.title) return { error: 'WORK_PLAN_TITLE_TOO_LONG' };
+    return { value: title };
+}
+// Un texto largo opcional (descripción o nota): { value } o { error }.
+function cleanWorkPlanLongText(value, max) {
+    if (value == null) return { value: '' };
+    if (typeof value !== 'string') return { error: 'WORK_PLAN_FIELD_INVALID' };
+    const text = workPlanText(value);
+    if (workPlanLen(text) > max) return { error: 'WORK_PLAN_TEXT_TOO_LONG' };
+    return { value: text };
+}
+// Los nombres de los niveles: de 1 a 4, cada uno de 1 a 30 letras en una sola línea: { value } o { error }.
+function cleanWorkPlanLevels(value) {
+    if (!Array.isArray(value) || value.length < 1 || value.length > WORK_PLAN_LIMITS.levels) return { error: 'WORK_PLAN_LEVELS_INVALID' };
+    const names = [];
+    for (const raw of value) {
+        if (typeof raw !== 'string') return { error: 'WORK_PLAN_LEVELS_INVALID' };
+        const name = implementationLine(raw);
+        if (!name || workPlanLen(name) > WORK_PLAN_LIMITS.level) return { error: 'WORK_PLAN_LEVELS_INVALID' };
+        names.push(name);
+    }
+    return { value: names };
+}
+// Las dos fechas o ninguna (YYYY-MM-DD reales, fin ≥ inicio): { start, end } (null si no hay) o { error }.
+function cleanWorkPlanDates(startValue, endValue) {
+    for (const d of [startValue, endValue]) if (d != null && typeof d !== 'string') return { error: 'WORK_PLAN_DATES_INVALID' };
+    const start = String(startValue || '').trim();
+    const end = String(endValue || '').trim();
+    if (!start && !end) return { start: null, end: null };
+    if (!start || !end || !isRealDateOnly(start) || !isRealDateOnly(end) || end < start) return { error: 'WORK_PLAN_DATES_INVALID' };
+    return { start, end };
+}
+// Las personas que se pueden elegir como responsable: activas, de la misma compañía y del mismo tipo de cuenta (real o de prueba).
+function listWorkPlanPeople(clientId, forTestAccount = false) {
+    return listActiveUsersBrief(clientId, forTestAccount).map((u) => ({ id: u.id, name: implementationLine(u.name) || u.username }));
+}
+// Responsable: { userId, name } o { error }. Con userId se liga a esa persona (y se guarda su nombre por si después se da de baja); si no, nombre libre (≤ 80) o nada. `current` = lo que ya tiene el renglón (en un cambio parcial).
+function cleanWorkPlanResponsible(clientId, forTestAccount, fields, current) {
+    const hasUser = workPlanHas(fields, 'responsibleUserId');
+    const hasName = workPlanHas(fields, 'responsibleName');
+    if (!hasUser && !hasName) return { userId: current ? current.userId : null, name: current ? current.name : '' };
+    if (hasUser && fields.responsibleUserId != null && fields.responsibleUserId !== '') {
+        const id = Number(fields.responsibleUserId);
+        const person = Number.isInteger(id) ? listWorkPlanPeople(clientId, forTestAccount).find((p) => p.id === id) : null;
+        if (!person) return { error: 'WORK_PLAN_RESPONSIBLE_INVALID' };
+        return { userId: person.id, name: person.name };
+    }
+    if (hasName && fields.responsibleName != null && typeof fields.responsibleName !== 'string') return { error: 'WORK_PLAN_RESPONSIBLE_INVALID' };
+    const name = hasName ? implementationLine(fields.responsibleName) : '';
+    if (workPlanLen(name) > WORK_PLAN_LIMITS.responsible) return { error: 'WORK_PLAN_RESPONSIBLE_INVALID' };
+    return { userId: null, name };
+}
+// Los renglones de un plan ya con sus campos calculados, en orden de árbol (pre-orden por position): childCount, rangeStart/rangeEnd (propias + las de todos sus descendientes), progress 0–100 y effectiveStatus.
+// Hoja: progress 100 si está hecha, si no 0, y effectiveStatus = su estado. Con hijos: progress = hojas hechas / hojas × 100 y effectiveStatus 'done' (todas hechas), 'pending' (todas pendientes) o 'in_progress'.
+function computeWorkPlanItems(rows) {
+    const userIds = [...new Set(rows.map((r) => r.responsible_user_id).filter((id) => id != null))];
+    const names = new Map();
+    if (userIds.length) db.prepare(`SELECT id, name, username FROM users WHERE id IN (${userIds.map(() => '?').join(',')})`).all(...userIds).forEach((u) => names.set(u.id, implementationLine(u.name) || u.username));
+    const byParent = new Map();
+    rows.forEach((r) => { const key = r.parent_id == null ? 0 : r.parent_id; if (!byParent.has(key)) byParent.set(key, []); byParent.get(key).push(r); });
+    byParent.forEach((list) => list.sort((a, b) => a.position - b.position || a.id - b.id));
+    const out = [];
+    const visit = (row) => {
+        const kids = byParent.get(row.id) || [];
+        const item = {
+            id: row.id, parentId: row.parent_id == null ? null : row.parent_id, depth: row.depth, position: row.position, title: row.title,
+            responsibleUserId: row.responsible_user_id == null ? null : row.responsible_user_id,
+            responsibleName: row.responsible_user_id != null && names.has(row.responsible_user_id) ? names.get(row.responsible_user_id) : row.responsible_name,
+            startDate: row.start_date || null, endDate: row.end_date || null, status: row.status, note: row.note,
+            createdBy: row.created_by, createdAt: row.created_at, updatedAt: row.updated_at, childCount: kids.length,
+            rangeStart: row.start_date || null, rangeEnd: row.end_date || null, progress: 0, effectiveStatus: row.status,
+        };
+        out.push(item);
+        if (!kids.length) { item.progress = row.status === 'done' ? 100 : 0; return { leaves: 1, done: row.status === 'done' ? 1 : 0, pending: row.status === 'pending' ? 1 : 0 }; }
+        const sum = { leaves: 0, done: 0, pending: 0 };
+        kids.forEach((kid) => {
+            const before = out.length;
+            const part = visit(kid);
+            const child = out[before];
+            sum.leaves += part.leaves; sum.done += part.done; sum.pending += part.pending;
+            if (child.rangeStart && (!item.rangeStart || child.rangeStart < item.rangeStart)) item.rangeStart = child.rangeStart;
+            if (child.rangeEnd && (!item.rangeEnd || child.rangeEnd > item.rangeEnd)) item.rangeEnd = child.rangeEnd;
+        });
+        item.progress = Math.round((sum.done / sum.leaves) * 100);
+        item.effectiveStatus = sum.done === sum.leaves ? 'done' : (sum.pending === sum.leaves ? 'pending' : 'in_progress');
+        return sum;
+    };
+    (byParent.get(0) || []).forEach(visit);
+    return out;
+}
+// El resumen de un plan (lo que muestra la lista) a partir de su fila y de sus renglones ya calculados.
+function summarizeWorkPlan(row, items, ownerName) {
+    const leaves = items.filter((i) => i.childCount === 0);
+    const done = leaves.filter((i) => i.status === 'done').length;
+    let start = null; let end = null; let next = null;
+    items.forEach((i) => {
+        if (i.startDate && (!start || i.startDate < start)) start = i.startDate;
+        if (i.endDate && (!end || i.endDate > end)) end = i.endDate;
+    });
+    leaves.forEach((i) => { if (i.status !== 'done' && i.endDate && (!next || i.endDate < next.endDate)) next = { itemId: i.id, title: i.title, endDate: i.endDate }; });
+    return {
+        id: row.id, title: row.title, description: row.description, levelNames: workPlanLevelsOf(row), status: row.status, closed: row.status === 'closed', pinned: !!row.pinned,
+        ownerId: row.owner_user_id, ownerName, isOwner: true, origin: 'own', createdAt: row.created_at, updatedAt: row.updated_at, lastActivityAt: row.last_activity_at, closedAt: row.closed_at || null,
+        itemCount: items.length, leafCount: leaves.length, doneCount: done, openLeafCount: leaves.length - done, progress: leaves.length ? Math.round((done / leaves.length) * 100) : 0,
+        startDate: start, endDate: end, nextDue: next,
+    };
+}
+// ¿El Estatus del Árbol Maestro de una pantalla general (sección main) lo ve esta persona? Habilitado lo ve todo el mundo; en construcción, mejoras o inhabilitado solo la cuenta de pruebas. Cuenta también para el administrador del
+// cliente (como en el menú: una pantalla sin liberar no se le abre aunque sea administrador), por eso no basta con mirar los permisos efectivos.
+function isMainScreenStatusVisible(clientId, userId, itemId) {
+    const account = db.prepare('SELECT is_test_account AS isTest FROM users WHERE id = ?').get(userId);
+    if (!account) return false;
+    if (account.isTest) return true;
+    return new Set(getUserVisibleStatuses(userId)).has(resolveMasterNodeStatus('main', itemId, null, getLimitsContext(clientId).overrides));
+}
+const workPlanOwnerName = (userId) => { const u = db.prepare('SELECT name, username FROM users WHERE id = ?').get(userId); return u ? (implementationLine(u.name) || u.username) : ''; };
+// Un plan SUYO (de esa compañía y de ese dueño); cualquier otro (de otra persona, de otra compañía, que no existe) da undefined: la ruta responde 404 sin revelar si existe.
+const findOwnedWorkPlan = (clientId, userId, planId) => db.prepare('SELECT * FROM work_plans WHERE id = ? AND client_id = ? AND owner_user_id = ?').get(Number(planId), clientId, userId);
+function workPlanSnapshot(row) {
+    const items = computeWorkPlanItems(db.prepare('SELECT * FROM work_plan_items WHERE plan_id = ?').all(row.id));
+    return { plan: summarizeWorkPlan(row, items, workPlanOwnerName(row.owner_user_id)), items };
+}
+const touchWorkPlan = (planId) => { const now = workPlanNow(); db.prepare('UPDATE work_plans SET updated_at = ?, last_activity_at = ? WHERE id = ?').run(now, now, planId); return now; };
+// Los planes de esa persona: fijados primero y luego por último movimiento. status = 'active' (por defecto) | 'closed' | 'all'.
+function listWorkPlans(clientId, userId, status = 'active') {
+    if (!['active', 'closed', 'all'].includes(status)) return { error: 'WORK_PLAN_STATUS_INVALID' };
+    const rows = db.prepare(`SELECT * FROM work_plans WHERE client_id = ? AND owner_user_id = ?${status === 'all' ? '' : ' AND status = ?'} ORDER BY pinned DESC, last_activity_at DESC, id DESC`)
+        .all(...(status === 'all' ? [clientId, userId] : [clientId, userId, status]));
+    const itemRows = rows.length ? db.prepare(`SELECT * FROM work_plan_items WHERE plan_id IN (${rows.map(() => '?').join(',')})`).all(...rows.map((r) => r.id)) : [];
+    const byPlan = new Map();
+    itemRows.forEach((r) => { if (!byPlan.has(r.plan_id)) byPlan.set(r.plan_id, []); byPlan.get(r.plan_id).push(r); });
+    const ownerName = workPlanOwnerName(userId);
+    const counts = db.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(status = 'closed'), 0) AS closed FROM work_plans WHERE client_id = ? AND owner_user_id = ?").get(clientId, userId);
+    return { plans: rows.map((r) => summarizeWorkPlan(r, computeWorkPlanItems(byPlan.get(r.id) || []), ownerName)), closedCount: counts.closed, total: counts.total, canCreate: counts.total < WORK_PLAN_LIMITS.plansPerUser };
+}
+// Los ids de los planes de esa persona (el historial de un plan solo lo ve su dueño: ver las rutas de table-changes en server.js).
+function listOwnedWorkPlanIds(clientId, userId) {
+    return new Set(db.prepare('SELECT id FROM work_plans WHERE client_id = ? AND owner_user_id = ?').all(clientId, userId).map((r) => r.id));
+}
+function createWorkPlan(clientId, userId, { title, description, levelNames } = {}) {
+    const t = cleanWorkPlanTitle(title);
+    if (t.error) return t;
+    const d = cleanWorkPlanLongText(description, WORK_PLAN_LIMITS.description);
+    if (d.error) return d;
+    const l = levelNames == null ? { value: [...WORK_PLAN_DEFAULT_LEVELS] } : cleanWorkPlanLevels(levelNames);
+    if (l.error) return l;
+    if (db.prepare('SELECT COUNT(*) AS n FROM work_plans WHERE client_id = ? AND owner_user_id = ?').get(clientId, userId).n >= WORK_PLAN_LIMITS.plansPerUser) return { error: 'WORK_PLAN_LIMIT_PLANS' };
+    const now = workPlanNow();
+    const id = Number(db.prepare('INSERT INTO work_plans (client_id, owner_user_id, title, description, level_names, created_at, updated_at, last_activity_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(clientId, userId, t.value, d.value, JSON.stringify(l.value), now, now, now).lastInsertRowid);
+    const snap = workPlanSnapshot(findOwnedWorkPlan(clientId, userId, id));
+    return { planId: id, plan: snap.plan, changes: [{ action: 'create', recordLabel: workPlanLabel(t.value) }] };
+}
+// El plan con todos sus renglones (lista plana en orden de árbol) y si quien lo abre lo puede editar (el dueño, con el plan abierto).
+function getWorkPlanDetail(clientId, userId, planId) {
+    const row = findOwnedWorkPlan(clientId, userId, planId);
+    if (!row) return { error: 'WORK_PLAN_NOT_FOUND' };
+    return { ...workPlanSnapshot(row), canEdit: row.status === 'active' };
+}
+// Cambiar título, descripción, nombres de los niveles, fijado (pinned) o estado ('active' | 'closed'). Con el plan cerrado solo se permite reabrirlo (status 'active') y fijarlo/desfijarlo.
+// Fijar no es un movimiento del plan: no cambia su fecha de cambio ni su último movimiento, y no queda en el historial.
+function updateWorkPlan(clientId, userId, planId, patch) {
+    const row = findOwnedWorkPlan(clientId, userId, planId);
+    if (!row) return { error: 'WORK_PLAN_NOT_FOUND' };
+    const body = patch && typeof patch === 'object' ? patch : {};
+    if (row.status === 'closed' && ['title', 'description', 'levelNames'].some((k) => workPlanHas(body, k))) return { error: 'WORK_PLAN_CLOSED' };
+    const levels = workPlanLevelsOf(row);
+    const next = { title: row.title, description: row.description, levelNames: levels, status: row.status, pinned: !!row.pinned };
+    if (workPlanHas(body, 'title')) { const t = cleanWorkPlanTitle(body.title); if (t.error) return t; next.title = t.value; }
+    if (workPlanHas(body, 'description')) { const d = cleanWorkPlanLongText(body.description, WORK_PLAN_LIMITS.description); if (d.error) return d; next.description = d.value; }
+    if (workPlanHas(body, 'levelNames')) {
+        const l = cleanWorkPlanLevels(body.levelNames);
+        if (l.error) return l;
+        const deepest = db.prepare('SELECT COALESCE(MAX(depth), 0) AS d FROM work_plan_items WHERE plan_id = ?').get(row.id).d;
+        if (l.value.length < deepest) return { error: 'WORK_PLAN_LEVELS_IN_USE' };
+        next.levelNames = l.value;
+    }
+    if (workPlanHas(body, 'status')) { if (!['active', 'closed'].includes(body.status)) return { error: 'WORK_PLAN_STATUS_INVALID' }; next.status = body.status; }
+    if (workPlanHas(body, 'pinned')) {
+        if (!(typeof body.pinned === 'boolean' || body.pinned === 0 || body.pinned === 1)) return { error: 'WORK_PLAN_FIELD_INVALID' };
+        next.pinned = !!body.pinned;
+    }
+    const label = workPlanLabel(row.title);
+    const changes = [];
+    if (next.title !== row.title) changes.push({ action: 'update', recordLabel: label, fieldKey: 'main.workPlanFieldTitle', oldValue: row.title, newValue: next.title });
+    if (next.description !== row.description) changes.push({ action: 'update', recordLabel: label, fieldKey: 'main.workPlanFieldDescription', oldValue: row.description, newValue: next.description });
+    if (next.levelNames.join('\u0001') !== levels.join('\u0001')) changes.push({ action: 'update', recordLabel: label, fieldKey: 'main.workPlanFieldLevels', oldValue: levels.join(' › '), newValue: next.levelNames.join(' › ') });
+    if (next.status !== row.status) changes.push({ action: 'update', recordLabel: label, fieldKey: 'main.workPlanFieldStatus', oldValue: WORK_PLAN_STATUS_ES[row.status], newValue: WORK_PLAN_STATUS_ES[next.status] });
+    db.transaction(() => {
+        if (changes.length) {
+            const now = workPlanNow();
+            db.prepare('UPDATE work_plans SET title = ?, description = ?, level_names = ?, status = ?, closed_at = ?, updated_at = ?, last_activity_at = ? WHERE id = ?')
+                .run(next.title, next.description, JSON.stringify(next.levelNames), next.status, next.status === 'closed' ? (row.closed_at || now) : null, now, now, row.id);
+        }
+        if (next.pinned !== !!row.pinned) db.prepare('UPDATE work_plans SET pinned = ? WHERE id = ?').run(next.pinned ? 1 : 0, row.id);
+    })();
+    return { planId: row.id, plan: workPlanSnapshot(findOwnedWorkPlan(clientId, userId, row.id)).plan, changes };
+}
+// Eliminar el plan con todos sus renglones. También se borra su historial: es privado de su dueño y sin el plan ya no hay a qué mostrárselo.
+function deleteWorkPlan(clientId, userId, planId) {
+    const row = findOwnedWorkPlan(clientId, userId, planId);
+    if (!row) return { error: 'WORK_PLAN_NOT_FOUND' };
+    db.transaction(() => {
+        db.prepare('DELETE FROM data_table_changes WHERE client_id = ? AND table_key = ? AND record_id = ?').run(clientId, WORK_PLAN_TABLE, row.id);
+        db.prepare('DELETE FROM work_plans WHERE id = ?').run(row.id);
+    })();
+    return { ok: true, planId: row.id };
+}
+// Lo que devuelven las escrituras de renglones: el renglón ya calculado y el resumen del plan para refrescar el avance.
+function workPlanItemResult(clientId, userId, planId, itemId, extra) {
+    const snap = workPlanSnapshot(findOwnedWorkPlan(clientId, userId, planId));
+    return { planId, plan: snap.plan, item: itemId == null ? null : snap.items.find((i) => i.id === itemId) || null, ...extra };
+}
+// Agregar un renglón: parentId null = de primer nivel; si no, debajo de ese renglón (su nivel + 1, sin pasar del último nivel del plan). Va al final de sus hermanos.
+function addWorkPlanItem(clientId, userId, forTestAccount, planId, fields, byLabel) {
+    const row = findOwnedWorkPlan(clientId, userId, planId);
+    if (!row) return { error: 'WORK_PLAN_NOT_FOUND' };
+    if (row.status === 'closed') return { error: 'WORK_PLAN_CLOSED' };
+    const f = fields && typeof fields === 'object' ? fields : {};
+    const t = cleanWorkPlanTitle(f.title);
+    if (t.error) return t;
+    const resp = cleanWorkPlanResponsible(clientId, forTestAccount, f, null);
+    if (resp.error) return resp;
+    const dates = cleanWorkPlanDates(f.startDate, f.endDate);
+    if (dates.error) return dates;
+    const note = cleanWorkPlanLongText(f.note, WORK_PLAN_LIMITS.note);
+    if (note.error) return note;
+    let parent = null;
+    if (f.parentId != null && f.parentId !== '') {
+        const pid = Number(f.parentId);
+        parent = Number.isInteger(pid) ? db.prepare('SELECT * FROM work_plan_items WHERE id = ? AND plan_id = ?').get(pid, row.id) : null;
+        if (!parent) return { error: 'WORK_PLAN_ITEM_NOT_FOUND' };
+    }
+    const levels = workPlanLevelsOf(row);
+    const depth = parent ? parent.depth + 1 : 1;
+    if (depth > levels.length) return { error: 'WORK_PLAN_DEPTH_EXCEEDED' };
+    if (db.prepare('SELECT COUNT(*) AS n FROM work_plan_items WHERE plan_id = ?').get(row.id).n >= WORK_PLAN_LIMITS.itemsPerPlan) return { error: 'WORK_PLAN_LIMIT_ITEMS' };
+    let id = 0;
+    db.transaction(() => {
+        const last = db.prepare('SELECT COALESCE(MAX(position), 0) AS p FROM work_plan_items WHERE plan_id = ? AND parent_id IS ?').get(row.id, parent ? parent.id : null).p;
+        const now = workPlanNow();
+        id = Number(db.prepare(`INSERT INTO work_plan_items (plan_id, parent_id, depth, position, title, responsible_user_id, responsible_name, start_date, end_date, note, created_by, created_by_user_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(row.id, parent ? parent.id : null, depth, last + 1, t.value, resp.userId, resp.name, dates.start, dates.end, note.value, byLabel || '', userId, now, now).lastInsertRowid);
+        // al recibir su primer hijo, un renglón deja de ser hoja: su estado ya no se escribe a mano (se calcula), así que vuelve a «Pendiente» por si algún día se queda sin hijos
+        if (parent && parent.status !== 'pending' && !db.prepare('SELECT 1 FROM work_plan_items WHERE parent_id = ? AND id != ?').get(parent.id, id)) db.prepare("UPDATE work_plan_items SET status = 'pending' WHERE id = ?").run(parent.id);
+        touchWorkPlan(row.id);
+    })();
+    return workPlanItemResult(clientId, userId, row.id, id, { changes: [{ action: 'create', recordLabel: workPlanItemLabel(levels, depth, t.value) }] });
+}
+// Cambiar un renglón (lo que venga en `fields`; lo demás se queda): título, responsable, fechas (las dos o ninguna), nota y estado (solo en hojas).
+function updateWorkPlanItem(clientId, userId, forTestAccount, planId, itemId, fields) {
+    const row = findOwnedWorkPlan(clientId, userId, planId);
+    if (!row) return { error: 'WORK_PLAN_NOT_FOUND' };
+    const item = db.prepare('SELECT * FROM work_plan_items WHERE id = ? AND plan_id = ?').get(Number(itemId), row.id);
+    if (!item) return { error: 'WORK_PLAN_ITEM_NOT_FOUND' };
+    if (row.status === 'closed') return { error: 'WORK_PLAN_CLOSED' };
+    const f = fields && typeof fields === 'object' ? fields : {};
+    const levels = workPlanLevelsOf(row);
+    const label = workPlanItemLabel(levels, item.depth, item.title);
+    const next = {};
+    if (workPlanHas(f, 'title')) { const t = cleanWorkPlanTitle(f.title); if (t.error) return t; next.title = t.value; }
+    if (workPlanHas(f, 'responsibleUserId') || workPlanHas(f, 'responsibleName')) {
+        const r = cleanWorkPlanResponsible(clientId, forTestAccount, f, { userId: item.responsible_user_id, name: item.responsible_name });
+        if (r.error) return r;
+        next.responsible = r;
+    }
+    if (workPlanHas(f, 'startDate') || workPlanHas(f, 'endDate')) {
+        const d = cleanWorkPlanDates(workPlanHas(f, 'startDate') ? f.startDate : item.start_date, workPlanHas(f, 'endDate') ? f.endDate : item.end_date);
+        if (d.error) return d;
+        next.dates = d;
+    }
+    if (workPlanHas(f, 'note')) { const n = cleanWorkPlanLongText(f.note, WORK_PLAN_LIMITS.note); if (n.error) return n; next.note = n.value; }
+    if (workPlanHas(f, 'status')) {
+        if (!WORK_PLAN_ITEM_STATUSES.includes(f.status)) return { error: 'WORK_PLAN_STATUS_INVALID', http: 400 };
+        if (db.prepare('SELECT 1 FROM work_plan_items WHERE parent_id = ?').get(item.id)) return { error: 'WORK_PLAN_STATUS_INVALID', http: 409 };
+        next.status = f.status;
+    }
+    const changes = [];
+    const log = (fieldKey, oldValue, newValue) => changes.push({ action: 'update', recordLabel: label, fieldKey, oldValue, newValue });
+    if (next.title != null && next.title !== item.title) log('main.workPlanFieldItemTitle', item.title, next.title);
+    if (next.responsible) {
+        const shown = (r) => (r.userId != null ? (listWorkPlanPeople(clientId, forTestAccount).find((p) => p.id === r.userId) || { name: r.name }).name : r.name);
+        const before = item.responsible_user_id != null ? (db.prepare('SELECT name, username FROM users WHERE id = ?').get(item.responsible_user_id) || {}) : null;
+        const beforeText = before ? (implementationLine(before.name) || before.username || item.responsible_name) : item.responsible_name;
+        const afterText = shown(next.responsible);
+        if (afterText !== beforeText || next.responsible.userId !== item.responsible_user_id) log('main.workPlanFieldResponsible', beforeText, afterText);
+    }
+    if (next.dates) {
+        if (next.dates.start !== (item.start_date || null)) log('main.workPlanFieldStart', item.start_date || '', next.dates.start || '');
+        if (next.dates.end !== (item.end_date || null)) log('main.workPlanFieldEnd', item.end_date || '', next.dates.end || '');
+    }
+    if (next.note != null && next.note !== item.note) log('main.workPlanFieldNote', item.note, next.note);
+    if (next.status != null && next.status !== item.status) log('main.workPlanFieldItemStatus', WORK_PLAN_ITEM_STATUS_ES[item.status], WORK_PLAN_ITEM_STATUS_ES[next.status]);
+    if (changes.length) {
+        db.transaction(() => {
+            const now = workPlanNow();
+            db.prepare('UPDATE work_plan_items SET title = ?, responsible_user_id = ?, responsible_name = ?, start_date = ?, end_date = ?, note = ?, status = ?, updated_at = ? WHERE id = ?')
+                .run(next.title != null ? next.title : item.title,
+                    next.responsible ? next.responsible.userId : item.responsible_user_id, next.responsible ? next.responsible.name : item.responsible_name,
+                    next.dates ? next.dates.start : item.start_date, next.dates ? next.dates.end : item.end_date,
+                    next.note != null ? next.note : item.note, next.status != null ? next.status : item.status, now, item.id);
+            touchWorkPlan(row.id);
+        })();
+    }
+    return workPlanItemResult(clientId, userId, row.id, item.id, { changes });
+}
+// Subir o bajar un renglón entre sus hermanos (direction 'up' | 'down'). En el borde no hace nada.
+function moveWorkPlanItem(clientId, userId, planId, itemId, direction) {
+    const row = findOwnedWorkPlan(clientId, userId, planId);
+    if (!row) return { error: 'WORK_PLAN_NOT_FOUND' };
+    const item = db.prepare('SELECT * FROM work_plan_items WHERE id = ? AND plan_id = ?').get(Number(itemId), row.id);
+    if (!item) return { error: 'WORK_PLAN_ITEM_NOT_FOUND' };
+    if (row.status === 'closed') return { error: 'WORK_PLAN_CLOSED' };
+    if (direction !== 'up' && direction !== 'down') return { error: 'WORK_PLAN_FIELD_INVALID' };
+    const siblings = db.prepare('SELECT id, position FROM work_plan_items WHERE plan_id = ? AND parent_id IS ? ORDER BY position, id').all(row.id, item.parent_id == null ? null : item.parent_id);
+    const index = siblings.findIndex((s) => s.id === item.id);
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= siblings.length) return workPlanItemResult(clientId, userId, row.id, item.id, { moved: false, changes: [] });
+    const reordered = siblings.map((s) => s.id);
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    db.transaction(() => {
+        const setPos = db.prepare('UPDATE work_plan_items SET position = ? WHERE id = ?');
+        reordered.forEach((id, i) => setPos.run(i + 1, id));
+        touchWorkPlan(row.id);
+    })();
+    const label = workPlanItemLabel(workPlanLevelsOf(row), item.depth, item.title);
+    return workPlanItemResult(clientId, userId, row.id, item.id, { moved: true, changes: [{ action: 'update', recordLabel: label, fieldKey: 'main.workPlanFieldItemOrder', oldValue: `Posición ${index + 1}`, newValue: `Posición ${target + 1}` }] });
+}
+// Quitar un renglón con todo lo que tiene debajo (queda un cambio «Eliminado» por cada renglón quitado, en orden de árbol).
+function removeWorkPlanItem(clientId, userId, planId, itemId) {
+    const row = findOwnedWorkPlan(clientId, userId, planId);
+    if (!row) return { error: 'WORK_PLAN_NOT_FOUND' };
+    const item = db.prepare('SELECT * FROM work_plan_items WHERE id = ? AND plan_id = ?').get(Number(itemId), row.id);
+    if (!item) return { error: 'WORK_PLAN_ITEM_NOT_FOUND' };
+    if (row.status === 'closed') return { error: 'WORK_PLAN_CLOSED' };
+    const levels = workPlanLevelsOf(row);
+    const all = db.prepare('SELECT * FROM work_plan_items WHERE plan_id = ?').all(row.id);
+    const byParent = new Map();
+    all.forEach((r) => { const k = r.parent_id == null ? 0 : r.parent_id; if (!byParent.has(k)) byParent.set(k, []); byParent.get(k).push(r); });
+    const removed = [];
+    const walk = (r) => { removed.push(r); (byParent.get(r.id) || []).sort((a, b) => a.position - b.position || a.id - b.id).forEach(walk); };
+    walk(item);
+    db.transaction(() => {
+        db.prepare('DELETE FROM work_plan_items WHERE id = ?').run(item.id); // los de abajo se van con él (ON DELETE CASCADE)
+        touchWorkPlan(row.id);
+    })();
+    return workPlanItemResult(clientId, userId, row.id, null, { removedCount: removed.length, changes: removed.map((r) => ({ action: 'delete', recordLabel: workPlanItemLabel(levels, r.depth, r.title) })) });
+}
+
+// --- Implementación Inicial · nivel 1 «Contratado»: lo que la compañía contrató y lo que YA USA---------------------------------------------------------------------------------------------------
 // Resumen de departamentos, áreas, sitios y centros de costo contratados contra lo que ya se está usando, más el árbol de accesos contratado (el de Mis Accesos, solo lectura). «En uso» = ya hay algo hecho (Daniel, 2026-11-19):
 // sitios y centros = los que ya están creados; una pantalla = ya tiene datos capturados (al menos un cambio en su historial, data_table_changes); un área = alguna de sus pantallas está en uso; un departamento = alguna de sus áreas está en uso.
 // Se calcula en cada lectura (se actualiza solo mientras avanzan los demás niveles). Las pantallas sin historial (vistas, tableros) no cuentan.
@@ -18754,4 +19168,5 @@ module.exports = {
     getUserGrants,
     setUserGrants,
     getUserGrantChangeLog,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listOwnedWorkPlanIds, listWorkPlans, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
 };

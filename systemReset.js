@@ -61,6 +61,8 @@ const TABLES = {
     implementation_events: { action: WIPE, group: 'captures' },
     implementation_tasks: { action: WIPE, group: 'captures' },
     implementation_activities: { action: WIPE, group: 'captures' }, // las actividades que se agregan a cada nivel del Cronograma
+    work_plans: { action: WIPE, group: 'captures' }, // Planes de trabajo: los planes privados de cada persona (2026-11-19)
+    work_plan_items: { action: WIPE, group: 'captures' }, // y sus renglones (niveles, actividades y subactividades)
     client_login_configs: { action: WIPE, group: 'captures' }, // Apps Nuestros Clientes: el inicio de sesión personalizado de cada cliente
     sku_requests: { action: WIPE, group: 'captures' },
     sku_request_events: { action: WIPE, group: 'captures' },

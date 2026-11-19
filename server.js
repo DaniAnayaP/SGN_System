@@ -615,6 +615,7 @@ const {
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listOwnedWorkPlanIds, listWorkPlans, createWorkPlan, getWorkPlanDetail, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -637,7 +638,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual' };
+const EXTRA_SCREEN_LABEL_KEYS = { 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual', work_plans: 'menu.workPlans' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -1902,6 +1903,82 @@ app.get('/api/business/implementation/training', requireAuth, (req, res) => {
         }),
     });
 });
+// ---- Planes de trabajo (pieza 1): el plan PRIVADO de su dueño ----
+// Pantalla general (sección main, junto a Inicio, Panel y Tablero): entra quien tiene la hoja main/planes-trabajo en su árbol (el administrador del cliente, siempre). Las cuentas de SaaS (sin compañía) no tienen planes.
+// Solo el DUEÑO ve y modifica su plan: el de otra persona (de su misma compañía o de otra) responde 404 igual que uno que no existe. Cada cambio queda en el historial (table_key 'work_plans', record_id = id del plan, también para
+// sus renglones); ese historial es privado: solo lo ve el dueño (ver las rutas de table-changes más abajo).
+const WORK_PLAN_HTTP = {
+    WORK_PLAN_NOT_FOUND: 404, WORK_PLAN_ITEM_NOT_FOUND: 404, WORK_PLAN_FORBIDDEN: 403, WORK_PLAN_CLOSED: 409, WORK_PLAN_LEVELS_IN_USE: 409, WORK_PLAN_LIMIT_PLANS: 409, WORK_PLAN_LIMIT_ITEMS: 409, WORK_PLAN_STATUS_INVALID: 400,
+};
+const WORK_PLAN_MESSAGES = {
+    WORK_PLAN_NOT_FOUND: 'Ese plan no existe.', WORK_PLAN_ITEM_NOT_FOUND: 'Ese renglón no existe en este plan.', WORK_PLAN_FORBIDDEN: 'No tienes permiso para usar los planes de trabajo.',
+    WORK_PLAN_CLOSED: 'El plan está cerrado: ábrelo de nuevo para cambiarlo.', WORK_PLAN_TITLE_REQUIRED: 'Escribe un nombre.', WORK_PLAN_TITLE_TOO_LONG: `El nombre no puede pasar de ${WORK_PLAN_LIMITS.title} letras.`,
+    WORK_PLAN_TEXT_TOO_LONG: 'El texto es demasiado largo.', WORK_PLAN_LEVELS_INVALID: `Los niveles son de 1 a ${WORK_PLAN_LIMITS.levels}, cada uno con un nombre de hasta ${WORK_PLAN_LIMITS.level} letras.`,
+    WORK_PLAN_LEVELS_IN_USE: 'No se puede quitar un nivel que ya tiene renglones.', WORK_PLAN_DEPTH_EXCEEDED: 'Ese renglón ya está en el último nivel del plan.', WORK_PLAN_DATES_INVALID: 'Pon las dos fechas (inicio y fin) o ninguna, y que el fin no sea antes del inicio.',
+    WORK_PLAN_RESPONSIBLE_INVALID: 'Ese responsable no es válido.', WORK_PLAN_LIMIT_PLANS: `Ya tienes ${WORK_PLAN_LIMITS.plansPerUser} planes: elimina alguno para crear otro.`,
+    WORK_PLAN_LIMIT_ITEMS: `Un plan no puede tener más de ${WORK_PLAN_LIMITS.itemsPerPlan} renglones.`, WORK_PLAN_STATUS_INVALID: 'Ese estado no es válido para este plan o renglón.', WORK_PLAN_FIELD_INVALID: 'Falta un dato o viene mal escrito.',
+};
+function workPlanFail(res, result) {
+    const code = result.error;
+    const message = WORK_PLAN_MESSAGES[code] || 'No se pudo completar lo pedido.';
+    return res.status(result.http || WORK_PLAN_HTTP[code] || 400).json({ error: message, message, code });
+}
+// ¿Esta cuenta puede usar la pantalla? Cuenta de una compañía cuyo Estatus de la pantalla (Árbol Maestro) ya está habilitado, y administrador del cliente o con la hoja main/planes-trabajo en sus permisos efectivos
+// (los que de verdad valen: Estatus y exclusiones).
+function workPlanGate(req, res) {
+    if (req.user.clientId && isMainScreenStatusVisible(req.user.clientId, req.user.sub, 'planes-trabajo')
+        && (req.user.isClientAdmin || isTupleGranted(getUserEffectiveGrants(req.user.sub), 'main', 'planes-trabajo', null))) return true;
+    workPlanFail(res, { error: 'WORK_PLAN_FORBIDDEN' });
+    return false;
+}
+const workPlanPick = (body, keys) => { const b = body && typeof body === 'object' ? body : {}; const out = {}; keys.forEach((k) => { if (Object.prototype.hasOwnProperty.call(b, k)) out[k] = b[k]; }); return out; };
+const WORK_PLAN_KEYS = ['title', 'description', 'levelNames', 'pinned', 'status'];
+const WORK_PLAN_ITEM_KEYS = ['parentId', 'title', 'responsibleUserId', 'responsibleName', 'startDate', 'endDate', 'note', 'status'];
+function workPlanLog(req, planId, changes) {
+    (changes || []).forEach((c) => logTableChange({
+        clientId: req.user.clientId, tableKey: WORK_PLAN_TABLE, recordId: planId, recordLabel: c.recordLabel, action: c.action,
+        fieldKey: c.fieldKey || '', oldValue: c.oldValue, newValue: c.newValue, changedBy: changedByLabel(req),
+    }));
+}
+// Corre una operación de db.js sobre un plan: valida la cuenta, responde el error o el resultado y deja los cambios en el historial.
+function workPlanRun(req, res, operation, statusOk, respond) {
+    if (!workPlanGate(req, res)) return;
+    const result = operation();
+    if (result.error) return workPlanFail(res, result);
+    workPlanLog(req, result.planId, result.changes);
+    res.set('Cache-Control', 'no-store');
+    res.status(statusOk).json(respond(result));
+}
+app.get('/api/business/work-plans', requireAuth, (req, res) => {
+    if (!workPlanGate(req, res)) return;
+    const result = listWorkPlans(req.user.clientId, req.user.sub, req.query.status === undefined ? 'active' : String(req.query.status));
+    if (result.error) return workPlanFail(res, result);
+    res.set('Cache-Control', 'no-store');
+    res.json({ plans: result.plans, closedCount: result.closedCount, canCreate: result.canCreate });
+});
+app.post('/api/business/work-plans', requireAuth, (req, res) => workPlanRun(req, res,
+    () => createWorkPlan(req.user.clientId, req.user.sub, workPlanPick(req.body, ['title', 'description', 'levelNames'])), 201, (r) => ({ plan: r.plan })));
+app.get('/api/business/work-plans/:id', requireAuth, (req, res) => {
+    if (!workPlanGate(req, res)) return;
+    const result = getWorkPlanDetail(req.user.clientId, req.user.sub, req.params.id);
+    if (result.error) return workPlanFail(res, result);
+    res.set('Cache-Control', 'no-store');
+    res.json({ plan: result.plan, items: result.items, people: listWorkPlanPeople(req.user.clientId, req.user.isTestAccount), canEdit: result.canEdit });
+});
+app.patch('/api/business/work-plans/:id', requireAuth, (req, res) => workPlanRun(req, res,
+    () => updateWorkPlan(req.user.clientId, req.user.sub, req.params.id, workPlanPick(req.body, WORK_PLAN_KEYS)), 200, (r) => ({ plan: r.plan })));
+app.delete('/api/business/work-plans/:id', requireAuth, (req, res) => workPlanRun(req, res,
+    () => deleteWorkPlan(req.user.clientId, req.user.sub, req.params.id), 200, () => ({ ok: true })));
+app.post('/api/business/work-plans/:id/items', requireAuth, (req, res) => workPlanRun(req, res,
+    () => addWorkPlanItem(req.user.clientId, req.user.sub, req.user.isTestAccount, req.params.id, workPlanPick(req.body, WORK_PLAN_ITEM_KEYS), changedByLabel(req)), 201, (r) => ({ item: r.item, plan: r.plan })));
+app.patch('/api/business/work-plans/:id/items/:itemId', requireAuth, (req, res) => workPlanRun(req, res,
+    () => updateWorkPlanItem(req.user.clientId, req.user.sub, req.user.isTestAccount, req.params.id, req.params.itemId, workPlanPick(req.body, WORK_PLAN_ITEM_KEYS.filter((k) => k !== 'parentId'))), 200, (r) => ({ item: r.item, plan: r.plan })));
+app.post('/api/business/work-plans/:id/items/:itemId/move', requireAuth, (req, res) => workPlanRun(req, res,
+    () => moveWorkPlanItem(req.user.clientId, req.user.sub, req.params.id, req.params.itemId, (req.body || {}).direction), 200, (r) => ({ ok: true, moved: r.moved, plan: r.plan })));
+app.delete('/api/business/work-plans/:id/items/:itemId', requireAuth, (req, res) => workPlanRun(req, res,
+    () => removeWorkPlanItem(req.user.clientId, req.user.sub, req.params.id, req.params.itemId), 200, (r) => ({ ok: true, removedCount: r.removedCount, plan: r.plan })));
+// El historial de los planes es privado de su dueño: los renglones de work_plans que no son de un plan suyo se quitan de cualquier lista de cambios.
+const workPlanChangeFilter = (req) => { const own = listOwnedWorkPlanIds(req.user.clientId, req.user.sub); return (change) => change.table_key !== WORK_PLAN_TABLE || own.has(change.record_id); };
 app.get('/api/admin/implementations', requireAuth, requireAdmin, (req, res) => {
     if (!saasImplHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver las implementaciones.' });
     const rows = listImplementationsSummary();
@@ -19422,7 +19499,7 @@ app.post('/api/business/hr-workers/:id/resend-credentials-email', requireAuth, r
 app.get('/api/business/table-changes/:tableKey', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const recordId = req.query.recordId ? Number(req.query.recordId) : undefined;
-    res.json({ changes: getTableChanges(req.user.clientId, req.params.tableKey, recordId) });
+    res.json({ changes: getTableChanges(req.user.clientId, req.params.tableKey, recordId).filter(workPlanChangeFilter(req)) });
 });
 
 // --- Búsqueda Guardada / Acomodo Guardado -------------------------------
@@ -19795,7 +19872,7 @@ app.delete('/api/admin/saas-saved-layouts/:id', requireAuth, requireAdmin, (req,
 // only needs adding there to show up here too.
 app.get('/api/business/table-changes', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    const changes = getAllTableChanges(req.user.clientId).map((c) => ({
+    const changes = getAllTableChanges(req.user.clientId).filter(workPlanChangeFilter(req)).map((c) => ({
         ...c,
         screenLabelKey: screenLabelKeyOf(c.table_key),
     }));

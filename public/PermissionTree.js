@@ -141,7 +141,7 @@
     // alongside its real áreas (see generalItems below), but core
     // navigation rather than a Giro/Plan-facing "Área", so never
     // draggable/reorderable (see isRealArea in renderStatusTree).
-    const GENERAL_ITEM_IDS = ['home', 'panel', 'dashboard'];
+    const GENERAL_ITEM_IDS = ['home', 'panel', 'dashboard', 'planes-trabajo'];
     // Top-bar buttons (Mensajes/Chatbot/Notificaciones/Marcadores/
     // Configuración/Datos de Usuario/Datos de Usuario del Negocio) -- 'main'
     // section items that used to render as flat top-level "Área" rows
