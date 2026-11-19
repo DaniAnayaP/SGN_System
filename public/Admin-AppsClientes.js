@@ -186,8 +186,53 @@ function phoneLogin(ed) {
 function renderPreviews() {
     const ed = state.editor;
     const phones = `${ed.work.show.welcomeScreen ? phoneWelcome(ed) : ''}${phoneLogin(ed)}`;
-    $('#cli-previews').innerHTML = `<div><span class="cli-prev-cap">${esc(t('admin.saasCliPrevWeb'))}</span>${webPreview(ed)}</div><div><span class="cli-prev-cap">${esc(t('admin.saasCliPrevApp'))}</span><div class="cli-phones${ed.work.channels.app ? '' : ' cli-off'}">${phones}</div></div>`;
+    $('#cli-previews').innerHTML = `<div><span class="cli-prev-cap">${esc(t('admin.saasCliPrevWeb'))}</span>${webPreview(ed)}</div><div><span class="cli-prev-cap">${esc(t('admin.saasCliPrevApp'))}</span><div class="cli-phones${ed.work.channels.app ? '' : ' cli-off'}">${phones}</div></div><div><span class="cli-prev-cap">${esc(t('admin.saasCliPrevIcon'))}</span>${iconPreview(ed)}</div>`;
     renderStatus();
+}
+// ---- el ícono de la app: logo de la marca (o el de Diseño de Compañía) sobre el color elegido, con la banda «by SGN» abajo. Se dibuja aquí (imagen SVG) y se baja como PNG de 1024 px, cuadrado y sin esquinas redondeadas:
+// las tiendas y el celular le ponen su propia máscara. El nombre abreviado va debajo del ícono en la pantalla del celular, no dentro de la imagen. ----
+function iconIdentity(ed) {
+    const id = ed.work.identity || { shortName: '', iconColor: '' };
+    return { name: id.shortName || ed.company.suggestedShortName || '', color: id.iconColor || palette(ed).primary, logo: ed.work.brand.logo || ed.company.logo || '' };
+}
+function iconSvg(ed) {
+    const id = iconIdentity(ed);
+    const [r, g, b] = hexToRgb(id.color);
+    const light = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.62; // sobre un color muy claro la banda va más oscura para que «by SGN» se lea
+    const plate = id.logo
+        ? `<rect x="176" y="130" width="672" height="520" rx="92" fill="#fff"/><image href="${id.logo}" xlink:href="${id.logo}" x="216" y="170" width="592" height="440" preserveAspectRatio="xMidYMid meet"/>`
+        : `<circle cx="500" cy="390" r="170" fill="none" stroke="#fff" stroke-width="68"/><circle cx="668" cy="506" r="50" fill="${lighten(id.color, 0.6)}"/>`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024" width="1024" height="1024"><rect width="1024" height="1024" fill="${id.color}"/>${plate}<rect y="772" width="1024" height="252" fill="rgba(0,0,0,${light ? 0.62 : 0.34})"/><text x="512" y="925" text-anchor="middle" font-family="Poppins, Arial, Helvetica, sans-serif" font-weight="700" font-size="120" letter-spacing="6" fill="#fff">by SGN</text></svg>`;
+}
+const iconUri = (ed) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(iconSvg(ed))}`;
+function iconPreview(ed) {
+    const id = iconIdentity(ed);
+    const uri = esc(iconUri(ed));
+    const img = (size) => `<img class="cli-appicon" src="${uri}" width="${size}" height="${size}" alt="">`;
+    return `<div class="cli-iconprev"><div class="cli-iconrow">
+        <div class="cli-iconit">${img(104)}<span>${esc(t('admin.saasCliIconStore'))}</span></div>
+        <div class="cli-iconit">${img(60)}<span class="cli-iconlbl">${esc(id.name)}</span><span>${esc(t('admin.saasCliIconHome'))}</span></div>
+        <div class="cli-iconit">${img(38)}<span>${esc(t('admin.saasCliIconAlert'))}</span></div></div>
+        ${state.can.icon ? `<button type="button" class="btn btn-secondary sc-mini" id="cli-icon-dl">${esc(t('admin.saasCliIconDownload'))}</button>` : ''}</div>`;
+}
+function downloadIcon() {
+    const ed = state.editor;
+    const img = new Image();
+    img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024; canvas.height = 1024;
+        canvas.getContext('2d').drawImage(img, 0, 0, 1024, 1024);
+        canvas.toBlob((blob) => {
+            if (!blob) { Dashboard.showToast(t('admin.saasCliIconError'), 'error'); return; }
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = `icono-${ed.config.slug}.png`;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+            Dashboard.showToast(t('admin.saasCliIconDownloaded'), 'success');
+        }, 'image/png');
+    };
+    img.onerror = () => Dashboard.showToast(t('admin.saasCliIconError'), 'error');
+    img.src = iconUri(ed);
 }
 function renderStatus() {
     const ed = state.editor;
@@ -214,6 +259,11 @@ function buildEditor() {
         <div class="cli-grp" data-help-key="cliBrand"><h4>${esc(t('admin.saasCliGrpBrand'))} ${badge('both')}</h4>
             <div class="cli-row"><span>${esc(t('admin.saasCliLogo'))}</span><span class="cli-inline"><span id="cli-logo-thumb"></span><input type="file" id="cli-logo-file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" hidden><button type="button" class="cli-link" id="cli-logo-pick">${esc(t('admin.saasCliLogoChange'))}</button><button type="button" class="cli-link" id="cli-logo-reset">${esc(t('admin.saasCliLogoReset'))}</button></span></div>
             ${colorRow('brand.primary', t('admin.saasCliPrimary'))}${colorRow('brand.button', t('admin.saasCliButton'))}</div>
+        <div class="cli-grp" data-help-key="cliIdentity"><h4>${esc(t('admin.saasCliGrpIdentity'))} ${badge('app')}</h4>
+            <label class="cli-row"><span>${esc(t('admin.saasCliShortName'))} <span class="cli-count" id="cli-short-count"></span></span><input type="text" class="cli-fld" id="cli-short" data-p="identity.shortName" maxlength="12" autocomplete="off" spellcheck="false"></label>
+            ${colorRow('identity.iconColor', t('admin.saasCliIconColor'))}
+            <div class="cli-row"><span>${esc(t('admin.saasCliIconBy'))}</span><span class="cli-sub">${esc(t('admin.saasCliIconByFixed'))}</span></div>
+            <p class="cli-sub">${esc(t('admin.saasCliIconLogoNote'))}</p></div>
         <div class="cli-grp"><h4>${esc(t('admin.saasCliGrpBackground'))} ${badge('both')}</h4>
             <div class="cli-bgopt" role="radiogroup">${['solid', 'gradient', 'image', 'pattern'].map((k) => `<label><input type="radio" name="cli-bg" value="${k}" data-bgtype><span>${esc(t(`admin.saasCliBg${k.charAt(0).toUpperCase()}${k.slice(1)}`))}</span></label>`).join('')}</div>
             ${colorRow('background.color1', t('admin.saasCliBgColor1'))}${colorRow('background.color2', t('admin.saasCliBgColor2'))}
@@ -238,7 +288,7 @@ function buildEditor() {
     // se pone lo del borrador en los controles
     syncControls();
     const disabled = !can;
-    document.querySelectorAll('#cli-body input, #cli-body button').forEach((el) => { if (el.id === 'cli-slug' || el.id === 'cli-slug-save' || el.closest('#cli-link-grp')) return; if (disabled) el.disabled = true; });
+    document.querySelectorAll('#cli-body input, #cli-body button').forEach((el) => { if (el.id === 'cli-slug' || el.id === 'cli-slug-save' || el.id === 'cli-icon-dl' || el.closest('#cli-link-grp')) return; if (disabled) el.disabled = true; });
     const slugInput = $('#cli-slug'); const slugSave = $('#cli-slug-save');
     slugInput.disabled = !state.can.slug; slugSave.disabled = !state.can.slug;
 }
@@ -250,7 +300,11 @@ function syncControls() {
         const v = getPath(w, el.dataset.p);
         if (el.type === 'checkbox') el.checked = !!v; else if (el !== document.activeElement) el.value = v == null ? '' : v;
     });
-    document.querySelectorAll('#cli-body [data-color]').forEach((el) => { const path = el.dataset.color; const own = getPath(w, path); el.value = own || ({ 'brand.primary': p.primary, 'brand.button': p.button, 'background.color1': p.color1, 'background.color2': p.color2 }[path] || FALLBACK_PRIMARY); el.classList.toggle('cli-company', !own); });
+    document.querySelectorAll('#cli-body [data-color]').forEach((el) => { const path = el.dataset.color; const own = getPath(w, path); el.value = own || ({ 'brand.primary': p.primary, 'brand.button': p.button, 'background.color1': p.color1, 'background.color2': p.color2, 'identity.iconColor': p.primary }[path] || FALLBACK_PRIMARY); el.classList.toggle('cli-company', !own); });
+    // nombre abreviado: lo que se propone sale de placeholder, y el contador dice cuántas de las 12 letras lleva
+    const short = $('#cli-short');
+    short.placeholder = ed.company.suggestedShortName || '';
+    $('#cli-short-count').textContent = t('admin.saasCliShortNameCount', { n: Array.from(w.identity.shortName || '').length });
     document.querySelectorAll('#cli-body [data-bgtype]').forEach((el) => { el.checked = el.value === w.background.type; });
     const type = w.background.type;
     $('#cli-bg-image-row').hidden = type !== 'image';
@@ -300,6 +354,7 @@ function bindEditor() {
         else if (btn.id === 'cli-bg-pick') $('#cli-bg-file').click();
         else if (btn.id === 'cli-bg-reset') { ed.work.background.image = ''; touch(); }
         else if (btn.id === 'cli-slug-save') saveSlug();
+        else if (btn.id === 'cli-icon-dl') downloadIcon();
         else if (btn.id === 'cli-link-copy') copyLink();
         else if (btn.id === 'cli-link-open' && ed.link) window.open(ed.link.url, '_blank', 'noopener');
         else if (btn.id === 'cli-link-qr' && ed.link) downloadQr(ed.link.qrRows, ed.link.slug);

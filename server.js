@@ -1883,11 +1883,12 @@ app.post('/api/admin/implementations/:clientId/levels/:key/:action', requireAuth
 // dirección (…/c/<clave>) y de código de empresa de la app. Cada botón se da en el árbol de accesos de la cuenta (Equipo SaaS); posición de cada botón (a) en SaasAdminCatalog.js: no cambiar el orden.
 // Pieza 1: la pantalla y sus datos. La dirección pública y la app del celular son las piezas siguientes.
 const SAAS_CL_ITEM = 'saas-client-logins';
-const SAAS_CL_LEAVES = { edit: 'tabla::a0', publish: 'tabla::a1', remove: 'tabla::a2', slug: 'tabla::a3', link: 'tabla::a4' };
+const SAAS_CL_LEAVES = { edit: 'tabla::a0', publish: 'tabla::a1', remove: 'tabla::a2', slug: 'tabla::a3', link: 'tabla::a4', icon: 'tabla::a5' };
 const CL_ERRORS = {
     NOT_FOUND: [404, 'Ese cliente todavía no tiene inicio personalizado.'], EXISTS: [409, 'Ese cliente ya tiene inicio personalizado.'], NO_CHANNEL: [409, 'Enciende computadora o celular antes de publicar.'],
     FORMAT: [400, 'La clave usa de 3 a 40 letras minúsculas sin acentos, números y guiones.'], RESERVED: [400, 'Esa clave está reservada por el sistema.'], TAKEN: [409, 'Esa clave ya la tiene otro cliente.'],
     COLOR: [400, 'Un color no es válido.'], IMAGE: [400, 'La imagen debe ser PNG, JPG, WEBP, GIF o SVG.'], IMAGE_SIZE: [400, 'La imagen es demasiado grande.'], BACKGROUND_TYPE: [400, 'Ese tipo de fondo no existe.'],
+    SHORT_NAME: [400, 'El nombre abreviado lleva hasta 12 letras, números, espacios y . & \' + -'],
 };
 const clFail = (res, result) => { const [status, message] = CL_ERRORS[result.error] || [400, 'No se pudo hacer.']; return res.status(status).json({ message, code: result.error, field: result.field }); };
 const saasClHasScreen = (req) => !!req.user.isSaasSuperAdmin || getSaasUserGrants(req.user.sub).some((g) => g.itemId === SAAS_CL_ITEM);
@@ -1897,6 +1898,7 @@ const CL_FIELD_ES = {
     'background.color1': 'Color de fondo 1', 'background.color2': 'Color de fondo 2', 'background.image': 'Imagen de fondo', 'background.diagonal': 'Franja diagonal', 'texts.greeting': 'Saludo automático',
     'texts.welcome': 'Frase de bienvenida', 'texts.formTitle': 'Título del formulario', 'texts.appButton': 'Botón de entrada', 'show.welcomeScreen': 'Pantalla de bienvenida', 'show.faceId': 'Face ID o huella',
     'show.appLink': 'Enlace para descargar la app', 'show.language': 'Selector de idioma', 'show.forgot': '«Olvidé mi contraseña»', 'show.register': 'Registro de usuarios nuevos', 'show.social': 'Inicio con redes sociales',
+    'identity.shortName': 'Nombre abreviado de la app', 'identity.iconColor': 'Color del ícono de la app',
 };
 const CL_BACKGROUND_ES = { solid: 'Color liso', gradient: 'Degradado', image: 'Imagen', pattern: 'Patrón de la marca' };
 const clFlatten = (draft) => { const out = {}; Object.entries(draft).forEach(([group, values]) => Object.entries(values).forEach(([key, value]) => { out[`${group}.${key}`] = value; })); return out; };
@@ -1904,6 +1906,8 @@ const clValueEs = (path, value) => {
     if (typeof value === 'boolean') return value ? 'Sí' : 'No';
     if (path === 'background.type') return CL_BACKGROUND_ES[value] || value;
     if (path === 'brand.logo' || path === 'background.image') return value ? 'Imagen cargada' : 'Sin imagen';
+    if (path === 'identity.shortName' && value === '') return '(el que se propone)';
+    if (path === 'identity.iconColor' && value === '') return '(el color principal)';
     return value === '' ? '(el de la compañía)' : String(value);
 };
 function clLog(req, clientId, action, fieldKey, oldText, newText) {

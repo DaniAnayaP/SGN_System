@@ -173,7 +173,7 @@ window.SAAS_ADMIN_CATALOG = [
                 apartados: [
                     tablaApartado('tabla',
                         ['Cliente', 'Inicio en computadora', 'Inicio en celular', 'Clave del cliente', 'Estado'],
-                        ['Personalizar y guardar borrador', 'Publicar', 'Quitar personalización', 'Cambiar la clave del cliente', 'Enlace y QR']),
+                        ['Personalizar y guardar borrador', 'Publicar', 'Quitar personalización', 'Cambiar la clave del cliente', 'Enlace y QR', 'Descargar ícono de la app']),
                 ],
             },
         ],

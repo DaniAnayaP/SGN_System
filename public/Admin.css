@@ -9549,6 +9549,14 @@ body.dark-mode .impl-rejected{ color: #ff8f80; }
 input[type="color"].cli-company{ opacity: 0.55; }
 .cli-thumb{ width: 2.4rem; height: 1.6rem; object-fit: contain; border-radius: 0.3rem; background: var(--color-bg); box-shadow: inset 0 0 0 1px var(--color-border); }
 .cli-addr{ font-size: 0.74rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 0.4rem; padding: 0.15rem 0.5rem; word-break: break-all; }
+.cli-count{ font-size: 0.64rem; opacity: 0.6; margin-left: 0.4rem; }
+.cli-iconprev{ display: grid; gap: 0.8rem; justify-items: start; padding: 0.9rem 1rem; border-radius: 0.7rem; background: linear-gradient(170deg, #26294a, #101120); }
+.cli-iconrow{ display: flex; gap: 1.2rem; align-items: flex-end; flex-wrap: wrap; }
+.cli-iconit{ display: grid; gap: 0.3rem; justify-items: center; color: #d6d8e4; font-size: 0.6rem; text-align: center; }
+.cli-iconit .cli-iconlbl{ font-size: 0.72rem; color: #fff; max-width: 5.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cli-iconprev .btn{ background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.4); }
+.cli-iconprev .btn:hover:not(:disabled){ background: rgba(255,255,255,.22); }
+.cli-appicon{ border-radius: 22.5%; display: block; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
 .cli-linkbtns{ gap: 0.4rem; flex-wrap: wrap; }
 .cli-qr{ width: 9rem; }
 .cli-qr svg{ width: 100%; height: auto; display: block; border-radius: 0.4rem; box-shadow: 0 0 0 1px var(--color-border); }

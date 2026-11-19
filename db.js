@@ -15536,6 +15536,23 @@ const LOGIN_MAX_LOGO_CHARS = 500 * 1024;
 const LOGIN_MAX_IMAGE_CHARS = 1000 * 1024;
 const LOGIN_IMAGE_RE = /^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/;
 const LOGIN_HEX_RE = /^#[0-9a-fA-F]{6}$/;
+// Identidad de la app (pieza 4): el nombre abreviado que sale debajo del ícono en la pantalla del celular (hasta 12 letras, contadas como las ve la persona) y el color del ícono. Las letras, números, espacio y . & ' + -
+const LOGIN_SHORT_NAME_MAX = 12;
+const LOGIN_SHORT_NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} .&'+-]*$/u;
+const LOGIN_LEGAL_SUFFIX_RE = /[\s,]+(s\.?\s?a\.?\s?p\.?\s?i\.?(\s?de\s?c\.?\s?v\.?)?|s\.?\s?a\.?(\s?de\s?c\.?\s?v\.?)?|s\.?\s?de\s?r\.?\s?l\.?(\s?de\s?c\.?\s?v\.?)?|s\.?\s?c\.?|a\.?\s?c\.?|inc\.?|llc|ltd\.?|corp\.?)\s*$/i;
+// Lo que se propone como nombre abreviado: el de la compañía sin «S.A. de C.V.» y parecidos, y si no cabe en 12, las primeras palabras que quepan (o el principio de la primera). El implementador lo cambia.
+function loginSuggestShortName(companyName) {
+    const name = String(companyName || '').replace(LOGIN_LEGAL_SUFFIX_RE, '').replace(/[^\p{L}\p{N} .&'+-]/gu, ' ').replace(/\s+/g, ' ').trim();
+    const chars = (text) => Array.from(text).length;
+    if (chars(name) <= LOGIN_SHORT_NAME_MAX) return name;
+    let out = '';
+    for (const word of name.split(' ')) {
+        const next = out ? `${out} ${word}` : word;
+        if (chars(next) > LOGIN_SHORT_NAME_MAX) break;
+        out = next;
+    }
+    return out || Array.from(name.split(' ')[0]).slice(0, LOGIN_SHORT_NAME_MAX).join('');
+}
 function loginSlugify(name) {
     let base = String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/g, '');
     if (base.length < 3) base = `${base}${base ? '-' : ''}cliente`.slice(0, 40);
@@ -15566,6 +15583,8 @@ function defaultLoginDraft() {
         background: { type: 'gradient', color1: '', color2: '', image: '', diagonal: true },
         texts: { greeting: true, welcome: 'Te damos la bienvenida', formTitle: 'Iniciar sesión', appButton: 'Entrar' },
         show: { welcomeScreen: true, faceId: true, appLink: true, language: true, forgot: true, register: false, social: false },
+        // vacío = el que se propone (shortName) / el color principal de la marca (iconColor)
+        identity: { shortName: '', iconColor: '' },
     };
 }
 // Valida lo que llega del navegador y lo deja con la forma exacta del borrador (se descartan claves desconocidas). { draft } o { error, code, field }.
@@ -15578,7 +15597,9 @@ function normalizeLoginDraft(raw) {
     const color = (value, field) => { if (value === undefined || value === null || value === '') return ''; if (typeof value !== 'string' || !LOGIN_HEX_RE.test(value)) throw Object.assign(new Error('color'), { code: 'COLOR', field }); return value.toLowerCase(); };
     const image = (value, max, field) => { if (value === undefined || value === null || value === '') return ''; if (typeof value !== 'string' || !LOGIN_IMAGE_RE.test(value)) throw Object.assign(new Error('image'), { code: 'IMAGE', field }); if (value.length > max) throw Object.assign(new Error('size'), { code: 'IMAGE_SIZE', field }); return value; };
     try {
-        const channels = obj('channels'); const brand = obj('brand'); const bg = obj('background'); const texts = obj('texts'); const show = obj('show');
+        const channels = obj('channels'); const brand = obj('brand'); const bg = obj('background'); const texts = obj('texts'); const show = obj('show'); const identity = obj('identity');
+        const shortName = identity.shortName === undefined || identity.shortName === null ? def.identity.shortName : String(identity.shortName).replace(/\s+/g, ' ').trim();
+        if (Array.from(shortName).length > LOGIN_SHORT_NAME_MAX || (shortName && !LOGIN_SHORT_NAME_RE.test(shortName))) throw Object.assign(new Error('shortName'), { code: 'SHORT_NAME', field: 'identity.shortName' });
         const type = bg.type === undefined ? def.background.type : bg.type;
         if (!LOGIN_BACKGROUND_TYPES.includes(type)) throw Object.assign(new Error('type'), { code: 'BACKGROUND_TYPE', field: 'background.type' });
         const draft = {
@@ -15587,6 +15608,7 @@ function normalizeLoginDraft(raw) {
             background: { type, color1: color(bg.color1, 'background.color1'), color2: color(bg.color2, 'background.color2'), image: image(bg.image, LOGIN_MAX_IMAGE_CHARS, 'background.image'), diagonal: bool(bg.diagonal, def.background.diagonal) },
             texts: { greeting: bool(texts.greeting, def.texts.greeting), welcome: text(texts.welcome, def.texts.welcome, 80), formTitle: text(texts.formTitle, def.texts.formTitle, 40), appButton: text(texts.appButton, def.texts.appButton, 30) },
             show: Object.fromEntries(Object.keys(def.show).map((k) => [k, bool(show[k], def.show[k])])),
+            identity: { shortName, iconColor: color(identity.iconColor, 'identity.iconColor') },
         };
         return { draft };
     } catch (err) {
@@ -15633,7 +15655,7 @@ function listClientLogins() {
 // Lo de la compañía que la vista previa usa cuando el borrador no cambia nada: su logo y sus colores de Diseño de Compañía.
 function getClientLoginCompany(clientId) {
     const c = getClientById(clientId);
-    return c ? { id: c.id, name: c.company_name, logo: c.logo_data_url || '', primaryColor: c.primary_color || '', secondaryColor: c.secondary_color || '', status: c.status } : null;
+    return c ? { id: c.id, name: c.company_name, logo: c.logo_data_url || '', primaryColor: c.primary_color || '', secondaryColor: c.secondary_color || '', status: c.status, suggestedShortName: loginSuggestShortName(c.company_name) } : null;
 }
 function createClientLogin(clientId, updatedBy) {
     if (getClientLogin(clientId)) return { error: 'EXISTS' };
