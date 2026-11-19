@@ -11834,6 +11834,8 @@ document.querySelectorAll('.top-bar-actions-list').forEach((container) => {
         </div>
     `;
     wrapper.appendChild(dropdown);
+    // «Solicitudes» no cabía en su pestaña y salía «Solicitud…»: si no cabe, se abrevia (watchLabelFit)
+    watchLabelFit(dropdown.querySelector('.notifications-tabs'), '.notifications-tab-label');
     notificationsListEl = dropdown.querySelector('[data-role="list"]');
     dropdown.querySelectorAll('.notifications-tab').forEach((tabBtn) => {
         tabBtn.addEventListener('click', () => {
@@ -13671,16 +13673,38 @@ function fitTopBarLabels() {
     const bar = document.querySelector('.top-bar');
     if (!bar) return;
     if (topBarLabelObserver) topBarLabelObserver.disconnect();
-    bar.querySelectorAll(TOP_BAR_FIT_LABELS).forEach((span) => {
+    fitLabelSpans(bar.querySelectorAll(TOP_BAR_FIT_LABELS));
+    if (topBarLabelObserver) topBarLabelObserver.observe(bar, { childList: true, subtree: true, characterData: true });
+}
+// Ajusta etiquetas de UNA línea que se cortarían con «…»: baja por la escalera automática hasta que caben y deja el nombre completo en title. El texto que otra parte del código escribe en la etiqueta se toma como el
+// completo nuevo; el que dejó este ajuste se reconoce (abbrShown) para no confundirlo con el completo. Solo para spans que son solo texto y tienen su propio ancho (overflow oculto): ver submenuSpanFits.
+function fitLabelSpans(spans) {
+    spans.forEach((span) => {
         if (span.children.length) return; // un título con enlaces o iconos adentro no es solo texto: no se toca
         const current = span.textContent;
         const full = span.dataset.abbrShown !== undefined && current === span.dataset.abbrShown ? span.dataset.abbrFull : current;
         if (!full || !full.trim()) return;
-        const ladder = autoAbbrLadder(full);
+        let ladder = autoAbbrLadder(full);
+        // Las abreviaturas que el propio menú ya trae (abbrKey/abbrKeys) van primero, tal cual las escribieron; la automática sigue desde la última (data-abbr-steps = JSON con esos textos).
+        if (span.dataset.abbrSteps) {
+            try {
+                const given = JSON.parse(span.dataset.abbrSteps).filter((text, i, all) => typeof text === 'string' && text && text.length < full.length && all.indexOf(text) === i).sort((a, b) => b.length - a.length);
+                if (given.length) {
+                    const last = given[given.length - 1];
+                    ladder = [full, ...given, ...autoAbbrLadder(last).slice(1).filter((text) => text.length < last.length)];
+                }
+            } catch { /* data-abbr-steps no era JSON: solo la escalera automática */ }
+        }
+        // una abreviatura de menos de 3 letras («M.») ya no dice nada: no se usa (queda el escalón anterior o, en las pestañas, solo el icono)
+        ladder = ladder.filter((text, i) => i === 0 || text.replace(/[\s.·]/g, '').length >= 3);
         let step = 0;
+        // data-abbr-collapse: si ni la abreviatura más corta cabe, la etiqueta se esconde y queda el icono (el último escalón de las pestañas); el nombre completo sigue en title. Se vuelve a mostrar para medir cada vez.
+        const collapsible = span.dataset.abbrCollapse !== undefined;
+        if (collapsible) delete span.dataset.abbrCollapsed;
         if (current !== full) span.textContent = full;
         while (step < ladder.length - 1 && !submenuSpanFits(span)) { step += 1; span.textContent = ladder[step]; }
-        if (step > 0) {
+        if (collapsible && !submenuSpanFits(span)) span.dataset.abbrCollapsed = '1';
+        if (step > 0 || span.dataset.abbrCollapsed) {
             span.dataset.abbrFull = full;
             span.dataset.abbrShown = span.textContent;
             if (!span.hasAttribute('title') || span.dataset.abbrTitle) { span.title = full; span.dataset.abbrTitle = '1'; }
@@ -13690,7 +13714,28 @@ function fitTopBarLabels() {
             if (span.dataset.abbrTitle) { span.removeAttribute('title'); delete span.dataset.abbrTitle; }
         }
     });
-    if (topBarLabelObserver) topBarLabelObserver.observe(bar, { childList: true, subtree: true, characterData: true });
+}
+// Vigila un contenedor (las pestañas) y vuelve a ajustar sus etiquetas cuando cambia su tamaño, su contenido, el idioma o la letra. Una vez por contenedor. El observador se suelta mientras se escribe, así los
+// cambios de texto de este mismo ajuste no lo vuelven a llamar. setTimeout y no requestAnimationFrame: una pestaña en segundo plano no dibuja cuadros.
+function watchLabelFit(container, selector) {
+    if (!container || container.dataset.labelFitWatched) return;
+    container.dataset.labelFitWatched = '1';
+    let timer = 0;
+    const observe = () => observer.observe(container, { childList: true, subtree: true, characterData: true });
+    const run = () => {
+        observer.disconnect();
+        try { fitLabelSpans(container.querySelectorAll(selector)); } finally { observe(); }
+    };
+    const schedule = () => { clearTimeout(timer); timer = setTimeout(run, 40); };
+    const observer = new MutationObserver(schedule);
+    new ResizeObserver(schedule).observe(container);
+    window.addEventListener('resize', schedule);
+    document.addEventListener('dashboard:language-changed', schedule);
+    if (document.fonts) {
+        if (document.fonts.ready) document.fonts.ready.then(schedule);
+        if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', schedule);
+    }
+    run();
 }
 function scheduleTopBarLabelFit() {
     clearTimeout(topBarLabelTimer);
@@ -14883,6 +14928,7 @@ window.Dashboard = {
     get selectedDepartment() { return selectedDepartment; },
     get selectedArea() { return selectedArea; },
     getPanelCategories,
+    watchLabelFit,
     // "Centro Costos" (Control Interno system column) at record-creation
     // time — only meaningful when exactly one cost center is active in the
     // top-bar picker; 'all' or several selected is ambiguous for "which one

@@ -33,10 +33,16 @@ function buildTab(item, { active, isCategory }) {
     const full = document.createElement('span');
     full.className = 'full';
     full.textContent = Dashboard.t(item.labelKey, item.labelParams || {});
+    // las abreviaturas que el menú ya trae van primero cuando el nombre no cabe en su pestaña (Dashboard.watchLabelFit)
+    const given = [item.abbrKey, ...(item.abbrKeys || [])].filter(Boolean).map((key) => Dashboard.t(key, item.labelParams || {}));
+    if (given.length) full.dataset.abbrSteps = JSON.stringify(given);
     el.appendChild(full);
     if (isCategory) {
+        // en las pestañas de categoría, si ni la abreviatura más corta cabe se esconde el nombre y queda el icono (el botón ya trae el nombre completo en title)
+        full.dataset.abbrCollapse = '1';
         const short = document.createElement('span');
         short.className = 'short';
+        short.dataset.abbrCollapse = '1';
         short.textContent = Dashboard.t(item.abbrKey || item.labelKey, item.labelParams || {});
         el.appendChild(short);
         const badge = document.createElement('span');
@@ -124,6 +130,8 @@ document.addEventListener('dashboard:language-changed', renderPanel);
         const role = await Dashboard.initDashboard({ activePage: 'panel' });
         if (!role) return;
         renderPanel();
+        // Si un nombre no cabe en su pestaña se abrevia (y al sobreponer sale completo) en lugar de cortarse con «…»; ver Dashboard.watchLabelFit
+        Dashboard.watchLabelFit(tabsFrame, '.panel-tab .full, .panel-tab .short, .panel-subtab .full');
     } catch (err) {
         console.error('Panel failed to initialize:', err);
     }

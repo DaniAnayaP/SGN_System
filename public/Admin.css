@@ -176,6 +176,8 @@
     .panel-tab .short{ display: inline; }
     .panel-subtab .full{ max-width: 8rem; }
 }
+/* Si ni la abreviatura más corta cabe en su pestaña, la etiqueta se esconde y queda el icono (Dashboard.js fitLabelSpans, data-abbr-collapse): el nombre completo sigue en el title del botón. */
+.panel-tab [data-abbr-collapsed]{ display: none !important; }
 /* Narrow (container, e.g. mobile) -- categoría tabs drop to icon-only;
    pantallas keep their icon+label (already scrolls horizontally if it
    doesn't fit, per the note above). */
