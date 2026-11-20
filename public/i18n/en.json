@@ -5620,6 +5620,7 @@
     "twLogRowsOne": "1 row",
     "twLogMore": "Show {n} more",
     "twLogEmpty": "No finished activities in this period.",
+    "twLogHistoryTitle": "Log movement history",
     "twLogOpen": "View the activity",
     "twLogCol_done": "Finished",
     "twLogCol_activity": "Activity",

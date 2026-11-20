@@ -630,6 +630,24 @@ function syncLogTable() {
     if (window.Dashboard && Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(LOG_TABLE_ID);
 }
 
+// ---- Historial de la tabla (icono de la barra) ----
+// El diálogo estándar de historial con los movimientos de las actividades que se ven en el Registro (cada paso de cada persona: asignada, confirmó, empezó, pausó, validó…), el más reciente primero.
+// Sale de la línea del tiempo del mismo periodo (solo lectura) y se limita a las actividades que pasan los filtros de la pantalla. Columnas del diálogo: fecha, usuario, registro, cambio, solicitó y autorizó (autorizó = quien validó).
+async function logHistoryRows() {
+    const range = logData ? logData.range : periodRange('log');
+    const ids = new Set((logData ? logData.rows.filter(matches) : []).map((r) => r.activityId));
+    if (!ids.size) return [];
+    const out = await api('GET', `/timeline${periodQuery(range)}`);
+    const rows = [];
+    out.activities.filter((a) => ids.has(a.id)).forEach((a) => a.people.forEach((p) => p.steps.forEach((m) => {
+        rows.push({ at: Date.parse(m.at) || 0, cells: [dateTimeText(Date.parse(m.at)), m.by || '—', `${a.title} · ${p.name}`, [stepText(m), m.note].filter(Boolean).join(' — '), '—', m.type === 'validated' ? (m.by || '—') : '—'] });
+    })));
+    return rows.sort((x, y) => y.at - x.at).map((r) => r.cells);
+}
+function registerLogHistory() {
+    if (window.Dashboard && Dashboard.registerSaasTableHistory) Dashboard.registerSaasTableHistory(LOG_TABLE_ID, 'main.twLogHistoryTitle', logHistoryRows);
+}
+
 // ---- descargar (Excel o PDF) ----
 // El Registro baja lo que se ve en la tabla estándar (columnas visibles en su orden y filas filtradas, sin la columna de acciones)
 function logSnapshot() {
@@ -839,6 +857,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && !o
     try {
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
+        registerLogHistory();
         await load(false);
         if (view !== 'board') await loadView(false);
         $('tw-root').dataset.ready = '1';

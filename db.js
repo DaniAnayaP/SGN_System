@@ -9683,6 +9683,13 @@ function seedEquipoRegistroGrants() {
     })();
     console.log(`[db] Seeded Opciones de Búsqueda for the Equipo de Trabajo Registro table (one-time migration): ${inserted} grants.`);
 }
+// Equipo de Trabajo › Registro: el icono de Historial (2026-11-19, a petición de Daniel) lo recibe, una sola vez, quien ya tiene la pantalla. Aparte de la primera siembra a propósito: esa ya pudo haber corrido sin él.
+const EQUIPO_REGISTRO_HISTORY_SEED_KEY = 'seed-equipo-registro-history-icon-v1';
+function seedEquipoRegistroHistoryIcon() {
+    const path = TABLE_GRANT_PATHS['equipo-registro'];
+    if (!path) return;
+    seedLeavesForScreenHolders(EQUIPO_REGISTRO_HISTORY_SEED_KEY, path, [`${path.submenuPrefix}/iconHistory`], 'the Equipo de Trabajo Registro history icon');
+}
 // Operaciones > Alta Activos (2026-11-12): la pantalla nueva la reciben, una sola vez, quienes ya tienen el Layout (de ahí sale lo que ahora se da de alta aquí). Los botones (nuevo activo y desactivar) los asigna el administrador desde el árbol.
 const ALTA_ACTIVOS_SCREEN_SEED_KEY = 'seed-alta-activos-screen-v1';
 function seedAltaActivosGrants() {
@@ -21041,6 +21048,7 @@ seedRelacionEnvioGrants();
 seedAltaActivosGrants();
 seedImplementacionHistorialGrants();
 seedEquipoRegistroGrants();
+seedEquipoRegistroHistoryIcon();
 seedGestionActivosGrants();
 seedCompraSurtidoPedidoManualGrants();
 seedSurtidoPedidoManualButtons();
