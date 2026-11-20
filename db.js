@@ -13665,10 +13665,12 @@ function personGrantLimitCheck(clientId, visibleStatuses) {
     };
 }
 // grants = [{ sectionId, itemId, submenuId }] de UNA persona. Regresa { grants (lo que llegó + lo agregado − el «Solo ver» que sube), added: [tuplas], autoEnabled: [{ access, related, count }], blocked: [{ access, related }] }.
+// options.baseGrants: lo que la persona ya tiene por OTRA capa y también cuenta (en un usuario, lo que le da su puesto menos lo que se le quitó): habilita accesos y cubre lo que ya está, pero no sale en el resultado, que es solo la capa que se guarda (los adicionales).
 function expandPersonAccessMinimums(grants, options = {}) {
     const norm = (g) => ({ sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null });
-    let all = (grants || []).map(norm);
-    const empty = { grants: all, added: [], autoEnabled: [], blocked: [] };
+    let mine = (grants || []).map(norm);
+    let all = (options.baseGrants || []).map(norm).concat(mine);
+    const empty = { grants: mine, added: [], autoEnabled: [], blocked: [] };
     const catalog = buildAccessCatalog();
     const relations = db.prepare("SELECT access_key AS access, related_key AS related FROM access_relations WHERE kind = 'minimum'").all()
         .filter((r) => catalog.index.has(r.access) && catalog.index.has(r.related) && personMinimumSameScreen(r.access, r.related));
@@ -13710,9 +13712,10 @@ function expandPersonAccessMinimums(grants, options = {}) {
                     if (lv && lv.level === 'ver-y-operar') {
                         // los niveles se excluyen: al subir a «Ver y operar» se quita el «Solo ver» de esa columna o botón
                         const soloKey = keyOf({ ...tuple, submenuId: `${lv.base}/solo-ver${lv.sfx}` });
-                        if (have.has(soloKey)) { have.delete(soloKey); all = all.filter((g) => keyOf(g) !== soloKey); }
+                        if (have.has(soloKey)) { have.delete(soloKey); all = all.filter((g) => keyOf(g) !== soloKey); mine = mine.filter((g) => keyOf(g) !== soloKey); }
                     }
                     all.push(tuple);
+                    mine.push(tuple);
                     have.add(keyOf(tuple));
                     added.push(tuple);
                     if (!pairs.has(pairKey)) pairs.set(pairKey, { access: rel.access, related: rel.related, count: 0 });
@@ -13723,7 +13726,15 @@ function expandPersonAccessMinimums(grants, options = {}) {
         }
         if (!changed) break;
     }
-    return { grants: all, added, autoEnabled: [...pairs.values()], blocked: [...blocked.values()] };
+    return { grants: mine, added, autoEnabled: [...pairs.values()], blocked: [...blocked.values()] };
+}
+// Para un USUARIO: lo que le da su puesto menos lo que se le quita (las exclusiones que se van a guardar o, sin ellas, las guardadas). Es la base con la que cuentan las reglas de Relación de Accesos (ver expandPersonAccessMinimums, baseGrants).
+function userPositionBaseGrants(userId, exclusions) {
+    return applyUserExclusions(getUserJobPositionGrants(userId), exclusions || getUserExclusions(userId));
+}
+// ¿Esta tupla está quitada a esa persona (la llave misma o algo que la contiene, como su pantalla)? Lo que se le quitó no se le vuelve a dar solo.
+function isTupleExcludedForUser(exclusions, tuple) {
+    return !!exclusions && (exclusions.exclude || []).some((e) => exclusionKeyOf(e) === exclusionKeyOf(tuple) || grantTupleCovers(e, tuple));
 }
 // Las reglas de Relación de Accesos para los ÁRBOLES de personas (puestos y usuarios), con la forma que lee AccessRules.createPerson en el navegador (Daniel, 2026-11-20: candado y «Recomendado» en vivo). Son las MISMAS que aplica
 // expandPersonAccessMinimums al guardar, ya expandidas a las llaves del árbol:
@@ -22028,6 +22039,8 @@ module.exports = {
     setAccessRelations,
     expandAccessMinimums,
     expandPersonAccessMinimums,
+    userPositionBaseGrants,
+    isTupleExcludedForUser,
     personGrantLimitCheck,
     buildAccessRules,
     buildPersonAccessRules,

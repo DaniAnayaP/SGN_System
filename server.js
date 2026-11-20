@@ -214,7 +214,7 @@ const {
     parseFixedAssetEditing,
     parseFixedAssetBackup,
     startFixedAssetEditionWithFields,
-    getUserExclusions, setUserExclusions,
+    getUserExclusions, setUserExclusions, userPositionBaseGrants, isTupleExcludedForUser,
     isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,
     latestAssetReadingRows, listAssetReadingsOfAsset, lastAssetReadingTimes, listMaintenanceRunsOfAsset, latestMaintenanceRunRows,
     getAssetLimitsOf, setAssetLimit, listAssetLimitsMap, listTemperatureTimesOfPlaceSince, listCleaningFinishedTimesSince, listAssetReadingTimesSince, deleteAssetLimitsOfCriterion, countAssetLimitsOfCriterion, countAssetReadingsOfCatalog,
@@ -5435,9 +5435,11 @@ function autoEnableMinimums(grants, options = {}) {
     return { grants: out.grants, autoEnabled: name(out.autoEnabled), blocked: name(out.blocked) };
 }
 // Lo mismo que autoEnableMinimums pero para PERSONAS (puestos y usuarios, ver expandPersonAccessMinimums en db.js): solo el mínimo de la misma pantalla, con «Ver y operar», y solo lo que el contrato y el Estatus de quien da el permiso dejan dar.
-function autoEnablePersonMinimums(grants, req) {
-    const canAdd = personGrantLimitCheck(req.user.clientId, getUserVisibleStatuses(req.user.sub));
-    const out = expandPersonAccessMinimums(grants, { canAdd });
+// extra.baseGrants / extra.exclusions: para un USUARIO, lo que le da su puesto (menos lo que se le quita) cuenta como lo que ya tiene, y lo que se le quitó no se le vuelve a dar solo.
+function autoEnablePersonMinimums(grants, req, extra = {}) {
+    const limitCheck = personGrantLimitCheck(req.user.clientId, getUserVisibleStatuses(req.user.sub));
+    const canAdd = extra.exclusions ? (tuple) => limitCheck(tuple) && !isTupleExcludedForUser(extra.exclusions, tuple) : limitCheck;
+    const out = expandPersonAccessMinimums(grants, { canAdd, baseGrants: extra.baseGrants });
     const name = (list) => list.slice(0, 30).map((p) => ({ access: accessLabelEs(p.access), related: accessLabelEs(p.related), count: p.count || 0 }));
     return { grants: out.grants, autoEnabled: name(out.autoEnabled), blocked: name(out.blocked) };
 }
@@ -6418,15 +6420,24 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
     if (error) return res.status(400).json({ message: error });
     const grantsBefore = getUserGrants(req.params.id);
     if (rejectUncontractedNewGrants(res, req.user.clientId, grantsBefore, grants)) return;
-    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: grantsBefore, after: grants, allowedCenterIds: getHrAssignedCenterIds(req.params.id), limitMain: true });
-    const savedGrants = setUserGrants(req.params.id, limited.allowed, changedByLabel(req));
-    // Quitar a esta persona lo que le da su puesto: llega la lista completa de exclusiones y lo que se conserva de un permiso de contenedor (ver applyUserExclusions). Sin la lista, se deja como estaba.
-    let exclusionsChanged = false;
-    if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'exclusions')) {
+    // Las exclusiones que van a quedar: las que llegan (la lista completa) o, sin ellas, las guardadas. Se revisan antes de guardar nada porque lo que se le quita a esta persona cambia lo que cuenta como lo que ya tiene.
+    const sendsExclusions = !!(req.body && Object.prototype.hasOwnProperty.call(req.body, 'exclusions'));
+    let exclusionsAfter = getUserExclusions(req.params.id);
+    if (sendsExclusions) {
         const { exclusions, keep } = req.body;
         const exError = validateGrants(exclusions) || validateGrants(keep || []);
         if (exError) return res.status(400).json({ message: exError });
         if (exclusions.length > 8000 || (keep || []).length > 20000) return res.status(400).json({ message: 'Too many entries.' });
+        exclusionsAfter = { exclude: exclusions, keep: keep || [] };
+    }
+    // Relación de Accesos: el mínimo de lo que esta persona ya opera (con lo que le da su puesto, menos lo que se le quita) entra solo en sus adicionales, con «Ver y operar»; lo que el contrato no deja dar sale en «blocked»
+    const auto = autoEnablePersonMinimums(grants, req, { baseGrants: userPositionBaseGrants(req.params.id, exclusionsAfter), exclusions: exclusionsAfter });
+    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: grantsBefore, after: auto.grants, allowedCenterIds: getHrAssignedCenterIds(req.params.id), limitMain: true });
+    const savedGrants = setUserGrants(req.params.id, limited.allowed, changedByLabel(req));
+    // Quitar a esta persona lo que le da su puesto: llega la lista completa de exclusiones y lo que se conserva de un permiso de contenedor (ver applyUserExclusions). Sin la lista, se deja como estaba.
+    let exclusionsChanged = false;
+    if (sendsExclusions) {
+        const { exclusions, keep } = req.body;
         const exBefore = getUserExclusions(req.params.id).exclude;
         const exAfter = setUserExclusions(req.params.id, { exclude: exclusions, keep: keep || [] }, changedByLabel(req)).exclude;
         exclusionsChanged = exBefore.length !== exAfter.length || grantsSignature(exBefore) !== grantsSignature(exAfter);
@@ -6436,7 +6447,7 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
         logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyExtraGrants', grantsBefore.length, savedGrants.length);
         notifyAccessChange({ req, affectedUsers: [{ id: user.id, name: user.name || user.username }], scopeKind: 'usuario', before: grantsBefore, after: savedGrants });
     }
-    res.json({ grants: savedGrants, exclusions: getUserExclusions(req.params.id).exclude, dropped: summarizeDroppedGrants(limited.dropped) });
+    res.json({ grants: savedGrants, exclusions: getUserExclusions(req.params.id).exclude, dropped: summarizeDroppedGrants(limited.dropped), autoEnabled: auto.autoEnabled, blocked: auto.blocked });
 });
 
 // Per-node "Cambios" for the tree above -- same reasoning as the client

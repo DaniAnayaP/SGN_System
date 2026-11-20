@@ -187,10 +187,13 @@ grantAccessSaveBtn.addEventListener('click', async () => {
             throw err;
         }
         const saved = await grantsRes.json().catch(() => ({}));
+        const savedUser = users.find((u) => u.id === activeUserId) || null;
         closeGrantAccessModal();
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
         const droppedNotice = Dashboard.limitDroppedMessage(saved.dropped);
         if (droppedNotice) Dashboard.showToast(droppedNotice, 'warning');
+        // Relación de Accesos: si el mínimo de lo que esta persona opera entró solo, se avisa y se vuelve a abrir el árbol para que se vea marcado
+        if (Dashboard.showMinimumAutoEnabledNotice(saved, { person: true }) && savedUser) await openGrantAccessModal(savedUser);
     } catch (err) {
         grantAccessError.textContent = (err && err.limitMessage) || Dashboard.t('admin.saveError');
         grantAccessError.hidden = false;
