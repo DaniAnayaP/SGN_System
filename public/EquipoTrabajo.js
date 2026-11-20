@@ -607,6 +607,11 @@ function logRowHtml(r) {
     const outside = data.me.hasTeam && !r.person.isMine && !r.person.isMe ? ` <small>(${esc(t('main.twOutsideTeam'))})</small>` : '';
     return `<tr class="tw-log-row" data-tw="open" data-id="${r.activityId}" tabindex="0">${sys}${td('colTwDone', esc(dateText(r.doneAt)))}${td('colTwActivity', `${r.urgent ? '⚡ ' : ''}${esc(r.title)}`)}${td('colTwPerson', `${esc(r.person.name)}${outside}`)}${td('colTwKind', `<span class="tw-kind tw-k-${r.kind}">${esc(kindLabel(r.kind))}</span>`)}${td('colTwRealization', esc(realLabel(r.realization)))}${td('colTwSite', esc(r.sites.map((s) => s.name).join(', ')))}${td('colTwDepartment', esc(deptName(r.department)))}${td('colTwPlan', esc(r.plan ? r.plan.planTitle : ''))}${td('colTwArea', esc(r.area || ''))}${td('colTwAssigned', esc(dateText(r.assignedAt)))}${td('colTwDays', String(r.days), 'tw-num')}${td('colTwValidator', esc(r.validatedByName))}${td('actions', `<button type="button" class="admin-icon-btn" data-tw="open" data-id="${r.activityId}" aria-label="${esc(t('main.twLogOpen'))}" title="${esc(t('main.twLogOpen'))}"><i class="bx bx-show" aria-hidden="true"></i></button>`, 'admin-table-actions')}</tr>`;
 }
+// El motor de tablas arma las columnas (embudos, orden, mover, fijar) cuando la tabla ya tiene ancho; una tabla que nació oculta no siempre avisa al mostrarse, así que se inicia aquí (iniciar dos veces no hace nada).
+function initLogTable() {
+    const wrapper = document.querySelector(`[data-table-id="${LOG_TABLE_ID}"]`);
+    if (wrapper && window.Dashboard && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 0);
+}
 // Muestra u oculta la tabla según la vista y la llena (solo si cambió lo que se ve: periodo, filtros o idioma)
 function syncLogTable() {
     const host = $('tw-log-host');
@@ -616,6 +621,7 @@ function syncLogTable() {
     host.hidden = !on;
     if (!on) return;
     if (wasHidden) window.dispatchEvent(new Event('resize'));
+    initLogTable();
     const signature = `${logData.rev}|${locale()}|${JSON.stringify(filters)}|${data.me.hasTeam ? 1 : 0}`;
     if (signature === logDrawn) return;
     logDrawn = signature;

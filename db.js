@@ -3868,8 +3868,8 @@ const TABLE_GRANT_PATHS = {
     'tipos-cliente': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-catalogos/cat-catalogos-transporte-vol-tipos-cliente' },
     // Planes de trabajo: pantalla GENERAL (sección main, junto a Inicio, Panel y Tablero), sin submenú: se entra con la hoja main/planes-trabajo
     'work_plans': { sectionId: 'main', itemId: 'planes-trabajo', submenuPrefix: '' },
-    // Administración de Equipo de Trabajo: pantalla GENERAL (sección main), sin submenú: se entra con la hoja main/equipo-trabajo
-    'team_activities': { sectionId: 'main', itemId: 'equipo-trabajo', submenuPrefix: '' },
+    // Administración de Equipo de Trabajo: pantalla GENERAL (sección main). La pantalla se abre con CUALQUIER hoja de main/equipo-trabajo (isTeamScreenGranted); su tabla del Registro cuelga de et-registro/et-registro-tabla (columnas, Control Interno e iconos)
+    'equipo-registro': { sectionId: 'main', itemId: 'equipo-trabajo', submenuPrefix: 'et-registro/et-registro-tabla' },
 };
 
 // menu.json is the single source of truth for where a column actually
@@ -9654,6 +9654,34 @@ function seedImplementacionHistorialGrants() {
     const path = TABLE_GRANT_PATHS.implementacion;
     if (!path) return;
     seedLeavesForScreenHolders(IMPL_HISTORIAL_SEED_KEY, path, ['cat-gestion/cat-gestion-ti-impl-historial'], 'the Implementation history screen');
+}
+// Equipo de Trabajo › Registro (tabla estándar, 2026-11-19): quien YA tiene la pantalla recibe, una sola vez, la hoja de la tabla y sus iconos (menos Historial y Reglas de llenado: el Registro ya es un historial y no tiene campos que llenar) y, en cada columna,
+// las tres opciones de búsqueda (filtrar, reordenar, ordenar); sin esto los iconos y los embudos de la tabla desaparecerían para quien no es administrador del cliente. Las columnas no necesitan hoja (por omisión «Solo ver»).
+const EQUIPO_REGISTRO_SEED_KEY = 'seed-equipo-registro-table-v1';
+const EQUIPO_REGISTRO_SEARCH_SEED_KEY = 'seed-equipo-registro-column-search-v1';
+const EQUIPO_REGISTRO_ICONS = ['iconZoomOut', 'iconZoomIn', 'iconPin', 'iconVisibility', 'iconLegend', 'iconFilter', 'iconFilterClear', 'iconFilterAdvanced', 'iconSavedSearch', 'iconSavedLayout'];
+function seedEquipoRegistroGrants() {
+    const path = TABLE_GRANT_PATHS['equipo-registro'];
+    if (!path) return;
+    seedLeavesForScreenHolders(EQUIPO_REGISTRO_SEED_KEY, path, [path.submenuPrefix, ...EQUIPO_REGISTRO_ICONS.map((icon) => `${path.submenuPrefix}/${icon}`)], 'the Equipo de Trabajo Registro table');
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(EQUIPO_REGISTRO_SEARCH_SEED_KEY)) return;
+    const entries = treeDataColumnEntries(path);
+    let inserted = 0;
+    db.transaction(() => {
+        for (const [ownerTable, ownerColumn] of [['job_position_grants', 'job_position_id'], ['user_grants', 'user_id']]) {
+            const hasGrant = db.prepare(`SELECT 1 FROM ${ownerTable} WHERE ${ownerColumn} = ? AND section_id = ? AND item_id = ? AND submenu_id = ?`);
+            const insertGrant = db.prepare(`INSERT INTO ${ownerTable} (${ownerColumn}, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)`);
+            const under = `${path.submenuPrefix}/`;
+            const owners = db.prepare(`SELECT DISTINCT ${ownerColumn} AS ownerId FROM ${ownerTable} WHERE section_id = ? AND ((item_id = ? AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?)) OR (item_id = ? AND submenu_id IS NULL) OR (item_id IS NULL AND submenu_id IS NULL))`)
+                .all(path.sectionId, path.itemId, path.submenuPrefix, under.length, under, path.itemId);
+            owners.forEach(({ ownerId }) => entries.forEach((entry) => COLUMN_SEARCH_OPTION_LEAVES.forEach((leaf) => {
+                const submenuId = `${entry.base}/${leaf}`;
+                if (!hasGrant.get(ownerId, path.sectionId, path.itemId, submenuId)) { insertGrant.run(ownerId, path.sectionId, path.itemId, submenuId); inserted += 1; }
+            })));
+        }
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(EQUIPO_REGISTRO_SEARCH_SEED_KEY);
+    })();
+    console.log(`[db] Seeded Opciones de Búsqueda for the Equipo de Trabajo Registro table (one-time migration): ${inserted} grants.`);
 }
 // Operaciones > Alta Activos (2026-11-12): la pantalla nueva la reciben, una sola vez, quienes ya tienen el Layout (de ahí sale lo que ahora se da de alta aquí). Los botones (nuevo activo y desactivar) los asigna el administrador desde el árbol.
 const ALTA_ACTIVOS_SCREEN_SEED_KEY = 'seed-alta-activos-screen-v1';
@@ -16921,6 +16949,10 @@ function teamMapAssignee(a, names, viewer, photos) {
 // Quién puede tomar una actividad dejada «por asignar» (claim_scope): team_dept = mi equipo (las personas a cargo de quien la creó) y mi departamento (quienes tienen asignado el departamento de la actividad, o el de quien la creó si no trae uno);
 // team = solo mi equipo; company = cualquiera de la compañía; chosen = las personas elegidas (team_activity_claimers); '' = nadie la toma (solo se asigna).
 // «Libre» = la persona no tiene ninguna actividad en curso. Las personas con acceso al tablero se guardan 30 s (leer los permisos de cada una cuesta).
+// ¿Estas hojas abren la pantalla de Equipo de Trabajo? La hoja de siempre (main/equipo-trabajo, o un permiso más ancho) o cualquier hoja que cuelgue de ese ítem: desde que el ítem tiene hijos en el árbol (la tabla del Registro), marcarlo da solo los hijos.
+function isTeamScreenGranted(grants) {
+    return isTupleGranted(grants, 'main', 'equipo-trabajo', null) || grants.some((g) => g.sectionId === 'main' && g.itemId === 'equipo-trabajo');
+}
 const teamScreenCache = new Map();
 function teamScreenSet(clientId, forTest) {
     const key = `${clientId}:${forTest ? 1 : 0}`;
@@ -16930,7 +16962,7 @@ function teamScreenSet(clientId, forTest) {
     const ids = new Set();
     db.prepare('SELECT id, is_test_account AS isTest, is_client_admin AS isAdmin FROM users WHERE client_id = ? AND active != 0 AND COALESCE(is_test_account, 0) = ?').all(clientId, forTest ? 1 : 0).forEach((u) => {
         if (!u.isTest && !new Set(getUserVisibleStatuses(u.id)).has(status)) return;
-        if (u.isAdmin || isTupleGranted(getUserEffectiveGrants(u.id), 'main', 'equipo-trabajo', null)) ids.add(u.id);
+        if (u.isAdmin || isTeamScreenGranted(getUserEffectiveGrants(u.id))) ids.add(u.id);
     });
     teamScreenCache.set(key, { at: Date.now(), ids });
     return ids;
@@ -17674,7 +17706,7 @@ function teamRunRecurrences(opts) {
 function teamUserHasScreen(clientId, userId) {
     const account = db.prepare('SELECT is_client_admin AS isAdmin FROM users WHERE id = ? AND client_id = ?').get(userId, clientId);
     if (!account) return false;
-    return isMainScreenStatusVisible(clientId, userId, 'equipo-trabajo') && (!!account.isAdmin || isTupleGranted(getUserEffectiveGrants(userId), 'main', 'equipo-trabajo', null));
+    return isMainScreenStatusVisible(clientId, userId, 'equipo-trabajo') && (!!account.isAdmin || isTeamScreenGranted(getUserEffectiveGrants(userId)));
 }
 // lo mínimo de la liga que se enseña en la línea del tiempo y el Registro
 function teamPlanBrief(ctx, row) {
@@ -21008,6 +21040,7 @@ seedPresentacionesCatalogGrants();
 seedRelacionEnvioGrants();
 seedAltaActivosGrants();
 seedImplementacionHistorialGrants();
+seedEquipoRegistroGrants();
 seedGestionActivosGrants();
 seedCompraSurtidoPedidoManualGrants();
 seedSurtidoPedidoManualButtons();
@@ -21776,7 +21809,7 @@ module.exports = {
     getUserGrants,
     setUserGrants,
     getUserGrantChangeLog,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, teamRunRecurrences, getTeamActivity, teamTimeline, teamLog, teamLinkableItems, teamPlanItemInfo, setTeamWorkday, setTeamNow, setUserPhoto, getUserPhoto, getUserPhotoVer, deleteUserPhoto, TEAM_PHOTO_MAX_BYTES, createTeamActivity, teamActivityAct, TEAM_LIMITS, teamActivityState, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, teamRunRecurrences, isTeamScreenGranted, getTeamActivity, teamTimeline, teamLog, teamLinkableItems, teamPlanItemInfo, setTeamWorkday, setTeamNow, setUserPhoto, getUserPhoto, getUserPhotoVer, deleteUserPhoto, TEAM_PHOTO_MAX_BYTES, createTeamActivity, teamActivityAct, TEAM_LIMITS, teamActivityState, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
     MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices,
     THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,

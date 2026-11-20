@@ -112,6 +112,8 @@
     "dashboard": "Dashboard",
     "workPlans": "Work plans",
     "teamWork": "Team Work Management",
+    "teamWorkLog": "Log",
+    "teamWorkLogTable": "Completed activities",
     "adminBusiness": "Admin Business",
     "adminBusinessAbbr1": "Admin Bus.",
     "adminBusinessAbbr2": "Business",

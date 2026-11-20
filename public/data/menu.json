@@ -19,7 +19,65 @@
         },
         { "id": "dashboard", "labelKey": "menu.dashboard", "icon": "bx-bar-chart-alt-2", "href": "Inicio-en.html" },
         { "id": "planes-trabajo", "labelKey": "menu.workPlans", "icon": "bx-calendar-check", "href": "PlanesTrabajo.html", "permissionOnly": true },
-        { "id": "equipo-trabajo", "labelKey": "menu.teamWork", "icon": "bx-group", "href": "EquipoTrabajo.html", "permissionOnly": true },
+        {
+          "id": "equipo-trabajo", "labelKey": "menu.teamWork", "icon": "bx-group", "href": "EquipoTrabajo.html", "permissionOnly": true,
+          "submenu": [
+            {
+              "id": "et-registro", "labelKey": "menu.teamWorkLog", "permissionOnly": true,
+              "submenu": [
+                {
+                  "id": "et-registro-tabla", "labelKey": "menu.teamWorkLogTable", "permissionOnly": true,
+                  "submenu": [
+                    {
+                      "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+                      "submenu": [
+                      { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                      { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                      { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                      { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                      { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                      { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                      { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                      { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                      { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                      { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                      { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                      { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                      { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+                      ]
+                    },
+                    { "id": "colTwDone", "labelKey": "main.twLogCol_done", "permissionOnly": true },
+                    { "id": "colTwActivity", "labelKey": "main.twLogCol_activity", "permissionOnly": true },
+                    { "id": "colTwPerson", "labelKey": "main.twLogCol_person", "permissionOnly": true },
+                    { "id": "colTwKind", "labelKey": "main.twLogCol_kind", "permissionOnly": true },
+                    { "id": "colTwRealization", "labelKey": "main.twLogCol_realization", "permissionOnly": true },
+                    { "id": "colTwSite", "labelKey": "main.twLogCol_site", "permissionOnly": true },
+                    { "id": "colTwDepartment", "labelKey": "main.twLogCol_department", "permissionOnly": true },
+                    { "id": "colTwPlan", "labelKey": "main.twLogCol_plan", "permissionOnly": true },
+                    { "id": "colTwArea", "labelKey": "main.twLogCol_area", "permissionOnly": true },
+                    { "id": "colTwAssigned", "labelKey": "main.twLogCol_assigned", "permissionOnly": true },
+                    { "id": "colTwDays", "labelKey": "main.twLogCol_days", "permissionOnly": true },
+                    { "id": "colTwValidator", "labelKey": "main.twLogCol_validator", "permissionOnly": true }
+                  ],
+                  "iconsSubmenu": [
+                    { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+                    { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+                    { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+                    { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+                    { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+                    { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+                    { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+                    { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+                    { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
+                    { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+                    { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
+                    { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
         { "id": "btn-marcadores", "labelKey": "main.bookmarks", "icon": "bx-bookmarks", "href": "#", "permissionOnly": true },
         {
           "id": "btn-configuracion", "labelKey": "main.settings", "icon": "bx-cog", "href": "#", "permissionOnly": true,
