@@ -20860,7 +20860,7 @@ function markSupportRatingReminded(caseId) {
 // support_interrupts guarda cada decisión cuando llega un Urgente y alguien está con algo menos urgente: cuánto le falta (minutes_left), qué recomendaba el sistema (recommended: pause | finish) y qué eligió (decision).
 // urgent_alerted_at = ya se avisó a Coordinación y al nivel que nadie tomó este Urgente a tiempo.
 for (const [col, ddl] of [['assignee_user_id', 'INTEGER'], ['assignee_name', "TEXT NOT NULL DEFAULT ''"], ['assigned_at', 'TEXT'], ['paused_at', 'TEXT'], ['paused_prev', "TEXT NOT NULL DEFAULT ''"],
-    ['paused_ms', 'INTEGER NOT NULL DEFAULT 0'], ['pause_count', 'INTEGER NOT NULL DEFAULT 0'], ['urgent_alerted_at', 'TEXT']]) {
+    ['paused_ms', 'INTEGER NOT NULL DEFAULT 0'], ['pause_count', 'INTEGER NOT NULL DEFAULT 0'], ['urgent_alerted_at', 'TEXT'], ['overdue_notified_at', 'TEXT']]) {
     if (!db.prepare('PRAGMA table_info(support_cases)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE support_cases ADD COLUMN ${col} ${ddl}`);
 }
 db.exec(`
@@ -20923,6 +20923,14 @@ function listUrgentUntakenSupportCases(nowSql) {
 }
 function markSupportUrgentAlerted(caseId) {
     db.prepare("UPDATE support_cases SET urgent_alerted_at = datetime('now') WHERE id = ?").run(caseId);
+}
+// overdue_notified_at = ya se decidió (una sola vez por caso) si se avisaba al jefe directo de quien reportó que venció el plazo de la primera respuesta (Mapa de soporte › «Avisar al jefe directo cuando vence el plazo»).
+// Los casos con plazo de primera respuesta vencido y sin primera respuesta del equipo, que se siguen atendiendo (abiertos, en revisión, en trabajo o en pruebas; no en pausa ni ya resueltos o cerrados).
+function listOverdueSupportCases(nowSql) {
+    return db.prepare("SELECT * FROM support_cases WHERE status IN ('open', 'review', 'working', 'testing') AND first_response_at IS NULL AND overdue_notified_at IS NULL AND first_response_due_at IS NOT NULL AND first_response_due_at <= ? ORDER BY id ASC LIMIT 200").all(nowSql);
+}
+function markSupportOverdueNotified(caseId) {
+    db.prepare("UPDATE support_cases SET overdue_notified_at = datetime('now') WHERE id = ?").run(caseId);
 }
 // ---- KPI de Soporte: lo que se lee de todos los casos de la empresa para sacar los indicadores ---------------------------------------------------------------------------------------------------
 function listSupportMovesForClient(clientId) {
@@ -21395,7 +21403,7 @@ module.exports = {
     listSupportMoves, addSupportMove, usedSupportMoveFileIds, listSupportCasesForSaas, getSupportCaseForSaas, mapSupportLastMovesIntoN4, getSaasSupportScope, listSaasSupportScopes, listActiveBusinessSectorsBrief, setSaasSupportScope, listSaasSupportTakerIds, listSaasSuperAdminIds, listSaasSupportAccountNames, SUPPORT_SCOPE_DEPARTMENTS,
     listSupportHelpArticles, getSupportHelpArticle, createSupportHelpArticle, updateSupportHelpArticle, addSupportHelpUse, listSupportHelpUsesForClient,
     listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,
-    assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted,
+    assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted, listOverdueSupportCases, markSupportOverdueNotified,
     addSupportRating, getSupportRating, listSupportRatings, lastSupportClosedClosureId, listSupportRatingReminderCandidates, markSupportRatingReminded,
     addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,

@@ -11437,7 +11437,7 @@ function renderSupportNoticeRow(item) {
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
     const v = item.variant || '';
     const isPerson = v.startsWith('person-');
-    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated', 'general-linked': 'main.noticeSupportGeneralLinked', 'general-notify': 'main.noticeSupportGeneralNotify', 'case-resolved': 'main.noticeSupportResolved', 'case-closed': 'main.noticeSupportClosed', 'case-closed-boss': 'main.noticeSupportClosedBoss', 'case-reopened': 'main.noticeSupportReopened', 'general-resolved': 'main.noticeSupportGeneralResolved', 'rate-reminder': 'main.noticeSupportRateReminder', 'urgent-arrived': 'main.noticeSupportUrgentArrived', 'urgent-untaken': 'main.noticeSupportUrgentUntaken', 'interrupt-overridden': 'main.noticeSupportInterruptOverridden', 'case-paused': 'main.noticeSupportPaused', 'saas-arrived': 'main.noticeSupportSaasArrived', 'saas-assigned': 'main.noticeSupportSaasAssigned' }[v] || (v === 'case-arrived' ? 'main.noticeSupportArrived' : (item.auto ? (item.reason === 'auto_escalated' ? 'main.noticeSupportEscalatedAuto' : 'main.noticeSupportUrgent') : 'main.noticeSupportNotify'));
+    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated', 'general-linked': 'main.noticeSupportGeneralLinked', 'general-notify': 'main.noticeSupportGeneralNotify', 'case-resolved': 'main.noticeSupportResolved', 'case-closed': 'main.noticeSupportClosed', 'case-closed-boss': 'main.noticeSupportClosedBoss', 'case-overdue-boss': 'main.noticeSupportOverdueBoss', 'case-reopened': 'main.noticeSupportReopened', 'general-resolved': 'main.noticeSupportGeneralResolved', 'rate-reminder': 'main.noticeSupportRateReminder', 'urgent-arrived': 'main.noticeSupportUrgentArrived', 'urgent-untaken': 'main.noticeSupportUrgentUntaken', 'interrupt-overridden': 'main.noticeSupportInterruptOverridden', 'case-paused': 'main.noticeSupportPaused', 'saas-arrived': 'main.noticeSupportSaasArrived', 'saas-assigned': 'main.noticeSupportSaasAssigned' }[v] || (v === 'case-arrived' ? 'main.noticeSupportArrived' : (item.auto ? (item.reason === 'auto_escalated' ? 'main.noticeSupportEscalatedAuto' : 'main.noticeSupportUrgent') : 'main.noticeSupportNotify'));
     const tag = document.createElement('div');
     tag.className = 'notifications-item-meta';
     tag.style.fontWeight = '700';
@@ -11474,6 +11474,9 @@ function renderSupportNoticeRow(item) {
     } else if (v === 'case-closed-boss') {
         // al jefe directo de quien reportó (Mapa de soporte › «Avisar al jefe directo cuando se cierra»): solo informa, sin enlace al caso
         desc.textContent = t(item.noresp ? 'main.noticeSupportClosedBossNoReplyLine' : 'main.noticeSupportClosedBossLine', base);
+    } else if (v === 'case-overdue-boss') {
+        // al jefe directo de quien reportó (Mapa de soporte › «Avisar al jefe directo cuando vence el plazo»): solo informa, sin enlace al caso
+        desc.textContent = t('main.noticeSupportOverdueBossLine', { ...base, level: t(`main.sopLevel_${item.level}`), priority: t(`main.msPri_${item.priority || 4}`) });
     } else if (v === 'case-reopened') {
         desc.textContent = t('main.noticeSupportReopenedLine', { ...base, to: t(`main.sopLevel_${item.to}`), said: item.said || '' });
     } else if (v === 'general-resolved') {

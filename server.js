@@ -613,7 +613,7 @@ const {
     listSupportMoves, addSupportMove, usedSupportMoveFileIds, listSupportCasesForSaas, getSupportCaseForSaas, mapSupportLastMovesIntoN4, getSaasSupportScope, listSaasSupportScopes, listActiveBusinessSectorsBrief, setSaasSupportScope, listSaasSupportTakerIds, listSaasSuperAdminIds, listSaasSupportAccountNames, SUPPORT_SCOPE_DEPARTMENTS,
     listSupportHelpArticles, getSupportHelpArticle, createSupportHelpArticle, updateSupportHelpArticle, addSupportHelpUse, listSupportHelpUsesForClient,
     listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,
-    assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted,
+    assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted, listOverdueSupportCases, markSupportOverdueNotified,
     addSupportRating, getSupportRating, listSupportRatings, lastSupportClosedClosureId, listSupportRatingReminderCandidates, markSupportRatingReminded,
     addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
@@ -13410,6 +13410,23 @@ function processSupportUrgent() {
     for (const c of listUrgentUntakenSupportCases(nowSql)) {
         markSupportUrgentAlerted(c.id);
         try { supportAlertUrgentUntaken(c, { reason: 'overdue' }); } catch (err) { console.error('support urgent alert failed', err); }
+    }
+    try { processSupportOverdue(nowSql); } catch (err) { console.error('support overdue failed', err); }
+}
+// Mapa de soporte › «Avisar al jefe directo cuando vence el plazo» (notifyOverdue): cuando el plazo de la primera respuesta de un caso vence y el equipo todavía no ha respondido, el jefe directo de quien lo reportó recibe un aviso en la
+// campana (Avisos) y el caso lo anota en su chat interno. Solo informa (no pide confirmar ni sube a nadie), UNA vez por caso y se decide en ese momento: con el interruptor apagado no se avisa (y si se prende después, no se avisa lo que
+// ya venció). No avisa si quien reportó no tiene jefe directo. Se corre cada minuto y al abrir Mi cola.
+function processSupportOverdue(nowSql) {
+    const mapOn = new Map();
+    for (const c of listOverdueSupportCases(nowSql)) {
+        markSupportOverdueNotified(c.id);
+        if (!mapOn.has(c.client_id)) mapOn.set(c.client_id, getSupportMapRow(c.client_id).notify_overdue === 1);
+        if (!mapOn.get(c.client_id) || !c.reporter_user_id) continue;
+        const boss = resolveDirectSupervisorUserId(c.reporter_user_id);
+        if (!boss || boss === c.reporter_user_id) continue;
+        publishSupportNotice({ recipients: [boss], actorUserId: null, actorLabel: 'Sistema', payload: { variant: 'case-overdue-boss', caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary, targetName: c.reporter_name, level: c.level, priority: c.priority, dueAt: sqlUtcIso(c.first_response_due_at) } });
+        ensureSupportThread(c);
+        addSupportEvent(c, 'int_overdue_alert', {}, { level: c.level, authorName: 'Sistema' });
     }
 }
 // Poner el caso a nombre de quien lo atiende (y sacarlo de «Abierto»).

@@ -79,6 +79,7 @@ function eventText(m) {
         case 'paused': return t(d.urgent ? 'main.spEv_paused' : 'main.spEv_paused_plain', { author });
         case 'resumed': return t('main.spEv_resumed', { author });
         case 'int_urgent_alert': return t('main.spEv_int_urgent_alert');
+        case 'int_overdue_alert': return t('main.spEv_int_overdue_alert');
         case 'rated': return t('main.spEv_rated', { author, stars: starsText(d.stars) });
         case 'general_resolved': return t('main.spEv_general_resolved', { general: d.general });
         case 'closed': return d.noresp ? t('main.spEv_closed_noresp', { author, n: d.attempts || 0 }) : t('main.spEv_closed_ok', { author }) + (d.cause ? t('main.spEv_closed_cause', { cause: d.cause }) : '');
