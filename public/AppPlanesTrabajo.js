@@ -361,7 +361,7 @@ function actionsNode(a) {
     const btn = (icon, labelKey, status) => {
         const b = el('button', 'wpapp-act');
         b.type = 'button';
-        b.setAttribute('aria-label', t(labelKey));
+        b.setAttribute('aria-label', t(labelKey)); b.setAttribute('data-help-key', 'appWpActions');
         b.title = t(labelKey);
         b.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
         b.addEventListener('click', (event) => { event.stopPropagation(); b.disabled = true; changeStatus(a, status); });
@@ -395,7 +395,7 @@ function rowNode(a, today, from) {
     row.appendChild(el('i', `bx ${ICON[a.status] || ICON.pending} wpapp-dot wpapp-dot-${a.status}`));
     const main = el('button', 'wpapp-main');
     main.type = 'button';
-    main.setAttribute('aria-label', a.title);
+    main.setAttribute('aria-label', a.title); main.setAttribute('data-help-key', from === 'team' ? 'appWpTeamRow' : 'appWpRow'); // el botón trae su propio nombre: sin su llave el Modo ayuda no llega a la ayuda de la fila
     const title = el('span', 'wpapp-title');
     title.append(el('b', '', a.title), ' ', el('small', '', a.levelName || ''));
     main.append(title, el('span', 'wpapp-crumbs', [a.planTitle, ...(a.path || [])].join(' › ')), chips);
