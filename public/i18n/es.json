@@ -1400,6 +1400,46 @@
     "saasSpTabMine": "Mis casos",
     "saasSpTabFree": "Sin asignar",
     "saasSpTabAll": "Todos",
+    "saasSpTabKpi": "KPI del Nivel 4",
+    "saasKpiClientLabel": "Empresa",
+    "saasKpiClientAll": "Todas las empresas",
+    "saasKpiIndicators": "Indicadores del Nivel 4",
+    "saasKpiReceived": "Casos recibidos",
+    "saasKpiReceivedDetail": "{company} subidos por la empresa · {direct} directos (sin TI)",
+    "saasKpiInN4": "En el Nivel 4 ahora",
+    "saasKpiInN4Detail": "Abiertos, en atención o por confirmar",
+    "saasKpiResolved": "Resueltos por el Nivel 4",
+    "saasKpiResolvedDetail": "{n} de {of} casos recibidos",
+    "saasKpiReturned": "Devueltos a la empresa",
+    "saasKpiReturnedDetail": "{pct} de los recibidos",
+    "saasKpiFirstReply": "Primera respuesta",
+    "saasKpiFirstReplyDetail": "Promedio desde que llegó al Nivel 4",
+    "saasKpiResolution": "Tiempo de resolución",
+    "saasKpiResolutionDetail": "Promedio desde que llegó hasta marcarlo resuelto",
+    "saasKpiUserRatingDetail": "{n} calificaciones de los casos que cerró el Nivel 4",
+    "saasKpiReceiveRating": "Cómo le llegan los casos",
+    "saasKpiReceiveRatingDetail": "{n} calificaciones al recibir",
+    "saasKpiReopened": "Reabiertos o no conformes",
+    "saasKpiReopenedDetail": "{pct} de los recibidos",
+    "saasKpiUntakenTitle": "Casos sin tomar",
+    "saasKpiArrived": "Llegó",
+    "saasKpiUntakenHint": "Tiempo promedio sin tomar (desde que llegó al Nivel 4): {avg}.",
+    "saasKpiFromCompany": "Lo subió la empresa",
+    "saasKpiBySector": "Por giro",
+    "saasKpiClients": "Por empresa",
+    "saasKpiDirectCol": "Directos",
+    "saasKpiResolvedCol": "Resueltos",
+    "saasKpiReturnedCol": "Devueltos",
+    "saasKpiPeople": "Por persona del equipo",
+    "saasKpiPerson": "Persona",
+    "saasKpiTakenCol": "Tomó",
+    "saasKpiClosedCol": "Cerró",
+    "saasKpiPeopleHint": "Tomó = casos que tomó en el Nivel 4. Primera respuesta = el promedio de los casos donde escribió primero. Resueltos y Cerró = lo que marcó resuelto o cerró con el usuario.",
+    "saasKpiReasons": "Por qué llegan",
+    "saasKpiReasonsHow": "Con qué motivo los subió la empresa",
+    "saasKpiByDepartment": "Por departamento del sistema",
+    "saasKpiByCategory": "Por categoría",
+    "saasKpiEmpty": "Todavía no hay casos del Nivel 4 en este periodo.",
     "saasExpColClient": "Cliente",
     "saasExpTabOpen": "Por atender",
     "saasExpTabClosed": "Cerradas",
@@ -11625,6 +11665,30 @@
     "saasSpTabs": {
       "what": "Filtra los casos: «Mis casos» son los que tomaste y siguen en el Nivel 4, «Sin asignar» los que esperan a que alguien los tome y «Todos» incluye también los que ya regresaron a la empresa.",
       "example": "Entras y abres «Sin asignar»: ves los casos nuevos de cualquier cliente y tomas el más urgente."
+    },
+    "saasKpiTab": {
+      "what": "Cambia de la lista de casos a los indicadores del Nivel 4: cuántos casos llegaron, cuántos se resolvieron o se devolvieron, cuánto tardó la primera respuesta y la resolución, cuáles nadie ha tomado y cómo le va a cada empresa y a cada persona del equipo. Solo la ve quien tiene alguna sección del KPI en el árbol de accesos.",
+      "example": "Abres «KPI del Nivel 4» al empezar la semana y ves que 5 casos llevan más de un día sin tomar."
+    },
+    "saasKpiIndicadores": {
+      "what": "Los números del Nivel 4 del periodo, sacados del recorrido de cada caso: casos recibidos (los que subió la empresa y los directos de empresas sin TI), cuántos se resolvieron, cuántos se devolvieron, primera respuesta, tiempo de resolución, conformidad al cierre, calificaciones y cuántos siguen sin tomar. El periodo cuenta los casos que llegaron al Nivel 4 en él.",
+      "example": "Resueltos por el Nivel 4: 33 % (1 de 3 casos recibidos)."
+    },
+    "saasKpiSinTomar": {
+      "what": "Los casos que nadie ha tomado ahora mismo en el Nivel 4: de qué empresa y giro son, su prioridad, desde cuándo llegaron y si su primera respuesta ya venció.",
+      "example": "SP-0042 del Hospital Santa Clara, Urgente, llegó hace 3 h y su primera respuesta venció hace 2 h."
+    },
+    "saasKpiClientes": {
+      "what": "Cómo le va a cada empresa con el Nivel 4: cuántos casos le llegaron, cuántos fueron directos, cuántos siguen en el Nivel 4, cuántos se resolvieron o se devolvieron y los tiempos promedio.",
+      "example": "Hospital Santa Clara: 12 casos recibidos, 9 resueltos, 2 devueltos; primera respuesta en 25 min."
+    },
+    "saasKpiPersonas": {
+      "what": "Qué hace cada persona del equipo SaaS en el Nivel 4: cuántos casos tomó, cuánto tarda en responder cuando escribe primero, cuántos marcó resueltos o cerró con el usuario y cómo la califican los usuarios.",
+      "example": "Ana Torres: tomó 8, respondió en 12 min en promedio, resolvió 6 y cerró 2."
+    },
+    "saasKpiPorQue": {
+      "what": "Por qué llegan los casos al Nivel 4: el motivo con que los subió la empresa y en qué giro, departamento y categoría se concentran.",
+      "example": "El 70 % llega con el motivo «Es un error del sistema (proveedor)» y la mayoría son de Cadena de Suministro."
     },
     "saasSpTable": {
       "what": "Un renglón por caso de soporte que llegó al Nivel 4. Dice de qué cliente es, su giro, de dónde viene el caso y por qué lo subieron, su prioridad, estatus y quién lo atiende.",

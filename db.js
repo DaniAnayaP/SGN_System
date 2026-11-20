@@ -20563,6 +20563,21 @@ function mapSupportLastMovesIntoN4() {
     const rows = db.prepare("SELECT m.* FROM support_case_moves m WHERE m.to_level = 'n4' AND m.id = (SELECT MAX(id) FROM support_case_moves WHERE case_id = m.case_id AND to_level = 'n4')").all();
     return new Map(rows.map((r) => [r.case_id, r]));
 }
+// ---- KPI del Nivel 4 (Servicio a Cliente › Soporte › pestaña KPI): lo que se lee de los casos de empresas reales que llegaron al Nivel 4 (están ahí o pasaron por ahí) para sacar los indicadores. Las cuentas de prueba no cuentan. ----------------------------
+const SUPPORT_N4_CASE_IDS_SQL = `SELECT c.id FROM support_cases c WHERE c.is_test_data = 0 AND ${SUPPORT_REACHED_N4_SQL}`;
+function listSupportMovesForSaas() {
+    return db.prepare(`SELECT m.* FROM support_case_moves m WHERE m.case_id IN (${SUPPORT_N4_CASE_IDS_SQL}) ORDER BY m.id ASC`).all();
+}
+function listSupportClosuresForSaas() {
+    return db.prepare(`SELECT z.* FROM support_case_closures z WHERE z.case_id IN (${SUPPORT_N4_CASE_IDS_SQL}) ORDER BY z.id ASC`).all();
+}
+function listSupportRatingsForSaas() {
+    return db.prepare(`SELECT r.* FROM support_case_ratings r WHERE r.case_id IN (${SUPPORT_N4_CASE_IDS_SQL}) ORDER BY r.id ASC`).all();
+}
+// Lo que escribió el Nivel 4 en cada caso: sus mensajes (no las notas) y cuándo tomó el caso; de ahí salen la primera respuesta y quién atiende más.
+function listSupportN4MessagesForSaas() {
+    return db.prepare(`SELECT m.case_id, m.kind, m.author_user_id, m.author_name, m.event_key, m.created_at FROM support_case_messages m WHERE m.level = 'n4' AND (m.kind = 'message' OR m.event_key = 'taken') AND m.case_id IN (${SUPPORT_N4_CASE_IDS_SQL}) ORDER BY m.id ASC`).all();
+}
 // ---- Quién del equipo SaaS atiende qué: «Giros que atiende» y «Departamentos que atiende» (Equipo SaaS) --------------------------------------------------------------------------------
 // Cada cuenta del equipo SaaS dice de qué giros y de qué departamentos recibe casos del Nivel 4. Cada lista tiene tres estados: NULL = todavía no se elige (una persona nueva sin elegir no recibe nada), '[]' = TODOS y una lista
 // de ids = solo esos. El departamento de un caso sale de su pantalla (la primera parte de screen_node) y su giro, del plan del cliente. Un caso sin pantalla o de un cliente sin giro le toca a cualquiera que ya eligió.
@@ -21403,7 +21418,7 @@ module.exports = {
     listSupportMoves, addSupportMove, usedSupportMoveFileIds, listSupportCasesForSaas, getSupportCaseForSaas, mapSupportLastMovesIntoN4, getSaasSupportScope, listSaasSupportScopes, listActiveBusinessSectorsBrief, setSaasSupportScope, listSaasSupportTakerIds, listSaasSuperAdminIds, listSaasSupportAccountNames, SUPPORT_SCOPE_DEPARTMENTS,
     listSupportHelpArticles, getSupportHelpArticle, createSupportHelpArticle, updateSupportHelpArticle, addSupportHelpUse, listSupportHelpUsesForClient,
     listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,
-    assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted, listOverdueSupportCases, markSupportOverdueNotified,
+    assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted, listOverdueSupportCases, markSupportOverdueNotified, listSupportMovesForSaas, listSupportClosuresForSaas, listSupportRatingsForSaas, listSupportN4MessagesForSaas,
     addSupportRating, getSupportRating, listSupportRatings, lastSupportClosedClosureId, listSupportRatingReminderCandidates, markSupportRatingReminded,
     addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,

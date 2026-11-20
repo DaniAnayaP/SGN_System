@@ -134,6 +134,8 @@ window.SAAS_ADMIN_CATALOG = [
                     tablaApartado('tabla',
                         ['Folio', 'Cliente', 'Giro', 'Tipo', 'Viene de', 'Motivo de la derivación', 'Prioridad', 'Estatus', 'Lo atiende', 'Evidencias', 'Chat y recorrido'],
                         ['Tomar casos', 'Escribir en el chat', 'Notas internas', 'Cambiar estatus', 'Marcar resuelto', 'Devolver al nivel anterior', 'Calificar traspasos', 'Subir evidencias', 'Cerrar casos de clientes sin TI']),
+                    // La pestaña «KPI del Nivel 4» de la misma pantalla (GET /api/admin/support-kpi): cada sección se ve con su botón (posiciones kpi::a0 a a4 en SAAS_SUPPORT_KPI_LEAVES de server.js: no cambiar el orden). Lo nuevo va al final.
+                    { id: 'kpi', label: 'KPI del Nivel 4 (pestaña)', acciones: ['Indicadores', 'Casos sin tomar', 'Por cliente', 'Por persona', 'Por qué llegan'] },
                 ],
             },
             {

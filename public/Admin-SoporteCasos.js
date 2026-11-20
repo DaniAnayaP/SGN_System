@@ -23,7 +23,7 @@ const t = (key, params) => {
 const lang = () => (Dashboard.getLanguage ? Dashboard.getLanguage() : (localStorage.getItem('lang') || 'es'));
 const locale = () => (lang() === 'en' ? 'en-US' : 'es-MX');
 const fmtTime = (iso) => new Date(iso).toLocaleString(locale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-const state = { cases: [], counts: { mine: 0, free: 0, all: 0 }, me: null, tab: 'mine', canTake: false, canEvidence: false, canChat: false, scope: null };
+const state = { cases: [], counts: { mine: 0, free: 0, all: 0 }, me: null, tab: 'mine', canTake: false, canEvidence: false, canChat: false, canKpi: false, scope: null };
 
 (async function init() {
     try {
@@ -36,6 +36,7 @@ const state = { cases: [], counts: { mine: 0, free: 0, all: 0 }, me: null, tab: 
             state.tab = btn.dataset.ssTab;
             renderTabs();
             renderRows();
+            syncKpiTab();
         });
         document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyFilters);
         document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyFilters);
@@ -51,7 +52,10 @@ async function load() {
     const errEl = document.getElementById('ss-error');
     if (!res.ok) { errEl.textContent = body.message || Dashboard.t('admin.saveError'); errEl.hidden = false; return; }
     errEl.hidden = true;
-    state.cases = body.cases; state.counts = body.counts; state.me = body.me; state.canEvidence = !!body.canEvidence; state.canChat = !!body.canChat; state.canTake = !!body.canTake;
+    state.cases = body.cases; state.counts = body.counts; state.me = body.me; state.canEvidence = !!body.canEvidence; state.canChat = !!body.canChat; state.canTake = !!body.canTake; state.canKpi = !!body.canKpi;
+    // la pestaña «KPI del Nivel 4» solo la ve quien tiene alguna de sus secciones en el árbol de accesos
+    document.getElementById('ss-tab-kpi').hidden = !state.canKpi;
+    if (!state.canKpi && state.tab === 'kpi') { state.tab = 'mine'; syncKpiTab(); }
     // sin elegir giros y departamentos (Equipo SaaS) no llegan casos nuevos a «Sin asignar»
     state.scope = body.scope || null;
     document.getElementById('ss-scope-note').hidden = !state.scope || state.scope.configured;
@@ -65,6 +69,15 @@ function renderTabs() {
         btn.setAttribute('aria-selected', String(on));
     });
     ['mine', 'free', 'all'].forEach((k) => { document.getElementById(`ss-count-${k}`).textContent = String(state.counts[k] || 0); });
+}
+// La pestaña «KPI del Nivel 4» no es la tabla: se esconde la tabla (y su buscador) y se muestran los indicadores (Admin-SoporteKpi.js).
+function syncKpiTab() {
+    const kpi = state.tab === 'kpi';
+    document.getElementById('ss-kpi').hidden = !kpi;
+    document.querySelector('[data-table-id="soporte-saas"]').hidden = kpi;
+    const bar = document.getElementById('filter-bar');
+    if (bar) bar.hidden = kpi;
+    if (kpi && window.SaasSupportKpi) window.SaasSupportKpi.show();
 }
 const visible = () => state.cases.filter((c) => (state.tab === 'mine' ? c.atN4 && c.mine : (state.tab === 'free' ? c.atN4 && !c.assigneeId && c.inScope : true)));
 
@@ -173,6 +186,7 @@ function ensureEmptyState(tbody) {
     tbody.appendChild(tr);
 }
 function renderRows() {
+    if (state.tab === 'kpi') return; // la pestaña de KPI no es la tabla
     const tbody = getTbody();
     tbody.innerHTML = '';
     const list = visible();

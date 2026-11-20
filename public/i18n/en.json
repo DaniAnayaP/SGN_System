@@ -1401,6 +1401,46 @@
     "saasSpTabMine": "My cases",
     "saasSpTabFree": "Unassigned",
     "saasSpTabAll": "All",
+    "saasSpTabKpi": "Level 4 KPIs",
+    "saasKpiClientLabel": "Company",
+    "saasKpiClientAll": "All companies",
+    "saasKpiIndicators": "Level 4 indicators",
+    "saasKpiReceived": "Cases received",
+    "saasKpiReceivedDetail": "{company} raised by the company · {direct} direct (no IT)",
+    "saasKpiInN4": "At Level 4 now",
+    "saasKpiInN4Detail": "Open, being handled or waiting for confirmation",
+    "saasKpiResolved": "Resolved by Level 4",
+    "saasKpiResolvedDetail": "{n} of {of} cases received",
+    "saasKpiReturned": "Returned to the company",
+    "saasKpiReturnedDetail": "{pct} of those received",
+    "saasKpiFirstReply": "First reply",
+    "saasKpiFirstReplyDetail": "Average since it reached Level 4",
+    "saasKpiResolution": "Resolution time",
+    "saasKpiResolutionDetail": "Average from arrival until marked resolved",
+    "saasKpiUserRatingDetail": "{n} ratings of the cases Level 4 closed",
+    "saasKpiReceiveRating": "How cases arrive",
+    "saasKpiReceiveRatingDetail": "{n} ratings on receiving",
+    "saasKpiReopened": "Reopened or not satisfied",
+    "saasKpiReopenedDetail": "{pct} of those received",
+    "saasKpiUntakenTitle": "Cases not taken",
+    "saasKpiArrived": "Arrived",
+    "saasKpiUntakenHint": "Average time not taken (since it reached Level 4): {avg}.",
+    "saasKpiFromCompany": "Raised by the company",
+    "saasKpiBySector": "By business sector",
+    "saasKpiClients": "By company",
+    "saasKpiDirectCol": "Direct",
+    "saasKpiResolvedCol": "Resolved",
+    "saasKpiReturnedCol": "Returned",
+    "saasKpiPeople": "By team member",
+    "saasKpiPerson": "Person",
+    "saasKpiTakenCol": "Took",
+    "saasKpiClosedCol": "Closed",
+    "saasKpiPeopleHint": "Took = cases taken at Level 4. First reply = the average for the cases where they wrote first. Resolved and Closed = what they marked resolved or closed with the user.",
+    "saasKpiReasons": "Why they arrive",
+    "saasKpiReasonsHow": "The reason the company gave when raising them",
+    "saasKpiByDepartment": "By system department",
+    "saasKpiByCategory": "By category",
+    "saasKpiEmpty": "There are no Level 4 cases in this period yet.",
     "saasExpColClient": "Client",
     "saasExpTabOpen": "To handle",
     "saasExpTabClosed": "Closed",
@@ -11626,6 +11666,30 @@
     "saasSpTabs": {
       "what": "Filters the cases: «My cases» are the ones you took and are still at Level 4, «Unassigned» are waiting for someone to take them and «All» also includes the ones that already went back to the company.",
       "example": "You open «Unassigned»: you see the new cases from any client and take the most urgent one."
+    },
+    "saasKpiTab": {
+      "what": "Switches from the case list to the Level 4 indicators: how many cases arrived, how many were resolved or returned, how long the first reply and the resolution took, which ones nobody has taken, and how each company and each team member is doing. Only people with some KPI section in the access tree see it.",
+      "example": "You open «Level 4 KPIs» at the start of the week and see that 5 cases have gone more than a day untaken."
+    },
+    "saasKpiIndicadores": {
+      "what": "The Level 4 numbers for the period, taken from each case's path: cases received (the ones the company raised and the direct ones from companies without IT), how many were resolved, how many were returned, first reply, resolution time, conformity at closing, ratings and how many are still untaken. The period counts the cases that reached Level 4 in it.",
+      "example": "Resolved by Level 4: 33 % (1 of 3 cases received)."
+    },
+    "saasKpiSinTomar": {
+      "what": "The cases nobody has taken right now at Level 4: which company and business sector they are from, their priority, since when they arrived and whether their first reply is already overdue.",
+      "example": "SP-0042 from Hospital Santa Clara, Urgent, arrived 3 h ago and its first reply was due 2 h ago."
+    },
+    "saasKpiClientes": {
+      "what": "How each company is doing with Level 4: how many cases reached it, how many were direct, how many are still at Level 4, how many were resolved or returned, and the average times.",
+      "example": "Hospital Santa Clara: 12 cases received, 9 resolved, 2 returned; first reply in 25 min."
+    },
+    "saasKpiPersonas": {
+      "what": "What each SaaS team member does at Level 4: how many cases they took, how long they take to reply when they write first, how many they marked resolved or closed with the user, and how users rate them.",
+      "example": "Ana Torres: took 8, replied in 12 min on average, resolved 6 and closed 2."
+    },
+    "saasKpiPorQue": {
+      "what": "Why cases reach Level 4: the reason the company gave when raising them and which business sector, department and category they concentrate in.",
+      "example": "70 % arrive with the reason «It is a system error (provider)» and most are from Supply Chain."
     },
     "saasSpTable": {
       "what": "One row per support case that reached Level 4. It says which client it belongs to, its business sector, where the case comes from and why it was escalated, its priority, status and who handles it.",

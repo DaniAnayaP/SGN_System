@@ -613,7 +613,7 @@ const {
     listSupportMoves, addSupportMove, usedSupportMoveFileIds, listSupportCasesForSaas, getSupportCaseForSaas, mapSupportLastMovesIntoN4, getSaasSupportScope, listSaasSupportScopes, listActiveBusinessSectorsBrief, setSaasSupportScope, listSaasSupportTakerIds, listSaasSuperAdminIds, listSaasSupportAccountNames, SUPPORT_SCOPE_DEPARTMENTS,
     listSupportHelpArticles, getSupportHelpArticle, createSupportHelpArticle, updateSupportHelpArticle, addSupportHelpUse, listSupportHelpUsesForClient,
     listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,
-    assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted, listOverdueSupportCases, markSupportOverdueNotified,
+    assignSupportCase, pauseSupportCase, resumeSupportCase, listSupportQueueCases, addSupportInterrupt, listDueSupportInterrupts, markSupportInterruptAlerted, listUrgentUntakenSupportCases, markSupportUrgentAlerted, listOverdueSupportCases, markSupportOverdueNotified, listSupportMovesForSaas, listSupportClosuresForSaas, listSupportRatingsForSaas, listSupportN4MessagesForSaas,
     addSupportRating, getSupportRating, listSupportRatings, lastSupportClosedClosureId, listSupportRatingReminderCandidates, markSupportRatingReminded,
     addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
@@ -13930,7 +13930,112 @@ app.get('/api/admin/support-cases', requireAuth, requireAdmin, (req, res) => {
     const free = (c) => c.atN4 && !c.assigneeId && c.inScope;
     const mine = (c) => c.atN4 && c.mine;
     res.set('Cache-Control', 'no-store');
-    res.json({ cases: rows, counts: { mine: rows.filter(mine).length, free: rows.filter(free).length, all: rows.length }, truncated: rows.length >= LIMIT, me, canEvidence: saasSupportCan(req, 'evidence'), canChat: saasSupportCan(req, 'chat'), canTake: saasSupportCan(req, 'take'), scope: { configured: superAdmin || (scope.sectors !== null && scope.departments !== null), superAdmin } });
+    res.json({ cases: rows, counts: { mine: rows.filter(mine).length, free: rows.filter(free).length, all: rows.length }, truncated: rows.length >= LIMIT, me, canEvidence: saasSupportCan(req, 'evidence'), canChat: saasSupportCan(req, 'chat'), canTake: saasSupportCan(req, 'take'), canKpi: Object.values(saasSupportKpiSections(req)).some(Boolean), scope: { configured: superAdmin || (scope.sectors !== null && scope.departments !== null), superAdmin } });
+});
+// ---- KPI del Nivel 4 (Servicio a Cliente › Soporte › pestaña «KPI del Nivel 4») -----------------------------------------------------------------------------------------------------------------------
+// Lo mismo que el KPI de la empresa pero visto desde GEIPSA (el proveedor): de los casos de TODAS las empresas que llegaron al Nivel 4, cuántos llegaron y de dónde, cuántos se resolvieron o se devolvieron, cuánto tardó la primera respuesta y
+// la resolución, cuáles siguen sin tomar, y cómo les va a cada empresa y a cada persona del equipo. Todo sale del recorrido del caso (traspasos, cierres, calificaciones y lo que escribió el Nivel 4), sin capturar nada aparte. Cada sección se ve con
+// su botón del árbol de accesos de la cuenta (Equipo SaaS › Soporte › «KPI del Nivel 4»: posiciones kpi::a0 a a4 de SaasAdminCatalog.js, no cambiar su orden). Los casos del periodo son los que LLEGARON al Nivel 4 en él; las cuentas de prueba no cuentan.
+const SAAS_SUPPORT_KPI_LEAVES = { indicators: 'kpi::a0', untaken: 'kpi::a1', clients: 'kpi::a2', people: 'kpi::a3', reasons: 'kpi::a4' };
+const saasSupportKpiSections = (req) => Object.fromEntries(Object.entries(SAAS_SUPPORT_KPI_LEAVES).map(([k, leaf]) => [k, !!req.user.isSaasSuperAdmin || hasSaasGrant(getSaasUserGrants(req.user.sub), SAAS_SUPPORT_ITEM, leaf)]));
+function saasSupportKpiCompute({ period, type, clientId }) {
+    const range = supportKpiRange(period);
+    const nowMs = Date.now();
+    const ts = (sql) => new Date(sqlUtcIso(sql)).getTime();
+    const diffMin = (a, b) => Math.max(0, Math.round((ts(b) - ts(a)) / 60000));
+    const avg = (a) => (a.length ? Math.round(a.reduce((s, x) => s + x, 0) / a.length) : null);
+    const avg1 = (a) => (a.length ? Math.round((a.reduce((s, x) => s + x, 0) / a.length) * 10) / 10 : null);
+    const pct = (n, d) => (d ? Math.round((n / d) * 100) : null);
+    const group = (rows, keyOf) => { const m = new Map(); rows.forEach((r) => { const k = keyOf(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); }); return m; };
+    let all = listSupportCasesForSaas({ limit: 20000 });
+    if (type === 'c' || type === 'p') all = all.filter((c) => c.case_type === type);
+    const clientsList = [...new Map(all.map((c) => [c.client_id, c.client_name])).entries()].map(([id, name]) => ({ id, name })).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    if (clientId) all = all.filter((c) => c.client_id === clientId);
+    const movesBy = group(listSupportMovesForSaas(), (m) => m.case_id);
+    const closuresBy = group(listSupportClosuresForSaas(), (z) => z.case_id);
+    const msgsBy = group(listSupportN4MessagesForSaas(), (m) => m.case_id);
+    const intoN4 = (c) => (movesBy.get(c.id) || []).find((m) => m.to_level === 'n4') || null; // el primer traspaso que lo trajo (un caso que entró directo no tiene)
+    const arrivalOf = (c) => { const m = intoN4(c); return m ? m.created_at : c.created_at; };
+    const cs = all.filter((c) => { const a = ts(arrivalOf(c)); return (!range.from || a >= range.from) && (!range.to || a < range.to); });
+    const ids = new Set(cs.map((c) => c.id));
+    const afterArrival = (c, createdAt) => ts(createdAt) >= ts(arrivalOf(c));
+    const resolvedBy = (c) => (closuresBy.get(c.id) || []).find((z) => z.kind === 'resolved' && z.from_level === 'n4' && afterArrival(c, z.created_at)) || null;
+    const returnedBy = (c) => (movesBy.get(c.id) || []).find((m) => m.from_level === 'n4' && m.direction === 'down' && m.reason !== 'solved' && afterArrival(c, m.created_at)) || null;
+    const firstReplyOf = (c) => (msgsBy.get(c.id) || []).find((m) => m.kind === 'message' && afterArrival(c, m.created_at)) || null;
+    const n4Decisions = (c) => (closuresBy.get(c.id) || []).filter((z) => z.from_level === 'n4' && ['closed', 'not_conform', 'noresp'].includes(z.kind) && afterArrival(c, z.created_at));
+    const resolved = cs.map((c) => ({ c, z: resolvedBy(c) })).filter((x) => x.z);
+    const returned = cs.filter((c) => returnedBy(c));
+    const replies = cs.map((c) => { const m = firstReplyOf(c); return m ? diffMin(arrivalOf(c), m.created_at) : null; }).filter((v) => v !== null);
+    const decisions = cs.flatMap((c) => n4Decisions(c));
+    const closedDecisions = decisions.filter((z) => z.kind === 'closed');
+    const ratings = listSupportRatingsForSaas().filter((r) => ids.has(r.case_id));
+    const csById = new Map(cs.map((c) => [c.id, c]));
+    const userRatings = ratings.filter((r) => r.kind === 'user' && csById.has(r.case_id) && n4Decisions(csById.get(r.case_id)).length); // la calificación del usuario a los casos que cerró el Nivel 4
+    const receiveRatings = ratings.filter((r) => r.kind === 'receive' && r.rater_level === 'n4');
+    const tagCount = new Map();
+    receiveRatings.forEach((r) => parseJsonOr(r.tags, []).forEach((tag) => tagCount.set(tag, (tagCount.get(tag) || 0) + 1)));
+    const reopened = cs.filter((c) => (closuresBy.get(c.id) || []).some((z) => ['reopened', 'not_conform'].includes(z.kind) && afterArrival(c, z.created_at))).length;
+    const atN4Live = (c) => c.level === 'n4' && !SUPPORT_CLOSED_STATUSES.includes(c.status);
+    const inN4Now = all.filter((c) => atN4Live(c) && ['open', 'review', 'working', 'testing', 'paused', 'confirm'].includes(c.status));
+    const untakenNow = all.filter((c) => atN4Live(c) && c.status === 'open' && !c.assignee_user_id);
+    const direct = cs.filter((c) => !intoN4(c));
+    const indicators = {
+        received: cs.length, direct: direct.length, fromCompany: cs.length - direct.length, inN4Now: inN4Now.length,
+        resolved: { n: resolved.length, of: cs.length, pct: pct(resolved.length, cs.length) },
+        returned: { n: returned.length, of: cs.length, pct: pct(returned.length, cs.length) },
+        firstReplyMin: avg(replies), resolutionMin: avg(resolved.map((x) => diffMin(arrivalOf(x.c), x.z.created_at))),
+        conform: { n: closedDecisions.length, of: decisions.length, pct: pct(closedDecisions.length, decisions.length), notConform: decisions.filter((z) => z.kind === 'not_conform').length, noReply: decisions.filter((z) => z.kind === 'noresp').length },
+        userRating: { avg: avg1(userRatings.map((r) => r.stars)), n: userRatings.length },
+        receiveRating: { avg: avg1(receiveRatings.map((r) => r.stars)), n: receiveRatings.length, tags: [...tagCount].map(([tag, n]) => ({ tag, n, bad: SUPPORT_RATING_TAGS.receive.bad.includes(tag) })).sort((a, b) => b.n - a.n).slice(0, 6) },
+        reopened: { n: reopened, pct: pct(reopened, cs.length) },
+        untaken: { n: untakenNow.length, late: untakenNow.filter((c) => c.first_response_due_at && !c.first_response_at && ts(c.first_response_due_at) < nowMs).length },
+    };
+    // ---- casos que no se están tomando (ahora): desde cuándo llegaron y de qué empresa
+    const untakenRows = untakenNow.slice().sort((a, b) => a.priority - b.priority || ts(arrivalOf(a)) - ts(arrivalOf(b))).slice(0, 100).map((c) => ({
+        id: c.id, folio: supportFolio(c.record_number), client: c.client_name, sector: c.sector_name, priority: c.priority, direct: !intoN4(c), since: sqlUtcIso(arrivalOf(c)), waitingMin: Math.max(0, Math.round((nowMs - ts(arrivalOf(c))) / 60000)),
+        overdueMin: c.first_response_due_at && !c.first_response_at && ts(c.first_response_due_at) < nowMs ? Math.round((nowMs - ts(c.first_response_due_at)) / 60000) : 0,
+    }));
+    const untakenBySector = [...group(untakenNow, (c) => c.sector_name || '')].map(([name, list]) => ({ name, n: list.length })).sort((a, b) => b.n - a.n);
+    const untaken = { rows: untakenRows, bySector: untakenBySector, avgWaitMin: avg(untakenRows.map((r) => r.waitingMin)) };
+    // ---- por cliente
+    const clientRows = [...group(cs, (c) => c.client_id)].map(([id, list]) => {
+        const res = list.map((c) => ({ c, z: resolvedBy(c) })).filter((x) => x.z);
+        const rep = list.map((c) => { const m = firstReplyOf(c); return m ? diffMin(arrivalOf(c), m.created_at) : null; }).filter((v) => v !== null);
+        return { id, name: list[0].client_name, sector: list[0].sector_name || '', received: list.length, direct: list.filter((c) => !intoN4(c)).length, openNow: list.filter((c) => atN4Live(c)).length, resolved: res.length, returned: list.filter((c) => returnedBy(c)).length, resolutionMin: avg(res.map((x) => diffMin(arrivalOf(x.c), x.z.created_at))), firstReplyMin: avg(rep) };
+    }).sort((a, b) => b.received - a.received || String(a.name).localeCompare(String(b.name)));
+    // ---- por persona del equipo SaaS: quién tomó, quién respondió primero, quién resolvió y quién cerró
+    const people = new Map();
+    const person = (id, name) => { const key = id || `n:${name}`; if (!people.has(key)) people.set(key, { id: id || null, name: name || '—', taken: new Set(), firstReplies: [], resolved: 0, closed: 0, userStars: [] }); return people.get(key); };
+    cs.forEach((c) => {
+        (msgsBy.get(c.id) || []).filter((m) => m.event_key === 'taken' && afterArrival(c, m.created_at)).forEach((m) => person(m.author_user_id, m.author_name).taken.add(c.id));
+        const fr = firstReplyOf(c); if (fr) person(fr.author_user_id, fr.author_name).firstReplies.push(diffMin(arrivalOf(c), fr.created_at));
+        const rz = resolvedBy(c); if (rz) person(rz.by_user_id, rz.by_name).resolved += 1;
+        n4Decisions(c).filter((z) => z.kind === 'closed' || z.kind === 'noresp').forEach((z) => {
+            const p = person(z.by_user_id, z.by_name); p.closed += 1;
+            const star = ratings.find((r) => r.kind === 'user' && r.case_id === c.id); if (star && z.kind === 'closed') p.userStars.push(star.stars);
+        });
+    });
+    const peopleRows = [...people.values()].map((p) => ({ id: p.id, name: p.name, taken: p.taken.size, firstReplyMin: avg(p.firstReplies), replies: p.firstReplies.length, resolved: p.resolved, closed: p.closed, userRating: avg1(p.userStars) })).sort((a, b) => (b.resolved + b.closed) - (a.resolved + a.closed) || b.taken - a.taken || String(a.name).localeCompare(String(b.name)));
+    // ---- por qué llegan: el motivo con que los subió la empresa, giro, departamento y categoría
+    const reasonCount = new Map();
+    cs.forEach((c) => { const m = intoN4(c); const key = m ? (m.reason || 'other') : 'direct'; reasonCount.set(key, (reasonCount.get(key) || 0) + 1); });
+    const reasons = [...reasonCount].map(([reason, n]) => ({ reason, n, pct: pct(n, cs.length) })).sort((a, b) => b.n - a.n);
+    const top = (keyOf, limit = 10) => [...group(cs, keyOf)].map(([name, list]) => ({ name, n: list.length, resolved: list.filter((c) => resolvedBy(c)).length })).sort((a, b) => b.n - a.n || String(a.name).localeCompare(String(b.name))).slice(0, limit);
+    const reasonsOut = { reasons, bySector: top((c) => c.sector_name || ''), byDepartment: top((c) => saasScopeDept(c)), byCategory: top((c) => c.category_name || '') };
+    return { period, type, clientId: clientId || null, range: { from: range.from ? new Date(range.from).toISOString() : null, to: range.to ? new Date(range.to).toISOString() : null }, clientsList, indicators, untaken, clients: clientRows, people: peopleRows, reasons: reasonsOut };
+}
+app.get('/api/admin/support-kpi', requireAuth, requireAdmin, (req, res) => {
+    if (!saasSupportHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver el Soporte.' });
+    const sections = saasSupportKpiSections(req);
+    if (!Object.values(sections).some(Boolean)) return res.status(403).json({ message: 'No tienes permiso para el KPI del Nivel 4.' });
+    const period = ['month', 'prev', 'quarter', 'all'].includes(req.query.period) ? req.query.period : 'month';
+    const type = ['c', 'p'].includes(req.query.type) ? req.query.type : 'all';
+    const clientId = Number.isInteger(Number(req.query.clientId)) && Number(req.query.clientId) > 0 ? Number(req.query.clientId) : null;
+    const out = saasSupportKpiCompute({ period, type, clientId });
+    const result = { period: out.period, type: out.type, clientId: out.clientId, range: out.range, sections, clientsList: out.clientsList };
+    Object.keys(SAAS_SUPPORT_KPI_LEAVES).forEach((k) => { if (sections[k]) result[k] = out[k]; });
+    res.set('Cache-Control', 'no-store');
+    res.json(result);
 });
 app.get('/api/admin/support-cases/:id', requireAuth, requireAdmin, (req, res) => {
     const rec = saasSupportGate(req, res);
