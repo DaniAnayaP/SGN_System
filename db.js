@@ -17593,6 +17593,20 @@ function teamSetRecurrence(row, repeat, tz, userIds, principal, byUserId, byLabe
     teamEvent(row.id, null, byUserId, byLabel, 'repeat_set', `${repeat.unit}:${repeat.every}`);
     return 'set';
 }
+// Quien asigna o quita personas en la vuelta ACTUAL de una repetición cambia también con quién nacen las siguientes (un pase no: es solo un cambio de quien la hace esa vez). Una vuelta anterior no cambia nada.
+function teamTouchSeriesPeople(row, change) {
+    if (row.recurrence_id == null) return;
+    const rec = db.prepare('SELECT * FROM team_recurrences WHERE id = ? AND active = 1').get(row.recurrence_id);
+    if (!rec) return;
+    if (db.prepare('SELECT MAX(id) AS id FROM team_activities WHERE recurrence_id = ?').get(rec.id).id !== row.id) return;
+    let ids = [];
+    try { ids = JSON.parse(rec.user_ids) || []; } catch (err) { ids = []; }
+    ids = [...new Set([...ids, ...(change.add || [])])].filter((id) => !(change.remove || []).includes(id));
+    let principal = rec.principal_user_id;
+    if (change.principal !== undefined && change.principal !== null) principal = change.principal;
+    if (!ids.includes(principal)) principal = null;
+    db.prepare('UPDATE team_recurrences SET user_ids = ?, principal_user_id = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(ids), principal, teamNow(), rec.id);
+}
 function teamStopRecurrence(row, byUserId, byLabel) {
     const current = row.recurrence_id != null ? db.prepare('SELECT * FROM team_recurrences WHERE id = ?').get(row.recurrence_id) : null;
     if (!current || !current.active) return false;
@@ -17855,6 +17869,7 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
             if (principal != null) { db.prepare('UPDATE team_activity_assignees SET is_principal = CASE WHEN user_id = ? THEN 1 ELSE 0 END WHERE activity_id = ?').run(principal, row.id); }
             touch();
         })();
+        teamTouchSeriesPeople(row, { add: fresh, principal });
         notify('assigned', fresh);
         return done();
     }
@@ -17870,6 +17885,7 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
             teamEvent(row.id, uid, userId, byLabel, 'unassigned', '');
             touch();
         })();
+        teamTouchSeriesPeople(row, { remove: [uid] });
         notify('unassigned', [uid]);
         return done();
     }
