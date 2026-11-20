@@ -13591,6 +13591,121 @@ function expandAccessMinimums(grants, options = {}) {
     }
     return { grants: all, added, autoEnabled: [...pairs.values()], blocked: [...blocked.values()] };
 }
+// ---------------------------------------------------------------------------
+// Relación de Accesos para PERSONAS (puestos y usuarios; Daniel, 2026-11-19, «Sí a las recomendaciones»). En el Giro y el Plan lo mínimo entra con todos los niveles porque ahí solo se define qué se puede contratar; a una PERSONA no se le da de más:
+//   · solo cuenta el mínimo que está en la MISMA pantalla del acceso (su botón, su columna): lo de otra pantalla (p. ej. la bandeja de TI de «Pedir alta») se queda como recomendación, no se le da a la persona sola;
+//   · una columna o botón marcado como mínimo entra con «Ver y operar» (nunca Autorizar, Eliminar ni Notificar: esos los marca el administrador a mano); un contenedor (grupo, pantalla) marcado como mínimo entra solo con «Solo ver» en cada columna y botón;
+//   · el acceso cuenta como habilitado para la persona cuando ya OPERA algo de él (Ver y operar, Editar, Autorizar o Eliminar, o el ícono marcado): quien solo lo ve no recibe de pronto el botón de crear;
+//   · nunca baja un nivel (si ya tiene «Editar», no se le pone «Ver y operar») y, al subir de «Solo ver» a «Ver y operar», quita el «Solo ver» (los niveles se excluyen, como en el árbol);
+//   · solo lo que el contrato y el Estatus de quien da el permiso dejan dar (canAdd); lo demás sale en «blocked». General (main) no lleva reglas de personas.
+// ---------------------------------------------------------------------------
+const PERSON_LEVEL_RANK = { 'solo-ver': 1, 'ver-y-operar': 2, editar: 3 };
+const PERSON_OPERATING_LEVELS = ['ver-y-operar', 'editar', 'autorizar', 'eliminar'];
+function accessScreenOf(key) {
+    const index = buildAccessCatalog().index;
+    for (let k = key, guard = 0; k && guard < 20; guard += 1) {
+        const n = index.get(k);
+        if (!n) return null;
+        if (n.ty === 'pantalla') return k;
+        k = n.p;
+    }
+    return null;
+}
+// ¿Lo relacionado está en la misma pantalla que el acceso (o es la pantalla misma)? Solo eso cuenta como mínimo de una persona.
+function personMinimumSameScreen(accessKey, relatedKey) {
+    const screen = accessScreenOf(accessKey);
+    return !!screen && (relatedKey === screen || relatedKey.startsWith(`${screen}/`));
+}
+// Las tuplas que le da a una persona un mínimo (en una plataforma: '' = Web, '#app' = App). fromContainer: el mínimo viene de marcar un contenedor, entonces solo «Solo ver».
+function personMinimumTuples(key, platform, fromContainer = false) {
+    const node = buildAccessCatalog().index.get(key);
+    if (!node) return [];
+    const t = parseAccessKey(key);
+    if (t.sectionId === 'main') return [];
+    if (node.ty === 'group' || node.ty === 'pantalla' || node.ty === 'apartado') return accessChildrenOf(key).flatMap((c) => personMinimumTuples(c.k, platform, true));
+    if (node.ty === 'column' || node.ty === 'button') return [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: `${t.submenuId}/${fromContainer ? 'solo-ver' : 'ver-y-operar'}${platform}` }];
+    if (node.ty === 'icon') return [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: `${t.submenuId}${platform}` }];
+    return [];
+}
+// ¿La persona ya opera algo de ese acceso en esa plataforma? (ver arriba)
+function personEnablesAccess(grants, node, platform) {
+    const t = parseAccessKey(node.k);
+    if (t.sectionId === 'main' || !t.submenuId) return false;
+    return grants.some((g) => {
+        const isApp = typeof g.submenuId === 'string' && g.submenuId.endsWith(ACCESS_APP_SUFFIX);
+        if (isApp !== (platform === ACCESS_APP_SUFFIX) || g.sectionId !== t.sectionId || (g.itemId || null) !== t.itemId) return false;
+        const sub = isApp ? g.submenuId.slice(0, -ACCESS_APP_SUFFIX.length) : String(g.submenuId || '');
+        if (node.ty === 'icon') return sub === t.submenuId || sub.startsWith(`${t.submenuId}/`);
+        if (!sub.startsWith(`${t.submenuId}/`)) return false;
+        return PERSON_OPERATING_LEVELS.includes(sub.split('/').pop());
+    });
+}
+// Qué límites tiene QUIEN da el permiso (el administrador del cliente): contrato y Estatus que ve; los mismos que aplica clampNewGrantsToLimits al guardar. Regresa canAdd(tupla) → true si se puede dar.
+function personGrantLimitCheck(clientId, visibleStatuses) {
+    const visible = new Set(visibleStatuses || []);
+    const overrides = buildMasterStatusOverrideMap(getMasterPermissionStatuses());
+    const contract = getClientContractGrants(clientId);
+    return (g) => {
+        const sub = String(g.submenuId || '').replace(/#app$/, '') || null;
+        if (!visible.has(resolveMasterNodeStatus(g.sectionId, g.itemId || null, sub, overrides))) return false;
+        if (contract && g.sectionId !== 'main' && g.submenuId && !isCostCenterGrant(g) && !isTupleGranted(contract, g.sectionId, g.itemId, contractKeyForGrant(g.submenuId))) return false;
+        return true;
+    };
+}
+// grants = [{ sectionId, itemId, submenuId }] de UNA persona. Regresa { grants (lo que llegó + lo agregado − el «Solo ver» que sube), added: [tuplas], autoEnabled: [{ access, related, count }], blocked: [{ access, related }] }.
+function expandPersonAccessMinimums(grants, options = {}) {
+    const norm = (g) => ({ sectionId: g.sectionId, itemId: g.itemId || null, submenuId: g.submenuId || null });
+    let all = (grants || []).map(norm);
+    const empty = { grants: all, added: [], autoEnabled: [], blocked: [] };
+    const catalog = buildAccessCatalog();
+    const relations = db.prepare("SELECT access_key AS access, related_key AS related FROM access_relations WHERE kind = 'minimum'").all()
+        .filter((r) => catalog.index.has(r.access) && catalog.index.has(r.related) && personMinimumSameScreen(r.access, r.related));
+    if (!relations.length) return empty;
+    const keyOf = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
+    const have = new Set(all.map(keyOf));
+    const levelOf = (submenuId) => {
+        const m = /^(.*)\/(solo-ver|ver-y-operar|editar)(#app)?$/.exec(String(submenuId || ''));
+        return m ? { base: m[1], level: m[2], sfx: m[3] || '' } : null;
+    };
+    // ¿Ya tiene ese nivel (o uno más alto) en esa misma columna o botón? Un ícono se compara tal cual.
+    const covered = (tuple) => {
+        const lv = levelOf(tuple.submenuId);
+        if (!lv) return have.has(keyOf(tuple));
+        return Object.keys(PERSON_LEVEL_RANK).some((other) => PERSON_LEVEL_RANK[other] >= PERSON_LEVEL_RANK[lv.level] && have.has(keyOf({ ...tuple, submenuId: `${lv.base}/${other}${lv.sfx}` })));
+    };
+    const added = [];
+    const pairs = new Map();
+    const blocked = new Map();
+    for (let round = 0; round < 12; round += 1) {
+        let changed = false;
+        for (const rel of relations) {
+            const accessNode = catalog.index.get(rel.access);
+            for (const platform of ['', ACCESS_APP_SUFFIX]) {
+                if (!personEnablesAccess(all, accessNode, platform)) continue;
+                // un contenedor marcado como mínimo reparte «Solo ver»; una columna o botón marcado, «Ver y operar» (ver personMinimumTuples)
+                for (const tuple of personMinimumTuples(rel.related, platform)) {
+                    if (covered(tuple)) continue;
+                    const pairKey = `${rel.access}|${rel.related}`;
+                    if (options.canAdd && !options.canAdd(tuple)) { blocked.set(pairKey, { access: rel.access, related: rel.related }); continue; }
+                    const lv = levelOf(tuple.submenuId);
+                    if (lv && lv.level === 'ver-y-operar') {
+                        // los niveles se excluyen: al subir a «Ver y operar» se quita el «Solo ver» de esa columna o botón
+                        const soloKey = keyOf({ ...tuple, submenuId: `${lv.base}/solo-ver${lv.sfx}` });
+                        if (have.has(soloKey)) { have.delete(soloKey); all = all.filter((g) => keyOf(g) !== soloKey); }
+                    }
+                    all.push(tuple);
+                    have.add(keyOf(tuple));
+                    added.push(tuple);
+                    if (!pairs.has(pairKey)) pairs.set(pairKey, { access: rel.access, related: rel.related, count: 0 });
+                    pairs.get(pairKey).count += 1;
+                    changed = true;
+                }
+            }
+        }
+        if (!changed) break;
+    }
+    return { grants: all, added, autoEnabled: [...pairs.values()], blocked: [...blocked.values()] };
+}
 // Las relaciones guardadas: [{ access, related, kind, updatedBy, updatedAt }].
 function listAccessRelations() {
     return db.prepare('SELECT access_key AS access, related_key AS related, kind, updated_by AS updatedBy, updated_at AS updatedAt FROM access_relations ORDER BY access_key, kind, related_key').all();
@@ -21864,6 +21979,8 @@ module.exports = {
     validateAccessRelations,
     setAccessRelations,
     expandAccessMinimums,
+    expandPersonAccessMinimums,
+    personGrantLimitCheck,
     buildAccessRules,
     logClientChange,
     logPlanChange,

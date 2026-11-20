@@ -353,7 +353,17 @@ async function saveJobPositionGrants(saveBtn) {
             showToast(body.code === 'module-not-contracted' ? t('admin.limitModuleNotContracted', { department: body.labelKey ? t(body.labelKey) : body.sectionId }) : t('admin.saveError'));
         } else {
             const dropped = (result.body && result.body.dropped) || null;
-            showToast(dropped && dropped.count ? `${t('main.changeSaved')} · ${t('admin.limitDroppedNotice', { count: dropped.count })}` : t('main.changeSaved'));
+            // Relación de Accesos: lo mínimo que entró solo (y lo que no se pudo dar) se avisa en el mismo mensaje, y el árbol se vuelve a abrir para verlo marcado
+            const related = (list) => [...new Set((list || []).map((p) => p.related).filter(Boolean))];
+            const brief = (names) => `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` +${names.length - 3}` : ''}`;
+            const autoOn = related(result.body && result.body.autoEnabled);
+            const autoOff = related(result.body && result.body.blocked);
+            const parts = [t('main.changeSaved')];
+            if (dropped && dropped.count) parts.push(t('admin.limitDroppedNotice', { count: dropped.count }));
+            if (autoOn.length) parts.push(t('admin.minAutoEnabled', { count: autoOn.length, list: brief(autoOn) }));
+            if (autoOff.length) parts.push(t('admin.minAutoBlockedPerson', { count: autoOff.length, list: brief(autoOff) }));
+            showToast(parts.join(' · '), parts.length > 1 ? 7000 : 4000);
+            if (autoOn.length && jp) await openJobPositionTree(jp);
         }
     } catch {
         showToast(t('admin.saveError'));

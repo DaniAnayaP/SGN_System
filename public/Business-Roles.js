@@ -198,7 +198,10 @@ permissionsSaveBtn.addEventListener('click', async () => {
         Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
         const droppedNotice = Dashboard.limitDroppedMessage(saved.dropped);
         if (droppedNotice) Dashboard.showToast(droppedNotice, 'warning');
+        // Relación de Accesos: si el mínimo de lo que el puesto opera entró solo, se avisa y se vuelve a abrir el árbol para que se vea marcado
+        const reopenFor = Dashboard.showMinimumAutoEnabledNotice(saved, { person: true }) ? jobPositions.find((p) => p.id === selectedJobPositionId) : null;
         closePermissionsModal();
+        if (reopenFor) await selectJobPositionForPermissions(reopenFor);
     } catch (err) {
         Dashboard.showToast((err && err.limitMessage) || Dashboard.t('admin.saveError'), 'error');
     } finally {

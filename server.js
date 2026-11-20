@@ -553,6 +553,8 @@ const {
     validateAccessRelations,
     setAccessRelations,
     expandAccessMinimums,
+    expandPersonAccessMinimums,
+    personGrantLimitCheck,
     buildAccessRules,
     logClientChange,
     logPlanChange,
@@ -5431,6 +5433,13 @@ function autoEnableMinimums(grants, options = {}) {
     const name = (list) => list.slice(0, 30).map((p) => ({ access: accessLabelEs(p.access), related: accessLabelEs(p.related), count: p.count || 0 }));
     return { grants: out.grants, autoEnabled: name(out.autoEnabled), blocked: name(out.blocked) };
 }
+// Lo mismo que autoEnableMinimums pero para PERSONAS (puestos y usuarios, ver expandPersonAccessMinimums en db.js): solo el mínimo de la misma pantalla, con «Ver y operar», y solo lo que el contrato y el Estatus de quien da el permiso dejan dar.
+function autoEnablePersonMinimums(grants, req) {
+    const canAdd = personGrantLimitCheck(req.user.clientId, getUserVisibleStatuses(req.user.sub));
+    const out = expandPersonAccessMinimums(grants, { canAdd });
+    const name = (list) => list.slice(0, 30).map((p) => ({ access: accessLabelEs(p.access), related: accessLabelEs(p.related), count: p.count || 0 }));
+    return { grants: out.grants, autoEnabled: name(out.autoEnabled), blocked: name(out.blocked) };
+}
 const accessRelCan = (req, key) => hasSaasGrant(getSaasUserGrants(req.user.sub), ACCESS_REL_SCREEN, key, req.user.isSaasSuperAdmin);
 app.get('/api/admin/access-relations', requireAuth, requireAdmin, (req, res) => {
     if (!accessRelCan(req, 'controles::a0')) return res.status(403).json({ message: 'No tienes acceso a la Relación de Accesos.' });
@@ -6517,7 +6526,9 @@ app.put('/api/business/job-positions/:id/grants', requireAuth, requireClientAdmi
     if (error) return res.status(400).json({ message: error });
     const roleGrantsBefore = getJobPositionGrants(req.params.id);
     if (rejectUncontractedNewGrants(res, req.user.clientId, roleGrantsBefore, grants)) return;
-    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: roleGrantsBefore, after: grants, limitMain: true });
+    // Relación de Accesos: el mínimo de lo que el puesto ya opera entra solo (con «Ver y operar»); lo que el contrato no deja dar sale en «blocked»
+    const auto = autoEnablePersonMinimums(grants, req);
+    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: roleGrantsBefore, after: auto.grants, limitMain: true });
     const savedRoleGrants = setJobPositionGrants(req.params.id, limited.allowed);
     if (grantsSignature(roleGrantsBefore) !== grantsSignature(savedRoleGrants)) {
         logBusinessChange(req, 'business-roles', existing.id, existing.name, 'business.historyRoleGrants', roleGrantsBefore.length, savedRoleGrants.length);
@@ -6528,7 +6539,7 @@ app.put('/api/business/job-positions/:id/grants', requireAuth, requireClientAdmi
         }).filter(Boolean);
         notifyAccessChange({ req, affectedUsers: holders, scopeKind: 'perfil', scopeName: existing.name, before: roleGrantsBefore, after: savedRoleGrants });
     }
-    res.json({ grants: savedRoleGrants, dropped: summarizeDroppedGrants(limited.dropped) });
+    res.json({ grants: savedRoleGrants, dropped: summarizeDroppedGrants(limited.dropped), autoEnabled: auto.autoEnabled, blocked: auto.blocked });
 });
 
 // Nuestra Estructura Organizacional's own "bosquejo" edge -- which OTHER
