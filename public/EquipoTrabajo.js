@@ -132,7 +132,7 @@ function passTray() {
 }
 function personStack(a) {
     if (!a.assignees.length) return `<span class="tw-av tw-av-none" aria-hidden="true">?</span>`;
-    return `<span class="tw-stack">${a.assignees.slice(0, 3).map((x) => `<span class="tw-av${x.isMine || x.isMe ? '' : ' tw-av-out'}" title="${esc(x.name)}">${esc(initials(x.name))}</span>`).join('')}${a.assignees.length > 3 ? `<span class="tw-av tw-av-more">+${a.assignees.length - 3}</span>` : ''}</span>`;
+    return `<span class="tw-stack">${a.assignees.slice(0, 3).map((x) => avatar(x.userId, x.name, x.photoVer, x.isMine || x.isMe ? '' : 'tw-av-out', x.name)).join('')}${a.assignees.length > 3 ? `<span class="tw-av tw-av-more">+${a.assignees.length - 3}</span>` : ''}</span>`;
 }
 function cardActions(a) {
     const c = a.can || {};
@@ -178,14 +178,14 @@ function render() {
     const list = visible();
     const keepFocus = document.activeElement && document.activeElement.id;
     const caret = keepFocus === 'tw-f-q' ? document.activeElement.selectionStart : null;
-    const body = view === 'line' ? lineView() : view === 'log' ? logView() : `${counters(list)}${passTray()}${data.activities.length ? '' : `<p class="tw-empty">${esc(t('main.twEmpty'))}</p>`}${lanes(list)}`;
+    const body = view === 'line' ? lineView() : view === 'log' ? logView() : `${counters(list)}${passTray()}${todayStrip()}${data.activities.length ? '' : `<p class="tw-empty">${esc(t('main.twEmpty'))}</p>`}${lanes(list)}`;
     root.innerHTML = `<div class="tw-head"><h2>${esc(t('main.twBoard'))}</h2><button type="button" class="btn" data-tw="create" data-help-key="twCreate"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.twCreate'))}</button></div>
         ${viewTabs()}${filterBar()}${body}`;
     if (keepFocus === 'tw-f-q') { const el = $('tw-f-q'); if (el) { el.focus(); if (caret != null) el.setSelectionRange(caret, caret); } }
 }
 async function load(quiet) {
     try {
-        data = await api('GET', '');
+        data = await api('GET', `?day=${todayYmd()}`);
         if (!quiet) showError('');
         render();
         if (detailId) { const d = data.activities.find((a) => a.id === detailId); if (!d) closeModal(); }
@@ -228,7 +228,7 @@ function askReason(titleKey, onOk, optional) {
 function peopleList(selected, excluded, name) {
     const ex = new Set(excluded || []);
     const field = name || 'tw-p';
-    const row = (p) => `<label class="tw-person" data-name="${esc(fold(p.name))}"><input type="checkbox" name="${field}" value="${p.id}"${selected.has(p.id) ? ' checked' : ''}><span class="tw-av">${esc(initials(p.name))}</span><span class="tw-person-name">${esc(p.name)}</span>${p.free ? `<em class="tw-free">${esc(t('main.twFree'))}</em>` : ''}${p.hasScreen === false ? `<em class="tw-noscreen">${esc(t('main.twNoScreen'))}</em>` : ''}</label>`;
+    const row = (p) => `<label class="tw-person" data-name="${esc(fold(p.name))}"><input type="checkbox" name="${field}" value="${p.id}"${selected.has(p.id) ? ' checked' : ''}>${avatar(p.id, p.name, p.photoVer)}<span class="tw-person-name">${esc(p.name)}</span>${p.absent ? `<em class="tw-absent">${esc(t('main.twAbsentTag'))}${p.absence ? ` · ${esc(t(`main.twAbsence_${p.absence}`))}` : ''}</em>` : ''}${p.free ? `<em class="tw-free">${esc(t('main.twFree'))}</em>` : ''}${p.hasScreen === false ? `<em class="tw-noscreen">${esc(t('main.twNoScreen'))}</em>` : ''}</label>`;
     const mine = data.people.filter((p) => p.mine && !ex.has(p.id));
     const others = data.people.filter((p) => !p.mine && !ex.has(p.id));
     return `<div class="tw-people"><input type="search" class="tw-people-q" placeholder="${esc(t('main.twPeopleSearch'))}" aria-label="${esc(t('main.twPeopleSearch'))}" autocomplete="off">
@@ -292,7 +292,7 @@ function activityForm(existing) {
         const val = (id) => ov.querySelector(id).value;
         const body = {
             title: val('#tw-title'), kind: (ov.querySelector('input[name="tw-kind"]:checked') || {}).value, urgent: ov.querySelector('#tw-urgent').checked, realization: (ov.querySelector('input[name="tw-real"]:checked') || {}).value,
-            siteIds: [...ov.querySelectorAll('input[name="tw-site"]:checked')].map((i) => Number(i.value)), department: val('#tw-dept'), area: val('#tw-area'), dueDate: val('#tw-due'), description: val('#tw-desc'),
+            siteIds: [...ov.querySelectorAll('input[name="tw-site"]:checked')].map((i) => Number(i.value)), department: val('#tw-dept'), area: val('#tw-area'), dueDate: val('#tw-due'), description: val('#tw-desc'), day: todayYmd(), confirmAbsent: ov.dataset.absentOk === '1' ? true : undefined,
         };
         const seats = ov.querySelector('#tw-seats');
         if (seats) body.seatsNeeded = Number(seats.value) || 1;
@@ -312,7 +312,10 @@ function activityForm(existing) {
             }
             await load(true);
             closeModal();
-        } catch (err) { setErr('tw-form-error', errText(err)); submit.disabled = false; }
+        } catch (err) {
+            if (absentCode(err)) { ov.dataset.absentOk = '1'; setErr('tw-form-error', absentText(err.body.names)); submit.textContent = t('main.twAbsentGo'); } else setErr('tw-form-error', errText(err));
+            submit.disabled = false;
+        }
     });
     setTimeout(() => ov.querySelector('#tw-title').focus(), 0);
 }
@@ -331,7 +334,7 @@ async function openDetail(id) {
     const btn = (op, cls) => `<button type="button" class="btn${cls || ' btn-secondary'} tw-small" data-tw="act" data-act="${op}" data-id="${a.id}">${esc(t(`main.twAct_${op}`))}</button>`;
     const actions = [c.claim && btn('claim', ''), c.confirm && btn('confirm', ''), c.start && btn('start', c.confirm ? ' btn-secondary' : ''), c.pause && btn('pause'), c.resume && btn('resume', ''), c.submit && btn('submit', ''), c.validate && btn('validate', ''), c.returnIt && btn('return'), c.pass && btn('pass'),
         c.edit && btn('edit'), c.assign && btn('assign'), c.cancel && btn('cancel')].filter(Boolean).join('');
-    const rows = a.assignees.map((x) => `<li class="tw-asg tw-ps-${x.status}"><span class="tw-av${x.isMine || x.isMe ? '' : ' tw-av-out'}">${esc(initials(x.name))}</span><div><b>${esc(x.name)}${x.isPrincipal ? ` <em>${esc(t('main.twPrincipal'))}</em>` : ''}</b><small>${esc(t(`main.twPs_${x.status}`))}${x.status === 'paused' && x.pauseReason ? ` · ${esc(x.pauseReason)}` : ''}</small></div>${c.unassign && ['assigned', 'confirmed'].includes(x.status) ? `<button type="button" class="admin-icon-btn" data-tw="unassign" data-id="${a.id}" data-user="${x.userId}" aria-label="${esc(t('main.twAct_unassign'))}" title="${esc(t('main.twAct_unassign'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</li>`).join('');
+    const rows = a.assignees.map((x) => `<li class="tw-asg tw-ps-${x.status}">${avatar(x.userId, x.name, x.photoVer, x.isMine || x.isMe ? '' : 'tw-av-out')}<div><b>${esc(x.name)}${x.isPrincipal ? ` <em>${esc(t('main.twPrincipal'))}</em>` : ''}</b><small>${esc(t(`main.twPs_${x.status}`))}${x.status === 'paused' && x.pauseReason ? ` · ${esc(x.pauseReason)}` : ''}</small></div>${c.unassign && ['assigned', 'confirmed'].includes(x.status) ? `<button type="button" class="admin-icon-btn" data-tw="unassign" data-id="${a.id}" data-user="${x.userId}" aria-label="${esc(t('main.twAct_unassign'))}" title="${esc(t('main.twAct_unassign'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</li>`).join('');
     const events = a.events.map((e) => `<li class="tw-ev tw-ev-${e.event}"><span class="tw-ev-dot" aria-hidden="true"></span><div><b>${esc(eventText(e))}</b><small>${esc(e.actorName)} · ${esc(whenText(e.createdAt))}</small>${e.detail && ['paused', 'returned', 'cancelled', 'pass_requested', 'passed', 'pass_approved', 'pass_rejected', 'pass_cancelled'].includes(e.event) ? `<span class="tw-ev-note">${esc(e.detail)}</span>` : ''}</div></li>`).join('');
     const passes = a.passes.map((p) => passCard(p, a, false)).join('');
     const claimLine = a.claimScope && a.seatsOpen > 0 && a.status !== 'done' ? [t('main.twClaimLine', { who: t(`main.twClaim_${a.claimScope}`), n: a.seatsOpen }), a.claim && (c.edit || c.assign) ? (a.claim.freeCount ? t('main.twFreeCan', { names: a.claim.freeNames.join(', ') + (a.claim.freeCount > a.claim.freeNames.length ? ` +${a.claim.freeCount - a.claim.freeNames.length}` : '') }) : t('main.twFreeNone')) : ''].filter(Boolean).join(' · ') : '';
@@ -358,7 +361,7 @@ function assignModal(a) {
         if (b.dataset.twM === 'cancel') { closeModal(); return; }
         const ids = checkedPeople(ov);
         if (!ids.length) { setErr('tw-a-error', t('main.twErr_TEAM_PERSON_INVALID')); return; }
-        try { await api('POST', `/${a.id}/assign`, { userIds: ids }); await load(true); Dashboard.showToast(t('main.twAssigned'), 'success'); closeModal(); } catch (err) { setErr('tw-a-error', errText(err)); }
+        try { await api('POST', `/${a.id}/assign`, { userIds: ids, day: todayYmd(), confirmAbsent: ov.dataset.absentOk === '1' ? true : undefined }); await load(true); Dashboard.showToast(t('main.twAssigned'), 'success'); closeModal(); } catch (err) { if (absentCode(err)) { ov.dataset.absentOk = '1'; setErr('tw-a-error', absentText(err.body.names)); b.textContent = t('main.twAbsentGo'); } else setErr('tw-a-error', errText(err)); }
     });
 }
 // Pasar una actividad a otra persona: quién la pasa (si el que mira puede pasar la de varias), a quién y el motivo. Con jefe directo se pide su aprobación; si no, se hace al momento y se avisa a todos (lo decide el servidor).
@@ -387,7 +390,7 @@ function passModal(a) {
         if (!ids.length) { setErr('tw-p-error', t('main.twErr_TEAM_PERSON_INVALID')); return; }
         if (!reason) { setErr('tw-p-error', t('main.twErr_TEAM_REASON_REQUIRED')); return; }
         const asked = !!approverNow();
-        try { await api('POST', `/${a.id}/pass`, { fromUserId: fromNow(), userIds: ids, reason }); await load(true); Dashboard.showToast(t(asked ? 'main.twPassAsked' : 'main.twPassDone'), 'success'); closeModal(); } catch (err) { setErr('tw-p-error', errText(err)); }
+        try { await api('POST', `/${a.id}/pass`, { fromUserId: fromNow(), userIds: ids, reason, day: todayYmd(), confirmAbsent: ov.dataset.absentOk === '1' ? true : undefined }); await load(true); Dashboard.showToast(t(asked ? 'main.twPassAsked' : 'main.twPassDone'), 'success'); closeModal(); } catch (err) { if (absentCode(err)) { ov.dataset.absentOk = '1'; setErr('tw-p-error', absentText(err.body.names)); b.textContent = t('main.twAbsentGo'); } else setErr('tw-p-error', errText(err)); }
     });
 }
 const find = (id) => data.activities.find((a) => a.id === Number(id));
@@ -458,6 +461,7 @@ const viewItems = () => (view === 'line' ? (lineData ? lineData.activities : [])
 function viewPeople() {
     const seen = new Map();
     viewItems().forEach((a) => a.assignees.forEach((x) => { if (!seen.has(x.userId)) seen.set(x.userId, { id: x.userId, name: x.name }); }));
+    if (view === 'board' && data.today) data.today.people.forEach((x) => { if (!seen.has(x.userId)) seen.set(x.userId, { id: x.userId, name: x.name }); });
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, locale()));
 }
 const savePrefs = () => { try { localStorage.setItem(VIEW_KEY, JSON.stringify({ view, lineGroup, periods })); } catch (err) { /* solo esta visita */ } };
@@ -600,6 +604,92 @@ function downloadModal() {
     });
 }
 
+// ---- PIEZA 4: la foto, dónde trabaja cada quien hoy y en qué está ahora («El equipo hoy») ---------------------------------------------------------------------------------
+// La tira sale con lo que trae GET /?day=<hoy> (el día es el del calendario de quien mira). Pulsar a una persona filtra el tablero a ella; el lápiz abre su día (ella misma, su jefe directo o el administrador lo marcan).
+const photoUrl = (id, ver) => `/api/business/users/${id}/photo?v=${ver}`;
+const avatar = (id, name, ver, cls, title) => `<span class="tw-av${cls ? ` ${cls}` : ''}"${title ? ` title="${esc(title)}"` : ''}>${ver ? `<img src="${esc(photoUrl(id, ver))}" alt="" loading="lazy">` : esc(initials(name))}</span>`;
+const PLACE_DOT = { corporate: 'g', site: 'y', home: 'n', absent: 'r' };
+const PLACES = ['corporate', 'site', 'home', 'absent'];
+const ABSENCES = ['vacation', 'permit', 'sick', 'other'];
+const timeText = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const placeText = (p) => {
+    if (!p || !p.place) return '';
+    if (p.place === 'site') return t('main.twPlaceAt', { place: t('main.twPlace_site'), site: p.siteName });
+    if (p.place === 'absent') return t('main.twPlaceAt', { place: t('main.twPlace_absent'), site: t(`main.twAbsence_${p.absence || 'other'}`) });
+    return t(`main.twPlace_${p.place}`);
+};
+// «X (Vacaciones), Y»: a quién se le va a asignar algo estando ausente hoy
+const absentText = (list) => t('main.twAbsentAsk', { names: (list || []).map((n) => `${n.name}${n.absence ? ` (${t(`main.twAbsence_${n.absence}`)})` : ''}`).join(', ') });
+const absentCode = (err) => !!(err && err.body && err.body.code === 'TEAM_PERSON_ABSENT');
+
+function todayStrip() {
+    const td = data.today;
+    if (!td || !td.people.length) return '';
+    const card = (p) => {
+        const nowLine = p.absent ? `<span class="tw-now tw-now-none">${esc(t('main.twNoAssign'))}</span>`
+            : p.now ? `<span class="tw-now"><small>${esc(t('main.twNow'))}</small>${esc(p.now.title)}</span>`
+                : p.busyHidden ? `<span class="tw-now"><small>${esc(t('main.twNow'))}</small>${esc(t('main.twBusyHidden'))}</span>`
+                    : p.inProgress > 1 ? `<span class="tw-now"><small>${esc(t('main.twNow'))}</small>${esc(t('main.twInProgressN', { n: p.inProgress }))}</span>`
+                        : `<span class="tw-now tw-now-none"><span class="tw-free">${esc(t('main.twFree'))}</span> ${esc(t('main.twFreeNoAct'))}</span>`;
+        const on = String(filters.person) === String(p.userId);
+        const out = data.me.hasTeam && !p.isMine && !p.isMe;
+        const where = p.place ? esc(placeText(p)) : (p.isMe ? `<span class="tw-ask">${esc(t('main.twDayAsk'))}</span>` : `<span class="tw-ask">${esc(t('main.twPlaceNone'))}</span>`);
+        return `<div class="tw-tc tw-tc-${PLACE_DOT[p.place] || 'x'}${on ? ' on' : ''}${out ? ' out' : ''}">
+            <button type="button" class="tw-tc-main" data-tw="person" data-user="${p.userId}" aria-pressed="${on}"><span class="tw-phw">${avatar(p.userId, p.name, p.photoVer, 'tw-av-lg')}<i class="tw-pd" aria-hidden="true"></i></span>
+                <span class="tw-tc-t"><b>${esc(p.name)}</b><span class="tw-site">${where}</span>${out ? `<span class="tw-tag-out">${esc(t('main.twOutsideTeam'))}</span>` : ''}${nowLine}</span></button>
+            ${p.canSet ? `<button type="button" class="admin-icon-btn tw-tc-edit" data-tw="day" data-user="${p.userId}" aria-label="${esc(t('main.twEditDay', { name: p.name }))}" title="${esc(t('main.twEditDay', { name: p.name }))}"><i class="bx bx-pencil" aria-hidden="true"></i></button>` : ''}</div>`;
+    };
+    return `<section class="tw-team-today" aria-label="${esc(t('main.twTodayTitle'))}" data-help-key="twToday"><h3>${esc(t('main.twTodayTitle'))}</h3><div class="tw-tcards">${td.people.map(card).join('')}</div>${weekGrid(td)}</section>`;
+}
+// «El día a día queda en el registro»: dónde trabajó cada quien los últimos 5 días
+function weekGrid(td) {
+    const label = (ymd) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd); return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString(locale(), { weekday: 'short', day: 'numeric' }) : ymd; };
+    const cell = (p, ymd) => { const w = p.week[ymd]; return w ? `<td><i class="tw-pd tw-pd-${PLACE_DOT[w.place] || 'x'}" aria-hidden="true"></i> ${esc(placeText(w))}</td>` : '<td></td>'; };
+    return `<details class="tw-week"><summary>${esc(t('main.twWeek'))}</summary><div class="tw-week-scroll"><table class="tw-log tw-week-table" aria-label="${esc(t('main.twWeek'))}"><thead><tr><th scope="col">${esc(t('main.twPerson'))}</th>${td.weekDays.map((d) => `<th scope="col">${esc(label(d))}</th>`).join('')}</tr></thead><tbody>${td.people.map((p) => `<tr><td>${esc(p.name)}</td>${td.weekDays.map((d) => cell(p, d)).join('')}</tr>`).join('')}</tbody></table></div></details>`;
+}
+// La ficha del día de una persona: dónde trabaja hoy (corporativo, una unidad, home office o ausente con su motivo) y, si es el propio día, en cuál de sus actividades en curso está ahora.
+function dayModal(userId) {
+    const td = data.today;
+    const p = td && td.people.find((x) => x.userId === userId);
+    if (!p || !p.canSet) return;
+    const mineNow = p.isMe ? td.myInProgress : [];
+    const currentNow = (mineNow.find((m) => m.isNow) || {}).id || '';
+    const radio = (name, value, label, checked) => `<label class="tw-opt"><input type="radio" name="${name}" value="${esc(value)}"${checked ? ' checked' : ''}><span>${esc(label)}</span></label>`;
+    const ov = openModal(`<h3 data-help-key="twDay">${esc(t('main.twDayTitle'))}</h3>
+        <div class="tw-fich">${avatar(p.userId, p.name, p.photoVer, 'tw-av-xl')}<div><b>${esc(p.name)}</b><small>${esc(p.place ? t('main.twDaySince', { time: timeText(p.since) }) : t('main.twPlaceNone'))}${p.setBy && !p.isMe && p.setBy !== p.name ? ` · ${esc(t('main.twDaySetBy', { name: p.setBy }))}` : ''}</small></div></div>
+        <form id="tw-day-form" novalidate>
+        <fieldset class="tw-set"><legend>${esc(p.isMe ? t('main.twDayWhereSelf') : t('main.twDayWhere', { name: p.name.split(' ')[0] }))}</legend><div class="tw-opts">${PLACES.map((k) => radio('tw-place', k, t(`main.twPlace_${k}`), p.place === k)).join('')}</div></fieldset>
+        <div class="tw-two"><div class="admin-field" id="tw-day-site-box"${p.place === 'site' ? '' : ' hidden'}><label for="tw-day-site">${esc(t('main.twDayUnit'))}</label><select id="tw-day-site">${data.sites.map((s) => `<option value="${s.id}"${p.siteId === s.id ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
+            <div class="admin-field" id="tw-day-abs-box"${p.place === 'absent' ? '' : ' hidden'}><label for="tw-day-abs">${esc(t('main.twDayAbsence'))}</label><select id="tw-day-abs">${ABSENCES.map((k) => `<option value="${k}"${(p.absence || 'vacation') === k ? ' selected' : ''}>${esc(t(`main.twAbsence_${k}`))}</option>`).join('')}</select></div></div>
+        ${mineNow.length ? `<fieldset class="tw-set"><legend>${esc(t('main.twDayNowLegend'))}</legend><div class="tw-opts tw-opts-col">${radio('tw-now', '', t('main.twDayNowNone'), !currentNow)}${mineNow.map((m) => radio('tw-now', String(m.id), m.title, currentNow === m.id)).join('')}</div></fieldset>` : ''}
+        ${fieldErr('tw-day-error')}
+        <div class="admin-form-actions"><button type="submit" class="btn">${esc(t('main.wpSave'))}</button><button type="button" class="btn btn-secondary" data-tw-m="cancel">${esc(t('main.wpCancel'))}</button></div></form>`);
+    ov.addEventListener('change', (event) => {
+        if (event.target.name !== 'tw-place') return;
+        ov.querySelector('#tw-day-site-box').hidden = event.target.value !== 'site';
+        ov.querySelector('#tw-day-abs-box').hidden = event.target.value !== 'absent';
+    });
+    ov.addEventListener('click', (event) => { if (event.target.closest('[data-tw-m="cancel"]')) closeModal(); });
+    ov.querySelector('#tw-day-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const place = (ov.querySelector('input[name="tw-place"]:checked') || {}).value;
+        if (!place) { setErr('tw-day-error', t('main.twErr_TEAM_WORKDAY_INVALID')); return; }
+        const body = { userId: p.userId, day: td.day, place };
+        if (place === 'site') body.siteId = Number(ov.querySelector('#tw-day-site').value);
+        if (place === 'absent') body.absence = ov.querySelector('#tw-day-abs').value;
+        const submit = ov.querySelector('button[type="submit"]');
+        submit.disabled = true;
+        try {
+            await api('PUT', '/workday', body);
+            const chosen = ov.querySelector('input[name="tw-now"]:checked');
+            if (mineNow.length && chosen && chosen.value !== String(currentNow)) await api('PUT', '/now', { activityId: chosen.value ? Number(chosen.value) : null });
+            await load(true);
+            closeModal();
+            Dashboard.showToast(t('main.twDaySaved'), 'success');
+        } catch (err) { setErr('tw-day-error', errText(err)); submit.disabled = false; }
+    });
+}
+
 // ---- eventos de la pantalla ----------------------------------------------------------------------------------------------------------------------------------------------
 document.addEventListener('click', (event) => {
     const el = event.target.closest('[data-tw]');
@@ -608,6 +698,8 @@ document.addEventListener('click', (event) => {
     if (op === 'create') { activityForm(null); return; }
     if (op === 'clear') { filters = { ...DEFAULT_FILTERS }; saveFilters(); render(); return; }
     if (op === 'view') { view = el.dataset.view; savePrefs(); render(); loadView(true); return; }
+    if (op === 'person') { event.stopPropagation(); filters.person = String(filters.person) === el.dataset.user ? 'all' : el.dataset.user; saveFilters(); render(); return; }
+    if (op === 'day') { event.stopPropagation(); dayModal(Number(el.dataset.user)); return; }
     if (op === 'download') { downloadModal(); return; }
     if (op === 'more') { logShown += LOG_PAGE; render(); return; }
     if (op === 'act') { event.stopPropagation(); doAct(el.dataset.id, el.dataset.act, el.dataset.pass); return; }
@@ -639,6 +731,8 @@ document.addEventListener('change', (event) => {
     }
 });
 document.addEventListener('dashboard:language-changed', () => { if ($('tw-root').dataset.ready) render(); });
+// al cambiar la propia foto (Datos de usuario) se vuelve a leer para que salga en la tira y en las tarjetas
+document.addEventListener('user-photo-changed', () => { if ($('tw-root').dataset.ready) loadView(true); });
 // un aviso de la campana abre la actividad aunque ya se esté en el tablero (solo cambia el # de la dirección)
 window.addEventListener('hashchange', () => { const m = /^#actividad-(\d+)$/.exec(location.hash); if (m && $('tw-root').dataset.ready) load(true).then(() => openDetail(Number(m[1]))); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !overlay && $('tw-root').dataset.ready) loadView(true); });

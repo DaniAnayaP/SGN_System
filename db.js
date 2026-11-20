@@ -14639,12 +14639,13 @@ function setUserActive(id, active) {
 // in server.js), never an id supplied by the client, so there's no
 // cross-tenant lookup to guard against.
 function getUserProfileById(id) {
-    return db
+    const profile = db
         .prepare(`
             SELECT id, username, email, name, nickname, business_email, phone, address, birth_date, id_number
             FROM users WHERE id = ?
         `)
         .get(id);
+    return profile ? { ...profile, photoVer: getUserPhotoVer(id) } : profile;
 }
 
 // Backs the top-bar "Datos de Usuario del Negocio" panel — Rol is now this
@@ -16816,6 +16817,35 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_team_passes_activity ON team_activity_passes (activity_id, status);
 `);
 const TEAM_CLAIM_SCOPES = ['team_dept', 'team', 'company', 'chosen'];
+// Pieza 4: la foto de cada usuario, dónde trabaja cada día y cuál de sus actividades en curso es la de «ahora».
+ensureColumn('team_activity_assignees', 'is_now', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('team_activity_assignees', 'now_at', 'TEXT');
+db.exec(`
+    CREATE TABLE IF NOT EXISTS user_photos (
+        user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        client_id  INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        mime       TEXT NOT NULL,
+        data       BLOB NOT NULL,
+        ver        INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS team_workdays (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id         INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data      INTEGER NOT NULL DEFAULT 0,
+        user_id           INTEGER NOT NULL,
+        day               TEXT NOT NULL,
+        place             TEXT NOT NULL,
+        site_id           INTEGER,
+        absence           TEXT NOT NULL DEFAULT '',
+        set_by_user_id    INTEGER,
+        set_by_label      TEXT NOT NULL DEFAULT '',
+        created_at        TEXT NOT NULL,
+        updated_at        TEXT NOT NULL,
+        UNIQUE (user_id, day)
+    );
+    CREATE INDEX IF NOT EXISTS idx_team_workdays_client_day ON team_workdays (client_id, is_test_data, day);
+`);
 const teamNow = () => new Date().toISOString().replace('T', ' ').replace('Z', '');
 // En qué columna del tablero está una actividad, según lo que lleva cada persona: sin personas = por asignar; con responsable principal, lo que ella termina vale por todas.
 function teamActivityState(assignees, cancelled) {
@@ -16845,10 +16875,10 @@ function teamSiteMap(clientId, forTest) {
     listCostCenters(clientId, forTest).forEach((c) => out.set(c.id, { id: c.id, code: c.code, name: c.name, siteCode: c.site_code || '' }));
     return out;
 }
-function teamMapAssignee(a, names, viewer) {
+function teamMapAssignee(a, names, viewer, photos) {
     return {
         userId: a.user_id, name: names.get(a.user_id) || '', status: a.status, isPrincipal: !!a.is_principal, pauseReason: a.pause_reason, assignedAt: a.assigned_at, confirmedAt: a.confirmed_at, startedAt: a.started_at,
-        pausedAt: a.paused_at, reviewAt: a.review_at, doneAt: a.done_at, isMe: a.user_id === viewer.userId, isMine: viewer.reports.has(a.user_id),
+        pausedAt: a.paused_at, reviewAt: a.review_at, doneAt: a.done_at, isMe: a.user_id === viewer.userId, isMine: viewer.reports.has(a.user_id), isNow: !!a.is_now, photoVer: photos ? photos.get(a.user_id) || 0 : 0,
     };
 }
 // ---- PIEZA 2: «La tomo» (actividades por asignar que toma quien esté libre), pases con aprobación del jefe directo y avisos de campana ----
@@ -16962,7 +16992,8 @@ function teamActivityCan(row, assignees, viewer, scope, pending) {
 }
 function teamMapActivity(row, assigneeRows, ctx) {
     const { viewer, names, sites } = ctx;
-    const assignees = assigneeRows.map((a) => teamMapAssignee(a, names, viewer));
+    const photos = teamCtxPhotos(ctx);
+    const assignees = assigneeRows.map((a) => teamMapAssignee(a, names, viewer, photos));
     let siteIds = [];
     try { siteIds = JSON.parse(row.site_ids); } catch (err) { siteIds = []; }
     const pending = (ctx.passes.get(row.id) || []).map((p) => teamMapPass(p, ctx, row));
@@ -16998,7 +17029,7 @@ function teamMapActivity(row, assigneeRows, ctx) {
 const teamSees = (row, assignees, viewer, scope) => viewer.isAdmin || row.created_by_user_id === viewer.userId || assignees.some((a) => a.user_id === viewer.userId || viewer.reports.has(a.user_id))
     || (!!row.claim_scope && assignees.length < row.seats_needed && scope.has(viewer.userId));
 // La lista del tablero: lo que esta persona puede ver (sin las canceladas y sin las terminadas hace más de 90 días; el registro de la pieza 3 trae lo viejo), con los catálogos para los filtros y para crear.
-function listTeamActivities(clientId, userId, forTest, isAdmin) {
+function listTeamActivities(clientId, userId, forTest, isAdmin, day) {
     const rows = db.prepare("SELECT * FROM team_activities WHERE client_id = ? AND is_test_data = ? AND status = 'active' ORDER BY id DESC LIMIT ?").all(clientId, forTest ? 1 : 0, TEAM_LIMITS.activities);
     const ctx = teamBuildCtx(clientId, userId, forTest, isAdmin, rows);
     const byActivity = new Map();
@@ -17016,9 +17047,15 @@ function listTeamActivities(clientId, userId, forTest, isAdmin) {
     const reports = ctx.viewer.reports;
     const free = teamCtxFree(ctx);
     const granted = teamScreenSet(clientId, forTest);
-    const people = listActiveUsersBrief(clientId, forTest).map((u) => ({ id: u.id, name: implementationLine(u.name) || u.username, mine: reports.has(u.id), free: free.has(u.id), hasScreen: granted.has(u.id) }));
+    const dayOk = cleanTeamDay(day);
+    const absent = new Map();
+    if (dayOk) db.prepare("SELECT user_id AS id, absence FROM team_workdays WHERE client_id = ? AND is_test_data = ? AND day = ? AND place = 'absent'").all(clientId, forTest ? 1 : 0, dayOk).forEach((r) => absent.set(r.id, r.absence));
+    const photos = teamCtxPhotos(ctx);
+    const people = listActiveUsersBrief(clientId, forTest).map((u) => ({
+        id: u.id, name: implementationLine(u.name) || u.username, mine: reports.has(u.id), free: free.has(u.id) && !absent.has(u.id), hasScreen: granted.has(u.id), absent: absent.has(u.id), absence: absent.get(u.id) || '', photoVer: photos.get(u.id) || 0,
+    }));
     const departments = listContractedDepartmentKeys(clientId).map((key) => ({ key, labelKey: (MODULE_CATALOG.find((m) => m.key === key) || {}).labelKey || '' }));
-    return { activities, people, sites: [...ctx.sites.values()], departments, me: { id: userId, name: ctx.names.get(userId) || '', isAdmin: !!isAdmin, hasTeam: reports.size > 0 } };
+    return { activities, people, sites: [...ctx.sites.values()], departments, me: { id: userId, name: ctx.names.get(userId) || '', isAdmin: !!isAdmin, hasTeam: reports.size > 0, photoVer: photos.get(userId) || 0 }, today: dayOk ? teamTodayBlock(ctx, activities, dayOk) : null };
 }
 function teamActivityRowFor(clientId, forTest, id) {
     const n = Number(id);
@@ -17178,6 +17215,128 @@ function teamLog(clientId, userId, forTest, isAdmin, query) {
     });
     return { from: period.fromIso, to: period.toIso, rows: out, truncated, me: { id: userId, isAdmin: !!isAdmin } };
 }
+// ---- PIEZA 4: la foto de la persona, dónde trabaja hoy y en qué está ahora («El equipo hoy») ----
+// Foto: una por usuario (user_photos), la sube la propia persona desde «Datos de usuario»; se sirve por este servidor y cada versión trae su número (ver) para que el navegador no guarde una vieja.
+// Sitio del día: team_workdays, una fila por persona y día (el día es el del calendario de quien lo marca): corporativo, una unidad (un sitio), home office o ausente con su motivo. Lo marca la persona o su jefe directo (o el administrador); cada día queda guardado.
+// «Ahora»: de sus actividades en curso, la que la persona marca como en la que está trabajando (una a la vez); al empezar o reanudar una, esa pasa a ser la de ahora.
+const TEAM_PLACES = ['corporate', 'site', 'home', 'absent'];
+const TEAM_ABSENCES = ['vacation', 'permit', 'sick', 'other'];
+const TEAM_PHOTO_MAX_BYTES = 600 * 1024;
+// «2026-11-19» que sea fecha de verdad y esté cerca de hoy (la pantalla manda SU día; aquí solo se evita basura): hasta 3 días y medio de diferencia con la hora del servidor.
+function cleanTeamDay(raw) {
+    const s = typeof raw === 'string' ? raw.trim() : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !isRealDateOnly(s)) return '';
+    return Math.abs(Date.parse(`${s}T12:00:00Z`) - Date.now()) <= 3.5 * 86400000 ? s : '';
+}
+function setUserPhoto(clientId, userId, mime, data) {
+    const ver = Math.floor(Date.now() / 1000);
+    db.prepare(`INSERT INTO user_photos (user_id, client_id, mime, data, ver) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET client_id = excluded.client_id, mime = excluded.mime, data = excluded.data, ver = excluded.ver, updated_at = datetime('now')`).run(userId, clientId, mime, data, ver);
+    return ver;
+}
+const getUserPhoto = (clientId, userId) => db.prepare('SELECT mime, data, ver FROM user_photos WHERE user_id = ? AND client_id = ?').get(userId, clientId);
+const getUserPhotoVer = (userId) => { const r = db.prepare('SELECT ver FROM user_photos WHERE user_id = ?').get(userId); return r ? r.ver : 0; };
+const deleteUserPhoto = (userId) => db.prepare('DELETE FROM user_photos WHERE user_id = ?').run(userId).changes > 0;
+function teamCtxPhotos(ctx) {
+    if (!ctx.photos) ctx.photos = new Map(db.prepare('SELECT user_id AS id, ver FROM user_photos WHERE client_id = ?').all(ctx.clientId).map((r) => [r.id, r.ver]));
+    return ctx.photos;
+}
+// ¿Alguna de estas personas está ausente hoy? (el día lo manda la pantalla; sin día no se revisa). Se pide confirmar antes de asignarle algo: { error: 'TEAM_PERSON_ABSENT', names } o null.
+function teamAbsentGate(clientId, forTest, body, ids) {
+    const b = body && typeof body === 'object' ? body : {};
+    const day = cleanTeamDay(b.day);
+    if (!day || b.confirmAbsent === true || !ids.length) return null;
+    const rows = db.prepare(`SELECT user_id AS userId, absence FROM team_workdays WHERE client_id = ? AND is_test_data = ? AND day = ? AND place = 'absent' AND user_id IN (${ids.map(() => '?').join(',')})`).all(clientId, forTest ? 1 : 0, day, ...ids);
+    if (!rows.length) return null;
+    const names = teamNames(clientId);
+    return { error: 'TEAM_PERSON_ABSENT', names: rows.map((r) => ({ userId: r.userId, name: names.get(r.userId) || '', absence: r.absence })) };
+}
+// Dónde trabaja una persona ese día. Lo marca ella, su jefe directo o el administrador del cliente. body: { userId?, day, place, siteId?, absence? }.
+function setTeamWorkday(clientId, userId, forTest, isAdmin, body, byLabel) {
+    const b = body && typeof body === 'object' ? body : {};
+    const day = cleanTeamDay(b.day);
+    if (!day) return { error: 'TEAM_WORKDAY_INVALID', field: 'day' };
+    const target = b.userId === undefined || b.userId === null || b.userId === '' ? userId : Number(b.userId);
+    if (!Number.isInteger(target) || !listActiveUsersBrief(clientId, forTest).some((u) => u.id === target)) return { error: 'TEAM_PERSON_INVALID' };
+    const viewer = teamViewer(clientId, userId, isAdmin);
+    if (!(target === userId || viewer.isAdmin || viewer.reports.has(target))) return { error: 'TEAM_NOT_ALLOWED' };
+    if (!TEAM_PLACES.includes(b.place)) return { error: 'TEAM_WORKDAY_INVALID', field: 'place' };
+    let siteId = null;
+    if (b.place === 'site') {
+        siteId = Number(b.siteId);
+        if (!Number.isInteger(siteId) || !teamSiteMap(clientId, forTest).has(siteId)) return { error: 'TEAM_SITE_INVALID', field: 'siteId' };
+    }
+    let absence = '';
+    if (b.place === 'absent') {
+        absence = typeof b.absence === 'string' && b.absence ? b.absence : 'other';
+        if (!TEAM_ABSENCES.includes(absence)) return { error: 'TEAM_WORKDAY_INVALID', field: 'absence' };
+    }
+    const now = teamNow();
+    db.prepare(`INSERT INTO team_workdays (client_id, is_test_data, user_id, day, place, site_id, absence, set_by_user_id, set_by_label, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, day) DO UPDATE SET place = excluded.place, site_id = excluded.site_id, absence = excluded.absence, set_by_user_id = excluded.set_by_user_id, set_by_label = excluded.set_by_label, updated_at = excluded.updated_at`)
+        .run(clientId, forTest ? 1 : 0, target, day, b.place, siteId, absence, userId, byLabel || '', now, now);
+    return { workday: { userId: target, day, place: b.place, siteId, absence } };
+}
+// La actividad en la que esta persona está trabajando AHORA: una de sus actividades en curso (o ninguna). body: { activityId } (null = ninguna).
+function setTeamNow(clientId, userId, forTest, body) {
+    const b = body && typeof body === 'object' ? body : {};
+    if (b.activityId === null || b.activityId === undefined || b.activityId === '') {
+        db.prepare('UPDATE team_activity_assignees SET is_now = 0 WHERE user_id = ?').run(userId);
+        return { ok: true, activityId: null };
+    }
+    const id = Number(b.activityId);
+    const row = Number.isInteger(id) ? db.prepare(`SELECT a.id FROM team_activity_assignees a JOIN team_activities t ON t.id = a.activity_id
+        WHERE a.user_id = ? AND a.activity_id = ? AND a.status = 'in_progress' AND t.status = 'active' AND t.client_id = ? AND t.is_test_data = ?`).get(userId, id, clientId, forTest ? 1 : 0) : null;
+    if (!row) return { error: 'TEAM_NOW_INVALID' };
+    teamMarkNow(userId, row.id, teamNow());
+    return { ok: true, activityId: id };
+}
+// Una sola actividad «de ahora» por persona.
+function teamMarkNow(userId, assigneeRowId, now) {
+    db.transaction(() => {
+        db.prepare('UPDATE team_activity_assignees SET is_now = 0 WHERE user_id = ?').run(userId);
+        db.prepare('UPDATE team_activity_assignees SET is_now = 1, now_at = ? WHERE id = ?').run(now, assigneeRowId);
+    })();
+}
+// «El equipo hoy»: las personas que esta persona ve (ella, su gente a cargo y quienes tienen algo de lo que ve), cada una con su foto, dónde trabaja ese día, en qué está ahora y si está libre; y los últimos 5 días de dónde trabajó.
+function teamTodayBlock(ctx, activities, day) {
+    const { clientId, forTest, viewer, names } = ctx;
+    const active = new Map(listActiveUsersBrief(clientId, forTest).map((u) => [u.id, u]));
+    const ids = new Set([viewer.userId, ...viewer.reports]);
+    activities.forEach((a) => a.assignees.forEach((x) => { if (x.status !== 'done') ids.add(x.userId); }));
+    const rank = (id) => (id === viewer.userId ? 0 : viewer.reports.has(id) ? 1 : 2);
+    const list = [...ids].filter((id) => active.has(id)).sort((a, b) => rank(a) - rank(b) || (names.get(a) || '').localeCompare(names.get(b) || '')).slice(0, 60);
+    const base = Date.parse(`${day}T12:00:00Z`);
+    const weekDays = [4, 3, 2, 1, 0].map((n) => new Date(base - n * 86400000).toISOString().slice(0, 10));
+    const marks = list.map(() => '?').join(',');
+    const rows = list.length ? db.prepare(`SELECT * FROM team_workdays WHERE client_id = ? AND is_test_data = ? AND day >= ? AND day <= ? AND user_id IN (${marks})`).all(clientId, forTest ? 1 : 0, weekDays[0], day, ...list) : [];
+    const workdays = new Map();
+    rows.forEach((r) => { if (!workdays.has(r.user_id)) workdays.set(r.user_id, new Map()); workdays.get(r.user_id).set(r.day, r); });
+    const total = new Map(list.length ? db.prepare(`SELECT a.user_id AS id, COUNT(*) AS n FROM team_activity_assignees a JOIN team_activities t ON t.id = a.activity_id
+        WHERE t.client_id = ? AND t.is_test_data = ? AND t.status = 'active' AND a.status = 'in_progress' AND a.user_id IN (${marks}) GROUP BY a.user_id`).all(clientId, forTest ? 1 : 0, ...list).map((r) => [r.id, r.n]) : []);
+    // lo que la persona que mira SÍ puede ver de lo que cada quien trae en curso
+    const seen = new Map();
+    activities.forEach((a) => a.assignees.forEach((x) => { if (x.status === 'in_progress') { if (!seen.has(x.userId)) seen.set(x.userId, []); seen.get(x.userId).push({ id: a.id, title: a.title, isNow: !!x.isNow, at: x.startedAt || '' }); } }));
+    const photos = teamCtxPhotos(ctx);
+    const sites = ctx.sites;
+    const dayInfo = (r) => (r ? { place: r.place, siteId: r.site_id, siteName: r.site_id ? ((sites.get(r.site_id) || {}).name || '') : '', absence: r.absence } : null);
+    const people = list.map((uid) => {
+        const wd = (workdays.get(uid) || new Map()).get(day) || null;
+        const mine = seen.get(uid) || [];
+        const all = total.get(uid) || 0;
+        const marked = mine.find((m) => m.isNow);
+        const now = marked || (all === 1 && mine.length === 1 ? mine[0] : null);
+        const absent = !!wd && wd.place === 'absent';
+        const week = {};
+        (workdays.get(uid) || new Map()).forEach((r, d) => { week[d] = dayInfo(r); });
+        return {
+            userId: uid, name: names.get(uid) || '', isMe: uid === viewer.userId, isMine: viewer.reports.has(uid), photoVer: photos.get(uid) || 0, canSet: uid === viewer.userId || viewer.isAdmin || viewer.reports.has(uid),
+            ...(dayInfo(wd) || { place: '', siteId: null, siteName: '', absence: '' }), since: wd ? teamIso(wd.created_at) : '', setBy: wd ? (wd.set_by_label || names.get(wd.set_by_user_id) || '') : '',
+            inProgress: all, now: now ? { id: now.id, title: now.title } : null, busyHidden: !now && all > mine.length ? all - mine.length : 0, absent, free: all === 0 && !absent, week,
+        };
+    });
+    return { day, weekDays, people, myInProgress: (seen.get(viewer.userId) || []).map((m) => ({ id: m.id, title: m.title, isNow: m.isNow })) };
+}
 const teamEvent = (activityId, userId, actorUserId, actorLabel, event, detail, passId) => db.prepare('INSERT INTO team_activity_events (activity_id, user_id, actor_user_id, actor_label, event, detail, created_at, pass_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(activityId, userId == null ? null : userId, actorUserId, actorLabel || '', event, String(detail || '').slice(0, 400), teamNow(), passId == null ? null : passId);
 // Lo que viene del formulario de crear o cambiar → datos limpios: { value } o { error, field }.
 function cleanTeamActivityFields(clientId, forTest, body, partial) {
@@ -17230,6 +17389,7 @@ function createTeamActivity(clientId, userId, forTest, isAdmin, body, byLabel) {
     // quién puede tomarla: sin personas queda «por asignar» y la toma mi equipo y mi departamento (salvo que se elija otra cosa); con personas, nadie la toma (salvo que se pida)
     const claim = cleanTeamClaim(clientId, forTest, body, people.ids.length ? '' : 'team_dept');
     if (claim.error) return claim;
+    { const gate = teamAbsentGate(clientId, forTest, body, people.ids); if (gate) return gate; }
     const v = fields.value;
     const now = teamNow();
     let id = 0;
@@ -17320,6 +17480,7 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
         const fresh = people.ids.filter((id) => !current.has(id));
         if (!fresh.length) return { error: 'TEAM_PEOPLE_EXIST' };
         if (current.size + fresh.length > TEAM_LIMITS.people) return { error: 'TEAM_PEOPLE_LIMIT' };
+        { const gate = teamAbsentGate(clientId, forTest, b, fresh); if (gate) return gate; }
         const principal = b.principalUserId != null && b.principalUserId !== '' ? Number(b.principalUserId) : null;
         if (principal != null && !fresh.includes(principal) && !current.has(principal)) return { error: 'TEAM_PERSON_INVALID' };
         db.transaction(() => {
@@ -17358,6 +17519,7 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
         if (action === 'start') {
             if (st !== 'assigned' && st !== 'confirmed') return { error: 'TEAM_STATE' };
             set(st === 'assigned' ? { status: 'in_progress', confirmed_at: now, started_at: now } : { status: 'in_progress', started_at: now }, st === 'assigned' ? [['confirmed', ''], ['started', '']] : 'started', '');
+            teamMarkNow(userId, mineRow.id, now);
             return done();
         }
         if (action === 'pause') {
@@ -17368,7 +17530,7 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
             set({ status: 'paused', paused_at: now, pause_reason: reason }, 'paused', reason);
             return done();
         }
-        if (action === 'resume') { if (st !== 'paused') return { error: 'TEAM_STATE' }; set({ status: 'in_progress', pause_reason: '' }, 'resumed', ''); return done(); }
+        if (action === 'resume') { if (st !== 'paused') return { error: 'TEAM_STATE' }; set({ status: 'in_progress', pause_reason: '' }, 'resumed', ''); teamMarkNow(userId, mineRow.id, now); return done(); }
         if (st !== 'in_progress') return { error: 'TEAM_STATE' };
         set({ status: 'review', review_at: now }, 'submitted', '');
         // lo recibe quien puede validarlo: quien creó la actividad y el jefe directo de quien la entrega
@@ -17416,6 +17578,7 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
         if (!TEAM_PASSABLE.includes(target.status)) return { error: 'TEAM_STATE' };
         const check = teamPassCheck(clientId, forTest, row.id, fromId, b.userIds);
         if (check.error) return check;
+        { const gate = teamAbsentGate(clientId, forTest, b, check.ids); if (gate) return gate; }
         const reason = reasonOf();
         if (!reason) return { error: 'TEAM_REASON_REQUIRED' };
         if (workPlanLen(reason) > TEAM_LIMITS.reason) return { error: 'TEAM_TEXT_TOO_LONG' };
@@ -21220,7 +21383,7 @@ module.exports = {
     getUserGrants,
     setUserGrants,
     getUserGrantChangeLog,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, teamTimeline, teamLog, createTeamActivity, teamActivityAct, TEAM_LIMITS, teamActivityState, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, teamTimeline, teamLog, setTeamWorkday, setTeamNow, setUserPhoto, getUserPhoto, getUserPhotoVer, deleteUserPhoto, TEAM_PHOTO_MAX_BYTES, createTeamActivity, teamActivityAct, TEAM_LIMITS, teamActivityState, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
     MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices,
     THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,

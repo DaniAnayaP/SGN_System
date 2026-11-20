@@ -2969,6 +2969,7 @@ function renderUserProfile() {
     setField('user-info-address', cachedUserProfile.address, 'main.notSet');
     setField('user-info-birth-date', cachedUserProfile.birth_date, 'main.notSet');
     setField('user-info-id-number', cachedUserProfile.id_number, 'main.notSet');
+    renderUserPhotoBlock();
 }
 
 async function loadUserProfile() {
@@ -2985,6 +2986,133 @@ async function loadUserProfile() {
     } catch (err) {
         console.error('Failed to load user profile:', err);
     }
+}
+
+// --- Foto de usuario (pieza 4 de Equipo de Trabajo) ---------------------------------------------------------------------------
+// La sube la propia persona desde «Datos de usuario»: el navegador la recorta al centro y la achica a 256 px (JPEG) antes de mandarla; el servidor la guarda (user_photos) y cada versión trae su número (?v=).
+// Sale en el tablero de Equipo de Trabajo y en la tarjeta de la barra lateral. Solo cuentas de una compañía (la cuenta del equipo SaaS no tiene foto).
+const USER_PHOTO_SIZE = 256;
+const userPhotoUrl = (userId, ver) => `/api/business/users/${userId}/photo?v=${ver}`;
+// La imagen se abre sin direcciones blob: (la política de seguridad solo deja 'self' y data:): createImageBitmap y, si el navegador no lo tiene, el archivo leído como data:.
+async function loadUserPhotoSource(file) {
+    if (window.createImageBitmap) {
+        try { return await createImageBitmap(file); } catch (err) { /* sigue con el respaldo */ }
+    }
+    const dataUrl = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); });
+    return new Promise((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error('image')); img.src = dataUrl; });
+}
+async function resizeUserPhoto(file) {
+    const source = await loadUserPhotoSource(file);
+    const width = source.naturalWidth || source.width;
+    const height = source.naturalHeight || source.height;
+    const side = Math.min(width, height);
+    if (!side) throw new Error('image');
+    const canvas = document.createElement('canvas');
+    canvas.width = USER_PHOTO_SIZE;
+    canvas.height = USER_PHOTO_SIZE;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, USER_PHOTO_SIZE, USER_PHOTO_SIZE);
+    ctx.drawImage(source, (width - side) / 2, (height - side) / 2, side, side, 0, 0, USER_PHOTO_SIZE, USER_PHOTO_SIZE);
+    if (source.close) source.close();
+    return new Promise((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('blob'))), 'image/jpeg', 0.85));
+}
+function setUserPhotoError(text) {
+    const el = document.getElementById('user-photo-error');
+    if (el) { el.textContent = text || ''; el.hidden = !text; }
+}
+async function sendUserPhoto(method, body) {
+    const res = await fetch('/api/me/photo', { method, credentials: 'include', headers: body ? { 'Content-Type': 'image/jpeg' } : {}, body });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) { const err = new Error(out.message || 'failed'); err.code = out.code; throw err; }
+    return out;
+}
+function userPhotoChanged(ver, messageKey) {
+    cachedUserProfile.photoVer = ver;
+    renderUserPhotoBlock();
+    renderSidebarUserCard();
+    document.dispatchEvent(new CustomEvent('user-photo-changed', { detail: { ver } }));
+    showToast(t(messageKey), 'success');
+}
+async function onUserPhotoPick(event) {
+    const input = event.target.closest('#user-photo-file');
+    if (!input || !input.files || !input.files[0]) return;
+    const file = input.files[0];
+    input.value = '';
+    setUserPhotoError('');
+    if (!/^image\/(png|jpeg|webp)$/i.test(file.type)) { setUserPhotoError(t('main.userPhotoErr_FILE')); return; }
+    try {
+        const blob = await resizeUserPhoto(file);
+        const out = await sendUserPhoto('PUT', blob);
+        userPhotoChanged(out.photoVer, 'main.userPhotoSaved');
+    } catch (err) {
+        const key = err && err.code ? `main.userPhotoErr_${err.code}` : '';
+        setUserPhotoError(key && t(key) !== key ? t(key) : t('main.userPhotoErr'));
+    }
+}
+async function onUserPhotoClick(event) {
+    const btn = event.target.closest('[data-photo]');
+    if (!btn) return;
+    if (btn.dataset.photo === 'pick') { const input = document.getElementById('user-photo-file'); if (input) input.click(); return; }
+    setUserPhotoError('');
+    try { const out = await sendUserPhoto('DELETE'); userPhotoChanged(out.photoVer, 'main.userPhotoRemoved'); } catch (err) { setUserPhotoError(t('main.userPhotoErr')); }
+}
+function renderUserPhotoBlock() {
+    const dropdown = document.getElementById('user-info-dropdown');
+    if (!dropdown || !cachedUserProfile || !currentUser || !currentUser.clientId) return;
+    let block = document.getElementById('user-photo-block');
+    if (!block) {
+        block = document.createElement('div');
+        block.id = 'user-photo-block';
+        block.className = 'user-info-group user-photo-block';
+        block.setAttribute('data-help-key', 'userPhoto');
+        dropdown.insertBefore(block, dropdown.firstChild);
+        block.addEventListener('click', onUserPhotoClick);
+        block.addEventListener('change', onUserPhotoPick);
+    }
+    const ver = cachedUserProfile.photoVer || 0;
+    const name = cachedUserProfile.name || currentUser.name || currentUser.username || '';
+    const title = document.createElement('h4');
+    title.textContent = t('main.userPhoto');
+    const avatar = document.createElement('span');
+    avatar.className = 'user-photo-avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    if (ver) {
+        const img = document.createElement('img');
+        img.alt = '';
+        img.src = userPhotoUrl(cachedUserProfile.id, ver);
+        avatar.appendChild(img);
+    } else avatar.textContent = userCardInitials(name);
+    const actions = document.createElement('div');
+    actions.className = 'user-photo-actions';
+    const pick = document.createElement('button');
+    pick.type = 'button';
+    pick.className = 'btn btn-secondary user-photo-btn';
+    pick.dataset.photo = 'pick';
+    pick.textContent = t(ver ? 'main.userPhotoChange' : 'main.userPhotoUpload');
+    actions.appendChild(pick);
+    if (ver) {
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn btn-secondary user-photo-btn';
+        remove.dataset.photo = 'remove';
+        remove.textContent = t('main.userPhotoRemove');
+        actions.appendChild(remove);
+    }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.id = 'user-photo-file';
+    input.accept = 'image/png,image/jpeg,image/webp';
+    input.hidden = true;
+    const error = document.createElement('p');
+    error.id = 'user-photo-error';
+    error.className = 'user-photo-error';
+    error.setAttribute('role', 'alert');
+    error.hidden = true;
+    const row = document.createElement('div');
+    row.className = 'user-photo-row';
+    row.append(avatar, actions, input);
+    block.replaceChildren(title, row, error);
 }
 
 // Same synthetic-duplicate-click guard as topBarActionsToggle/settingsBtn
@@ -13673,6 +13801,7 @@ function userCardRoleKey(user) {
     return user.isClientAdmin ? 'main.userCardRoleClientAdmin' : 'main.userCardRoleUser';
 }
 
+let userCardProfileAsked = false;
 function renderSidebarUserCard() {
     if (!currentUser) return;
     const footer = document.querySelector('.Sidebar .footer');
@@ -13696,6 +13825,17 @@ function renderSidebarUserCard() {
     avatar.className = 'user-card-avatar';
     avatar.setAttribute('aria-hidden', 'true');
     avatar.textContent = userCardInitials(name);
+    // con foto (cuentas de una compañía) el círculo la lleva; el perfil se pide una sola vez para saber si tiene
+    if (currentUser.clientId && cachedUserProfile && cachedUserProfile.photoVer) {
+        avatar.textContent = '';
+        const img = document.createElement('img');
+        img.alt = '';
+        img.src = userPhotoUrl(cachedUserProfile.id, cachedUserProfile.photoVer);
+        avatar.appendChild(img);
+    } else if (currentUser.clientId && !cachedUserProfile && !userCardProfileAsked) {
+        userCardProfileAsked = true;
+        loadUserProfile().then(() => { if (cachedUserProfile && cachedUserProfile.photoVer) renderSidebarUserCard(); });
+    }
 
     const nameEl = document.createElement('b');
     nameEl.className = 'user-card-name';

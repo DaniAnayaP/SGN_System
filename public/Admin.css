@@ -10146,3 +10146,41 @@ input[type="color"].cli-company{ opacity: 0.55; }
     .tw-views small{ flex-basis: 100%; margin-left: 0; }
     .tw-view-head .tw-flt{ max-width: none; }
 }
+/* ---- Equipo de Trabajo, pieza 4: foto, «El equipo hoy», ficha del día, ausentes ---- */
+.tw-av img{ width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+.tw-av-lg{ width: 2.6rem; height: 2.6rem; font-size: 0.8rem; }
+.tw-av-xl{ width: 3.6rem; height: 3.6rem; font-size: 1.05rem; }
+.tw-team-today{ margin-bottom: 0.9rem; padding: 0.7rem 0.8rem; border: 1px solid var(--color-border); border-radius: 0.7rem; background: var(--color-bg); }
+.tw-team-today h3{ margin: 0 0 0.6rem; font-size: 0.8rem; font-weight: 700; }
+.tw-tcards{ display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.6rem; }
+.tw-tc{ position: relative; border: 1px solid var(--color-border); border-radius: 0.7rem; background: var(--color-surface); }
+.tw-tc.on{ border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+.tw-tc.out{ border-style: dashed; }
+.tw-tc-main{ display: flex; align-items: flex-start; gap: 0.6rem; width: 100%; padding: 0.6rem 2rem 0.6rem 0.7rem; border: 0; border-radius: 0.7rem; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.tw-tc-main:focus-visible{ outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.tw-phw{ position: relative; flex: none; display: inline-flex; }
+.tw-pd{ position: absolute; right: -0.1rem; bottom: -0.1rem; width: 0.8rem; height: 0.8rem; border-radius: 50%; border: 2px solid var(--color-surface); background: #9ca3af; display: inline-block; }
+.tw-tc-g .tw-pd, .tw-pd-g{ background: #278a52; }
+.tw-tc-y .tw-pd, .tw-pd-y{ background: #d99a1e; }
+.tw-tc-n .tw-pd, .tw-pd-n{ background: #6b7280; }
+.tw-tc-r .tw-pd, .tw-pd-r{ background: #c0392b; }
+.tw-tc-t{ display: grid; gap: 0.15rem; min-width: 0; }
+.tw-tc-t b{ font-size: 0.82rem; overflow-wrap: anywhere; }
+.tw-site{ font-size: 0.7rem; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.tw-ask{ font-style: normal; text-decoration: underline dashed; text-underline-offset: 0.2rem; }
+.tw-tag-out{ width: fit-content; font-size: 0.6rem; font-weight: 700; color: #7a4fc2; background: rgba(138, 92, 214, 0.14); border-radius: 1rem; padding: 0.05rem 0.45rem; }
+.tw-now{ display: grid; gap: 0.05rem; margin-top: 0.15rem; font-size: 0.72rem; overflow-wrap: anywhere; }
+.tw-now small{ font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-secondary); }
+.tw-now-none{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; color: var(--color-text-secondary); }
+.tw-now-none .tw-free{ margin-left: 0; }
+.tw-tc-edit{ position: absolute; top: 0.3rem; right: 0.3rem; }
+.tw-week{ margin-top: 0.7rem; }
+.tw-week summary{ cursor: pointer; font-size: 0.76rem; font-weight: 600; }
+.tw-week-scroll{ overflow: auto; margin-top: 0.5rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); }
+.tw-week-table{ min-width: 34rem; }
+.tw-week-table .tw-pd{ position: static; width: 0.6rem; height: 0.6rem; margin-right: 0.25rem; border: 0; }
+.tw-fich{ display: flex; align-items: center; gap: 0.8rem; margin: 0.3rem 0 0.8rem; }
+.tw-fich b{ font-size: 0.9rem; overflow-wrap: anywhere; }
+.tw-fich small{ display: block; font-size: 0.72rem; color: var(--color-text-secondary); }
+.tw-opts-col{ display: grid; gap: 0.4rem; }
+.tw-absent{ font-style: normal; font-size: 0.6rem; font-weight: 700; color: #c0392b; background: rgba(220, 70, 60, 0.13); border-radius: 1rem; padding: 0.05rem 0.45rem; margin-left: auto; white-space: nowrap; }

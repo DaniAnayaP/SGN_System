@@ -3975,3 +3975,62 @@
         body.sgn-ready > nav.Sidebar,
         body.sgn-ready > main{ animation: none; }
     }
+
+    /* Foto de usuario (pieza 4 de Equipo de Trabajo): en la tarjeta de la barra lateral y en «Datos de usuario» */
+    .user-card-avatar img{
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        object-fit: cover;
+        display: block;
+    }
+    .user-photo-row{
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+    }
+    .user-photo-avatar{
+        flex: none;
+        width: 3.2rem;
+        height: 3.2rem;
+        border-radius: 50%;
+        overflow: hidden;
+        display: grid;
+        place-items: center;
+        font-size: 0.9rem;
+        font-weight: 700;
+        background-color: var(--color-accent);
+        color: var(--color-accent-text);
+    }
+    .user-photo-avatar img{
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    .user-photo-actions{
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.3rem;
+    }
+    .user-photo-btn{
+        padding: 0.25rem 0.65rem;
+        border: 1px solid var(--color-border);
+        border-radius: 1rem;
+        background-color: var(--color-surface);
+        color: var(--color-text-primary);
+        font-family: inherit;
+        font-size: 0.7rem;
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+    .user-photo-btn:hover{
+        background-color: var(--color-bg);
+    }
+    .user-photo-error{
+        margin: 0.4rem 0 0;
+        font-size: 0.72rem;
+        color: #c0392b;
+    }

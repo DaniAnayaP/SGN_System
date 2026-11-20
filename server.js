@@ -616,7 +616,7 @@ const {
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, teamTimeline, teamLog, createTeamActivity, teamActivityAct, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, teamTimeline, teamLog, setTeamWorkday, setTeamNow, setUserPhoto, getUserPhoto, getUserPhotoVer, deleteUserPhoto, TEAM_PHOTO_MAX_BYTES, createTeamActivity, teamActivityAct, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -1188,6 +1188,33 @@ app.get('/api/me/profile', requireAuth, (req, res) => {
     const profile = getUserProfileById(req.user.sub);
     if (!profile) return res.status(404).json({ message: 'User not found.' });
     res.json({ profile });
+});
+
+// La foto de la persona (pieza 4 de Equipo de Trabajo): la sube ella misma desde «Datos de usuario». La imagen se achica en el navegador (256 px) y aquí solo se revisan sus primeros bytes y su peso. Quien está en la misma compañía la puede ver (?v= es la versión).
+const userPhotoRaw = express.raw({ type: (req) => /^image\//i.test(String(req.headers['content-type'] || '')), limit: '1mb' });
+app.put('/api/me/photo', requireAuth, userPhotoRaw, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const data = req.body;
+    if (!Buffer.isBuffer(data) || !data.length) return res.status(400).json({ message: 'La foto no es válida.', code: 'FILE' });
+    if (data.length > TEAM_PHOTO_MAX_BYTES) return res.status(413).json({ message: 'La foto pesa demasiado: redúcela e inténtalo otra vez.', code: 'SIZE' });
+    const mime = assetModelPhotoMime(data);
+    if (!mime) return res.status(400).json({ message: 'La foto debe ser PNG, WebP o JPEG.', code: 'FILE' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ photoVer: setUserPhoto(req.user.clientId, req.user.sub, mime, data) });
+});
+app.delete('/api/me/photo', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!deleteUserPhoto(req.user.sub)) return res.status(404).json({ message: 'No tienes foto.', code: 'NOPHOTO' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ photoVer: 0 });
+});
+app.get('/api/business/users/:id/photo', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).end();
+    const id = Number(req.params.id);
+    const photo = Number.isInteger(id) ? getUserPhoto(req.user.clientId, id) : null;
+    if (!photo) return res.status(404).end();
+    res.set({ 'Content-Type': photo.mime, 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' });
+    res.send(photo.data);
 });
 
 // Top-bar "Datos de Usuario del Negocio" panel — same "always the caller's
@@ -2302,7 +2329,7 @@ app.delete('/api/business/work-plans/:id/items/:itemId', requireAuth, (req, res)
 // ---- Administración de Equipo de Trabajo (Daniel, 2026-11-19) · PIEZA 1 ----
 // Pantalla general (sección main, junto a Planes de trabajo): entra quien tiene la hoja main/equipo-trabajo en su árbol (el administrador del cliente, siempre) y su Estatus habilitado. Las cuentas de SaaS (sin compañía) no la tienen.
 // Cada persona ve lo que creó, lo que tiene y lo de las personas a su cargo; el administrador, todo. Quien puede qué lo decide db.js (teamActivityCan) y viaja en `can`. Cada movimiento queda en team_activity_events.
-const TEAM_HTTP = { TEAM_NOT_FOUND: 404, TEAM_NOT_ALLOWED: 403, TEAM_FORBIDDEN: 403, TEAM_STATE: 409, TEAM_CANCELLED: 409, TEAM_PEOPLE_EXIST: 409, TEAM_PEOPLE_LIMIT: 409, TEAM_FULL: 409, TEAM_PASS_PENDING: 409, TEAM_PASS_NOT_FOUND: 404 };
+const TEAM_HTTP = { TEAM_NOT_FOUND: 404, TEAM_NOT_ALLOWED: 403, TEAM_FORBIDDEN: 403, TEAM_STATE: 409, TEAM_CANCELLED: 409, TEAM_PEOPLE_EXIST: 409, TEAM_PEOPLE_LIMIT: 409, TEAM_FULL: 409, TEAM_PASS_PENDING: 409, TEAM_PASS_NOT_FOUND: 404, TEAM_PERSON_ABSENT: 409 };
 const TEAM_MESSAGES = {
     TEAM_NOT_FOUND: 'Esa actividad no existe.', TEAM_NOT_ALLOWED: 'No puedes hacer eso con esta actividad.', TEAM_FORBIDDEN: 'No tienes permiso para usar la Administración de Equipo de Trabajo.',
     TEAM_STATE: 'La actividad ya no está en ese paso.', TEAM_CANCELLED: 'La actividad está cancelada.', TEAM_REASON_REQUIRED: 'Escribe el motivo.', TEAM_TITLE_REQUIRED: 'Escribe qué hay que hacer.',
@@ -2312,11 +2339,12 @@ const TEAM_MESSAGES = {
     TEAM_PEOPLE_EXIST: 'Esas personas ya están en la actividad.', TEAM_PEOPLE_LIMIT: 'Una actividad no puede tener más de 20 personas.', TEAM_ACTION_INVALID: 'Esa acción no existe.',
     TEAM_CLAIM_INVALID: 'Elige quién puede tomarla (y, si son personas elegidas, al menos una).', TEAM_FULL: 'Ya se completaron las personas que necesita la actividad.',
     TEAM_PASS_PENDING: 'Esa persona ya tiene un pase esperando respuesta.', TEAM_PASS_NOT_FOUND: 'Ese pase ya no existe.', TEAM_PERIOD_INVALID: 'El periodo no es válido: elige una fecha de inicio y otra de fin posterior (hasta 5 años).',
+    TEAM_PERSON_ABSENT: 'Hay personas ausentes hoy: confirma si quieres asignarles de todos modos.', TEAM_WORKDAY_INVALID: 'Elige dónde se trabaja hoy (y, si está ausente, el motivo).', TEAM_NOW_INVALID: 'Solo puedes marcar como «ahora» una actividad tuya que esté en curso.',
 };
 function teamFail(res, result) {
     const code = result.error;
     const message = TEAM_MESSAGES[code] || 'No se pudo completar lo pedido.';
-    return res.status(TEAM_HTTP[code] || 400).json({ error: message, message, code, field: result.field });
+    return res.status(TEAM_HTTP[code] || 400).json({ error: message, message, code, field: result.field, names: result.names });
 }
 function teamGate(req, res) {
     if (req.user.clientId && isMainScreenStatusVisible(req.user.clientId, req.user.sub, 'equipo-trabajo')
@@ -2327,7 +2355,7 @@ function teamGate(req, res) {
 app.get('/api/business/team-activities', requireAuth, (req, res) => {
     if (!teamGate(req, res)) return;
     res.set('Cache-Control', 'no-store');
-    res.json(listTeamActivities(req.user.clientId, req.user.sub, !!req.user.isTestAccount, !!req.user.isClientAdmin));
+    res.json(listTeamActivities(req.user.clientId, req.user.sub, !!req.user.isTestAccount, !!req.user.isClientAdmin, req.query.day));
 });
 app.post('/api/business/team-activities', requireAuth, (req, res) => {
     if (!teamGate(req, res)) return;
@@ -2346,6 +2374,21 @@ function teamHistory(read) {
         res.json(result);
     };
 }
+// pieza 4: dónde trabaja alguien hoy y en qué actividad está ahora (también antes de «/:id»)
+app.put('/api/business/team-activities/workday', requireAuth, (req, res) => {
+    if (!teamGate(req, res)) return;
+    const result = setTeamWorkday(req.user.clientId, req.user.sub, !!req.user.isTestAccount, !!req.user.isClientAdmin, req.body, changedByLabel(req));
+    if (result.error) return teamFail(res, result);
+    res.set('Cache-Control', 'no-store');
+    res.json(result);
+});
+app.put('/api/business/team-activities/now', requireAuth, (req, res) => {
+    if (!teamGate(req, res)) return;
+    const result = setTeamNow(req.user.clientId, req.user.sub, !!req.user.isTestAccount, req.body);
+    if (result.error) return teamFail(res, result);
+    res.set('Cache-Control', 'no-store');
+    res.json(result);
+});
 app.get('/api/business/team-activities/timeline', requireAuth, teamHistory(teamTimeline));
 app.get('/api/business/team-activities/log', requireAuth, teamHistory(teamLog));
 app.get('/api/business/team-activities/:id', requireAuth, (req, res) => {
