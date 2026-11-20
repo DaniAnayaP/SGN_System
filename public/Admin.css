@@ -10133,14 +10133,8 @@ input[type="color"].cli-company{ opacity: 0.55; }
 .tw-mk-x{ background: #3f9bb0; }
 .tw-mk-z{ background: #c0392b; }
 .tw-log-count{ margin: 0 0 0.5rem; font-size: 0.76rem; color: var(--color-text-secondary); }
-.tw-log-scroll{ overflow: auto; max-height: 70vh; border: 1px solid var(--color-border); border-radius: 0.7rem; background: var(--color-surface); margin-bottom: 0.6rem; }
-.tw-log{ border-collapse: collapse; width: 100%; min-width: 56rem; font-size: 0.8rem; }
-.tw-log th{ position: sticky; top: 0; z-index: 3; background: var(--color-surface); text-align: left; font-size: 0.7rem; font-weight: 700; color: var(--color-text-secondary); padding: 0.55rem 0.65rem; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
-.tw-log td{ padding: 0.5rem 0.65rem; border-top: 1px solid var(--color-border); vertical-align: top; }
-.tw-log tbody tr:first-child td{ border-top: 0; }
 .tw-log-row{ cursor: pointer; }
 .tw-log-row:hover{ background: var(--color-bg); }
-.tw-log small{ color: var(--color-text-secondary); }
 .tw-num{ text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 760px){
     .tw-views small{ flex-basis: 100%; margin-left: 0; }

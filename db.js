@@ -17224,9 +17224,12 @@ function teamTimeline(clientId, userId, forTest, isAdmin, query) {
     return { from: period.fromIso, to: period.toIso, activities, truncated, me: { id: userId, isAdmin: !!isAdmin } };
 }
 // El Registro: lo que cada persona ya TERMINÓ (validado) dentro del periodo; una fila por actividad y persona.
+// Control Interno del Registro: Empresa/Área/Módulo/Pantalla fijos de la pantalla, Centro de Costos = los sitios de la actividad y todo lo de fecha sale de cuándo se terminó (en la zona horaria de la compañía).
+const TEAM_LOG_SCREEN_META = { area: '', modulo: 'General', pantalla: 'Administración de Equipo de Trabajo' };
 function teamLog(clientId, userId, forTest, isAdmin, query) {
     const period = teamPeriod(query);
     if (period.error) return period;
+    const companyName = (db.prepare('SELECT company_name FROM clients WHERE id = ?').get(clientId) || {}).company_name || '';
     const done = db.prepare(`SELECT a.*, t.id AS tid FROM team_activity_assignees a JOIN team_activities t ON t.id = a.activity_id
         WHERE t.client_id = ? AND t.is_test_data = ? AND a.status = 'done' AND a.done_at >= ? AND a.done_at < ? ORDER BY a.done_at DESC, a.id DESC LIMIT ?`).all(clientId, forTest ? 1 : 0, period.fromDb, period.toDb, TEAM_HISTORY_LIMITS.logRows + 1);
     const truncated = done.length > TEAM_HISTORY_LIMITS.logRows;
@@ -17251,8 +17254,10 @@ function teamLog(clientId, userId, forTest, isAdmin, query) {
         let siteIds = [];
         try { siteIds = JSON.parse(r.site_ids); } catch (err) { siteIds = []; }
         const person = { userId: a.user_id, name: ctx.names.get(a.user_id) || '', isMe: a.user_id === ctx.viewer.userId, isMine: ctx.viewer.reports.has(a.user_id) };
+        const sites = siteIds.map((id) => ctx.sites.get(id)).filter(Boolean);
         out.push({
-            activityId: r.id, title: r.title, kind: r.kind, urgent: !!r.urgent, realization: r.realization, department: r.department, area: r.area, sites: siteIds.map((id) => ctx.sites.get(id)).filter(Boolean),
+            ...getSystemColumnsForRecord({ companyName, ...TEAM_LOG_SCREEN_META, centroCostos: sites.map((s) => s.name).join(', '), createdAt: a.done_at }),
+            activityId: r.id, title: r.title, kind: r.kind, urgent: !!r.urgent, realization: r.realization, department: r.department, area: r.area, sites,
             person, assignees: [person], plan: teamPlanBrief(ctx, r), assignedAt: teamIso(a.assigned_at), startedAt: teamIso(a.started_at), doneAt: teamIso(a.done_at), days: days(a.assigned_at, a.done_at), validatedByName: a.validated_by_user_id == null ? '' : (ctx.names.get(a.validated_by_user_id) || ''),
         });
     });

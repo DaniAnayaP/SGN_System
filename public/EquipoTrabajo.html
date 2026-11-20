@@ -367,6 +367,44 @@
         <section class="admin-panel">
             <div id="tw-error" class="admin-error" role="alert" hidden></div>
             <div id="tw-root"></div>
+            <!-- El Registro es una tabla estándar del sistema (los 9 iconos, columnas personalizables, Control Interno): el HTML es fijo y equipo-trabajo.js llena las filas. -->
+            <div id="tw-log-host" hidden>
+                <div class="data-table-wrapper" data-table-id="equipo-registro" data-no-history="1">
+                    <table class="data-table" aria-label="Registro" data-help-key="twLog">
+                        <thead>
+                            <tr>
+                    <th data-i18n="main.colSysEmpresa" data-col="colSysEmpresa" data-group="menu.classControlInterno" class="col-system">Company</th>
+                    <th data-i18n="main.colSysArea" data-col="colSysArea" data-group="menu.classControlInterno" class="col-system">Area</th>
+                    <th data-i18n="main.colSysModulo" data-col="colSysModulo" data-group="menu.classControlInterno" class="col-system">Module</th>
+                    <th data-i18n="main.colSysPantalla" data-col="colSysPantalla" data-group="menu.classControlInterno" class="col-system">Screen</th>
+                    <th data-i18n="main.colSysCentroCostos" data-col="colSysCentroCostos" data-group="menu.classControlInterno" class="col-system">Cost Center</th>
+                    <th data-i18n="main.colSysFecha" data-col="colSysFecha" data-group="menu.classControlInterno" class="col-system">Date (dd/mmm/yyyy)</th>
+                    <th data-i18n="main.colSysDiaNum" data-col="colSysDiaNum" data-group="menu.classControlInterno" class="col-system">Day (dd)</th>
+                    <th data-i18n="main.colSysDiaTexto" data-col="colSysDiaTexto" data-group="menu.classControlInterno" class="col-system">Day (ddd)</th>
+                    <th data-i18n="main.colSysMesNum" data-col="colSysMesNum" data-group="menu.classControlInterno" class="col-system">Month (mm)</th>
+                    <th data-i18n="main.colSysMesTexto" data-col="colSysMesTexto" data-group="menu.classControlInterno" class="col-system">Month (mmm)</th>
+                    <th data-i18n="main.colSysAnio" data-col="colSysAnio" data-group="menu.classControlInterno" class="col-system">Year (yyyy)</th>
+                    <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group="menu.classControlInterno" class="col-system">Week (wk+yyyy)</th>
+                    <th data-i18n="main.colSysHora" data-col="colSysHora" data-group="menu.classControlInterno" class="col-system">Time (hh:mm:ss)</th>
+                    <th data-i18n="main.twLogCol_done" data-col="colTwDone" data-group="menu.teamWork">Done</th>
+                    <th data-i18n="main.twLogCol_activity" data-col="colTwActivity" data-group="menu.teamWork">Activity</th>
+                    <th data-i18n="main.twLogCol_person" data-col="colTwPerson" data-group="menu.teamWork">Person</th>
+                    <th data-i18n="main.twLogCol_kind" data-col="colTwKind" data-group="menu.teamWork">Type</th>
+                    <th data-i18n="main.twLogCol_realization" data-col="colTwRealization" data-group="menu.teamWork">Realization</th>
+                    <th data-i18n="main.twLogCol_site" data-col="colTwSite" data-group="menu.teamWork">Site</th>
+                    <th data-i18n="main.twLogCol_department" data-col="colTwDepartment" data-group="menu.teamWork">Department</th>
+                    <th data-i18n="main.twLogCol_plan" data-col="colTwPlan" data-group="menu.teamWork">Plan</th>
+                    <th data-i18n="main.twLogCol_area" data-col="colTwArea" data-group="menu.teamWork">Area</th>
+                    <th data-i18n="main.twLogCol_assigned" data-col="colTwAssigned" data-group="menu.teamWork">Assigned</th>
+                    <th data-i18n="main.twLogCol_days" data-col="colTwDays" data-group="menu.teamWork">Days</th>
+                    <th data-i18n="main.twLogCol_validator" data-col="colTwValidator" data-group="menu.teamWork">Validated by</th>
+                                <th data-i18n="main.colActions" data-col="actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tw-log-body"></tbody>
+                    </table>
+                </div>
+            </div>
         </section>
     </main>
 

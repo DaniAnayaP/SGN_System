@@ -24,7 +24,9 @@ const GROUPS = ['activity', 'user', 'site'];
 const LINE_PERIODS = ['7d', '14d', '30d', 'week', 'month', 'prev', 'custom'];
 const LOG_PERIODS = ['month', 'prev', '30d', '90d', 'year', 'all', 'custom'];
 const VIEW_KEY = 'sgn.teamWork.view';
-const LOG_PAGE = 300;
+const LOG_TABLE_ID = 'equipo-registro';
+const LOG_SYS_KEYS = ['colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos', 'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto', 'colSysAnio', 'colSysSemana', 'colSysHora'];
+const LOG_COLUMNS = LOG_SYS_KEYS.length + 13;
 const FILTERS_KEY = 'sgn.teamWork.filters';
 const DEFAULT_FILTERS = { q: '', person: 'all', kind: 'all', real: 'all', site: 'all', dept: 'all', area: 'all', plan: 'all', urgent: false };
 let data = { activities: [], people: [], sites: [], departments: [], me: { id: 0, name: '', isAdmin: false, hasTeam: false } };
@@ -37,7 +39,8 @@ let lineGroup = 'activity';
 let periods = { line: { kind: '14d', from: '', to: '' }, log: { kind: 'month', from: '', to: '' } };
 let lineData = null;
 let logData = null;
-let logShown = LOG_PAGE;
+let logRev = 0;
+let logDrawn = '';
 try {
     const saved = JSON.parse(localStorage.getItem(VIEW_KEY) || 'null');
     if (saved && typeof saved === 'object') {
@@ -192,6 +195,7 @@ function render() {
     const body = view === 'line' ? lineView() : view === 'log' ? logView() : `${counters(list)}${passTray()}${todayStrip()}${data.activities.length ? '' : `<p class="tw-empty">${esc(t('main.twEmpty'))}</p>`}${lanes(list)}`;
     root.innerHTML = `<div class="tw-head"><h2>${esc(t('main.twBoard'))}</h2><button type="button" class="btn" data-tw="create" data-help-key="twCreate"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.twCreate'))}</button></div>
         ${viewTabs()}${filterBar()}${body}`;
+    syncLogTable();
     if (keepFocus === 'tw-f-q') { const el = $('tw-f-q'); if (el) { el.focus(); if (caret != null) el.setSelectionRange(caret, caret); } }
 }
 async function load(quiet) {
@@ -501,7 +505,7 @@ async function loadLine(quiet) {
 }
 async function loadLog(quiet) {
     const range = periodRange('log');
-    try { logData = { ...(await api('GET', `/log${periodQuery(range)}`)), range }; logShown = LOG_PAGE; if (!quiet) showError(''); } catch (err) { if (!quiet) showError(errText(err)); }
+    try { logData = { ...(await api('GET', `/log${periodQuery(range)}`)), range, rev: ++logRev }; if (!quiet) showError(''); } catch (err) { if (!quiet) showError(errText(err)); }
     render();
 }
 const loadView = (quiet) => (view === 'line' ? loadLine(quiet) : view === 'log' ? loadLog(quiet) : load(quiet));
@@ -590,19 +594,45 @@ function lineView() {
 }
 
 // ---- Registro ----
+// Tabla estándar del sistema (equipo-registro): el encabezado vive en EquipoTrabajo.html y aquí se llenan las filas (cada celda con su data-col: el motor de tablas se encarga de columnas, filtros, orden y búsquedas guardadas).
 function logView() {
     const controls = `<div class="tw-view-head">${periodControls('log')}${downloadBtn()}</div>`;
     if (!logData) return controls;
     const rows = logData.rows.filter(matches);
-    const shown = rows.slice(0, logShown);
-    const cell = (r) => `<tr class="tw-log-row" data-tw="open" data-id="${r.activityId}" tabindex="0"><td>${esc(dateText(r.doneAt))}</td><td>${r.urgent ? '⚡ ' : ''}${esc(r.title)}</td><td>${esc(r.person.name)}${data.me.hasTeam && !r.person.isMine && !r.person.isMe ? ` <small>(${esc(t('main.twOutsideTeam'))})</small>` : ''}</td><td><span class="tw-kind tw-k-${r.kind}">${esc(kindLabel(r.kind))}</span></td><td>${esc(realLabel(r.realization))}</td><td>${esc(r.sites.map((s) => s.name).join(', '))}</td><td>${esc(deptName(r.department))}</td><td>${esc(r.plan ? r.plan.planTitle : '')}</td><td class="tw-num">${r.days}</td><td>${esc(r.validatedByName)}</td></tr>`;
-    const head = ['done', 'activity', 'person', 'kind', 'realization', 'site', 'department', 'plan', 'days', 'validator'];
-    return `${controls}<p class="tw-log-count" role="status">${esc(t(rows.length === 1 ? 'main.twLogRowsOne' : 'main.twLogRows', { n: rows.length }))}${logData.truncated ? ` · ${esc(t('main.twTruncated'))}` : ''}</p>
-        ${rows.length ? `<div class="tw-log-scroll"><table class="tw-log" aria-label="${esc(t('main.twTab_log'))}" data-help-key="twLog"><thead><tr>${head.map((k) => `<th scope="col"${k === 'days' ? ' class="tw-num"' : ''}>${esc(t(`main.twLogCol_${k}`))}</th>`).join('')}</tr></thead><tbody>${shown.map(cell).join('')}</tbody></table></div>
-        ${rows.length > shown.length ? `<button type="button" class="btn btn-secondary tw-small" data-tw="more">${esc(t('main.twLogMore', { n: Math.min(LOG_PAGE, rows.length - shown.length) }))}</button>` : ''}` : `<p class="tw-empty">${esc(t('main.twLogEmpty'))}</p>`}`;
+    return `${controls}<p class="tw-log-count" role="status">${esc(t(rows.length === 1 ? 'main.twLogRowsOne' : 'main.twLogRows', { n: rows.length }))}${logData.truncated ? ` · ${esc(t('main.twTruncated'))}` : ''}</p>`;
+}
+function logRowHtml(r) {
+    const td = (key, html, cls) => `<td data-col="${key}"${cls ? ` class="${cls}"` : ''}>${html}</td>`;
+    const sys = LOG_SYS_KEYS.map((k) => td(k, esc(r[k] || ''), 'col-system')).join('');
+    const outside = data.me.hasTeam && !r.person.isMine && !r.person.isMe ? ` <small>(${esc(t('main.twOutsideTeam'))})</small>` : '';
+    return `<tr class="tw-log-row" data-tw="open" data-id="${r.activityId}" tabindex="0">${sys}${td('colTwDone', esc(dateText(r.doneAt)))}${td('colTwActivity', `${r.urgent ? '⚡ ' : ''}${esc(r.title)}`)}${td('colTwPerson', `${esc(r.person.name)}${outside}`)}${td('colTwKind', `<span class="tw-kind tw-k-${r.kind}">${esc(kindLabel(r.kind))}</span>`)}${td('colTwRealization', esc(realLabel(r.realization)))}${td('colTwSite', esc(r.sites.map((s) => s.name).join(', ')))}${td('colTwDepartment', esc(deptName(r.department)))}${td('colTwPlan', esc(r.plan ? r.plan.planTitle : ''))}${td('colTwArea', esc(r.area || ''))}${td('colTwAssigned', esc(dateText(r.assignedAt)))}${td('colTwDays', String(r.days), 'tw-num')}${td('colTwValidator', esc(r.validatedByName))}${td('actions', `<button type="button" class="admin-icon-btn" data-tw="open" data-id="${r.activityId}" aria-label="${esc(t('main.twLogOpen'))}" title="${esc(t('main.twLogOpen'))}"><i class="bx bx-show" aria-hidden="true"></i></button>`, 'admin-table-actions')}</tr>`;
+}
+// Muestra u oculta la tabla según la vista y la llena (solo si cambió lo que se ve: periodo, filtros o idioma)
+function syncLogTable() {
+    const host = $('tw-log-host');
+    if (!host) return;
+    const on = view === 'log' && !!logData;
+    const wasHidden = host.hidden;
+    host.hidden = !on;
+    if (!on) return;
+    if (wasHidden) window.dispatchEvent(new Event('resize'));
+    const signature = `${logData.rev}|${locale()}|${JSON.stringify(filters)}|${data.me.hasTeam ? 1 : 0}`;
+    if (signature === logDrawn) return;
+    logDrawn = signature;
+    const rows = logData.rows.filter(matches);
+    $('tw-log-body').innerHTML = rows.length ? rows.map(logRowHtml).join('') : `<tr><td class="data-table-empty-cell" colspan="${LOG_COLUMNS}"><div class="data-table-empty-inner">${esc(t('main.twLogEmpty'))}</div></td></tr>`;
+    if (window.Dashboard && Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(LOG_TABLE_ID);
 }
 
 // ---- descargar (Excel o PDF) ----
+// El Registro baja lo que se ve en la tabla estándar (columnas visibles en su orden y filas filtradas, sin la columna de acciones)
+function logSnapshot() {
+    const snap = Dashboard.getVisibleTableSnapshot(LOG_TABLE_ID);
+    const keep = snap.columns.map((c, i) => i).filter((i) => snap.columns[i].key !== 'actions');
+    const columns = keep.map((i) => ({ label: snap.columns[i].label }));
+    const rows = snap.rows.map((row) => keep.map((i) => row[i]));
+    return { rows, built: { title: t('main.twTab_log'), columns, rows } };
+}
 function saveFile(blob, filename) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -616,13 +646,14 @@ function saveFile(blob, filename) {
 function downloadModal() {
     const kind = view;
     if (kind !== 'line' && kind !== 'log') return;
-    const source = kind === 'log' ? (logData ? logData.rows.filter(matches) : []) : (lineData ? lineData.activities.filter(matches) : []);
+    const snap = kind === 'log' ? logSnapshot() : null;
+    const source = kind === 'log' ? snap.rows : (lineData ? lineData.activities.filter(matches) : []);
     if (!source.length) { Dashboard.showToast(t('main.twDlNone'), 'error'); return; }
     const fmt = {
         t, dateTime: dateTimeText, date: (iso) => dateText(iso), duration: (ms) => durText(ms), kind: kindLabel, real: realLabel, dept: deptName,
         state: (s) => t(`main.twState_${s}`), step: stepText,
     };
-    const built = kind === 'log' ? window.TeamTimeline.buildLog(source, fmt) : window.TeamTimeline.buildLine(source, fmt, Date.now());
+    const built = kind === 'log' ? snap.built : window.TeamTimeline.buildLine(source, fmt, Date.now());
     const range = (kind === 'log' ? logData : lineData).range;
     const baseName = `${window.TeamTimeline.slug(t(kind === 'log' ? 'main.twTab_log' : 'main.twTab_line'))}_${todayYmd()}`;
     const count = kind === 'log' ? source.length : built.sections[0].rows.length;
@@ -750,10 +781,9 @@ document.addEventListener('click', (event) => {
     if (op === 'person') { event.stopPropagation(); filters.person = String(filters.person) === el.dataset.user ? 'all' : el.dataset.user; saveFilters(); render(); return; }
     if (op === 'day') { event.stopPropagation(); dayModal(Number(el.dataset.user)); return; }
     if (op === 'download') { downloadModal(); return; }
-    if (op === 'more') { logShown += LOG_PAGE; render(); return; }
     if (op === 'act') { event.stopPropagation(); doAct(el.dataset.id, el.dataset.act, el.dataset.pass); return; }
     if (op === 'unassign') { event.stopPropagation(); api('POST', `/${el.dataset.id}/unassign`, { userId: Number(el.dataset.user) }).then(() => load(true)).then(() => openDetail(Number(el.dataset.id))).catch((err) => setErr('tw-d-error', errText(err))); return; }
-    if (op === 'open' && !event.target.closest('button')) openDetail(Number(el.dataset.id));
+    if (op === 'open' && (el.tagName === 'BUTTON' || !event.target.closest('button'))) openDetail(Number(el.dataset.id));
 });
 document.addEventListener('keydown', (event) => {
     if ((event.key === 'Enter' || event.key === ' ') && event.target.matches && event.target.matches('[data-tw="open"]') && event.target === document.activeElement) { event.preventDefault(); openDetail(Number(event.target.dataset.id)); }

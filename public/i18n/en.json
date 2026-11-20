@@ -5618,6 +5618,7 @@
     "twLogRowsOne": "1 row",
     "twLogMore": "Show {n} more",
     "twLogEmpty": "No finished activities in this period.",
+    "twLogOpen": "View the activity",
     "twLogCol_done": "Finished",
     "twLogCol_activity": "Activity",
     "twLogCol_person": "Person",

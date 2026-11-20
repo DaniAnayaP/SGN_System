@@ -5617,6 +5617,7 @@
     "twLogRowsOne": "1 fila",
     "twLogMore": "Mostrar {n} más",
     "twLogEmpty": "No hay actividades terminadas en este periodo.",
+    "twLogOpen": "Ver la actividad",
     "twLogCol_done": "Terminó",
     "twLogCol_activity": "Actividad",
     "twLogCol_person": "Persona",
