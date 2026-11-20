@@ -588,7 +588,7 @@ function cardNode(a, today, shown) {
     card.appendChild(el('i', `bx ${DOT[state] || DOT.assigned} wpapp-dot twapp-dot-${state}`));
     const main = el('button', 'wpapp-main');
     main.type = 'button';
-    main.setAttribute('aria-label', a.title);
+    main.setAttribute('aria-label', a.title); main.setAttribute('data-help-key', 'appTwRow'); // el botón trae su propio nombre: sin su llave de ayuda el Modo ayuda no llega a la de la tarjeta
     const title = el('span', 'wpapp-title');
     title.appendChild(el('b', '', a.title));
     const sub = [peopleLine(a), (a.sites || []).map((s) => s.name).join(', '), a.plan ? a.plan.itemTitle : ''].filter(Boolean).join(' · ');
