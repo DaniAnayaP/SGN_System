@@ -13595,7 +13595,7 @@ function expandAccessMinimums(grants, options = {}) {
 // Relación de Accesos para PERSONAS (puestos y usuarios; Daniel, 2026-11-19, «Sí a las recomendaciones»). En el Giro y el Plan lo mínimo entra con todos los niveles porque ahí solo se define qué se puede contratar; a una PERSONA no se le da de más:
 //   · solo cuenta el mínimo que está en la MISMA pantalla del acceso (su botón, su columna): lo de otra pantalla (p. ej. la bandeja de TI de «Pedir alta») se queda como recomendación, no se le da a la persona sola;
 //   · una columna o botón marcado como mínimo entra con «Ver y operar» (nunca Autorizar, Eliminar ni Notificar: esos los marca el administrador a mano); un contenedor (grupo, pantalla) marcado como mínimo entra solo con «Solo ver» en cada columna y botón;
-//   · el acceso cuenta como habilitado para la persona cuando ya OPERA algo de él (Ver y operar, Editar, Autorizar o Eliminar, o el ícono marcado): quien solo lo ve no recibe de pronto el botón de crear;
+//   · el acceso cuenta como habilitado para la persona cuando ya OPERA algo de él (Ver y operar, Editar, Autorizar o Eliminar, o el ícono marcado): quien solo lo ve no recibe de pronto el botón de crear. Lo que es el mínimo del propio acceso no cuenta para habilitarlo (si no, el botón que entró solo lo dejaría habilitado, y bloqueado, para siempre);
 //   · nunca baja un nivel (si ya tiene «Editar», no se le pone «Ver y operar») y, al subir de «Solo ver» a «Ver y operar», quita el «Solo ver» (los niveles se excluyen, como en el árbol);
 //   · solo lo que el contrato y el Estatus de quien da el permiso dejan dar (canAdd); lo demás sale en «blocked». General (main) no lleva reglas de personas.
 // ---------------------------------------------------------------------------
@@ -13627,18 +13627,30 @@ function personMinimumTuples(key, platform, fromContainer = false) {
     if (node.ty === 'icon') return [{ sectionId: t.sectionId, itemId: t.itemId, submenuId: `${t.submenuId}${platform}` }];
     return [];
 }
-// ¿La persona ya opera algo de ese acceso en esa plataforma? (ver arriba)
-function personEnablesAccess(grants, node, platform) {
+// ¿La persona ya opera algo de ese acceso en esa plataforma? (ver arriba) ownBases: las columnas, botones e íconos que son el MÍNIMO del propio acceso (las rutas sin el nivel): no cuentan para habilitarlo, si no el mínimo que acaba de entrar
+// dejaría el acceso habilitado para siempre (y, en el árbol, bloqueado para siempre: «Pedir alta» lleva su botón dentro de la misma pantalla).
+function personEnablesAccess(grants, node, platform, ownBases) {
     const t = parseAccessKey(node.k);
     if (t.sectionId === 'main' || !t.submenuId) return false;
     return grants.some((g) => {
         const isApp = typeof g.submenuId === 'string' && g.submenuId.endsWith(ACCESS_APP_SUFFIX);
         if (isApp !== (platform === ACCESS_APP_SUFFIX) || g.sectionId !== t.sectionId || (g.itemId || null) !== t.itemId) return false;
         const sub = isApp ? g.submenuId.slice(0, -ACCESS_APP_SUFFIX.length) : String(g.submenuId || '');
+        if (ownBases && (ownBases.has(sub) || ownBases.has(sub.slice(0, Math.max(sub.lastIndexOf('/'), 0))))) return false;
         if (node.ty === 'icon') return sub === t.submenuId || sub.startsWith(`${t.submenuId}/`);
         if (!sub.startsWith(`${t.submenuId}/`)) return false;
         return PERSON_OPERATING_LEVELS.includes(sub.split('/').pop());
     });
+}
+// Las rutas (sin nivel ni #app) de lo que es el mínimo del propio acceso: la columna o el botón sin su «/ver-y-operar», el ícono tal cual.
+function personOwnMinimumBases(tuples) {
+    const bases = new Set();
+    tuples.forEach((tuple) => {
+        const sub = String(tuple.submenuId || '').replace(/#app$/, '');
+        const m = /^(.*)\/(solo-ver|ver-y-operar|editar)$/.exec(sub);
+        bases.add(m ? m[1] : sub);
+    });
+    return bases;
 }
 // Qué límites tiene QUIEN da el permiso (el administrador del cliente): contrato y Estatus que ve; los mismos que aplica clampNewGrantsToLimits al guardar. Regresa canAdd(tupla) → true si se puede dar.
 function personGrantLimitCheck(clientId, visibleStatuses) {
@@ -13673,6 +13685,13 @@ function expandPersonAccessMinimums(grants, options = {}) {
         if (!lv) return have.has(keyOf(tuple));
         return Object.keys(PERSON_LEVEL_RANK).some((other) => PERSON_LEVEL_RANK[other] >= PERSON_LEVEL_RANK[lv.level] && have.has(keyOf({ ...tuple, submenuId: `${lv.base}/${other}${lv.sfx}` })));
     };
+    // lo que es el mínimo del propio acceso no cuenta para habilitarlo (ver personEnablesAccess)
+    const ownBases = new Map();
+    const ownFor = (access, platform) => {
+        const cacheKey = `${access}|${platform}`;
+        if (!ownBases.has(cacheKey)) ownBases.set(cacheKey, personOwnMinimumBases(relations.filter((r) => r.access === access).flatMap((r) => personMinimumTuples(r.related, platform))));
+        return ownBases.get(cacheKey);
+    };
     const added = [];
     const pairs = new Map();
     const blocked = new Map();
@@ -13681,7 +13700,7 @@ function expandPersonAccessMinimums(grants, options = {}) {
         for (const rel of relations) {
             const accessNode = catalog.index.get(rel.access);
             for (const platform of ['', ACCESS_APP_SUFFIX]) {
-                if (!personEnablesAccess(all, accessNode, platform)) continue;
+                if (!personEnablesAccess(all, accessNode, platform, ownFor(rel.access, platform))) continue;
                 // un contenedor marcado como mínimo reparte «Solo ver»; una columna o botón marcado, «Ver y operar» (ver personMinimumTuples)
                 for (const tuple of personMinimumTuples(rel.related, platform)) {
                     if (covered(tuple)) continue;
@@ -13705,6 +13724,35 @@ function expandPersonAccessMinimums(grants, options = {}) {
         if (!changed) break;
     }
     return { grants: all, added, autoEnabled: [...pairs.values()], blocked: [...blocked.values()] };
+}
+// Las reglas de Relación de Accesos para los ÁRBOLES de personas (puestos y usuarios), con la forma que lee AccessRules.createPerson en el navegador (Daniel, 2026-11-20: candado y «Recomendado» en vivo). Son las MISMAS que aplica
+// expandPersonAccessMinimums al guardar, ya expandidas a las llaves del árbol:
+//   · web: las hojas que entran con «Ver y operar» (columna o botón) o «Solo ver» (lo que viene de un contenedor) cuando la persona opera el acceso; solo el mínimo de la MISMA pantalla;
+//   · touches: lo que se recomienda (violeta, sin marcar): lo que el acceso «toca» y también el mínimo de OTRA pantalla, que a la persona no se le da sola;
+//   · icon: el acceso es un ícono (a un ícono lo habilita cualquier hoja suya; a lo demás, solo un nivel de operar).
+// General (main) y los accesos sin ruta (departamento, área) no llevan reglas de personas. La App no entra: ahí la visibilidad es un interruptor por hoja (ver «App» en el árbol), no un nivel.
+function buildPersonAccessRules(labelFn) {
+    const keyOf = (t) => `${t.sectionId}::${t.itemId || ''}::${t.submenuId || ''}`;
+    const catalog = buildAccessCatalog();
+    const byAccess = new Map();
+    listAccessRelations().forEach((r) => {
+        if (!byAccess.has(r.access)) byAccess.set(r.access, { minimum: [], touches: [] });
+        byAccess.get(r.access)[r.kind === 'minimum' ? 'minimum' : 'touches'].push(r.related);
+    });
+    const unique = (list) => [...new Set(list)];
+    const rules = [];
+    byAccess.forEach((v, access) => {
+        const node = catalog.index.get(access);
+        const t = parseAccessKey(access);
+        if (!node || t.sectionId === 'main' || !t.submenuId) return;
+        const minimum = v.minimum.filter((k) => catalog.index.has(k));
+        const sameScreen = minimum.filter((k) => personMinimumSameScreen(access, k));
+        const web = unique(sameScreen.flatMap((k) => personMinimumTuples(k, '').map(keyOf)));
+        const touches = unique(v.touches.filter((k) => catalog.index.has(k)).concat(minimum.filter((k) => !sameScreen.includes(k))));
+        if (!web.length && !touches.length) return;
+        rules.push({ access, label: labelFn ? labelFn(access) : access, icon: node.ty === 'icon', web, touches });
+    });
+    return rules;
 }
 // Las relaciones guardadas: [{ access, related, kind, updatedBy, updatedAt }].
 function listAccessRelations() {
@@ -21982,6 +22030,7 @@ module.exports = {
     expandPersonAccessMinimums,
     personGrantLimitCheck,
     buildAccessRules,
+    buildPersonAccessRules,
     logClientChange,
     logPlanChange,
     listSaasAdmins,

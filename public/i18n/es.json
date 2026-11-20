@@ -1298,6 +1298,7 @@
     "minAutoEnabled": "Mínimos indispensables que se habilitaron solos ({count}): {list}.",
     "minAutoBlocked": "Mínimos que no se pudieron habilitar porque no están habilitados para servicio en el Árbol Maestro ({count}): {list}.",
     "minAutoBlockedPerson": "Mínimos que no se pudieron dar porque no están en el contrato de la empresa o no los puedes dar ({count}): {list}.",
+    "minAutoBlockedPersonLive": "No se pudo dar el mínimo indispensable de «{access}»: no está en el contrato de la empresa o no lo puedes dar.",
     "relAccSubtitle": "Por cada acceso (una pantalla, una columna, un botón o un icono) se marca cuál es el mínimo indispensable para operarlo y qué otros accesos llega a tocar. Lo mínimo se habilitará solo y bloqueado desde el Giro; lo que toca solo se recomienda. Lo que no se marca es opcional, para personalizar.",
     "relAccChoose": "¿Qué acceso vas a configurar?",
     "relAccSearchPlaceholder": "Buscar un acceso…",

@@ -279,7 +279,7 @@
     // alone by every other caller (undefined here, unchanged behavior).
     // 'main' (Inicio/Tablero/Administración del Negocio -- core navigation,
     // not a Giro/Plan-facing "Departamento") is never reordered by this.
-    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, order = null, classOverrides = null, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null, describeColorId = null, classificationEditor = null, grantLimits = null, accessRules = null } = {}) {
+    function create(container, { allowedSectionIds = null, costCenters = [], readOnly = false, enabledModuleKeys = null, showAppTab = false, statusMode = false, order = null, classOverrides = null, grantMode = null, masterGate = null, masterCosts = null, grantOrderMode = false, departmentOrder = null, areaOrder = null, apartadoOrder = null, pantallaOrder = null, columnOrder = null, costCurrency = 'MXN', controlGrants = null, onColorRequested = null, describeColorId = null, classificationEditor = null, grantLimits = null, accessRules = null, personAccessRules = null } = {}) {
         // Shown inside every $ Web/$ App input (see buildCostInput below) --
         // purely a label, never affects the number stored/sent; the caller
         // (Admin-ArbolMaestro.js) is the one that actually knows/persists
@@ -516,6 +516,73 @@
                 pill.title = t('admin.minRecommendedTitle', { access: accessNamesText(touchedBy) });
                 pill.textContent = t('admin.minRecommended');
                 row.appendChild(pill);
+            }
+        }
+        // ── Relación de Accesos para PERSONAS (puestos y usuarios; candado y «Recomendado» en vivo) ────────────────────────────────────────────────────────────────────────────────────────────────────
+        // personAccessRules = las reglas que manda GET /api/business/access-rules (ver AccessRules.createPerson; las mismas que aplica el servidor al guardar). Al operar un acceso que tiene relaciones, su mínimo de la MISMA pantalla
+        // se marca solo con «Ver y operar» (nunca Autorizar, Eliminar ni Notificar), queda con candado mientras ese acceso se siga operando (no baja de nivel ni se quita) y lo que el acceso toca sale como «Recomendado» (violeta).
+        const personEngine = !grantMode && !statusMode && !readOnly && personAccessRules && window.AccessRules && window.AccessRules.createPerson ? window.AccessRules.createPerson(personAccessRules) : null;
+        let personLocks = new Map(); // llave de la columna, botón o ícono (sin el nivel) -> { rank (1 Solo ver, 2 Ver y operar, 0 ícono), names }
+        let personTouched = new Map(); // llave del acceso recomendado -> nombres de quien lo recomienda
+        let personSkipped = []; // hojas que no se pudieron quitar porque son mínimo de un acceso que se sigue operando
+        const personAnnouncedBlocked = new Set();
+        const PERSON_LEVEL_KEY_RE = /^(.*)\/(solo-ver|ver-y-operar|editar)$/;
+        const PERSON_LEVEL_RANK = { 'solo-ver': 1, 'ver-y-operar': 2, editar: 3 };
+        // ¿Esta hoja no se puede quitar? Un nivel de una columna o botón bloqueado (el que tenga, mientras el acceso se opere) o un ícono bloqueado.
+        function personKeyLocked(key) {
+            if (!personEngine || !personLocks.size) return false;
+            const lv = PERSON_LEVEL_KEY_RE.exec(key);
+            if (lv) return personLocks.has(lv[1]);
+            const lock = personLocks.get(key);
+            return !!lock && lock.rank === 0;
+        }
+        // Rango mínimo que debe conservar una columna o botón (0 si no está bloqueado).
+        function personLockRank(baseKey) {
+            const lock = personEngine ? personLocks.get(baseKey) : null;
+            return lock ? lock.rank : 0;
+        }
+        function personNotify(message, kind) {
+            if (window.Dashboard && typeof window.Dashboard.showToast === 'function') window.Dashboard.showToast(message, kind);
+        }
+        // Lo que acaba de entrar solo se marca y se avisa; lo que no se pudo dar (contrato o Estatus) y lo que no se pudo quitar también. Corre al empezar cada dibujo del árbol.
+        function recomputePersonRules() {
+            if (!personEngine || !personEngine.hasRules) { personLocks = new Map(); personTouched = new Map(); personSkipped = []; return; }
+            const out = personEngine.resolve(Array.from(grantSet), { canAdd: (key) => !isLimitLocked(key) });
+            out.removed.forEach((k) => grantSet.delete(k)); // el «Solo ver» que sube a «Ver y operar» (igual que al subir de nivel a mano: su App se queda como estaba)
+            out.added.forEach((k) => grantSet.add(k));
+            personLocks = out.locks;
+            personTouched = out.touched;
+            if (out.added.length) personNotify(t('admin.minAutoLive', { access: accessNamesText(out.addedBy) }), 'info');
+            const freshBlocked = out.blocked.filter((name) => !personAnnouncedBlocked.has(name));
+            freshBlocked.forEach((name) => personAnnouncedBlocked.add(name));
+            if (freshBlocked.length) personNotify(t('admin.minAutoBlockedPersonLive', { access: accessNamesText(freshBlocked) }), 'warning');
+            if (personSkipped.length) {
+                const names = personSkipped.flatMap((k) => { const lv = PERSON_LEVEL_KEY_RE.exec(k); const lock = personLocks.get(lv ? lv[1] : k); return lock ? lock.names : []; });
+                if (names.length) personNotify(t('admin.minLockedToast', { access: accessNamesText(names) }), 'warning');
+                personSkipped = [];
+            }
+        }
+        // La marca de un renglón: con candado (es el mínimo de un acceso que se opera) y/o «Recomendado» (lo toca un acceso que se opera y todavía no está marcado del todo).
+        function markPersonRow(rowObj, accessKey) {
+            if (!personEngine || !rowObj || !rowObj.row || !accessKey) return;
+            const host = rowObj.row.querySelector('label.perm-tree-check') || rowObj.row;
+            const lock = personLocks.get(accessKey);
+            if (lock) {
+                rowObj.row.classList.add('perm-tree-row-min');
+                const badge = document.createElement('span');
+                badge.className = 'perm-tree-access-badge perm-tree-access-badge-min';
+                badge.title = t('admin.minLockedTitle', { access: accessNamesText(lock.names) });
+                badge.innerHTML = '<i class="bx bx-lock-alt" aria-hidden="true"></i>';
+                host.appendChild(badge);
+            }
+            const touchedBy = personTouched.get(accessKey);
+            if (touchedBy && !(rowObj.input && rowObj.input.checked && !rowObj.input.indeterminate)) {
+                rowObj.row.classList.add('perm-tree-row-touch');
+                const pill = document.createElement('span');
+                pill.className = 'perm-tree-access-badge perm-tree-access-badge-touch';
+                pill.title = t('admin.minRecommendedTitle', { access: accessNamesText(touchedBy) });
+                pill.textContent = t('admin.minRecommended');
+                host.appendChild(pill);
             }
         }
         // key -> the human label shown on that row, filled in as
@@ -834,6 +901,7 @@
         function setKeys(keys, checked) {
             keys.forEach((k) => {
                 if (checked) { if (!isLimitLocked(k)) grantSet.add(k); }
+                else if (personKeyLocked(k)) personSkipped.push(k); // el mínimo de un acceso que se sigue operando no se quita
                 else { grantSet.delete(k); grantSet.delete(k + APP_SUFFIX); }
             });
         }
@@ -1029,6 +1097,9 @@
                 },
             }, subBlocked, computeAppToggle([soloVerKey]));
             const colLimitReason = limitReasonKey(soloVerKey);
+            // Relación de Accesos: si esta columna o botón es el mínimo de un acceso que se opera, no se quita ni baja de ese nivel
+            const colBaseKey = keyOf(section.id, item.id, base);
+            const lockRank = personLockRank(colBaseKey);
             if (!readOnly) {
                 const levelKeys = COLUMN_LEVELS.map((level) => keyOf(section.id, item.id, `${base}/${level.id}`));
                 colRow.input.checked = levelKeys.some((k) => grantSet.has(k));
@@ -1037,6 +1108,8 @@
                     render();
                 });
                 applyLimitLock(colRow, colLimitReason, colRow.input.checked);
+                if (lockRank && colRow.input.checked) colRow.input.disabled = true;
+                markPersonRow(colRow, colBaseKey);
             }
             container.appendChild(colRow.row);
             if (!colExpanded) return;
@@ -1046,11 +1119,13 @@
             const items = [
                 ...COLUMN_LEVELS.filter((level) => level.id !== 'solo-ver').map((level) => {
                     const levelKey = keyOf(section.id, item.id, `${base}/${level.id}`);
+                    const levelRank = PERSON_LEVEL_RANK[level.id];
                     return {
                         icon: COLUMN_LEVEL_ICONS[level.id],
                         label: t(level.labelKey),
                         checked: grantSet.has(levelKey),
-                        disabled: subBlocked || (!!colLimitReason && !grantSet.has(levelKey)),
+                        // si es el mínimo de un acceso que se opera, ese nivel (o uno menor) no se quita: bajaría de lo que ese acceso necesita
+                        disabled: subBlocked || (!!colLimitReason && !grantSet.has(levelKey)) || (lockRank >= levelRank && grantSet.has(levelKey)),
                         onChange: (checked) => {
                             if (checked) {
                                 // Uncheck the other 2 mutually-exclusive levels for this column.
@@ -1064,9 +1139,12 @@
                                 // TOP of Solo Ver, not a raise-then-nothing
                                 // toggle -- turning one off always falls back
                                 // to the Solo Ver baseline instead of leaving
-                                // the column with zero access.
-                                setKeys([levelKey], false);
-                                setKeys([soloVerKey], true);
+                                // the column with zero access. Si la columna es
+                                // el mínimo de un acceso que se opera, cae al
+                                // nivel que ese acceso necesita (no más abajo).
+                                grantSet.delete(levelKey);
+                                grantSet.delete(levelKey + APP_SUFFIX);
+                                setKeys([keyOf(section.id, item.id, `${base}/${lockRank >= 2 ? 'ver-y-operar' : 'solo-ver'}`)], true);
                             }
                             render();
                         },
@@ -1252,6 +1330,7 @@
                     render();
                 });
                 if (classState.locked) applyLimitLock(classRow, firstLimitReason(classLeafKeys), false);
+                markPersonRow(classRow, keyOf(section.id, item.id, classBase));
             }
             container.appendChild(classRow.row);
             if (!classExpanded) return;
@@ -1281,6 +1360,8 @@
                     const colBase = entry.isClassification
                         ? `${sm.id}/${subSm.id}/${entry.id}/${col.id}`
                         : `${sm.id}/${subSm.id}/${entry.id}`;
+                    // el mínimo de un acceso que se opera no se mueve (ni se baja a «Solo ver» ni se quita)
+                    if (personLockRank(keyOf(section.id, item.id, colBase))) { if (!checked) personSkipped.push(keyOf(section.id, item.id, `${colBase}/solo-ver`)); return; }
                     [...COLUMN_LEVELS, COLUMN_AUTHORIZE].forEach((level) => {
                         if (checked && level.id === 'solo-ver') return;
                         grantSet.delete(keyOf(section.id, item.id, `${colBase}/${level.id}`));
@@ -1467,6 +1548,8 @@
                         render();
                     });
                     applyLimitLock(iconRow, limitReasonKey(iconKey), iconRow.input.checked);
+                    if (personKeyLocked(iconKey) && iconRow.input.checked) iconRow.input.disabled = true; // mínimo de un acceso que se opera
+                    markPersonRow(iconRow, iconKey);
                 }
                 container.appendChild(iconRow.row);
                 // Los íconos que guardan algo que otros pueden usar llevan su Notificar actualizado debajo.
@@ -5320,6 +5403,8 @@
                 renderStatusTree();
                 return;
             }
+            // Relación de Accesos (personas): lo que se acaba de operar trae su mínimo, y se recalculan el candado y lo recomendado antes de dibujar
+            recomputePersonRules();
             treeRoot.innerHTML = '';
             if (appColumnEnabled) treeRoot.appendChild(buildAppColumnHeader());
             sectionsData.forEach((section) => {
@@ -5342,6 +5427,7 @@
                     sectionRow.input.checked = sectionState.checked;
                     sectionRow.input.indeterminate = sectionState.indeterminate;
                     if (sectionState.locked) applyLimitLock(sectionRow, firstLimitReason(sectionLeafKeys), false);
+                    markPersonRow(sectionRow, keyOf(section.id, null, null));
                     sectionRow.input.addEventListener('change', () => {
                         setKeys(sectionLeafKeys, sectionRow.input.checked);
                         section.items.forEach((item) => {
@@ -5380,6 +5466,7 @@
                         itemRow.input.checked = itemState.checked;
                         itemRow.input.indeterminate = itemState.indeterminate;
                         if (itemState.locked) applyLimitLock(itemRow, firstLimitReason(itemLeafKeys), false);
+                        markPersonRow(itemRow, keyOf(section.id, item.id, null));
                         itemRow.input.addEventListener('change', () => {
                             setKeys(itemLeafKeys, itemRow.input.checked);
                             detailedSubSmUnder(item).forEach(({ sm, subSm }) => {
@@ -5403,6 +5490,7 @@
                                     render();
                                 });
                                 applyLimitLock(smRow, limitReasonKey(key), smRow.input.checked);
+                                markPersonRow(smRow, key);
                             }
                             treeRoot.appendChild(smRow.row);
                             return;
@@ -5433,6 +5521,7 @@
                             smRow.input.checked = smState.checked;
                             smRow.input.indeterminate = smState.indeterminate;
                             if (smState.locked) applyLimitLock(smRow, firstLimitReason(smLeafKeys), false);
+                            markPersonRow(smRow, smKey);
                             smRow.input.addEventListener('change', () => {
                                 setKeys(smLeafKeys, smRow.input.checked);
                                 sm.submenu.forEach((subSm) => {
@@ -5512,6 +5601,7 @@
                                 subRow.input.checked = subChecked;
                                 subRow.input.indeterminate = subIndeterminate;
                                 applyLimitLock(subRow, limitReasonKey(key), subChecked);
+                                markPersonRow(subRow, key);
                                 subRow.input.addEventListener('change', () => {
                                     setKeys([key], subRow.input.checked);
                                     // Checking/unchecking the pantalla itself

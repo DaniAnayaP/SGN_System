@@ -1299,6 +1299,7 @@
     "minAutoEnabled": "Minimums that were enabled on their own ({count}): {list}.",
     "minAutoBlocked": "Minimums that could not be enabled because they are not enabled for service in the Master Tree ({count}): {list}.",
     "minAutoBlockedPerson": "Minimums that could not be given because they are not in the company's contract or you cannot give them ({count}): {list}.",
+    "minAutoBlockedPersonLive": "The minimum of \"{access}\" could not be given: it is not in the company's contract or you cannot give it.",
     "relAccSubtitle": "For each access (a screen, a column, a button or an icon) you mark the minimum it needs to operate and which other accesses it touches. The minimum will be enabled on its own and locked from the Business Line; what it touches is only recommended. Whatever is unmarked is optional, for customizing.",
     "relAccChoose": "Which access are you configuring?",
     "relAccSearchPlaceholder": "Search for an access…",

@@ -556,6 +556,7 @@ const {
     expandPersonAccessMinimums,
     personGrantLimitCheck,
     buildAccessRules,
+    buildPersonAccessRules,
     logClientChange,
     logPlanChange,
     listSaasAdmins,
@@ -6345,6 +6346,12 @@ app.get('/api/business/me/grants', requireAuth, (req, res) => {
 
 // Lo contratado por la empresa del administrador (plan + adicionales; null sin plan): los editores de Perfil y Usuario lo usan para mostrar con
 // candado lo que no se puede dar (las mismas reglas que clampNewGrantsToLimits aplica al guardar).
+// Las reglas de Relación de Accesos para los árboles de permisos de PERSONAS (puestos y usuarios): el candado del mínimo y el «Recomendado» en vivo. Son las mismas que aplica el servidor al guardar (ver buildPersonAccessRules en db.js).
+app.get('/api/business/access-rules', requireAuth, requireClientAdmin, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ rules: buildPersonAccessRules(accessLabelEs) });
+});
+
 app.get('/api/business/contract-grants', requireAuth, requireClientAdmin, (req, res) => {
     // mainContractGrants: lo de General que el contrato trae (vacía = nada de General asignado, sin límite); el administrador solo puede dar de General lo que ahí está
     res.json({ contractGrants: getClientContractGrants(req.user.clientId), mainContractGrants: getClientMainContractGrants(req.user.clientId) });

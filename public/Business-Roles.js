@@ -159,7 +159,9 @@ async function selectJobPositionForPermissions(jp) {
         const classOverrides = await fetch(`/api/business/permission-classifications?level=perfil&entityId=${jp.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
         const contractData = await fetch('/api/business/contract-grants', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const contractGrants = contractData ? contractData.contractGrants : null;
-        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true, order, classOverrides, grantLimits: Dashboard.buildGrantLimits(contractGrants, contractData ? contractData.mainContractGrants : null) });
+        // Relación de Accesos para personas: el candado del mínimo y el «Recomendado» en vivo (si no cargan, el árbol funciona igual y el servidor aplica lo mismo al guardar)
+        const personAccessRules = await fetch('/api/business/access-rules', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.rules) || null).catch(() => null);
+        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true, order, classOverrides, grantLimits: Dashboard.buildGrantLimits(contractGrants, contractData ? contractData.mainContractGrants : null), personAccessRules });
         await tree.init(data.grants || []);
     } catch {
         permissionsSaveStatus.textContent = Dashboard.t('admin.loadError');

@@ -18,7 +18,7 @@ const WWW_DIR = path.join(__dirname, 'www');
 
 const FILES = [
     'Login.html', 'Login.css', 'login.js', 'access-screen.js', 'AppClientBrand.js',
-    'AppConfig.js', 'ColorPalette.js', 'ColorDialog.js', 'AppOfflineSync.js', 'PermissionTree.js',
+    'AppConfig.js', 'ColorPalette.js', 'ColorDialog.js', 'AppOfflineSync.js', 'AccessRules.js', 'PermissionTree.js',
     'AppInicio.html', 'AppInicio.css', 'AppInicio.js',
     'AppCargaCombustible.html', 'AppCargaCombustible.js',
     'AppTiposUnidad.html', 'AppTiposUnidad.js',

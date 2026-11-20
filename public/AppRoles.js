@@ -22,8 +22,8 @@ function t(key, params = {}) {
     if (typeof value !== 'string') return key;
     return value.replace(/\{(\w+)\}/g, (_, name) => params[name] ?? `{${name}}`);
 }
-// PermissionTree.js's only Dashboard.js dependency -- see header note above.
-window.Dashboard = { t };
+// PermissionTree.js's only Dashboard.js dependency -- see header note above. showToast: los avisos del árbol (lo mínimo que entra solo, lo que no se pudo quitar) salen con el aviso de esta pantalla.
+window.Dashboard = { t, showToast: (message) => showToast(message, 6000) };
 
 async function loadLanguage() {
     const stored = localStorage.getItem('lang');
@@ -295,7 +295,9 @@ async function openJobPositionTree(jp) {
         bodyEl.appendChild(treeContainer);
         const order = await fetch(apiUrl(`/api/business/permission-order?level=perfil&entityId=${jp.id}`), { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const classOverrides = await fetch(apiUrl(`/api/business/permission-classifications?level=perfil&entityId=${jp.id}`), { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
-        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true, order, classOverrides, grantLimits });
+        // Relación de Accesos para personas: el candado del mínimo y el «Recomendado» en vivo (si no cargan, el árbol funciona igual y el servidor aplica lo mismo al guardar)
+        const personAccessRules = await fetch(apiUrl('/api/business/access-rules'), { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.rules) || null).catch(() => null);
+        tree = window.PermissionTree.create(treeContainer, { allowedSectionIds, costCenters, showAppTab: true, order, classOverrides, grantLimits, personAccessRules });
         await tree.init(data.grants || []);
 
         const equalizeBtn = document.createElement('button');

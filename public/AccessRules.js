@@ -155,5 +155,104 @@
         }
         return { resolve, hasRules: rules.length > 0 };
     }
-    return { create, parse, enables, covers };
+    // ── Reglas para PERSONAS (puestos y usuarios; Daniel, 2026-11-20: candado y «Recomendado» en vivo) ──────────────────────────────────────────────────────────────────────────────────────────────
+    // Misma regla que aplica el servidor al guardar (expandPersonAccessMinimums en db.js), solo Web (la visibilidad en App es un interruptor por hoja del árbol, no un nivel). Recibe las reglas de GET /api/business/access-rules
+    //   [{ access: llave del acceso, label, icon: ¿es un ícono?, web: [hojas que entran con él], touches: [llaves de lo que se recomienda] }]
+    // · el acceso está habilitado cuando la persona OPERA algo de él (un nivel Ver y operar, Editar, Autorizar o Eliminar de lo que tiene adentro; un ícono, cuando marcó el ícono o algo suyo); lo que es el mínimo del propio acceso no cuenta;
+    // · lo que entra: las hojas de web que falten; una columna o botón entra con «Ver y operar» (si ya tiene ese nivel o uno más alto no se toca; al subir se quita su «Solo ver»);
+    // · lo que se bloquea (locks): llave de la columna, botón o ícono SIN el nivel → { rank (1 Solo ver, 2 Ver y operar; 0 = un ícono), names }: no puede quedar por debajo mientras el acceso esté habilitado;
+    // · lo que se recomienda (touched): llave del acceso recomendado → nombres de quien lo recomienda (los accesos que sí están habilitados).
+    const PERSON_RANK = { 'solo-ver': 1, 'ver-y-operar': 2, editar: 3 };
+    const PERSON_OPERATING = ['ver-y-operar', 'editar', 'autorizar', 'eliminar'];
+    const PERSON_LEVEL_RE = /^(.*)\/(solo-ver|ver-y-operar|editar)$/;
+    function createPerson(rawRules) {
+        const rules = (rawRules || []).map((r) => {
+            const access = parse(r.access);
+            const web = (r.web || []).map(parse);
+            const own = new Set(web.map((tuple) => { const m = PERSON_LEVEL_RE.exec(tuple.sub || ''); return m ? m[1] : (tuple.sub || ''); }));
+            return { label: r.label || r.access, access, icon: !!r.icon, web, touches: r.touches || [], own };
+        }).filter((r) => r.access.item && r.access.sub && (r.web.length || r.touches.length));
+
+        // opciones: canAdd(llave) → false si no se puede dar (contrato o Estatus). Regresa { added: [llaves], removed: [llaves del «Solo ver» que sube], addedBy, blocked, locks, touched }.
+        function resolve(keys, options = {}) {
+            const have = new Set();
+            const index = new Map(); // «sección|área» → rutas que la persona tiene en Web
+            const note = (key) => {
+                const p = parse(key);
+                if (p.app) return;
+                const bucket = `${p.section}|${p.item || ''}`;
+                if (!index.has(bucket)) index.set(bucket, []);
+                index.get(bucket).push(p.sub || '');
+            };
+            for (const key of keys || []) { if (!String(key).endsWith(APP_SUFFIX)) { have.add(key); note(key); } }
+            const enabled = (rule) => {
+                const subs = index.get(`${rule.access.section}|${rule.access.item}`);
+                if (!subs) return false;
+                const path = rule.access.sub;
+                return subs.some((sub) => {
+                    if (rule.own.has(sub) || rule.own.has(sub.slice(0, Math.max(sub.lastIndexOf('/'), 0)))) return false;
+                    if (rule.icon) return sub === path || sub.startsWith(`${path}/`);
+                    return sub.startsWith(`${path}/`) && PERSON_OPERATING.includes(sub.slice(sub.lastIndexOf('/') + 1));
+                });
+            };
+            const covered = (tuple) => {
+                const lv = PERSON_LEVEL_RE.exec(tuple.key);
+                if (!lv) return have.has(tuple.key);
+                return Object.keys(PERSON_RANK).some((other) => PERSON_RANK[other] >= PERSON_RANK[lv[2]] && have.has(`${lv[1]}/${other}`));
+            };
+            const added = [];
+            const removed = [];
+            const addedBy = new Set();
+            const blocked = new Set();
+            for (let round = 0; round < 12; round += 1) {
+                let changed = false;
+                rules.forEach((rule) => {
+                    if (!rule.web.length || !enabled(rule)) return;
+                    rule.web.forEach((tuple) => {
+                        if (covered(tuple)) return;
+                        if (options.canAdd && !options.canAdd(tuple.key)) { blocked.add(rule.label); return; }
+                        const lv = PERSON_LEVEL_RE.exec(tuple.key);
+                        if (lv && lv[2] === 'ver-y-operar') {
+                            // los niveles se excluyen: al subir a «Ver y operar» se quita el «Solo ver» de esa columna o botón
+                            const solo = `${lv[1]}/solo-ver`;
+                            if (have.has(solo)) {
+                                have.delete(solo);
+                                const at = added.indexOf(solo);
+                                if (at >= 0) added.splice(at, 1); else removed.push(solo);
+                            }
+                        }
+                        have.add(tuple.key);
+                        note(tuple.key);
+                        added.push(tuple.key);
+                        addedBy.add(rule.label);
+                        changed = true;
+                    });
+                });
+                if (!changed) break;
+            }
+            // lo bloqueado y lo recomendado salen de lo que quedó al final
+            const locks = new Map();
+            const touched = new Map();
+            rules.forEach((rule) => {
+                if (!enabled(rule)) return;
+                rule.web.forEach((tuple) => {
+                    const lv = PERSON_LEVEL_RE.exec(tuple.key);
+                    if (lv ? !covered(tuple) : !have.has(tuple.key)) return; // solo se bloquea lo que de verdad está puesto
+                    const lockKey = lv ? lv[1] : tuple.key;
+                    const rank = lv ? PERSON_RANK[lv[2]] : 0;
+                    const lock = locks.get(lockKey) || { rank, names: [] };
+                    lock.rank = Math.max(lock.rank, rank);
+                    if (!lock.names.includes(rule.label)) lock.names.push(rule.label);
+                    locks.set(lockKey, lock);
+                });
+                rule.touches.forEach((key) => {
+                    if (!touched.has(key)) touched.set(key, []);
+                    if (!touched.get(key).includes(rule.label)) touched.get(key).push(rule.label);
+                });
+            });
+            return { added, removed, addedBy: [...addedBy], blocked: [...blocked], locks, touched };
+        }
+        return { resolve, hasRules: rules.length > 0 };
+    }
+    return { create, createPerson, parse, enables, covers };
 }));
