@@ -556,6 +556,17 @@
             const freshBlocked = out.blocked.filter((name) => !personAnnouncedBlocked.has(name));
             freshBlocked.forEach((name) => personAnnouncedBlocked.add(name));
             if (freshBlocked.length) personNotify(t('admin.minAutoBlockedPersonLive', { access: accessNamesText(freshBlocked) }), 'warning');
+            // Lo que no se pudo quitar porque lo necesitaba el acceso que se acaba de quitar (su propio mínimo) ya no lo necesita nadie: se quita en este mismo clic (y se vuelve a calcular, por la cadena)
+            const freed = personSkipped.filter((k) => !personKeyLocked(k));
+            if (freed.length) {
+                freed.forEach((k) => {
+                    const lv = PERSON_LEVEL_KEY_RE.exec(k);
+                    (lv ? ['solo-ver', 'ver-y-operar', 'editar', 'autorizar'].map((level) => `${lv[1]}/${level}`) : [k]).forEach((key) => { grantSet.delete(key); grantSet.delete(key + APP_SUFFIX); });
+                });
+                personSkipped = personSkipped.filter((k) => personKeyLocked(k));
+                recomputePersonRules();
+                return;
+            }
             if (personSkipped.length) {
                 const names = personSkipped.flatMap((k) => { const lv = PERSON_LEVEL_KEY_RE.exec(k); const lock = personLocks.get(lv ? lv[1] : k); return lock ? lock.names : []; });
                 if (names.length) personNotify(t('admin.minLockedToast', { access: accessNamesText(names) }), 'warning');
@@ -5057,8 +5068,17 @@
                 });
                 // Relación de Accesos: lo que se acaba de marcar trae su mínimo; lo bloqueado se avisa
                 const live = recomputeAccessRules(true);
+                // Lo que no se pudo quitar porque lo necesitaba el acceso que se acaba de quitar (su propio mínimo) ya no lo necesita nadie: se quita en este mismo clic (y así la cadena de lo que ese mínimo necesitaba)
+                let skipped = lockedKeys;
+                for (let pass = 0; pass < 4 && skipped.length; pass += 1) {
+                    const still = skipped.filter((k) => accessRequired.has(k) || accessRequired.has(k + APP_SUFFIX));
+                    if (still.length === skipped.length) break;
+                    skipped.filter((k) => !still.includes(k)).forEach((k) => { grantSet.delete(k); if (!k.endsWith(APP_SUFFIX)) grantSet.delete(k + APP_SUFFIX); });
+                    skipped = still;
+                    recomputeAccessRules(true);
+                }
                 renderStatusTree();
-                announceAccessRules(live, lockedKeys);
+                announceAccessRules(live, skipped);
             });
             return btn;
         }

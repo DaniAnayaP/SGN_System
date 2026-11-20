@@ -294,18 +294,21 @@
             container.appendChild(box);
         }
         // Lo que no se pudo quitar por ser mínimo de un acceso habilitado: un solo aviso aunque se intenten varias llaves a la vez.
-        let lockedNames = [];
+        // lockedAttempts: las llaves que se intentó quitar y estaban bloqueadas. En el mismo clic el bloqueo puede soltarse (el acceso que las pedía se quitó junto con ellas: su propio mínimo ya no lo necesita nadie), así que
+        // render() quita en ese dibujo las que ya no están bloqueadas, y el aviso (un tick después) solo habla de las que de verdad siguen bloqueadas.
+        let lockedAttempts = new Set();
         let lockedTimer = null;
+        const isRequiredKey = (k) => !!accessEngine && (accessRequired.has(k) || accessRequired.has(String(k).replace(/#app$/, '')));
         function noteLockedKeys(keys) {
-            keys.forEach((k) => { lockedNames.push(...(accessRequired.get(k) || accessRequired.get(String(k).replace(/#app$/, '')) || [])); });
+            keys.forEach((k) => lockedAttempts.add(k));
             if (lockedTimer) return;
             lockedTimer = setTimeout(() => {
                 lockedTimer = null;
-                if (lockedNames.length) accessToast(t('admin.minLockedToast', { access: accessNamesText(lockedNames) }), 'warning');
-                lockedNames = [];
+                const names = [...lockedAttempts].filter(isRequiredKey).flatMap((k) => accessRequired.get(k) || accessRequired.get(String(k).replace(/#app$/, '')) || []);
+                lockedAttempts = new Set();
+                if (names.length) accessToast(t('admin.minLockedToast', { access: accessNamesText(names) }), 'warning');
             }, 0);
         }
-        const isRequiredKey = (k) => !!accessEngine && (accessRequired.has(k) || accessRequired.has(String(k).replace(/#app$/, '')));
         // La marca visual de un renglón: bloqueado (su llave es mínimo de un acceso habilitado) o recomendado (lo toca un acceso habilitado y todavía no está marcado).
         function decorateAccessRow(row, key) {
             if (!accessEngine || !accessEngine.hasRules || key == null || String(key).endsWith('#app')) return;
@@ -1660,6 +1663,14 @@
                     live = { added: [], addedBy: [], blocked: accessResultBlocked };
                 } else {
                     live = recomputeAccessRules();
+                    // lo que se intentó quitar y ya no está bloqueado (su acceso se quitó en este mismo clic) se quita ahora, y se vuelve a calcular (la cadena de lo que ese mínimo necesitaba)
+                    for (let pass = 0; pass < 4 && lockedAttempts.size; pass += 1) {
+                        const free = [...lockedAttempts].filter((k) => !isRequiredKey(k));
+                        if (!free.length) break;
+                        free.forEach((k) => { lockedAttempts.delete(k); stageDrop(k); });
+                        const again = recomputeAccessRules();
+                        live = { added: live.added.concat(again.added), addedBy: [...new Set([...live.addedBy, ...again.addedBy])], blocked: [...new Set([...live.blocked, ...again.blocked])] };
+                    }
                     accessResultBlocked = live.blocked;
                     accessResultVersion = dataVersion; // después de la cuenta: lo que ella misma marcó ya cuenta
                 }

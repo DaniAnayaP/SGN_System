@@ -13498,9 +13498,12 @@ function parseAccessKey(key) {
     return { sectionId, itemId: itemId || null, submenuId: submenuId || null };
 }
 // ¿Esta lista de permisos (de una sola plataforma) deja habilitado ese acceso? Lo cubre un permiso de su departamento, de su área o de su pantalla (o de lo que lo contiene); a una columna, botón o icono también lo habilita uno de sus niveles.
-function grantsEnableAccess(grants, node, platform) {
+// ownKeys (opcional): las llaves del mínimo del propio acceso; no cuentan para habilitarlo (Daniel, 2026-11-20). «Pedir alta de código» lleva su botón dentro de su misma pantalla: si el botón que entró solo bastara para habilitarla, quedaría
+// habilitada —y el botón bloqueado— para siempre y no se podría quitar del Giro, el Plan ni el cliente.
+function grantsEnableAccess(grants, node, platform, ownKeys) {
     const t = parseAccessKey(node.k);
     return grants.some((g) => {
+        if (ownKeys && ownKeys.has(`${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`)) return false;
         const isApp = typeof g.submenuId === 'string' && g.submenuId.endsWith(ACCESS_APP_SUFFIX);
         if (isApp !== (platform === ACCESS_APP_SUFFIX)) return false;
         const sub = isApp ? (g.submenuId.slice(0, -ACCESS_APP_SUFFIX.length) || null) : (g.submenuId || null);
@@ -13567,13 +13570,23 @@ function expandAccessMinimums(grants, options = {}) {
     const added = [];
     const pairs = new Map(); // access|related -> { access, related, count }
     const blocked = new Map();
+    // lo que es el mínimo del propio acceso (todas sus relaciones, por plataforma) no cuenta para habilitarlo (ver grantsEnableAccess)
+    const ownKeysCache = new Map();
+    const ownKeysOf = (access, platform) => {
+        const cacheKey = `${access}|${platform}`;
+        if (!ownKeysCache.has(cacheKey)) {
+            ownKeysCache.set(cacheKey, new Set(relations.filter((r) => r.access === access && catalog.index.has(r.related))
+                .flatMap((r) => accessMinimumTuples(r.related, platform)).map((tuple) => `${tuple.sectionId}::${tuple.itemId || ''}::${tuple.submenuId || ''}`)));
+        }
+        return ownKeysCache.get(cacheKey);
+    };
     for (let round = 0; round < 12; round += 1) {
         let changed = false;
         for (const rel of relations) {
             const accessNode = catalog.index.get(rel.access);
             if (!accessNode || !catalog.index.has(rel.related)) continue;
             for (const platform of ['', ACCESS_APP_SUFFIX]) {
-                if (!grantsEnableAccess(all, accessNode, platform)) continue;
+                if (!grantsEnableAccess(all, accessNode, platform, ownKeysOf(rel.access, platform))) continue;
                 for (const tuple of accessMinimumTuples(rel.related, platform)) {
                     if (grantsCoverTuple(all, tuple)) continue;
                     if ((options.coverGrants && grantsCoverTuple(options.coverGrants, tuple)) || (options.isCovered && options.isCovered(tuple))) continue;

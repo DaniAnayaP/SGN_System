@@ -47,6 +47,9 @@
             app: (r.app || []).map(parse),
             touches: r.touches || [],
             touchWeb: r.touchWeb || {},
+            // las llaves del mínimo del propio acceso, por plataforma: no cuentan para habilitarlo (ver enabledFor)
+            ownWeb: new Set((r.web || []).map(String)),
+            ownApp: new Set((r.app || []).map(String)),
         })).filter((r) => r.web.length || r.app.length || r.touches.length);
 
         // opciones: canAdd(llave) → false si no se puede agregar; coverKeys: llaves que ya da otro nivel (no se agregan). Regresa { added, required, touched, blocked }.
@@ -78,10 +81,31 @@
             if (!group) { group = { whole: false, itemWhole: new Set(), exact: new Set(), below: new Set() }; index.set(k, group); }
             addToGroup(group, g);
         }
-        function indexRelevant(keys) {
+        // sink (opcional): { lists, keySet } se llenan con los mismos permisos (la lista de cada plataforma y departamento y todas las llaves), para poder preguntar qué habilita un acceso SIN contar su propio mínimo.
+        function indexRelevant(keys, sink) {
             const index = new Map();
-            for (const key of keys) if (relevantSections.has(sectionOfKey(key))) addGrant(index, parseCached(key));
+            for (const key of keys) {
+                if (!relevantSections.has(sectionOfKey(key))) continue;
+                const p = parseCached(key);
+                addGrant(index, p);
+                if (sink) noteInSink(sink, p);
+            }
             return index;
+        }
+        function noteInSink(sink, p) {
+            sink.keySet.add(p.key);
+            const bucket = bucketKey(p.app, p.section);
+            if (!sink.lists.has(bucket)) sink.lists.set(bucket, []);
+            sink.lists.get(bucket).push(p);
+        }
+        // ¿Este permiso (de la misma plataforma y departamento) habilita el acceso? Lo mismo que enables de arriba, para un solo permiso.
+        function grantEnablesOne(g, access) {
+            if (!g.item) return true;
+            if (g.item !== access.item) return false;
+            if (!g.sub) return true;
+            if (!access.sub) return false;
+            if (g.sub === access.sub || access.sub.startsWith(`${g.sub}/`)) return true;
+            return g.sub.startsWith(`${access.sub}/`);
         }
         // Que alguna ruta de arriba (o la misma) esté en exact: «c1/p1/x» pregunta por c1/p1/x, c1/p1 y c1.
         function anyAbove(group, item, sub) {
@@ -107,9 +131,22 @@
             return anyAbove(group, tuple.item, tuple.sub);
         }
         function resolve(keys, options = {}) {
-            const grants = indexRelevant(keys);
+            const sink = { lists: new Map(), keySet: new Set() };
+            const grants = indexRelevant(keys, sink);
             const cover = indexRelevant(options.coverKeys || []); // lo que otro nivel ya da (el plan del cliente): cubre, pero no dispara nada
             const hasCover = cover.size > 0;
+            // ¿Está habilitado el acceso en esa plataforma? Lo habilita lo que lo cubre o lo que tiene adentro, PERO no su propio mínimo (Daniel, 2026-11-20): «Pedir alta» lleva su botón dentro de su misma pantalla, y si el botón que
+            // entró solo bastara para habilitarla, quedaría habilitada —y el botón bloqueado— para siempre y no se podría quitar. Primero la pregunta rápida (por las listas ordenadas); solo si lo habilita y ya hay algo de su propio
+            // mínimo marcado se revisan, uno por uno, los permisos que no son de ese mínimo.
+            const enabledFor = (rule, isApp) => {
+                if (!groupEnables(grants.get(bucketKey(isApp, rule.access.section)), rule.access)) return false;
+                const own = isApp ? rule.ownApp : rule.ownWeb;
+                if (!own.size) return true;
+                let ownMarked = false;
+                for (const k of own) { if (sink.keySet.has(k)) { ownMarked = true; break; } }
+                if (!ownMarked) return true;
+                return (sink.lists.get(bucketKey(isApp, rule.access.section)) || []).some((p) => !own.has(p.key) && grantEnablesOne(p, rule.access));
+            };
             const added = [];
             const addedBy = new Set();
             const blocked = new Set();
@@ -117,12 +154,13 @@
                 let changed = false;
                 rules.forEach((rule) => {
                     [['web', false], ['app', true]].forEach(([platform, isApp]) => {
-                        if (!rule[platform].length || !groupEnables(grants.get(bucketKey(isApp, rule.access.section)), rule.access)) return;
+                        if (!rule[platform].length || !enabledFor(rule, isApp)) return;
                         rule[platform].forEach((tuple) => {
                             const k = bucketKey(tuple.app, tuple.section);
                             if (groupCovers(grants.get(k), tuple) || (hasCover && groupCovers(cover.get(k), tuple))) return;
                             if (options.canAdd && !options.canAdd(tuple.key)) { blocked.add(rule.label); return; }
                             addGrant(grants, tuple);
+                            noteInSink(sink, tuple);
                             added.push(tuple.key);
                             addedBy.add(rule.label);
                             changed = true;
@@ -137,13 +175,13 @@
             const touchedKeys = new Set(); // lo recomendado, expandido a las llaves que marcaría el árbol
             rules.forEach((rule) => {
                 [['web', false], ['app', true]].forEach(([platform, isApp]) => {
-                    if (!rule[platform].length || !groupEnables(grants.get(bucketKey(isApp, rule.access.section)), rule.access)) return;
+                    if (!rule[platform].length || !enabledFor(rule, isApp)) return;
                     rule[platform].forEach((tuple) => {
                         if (!required.has(tuple.key)) required.set(tuple.key, []);
                         if (!required.get(tuple.key).includes(rule.label)) required.get(tuple.key).push(rule.label);
                     });
                 });
-                if (groupEnables(grants.get(bucketKey(false, rule.access.section)), rule.access) || groupEnables(grants.get(bucketKey(true, rule.access.section)), rule.access)) {
+                if (enabledFor(rule, false) || enabledFor(rule, true)) {
                     rule.touches.forEach((key) => {
                         if (!touched.has(key)) touched.set(key, []);
                         if (!touched.get(key).includes(rule.label)) touched.get(key).push(rule.label);
