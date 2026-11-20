@@ -16854,6 +16854,34 @@ db.exec(`
 ensureColumn('team_activities', 'plan_id', 'INTEGER');
 ensureColumn('team_activities', 'plan_item_id', 'INTEGER');
 db.exec('CREATE INDEX IF NOT EXISTS idx_team_activities_plan_item ON team_activities (plan_item_id)');
+// Pieza 6: una Periódica puede repetirse sola cada N días, semanas o meses. La repetición (team_recurrences) es de toda la serie: cada vuelta es una actividad con su recurrence_id; auto_born marca las que nacieron solas.
+// anchor = el día desde donde se cuenta; next_due = el siguiente día de esa cuenta que falta por crear; tz_offset = minutos del calendario de quien la puso (el día «de hoy» es el de esa persona); user_ids/principal = las personas con que nace cada vuelta.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS team_recurrences (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id          INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data       INTEGER NOT NULL DEFAULT 0,
+        unit               TEXT NOT NULL,
+        every              INTEGER NOT NULL DEFAULT 1,
+        anchor             TEXT NOT NULL,
+        next_due           TEXT NOT NULL,
+        tz_offset          INTEGER NOT NULL DEFAULT 0,
+        user_ids           TEXT NOT NULL DEFAULT '[]',
+        principal_user_id  INTEGER,
+        active             INTEGER NOT NULL DEFAULT 1,
+        created_by_user_id INTEGER,
+        created_by_label   TEXT NOT NULL DEFAULT '',
+        created_at         TEXT NOT NULL,
+        updated_at         TEXT NOT NULL,
+        stopped_at         TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_team_recurrences_active ON team_recurrences (active, next_due);
+`);
+ensureColumn('team_activities', 'recurrence_id', 'INTEGER');
+ensureColumn('team_activities', 'auto_born', 'INTEGER NOT NULL DEFAULT 0');
+db.exec('CREATE INDEX IF NOT EXISTS idx_team_activities_recurrence ON team_activities (recurrence_id)');
+const TEAM_REPEAT_UNITS = ['day', 'week', 'month'];
+const TEAM_REPEAT_MAX = { day: 365, week: 52, month: 24 };
 const teamNow = () => new Date().toISOString().replace('T', ' ').replace('Z', '');
 // En qué columna del tablero está una actividad, según lo que lleva cada persona: sin personas = por asignar; con responsable principal, lo que ella termina vale por todas.
 function teamActivityState(assignees, cancelled) {
@@ -16917,7 +16945,7 @@ function teamBuildCtx(clientId, userId, forTest, isAdmin, rows) {
         db.prepare(`SELECT activity_id AS activityId, user_id AS userId FROM team_activity_claimers WHERE activity_id IN (${marks})`).all(...ids).forEach((c) => { if (!claimers.has(c.activityId)) claimers.set(c.activityId, []); claimers.get(c.activityId).push(c.userId); });
         db.prepare(`SELECT * FROM team_activity_passes WHERE activity_id IN (${marks}) AND status = 'pending' ORDER BY id`).all(...ids).forEach((p) => { if (!passes.has(p.activity_id)) passes.set(p.activity_id, []); passes.get(p.activity_id).push(p); });
     }
-    return { clientId, forTest, viewer: teamViewer(clientId, userId, isAdmin), names: teamNames(clientId), sites: teamSiteMap(clientId, forTest), claimers, passes, scopes: new Map(), users: null, free: null, assignments: new Map(), planLinks: teamLoadPlanLinks(rows) };
+    return { clientId, forTest, viewer: teamViewer(clientId, userId, isAdmin), names: teamNames(clientId), sites: teamSiteMap(clientId, forTest), claimers, passes, scopes: new Map(), users: null, free: null, assignments: new Map(), planLinks: teamLoadPlanLinks(rows), recurrences: teamLoadRecurrences(rows) };
 }
 function teamCtxUsers(ctx) {
     if (!ctx.users) ctx.users = listActiveUsersBrief(ctx.clientId, ctx.forTest).map((u) => u.id);
@@ -17014,6 +17042,10 @@ function teamMapActivity(row, assigneeRows, ctx) {
         createdBy: { id: row.created_by_user_id, name: names.get(row.created_by_user_id) || row.created_by_label }, createdAt: row.created_at, updatedAt: row.updated_at, assignees, passes: pending,
     };
     out.can = teamActivityCan(row, assignees, viewer, scope, pending);
+    // la repetición (solo si sigue activa) y si esta vuelta nació sola; `waiting` = ya toca la siguiente pero esta sigue abierta
+    const rec = row.recurrence_id != null ? ctx.recurrences.get(row.recurrence_id) : null;
+    out.autoBorn = !!row.auto_born;
+    out.repeat = rec && rec.active ? { unit: rec.unit, every: rec.every, nextDue: rec.next_due, waiting: open && out.status !== 'done' && rec.next_due <= teamLocalDay(rec.tz_offset) } : null;
     const planLink = row.plan_item_id != null ? ctx.planLinks.get(row.plan_item_id) : null;
     out.plan = planLink ? { ...planLink, canOpen: teamCtxCanOpenPlan(ctx, planLink.planId) } : null;
     out.myStatus = (assignees.find((a) => a.userId === viewer.userId) || {}).status || '';
@@ -17040,6 +17072,7 @@ const teamSees = (row, assignees, viewer, scope) => viewer.isAdmin || row.create
     || (!!row.claim_scope && assignees.length < row.seats_needed && scope.has(viewer.userId));
 // La lista del tablero: lo que esta persona puede ver (sin las canceladas y sin las terminadas hace más de 90 días; el registro de la pieza 3 trae lo viejo), con los catálogos para los filtros y para crear.
 function listTeamActivities(clientId, userId, forTest, isAdmin, day) {
+    teamRunRecurrences({ clientId });
     const rows = db.prepare("SELECT * FROM team_activities WHERE client_id = ? AND is_test_data = ? AND status = 'active' ORDER BY id DESC LIMIT ?").all(clientId, forTest ? 1 : 0, TEAM_LIMITS.activities);
     const ctx = teamBuildCtx(clientId, userId, forTest, isAdmin, rows);
     const byActivity = new Map();
@@ -17500,6 +17533,124 @@ function teamLinksForPlan(planId) {
     });
     return out;
 }
+// ---- PIEZA 6: Periódicas que se repiten solas ----
+function teamLoadRecurrences(rows) {
+    const out = new Map();
+    const ids = [...new Set(rows.map((r) => r.recurrence_id).filter((id) => id != null))];
+    if (!ids.length) return out;
+    db.prepare(`SELECT * FROM team_recurrences WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids).forEach((r) => out.set(r.id, r));
+    return out;
+}
+// El día (AAAA-MM-DD) en el calendario de quien puso la repetición: tzOffset son los minutos que da Date.getTimezoneOffset() del navegador (positivo al oeste de UTC).
+const teamLocalDay = (tzOffset, nowMs) => new Date((nowMs == null ? Date.now() : nowMs) - (Number(tzOffset) || 0) * 60000).toISOString().slice(0, 10);
+// Suma n días, semanas o meses a un día. Un mes que no tiene ese día cae en el último (31 de enero + 1 mes = 28 o 29 de febrero).
+function teamDayAdd(ymd, unit, n) {
+    const [y, m, d] = ymd.split('-').map(Number);
+    if (unit === 'month') {
+        const total = y * 12 + (m - 1) + n;
+        const ny = Math.floor(total / 12);
+        const nm = total % 12;
+        const last = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
+        return `${String(ny).padStart(4, '0')}-${String(nm + 1).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+    }
+    return new Date(Date.UTC(y, m - 1, d) + n * (unit === 'week' ? 7 : 1) * 86400000).toISOString().slice(0, 10);
+}
+// El primer día de la cuenta (anchor, anchor + N, anchor + 2N…) que queda después de `after`. Siempre se cuenta desde el ancla para que los meses no se vayan corriendo.
+function teamNextGrid(anchor, unit, every, after) {
+    let k = 1;
+    let day = teamDayAdd(anchor, unit, every);
+    while (day <= after && k < 200000) { k += 1; day = teamDayAdd(anchor, unit, k * every); }
+    return day;
+}
+// Lo que viene del formulario → { unit, every } (unit '' = no se repite) o { error, field }.
+function cleanTeamRepeat(body) {
+    const b = body && typeof body === 'object' ? body : {};
+    const unit = b.repeatUnit === undefined || b.repeatUnit === null ? '' : b.repeatUnit;
+    if (unit === '') return { unit: '', every: 1 };
+    if (!TEAM_REPEAT_UNITS.includes(unit)) return { error: 'TEAM_REPEAT_INVALID', field: 'repeatUnit' };
+    const every = b.repeatEvery === undefined || b.repeatEvery === null || b.repeatEvery === '' ? 1 : Number(b.repeatEvery);
+    if (!Number.isInteger(every) || every < 1 || every > TEAM_REPEAT_MAX[unit]) return { error: 'TEAM_REPEAT_INVALID', field: 'repeatEvery' };
+    return { unit, every };
+}
+const cleanTeamTz = (body) => { const n = Number(body && body.tzOffset); return Number.isInteger(n) && n >= -840 && n <= 840 ? n : 0; };
+// Deja puesta (o cambiada) la repetición de una actividad: la serie nace de esta vuelta. Devuelve 'set' | 'changed' | 'same'. Se cuenta desde la fecha límite de la vuelta (o desde hoy) y la siguiente nunca queda hoy ni antes.
+function teamSetRecurrence(row, repeat, tz, userIds, principal, byUserId, byLabel) {
+    const now = teamNow();
+    const today = teamLocalDay(tz);
+    const current = row.recurrence_id != null ? db.prepare('SELECT * FROM team_recurrences WHERE id = ?').get(row.recurrence_id) : null;
+    if (current && current.active && current.unit === repeat.unit && current.every === repeat.every) return 'same';
+    const anchor = row.due_date || today;
+    const nextDue = teamNextGrid(anchor, repeat.unit, repeat.every, anchor > today ? anchor : today);
+    if (current) {
+        db.prepare('UPDATE team_recurrences SET unit = ?, every = ?, anchor = ?, next_due = ?, tz_offset = ?, user_ids = ?, principal_user_id = ?, active = 1, stopped_at = NULL, updated_at = ? WHERE id = ?')
+            .run(repeat.unit, repeat.every, anchor, nextDue, tz, JSON.stringify(userIds), principal, now, current.id);
+        teamEvent(row.id, null, byUserId, byLabel, current.active ? 'repeat_changed' : 'repeat_set', `${repeat.unit}:${repeat.every}`);
+        return 'changed';
+    }
+    const id = Number(db.prepare(`INSERT INTO team_recurrences (client_id, is_test_data, unit, every, anchor, next_due, tz_offset, user_ids, principal_user_id, created_by_user_id, created_by_label, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(row.client_id, row.is_test_data, repeat.unit, repeat.every, anchor, nextDue, tz, JSON.stringify(userIds), principal, row.created_by_user_id, row.created_by_label || '', now, now).lastInsertRowid);
+    db.prepare('UPDATE team_activities SET recurrence_id = ? WHERE id = ?').run(id, row.id);
+    teamEvent(row.id, null, byUserId, byLabel, 'repeat_set', `${repeat.unit}:${repeat.every}`);
+    return 'set';
+}
+function teamStopRecurrence(row, byUserId, byLabel) {
+    const current = row.recurrence_id != null ? db.prepare('SELECT * FROM team_recurrences WHERE id = ?').get(row.recurrence_id) : null;
+    if (!current || !current.active) return false;
+    const now = teamNow();
+    db.prepare('UPDATE team_recurrences SET active = 0, stopped_at = ?, updated_at = ? WHERE id = ?').run(now, now, current.id);
+    teamEvent(row.id, null, byUserId, byLabel, 'repeat_stopped', '');
+    return true;
+}
+// Crea (si toca) la vuelta siguiente de una repetición: ya llegó su día, la anterior no sigue abierta, y nunca se juntan (si pasaron varios periodos nace una sola, con fecha de hoy).
+// Nace con el mismo contenido que la última vuelta y con las personas de la repetición (por confirmar); si no tenía personas, por asignar con la misma regla de quién la toma. Devuelve el id nuevo o 0.
+function teamRecurOne(rec, nowMs) {
+    const today = teamLocalDay(rec.tz_offset, nowMs);
+    if (rec.next_due > today) return 0;
+    const all = db.prepare('SELECT * FROM team_activities WHERE recurrence_id = ? ORDER BY id DESC').all(rec.id);
+    if (!all.length) { db.prepare('UPDATE team_recurrences SET active = 0, stopped_at = ?, updated_at = ? WHERE id = ?').run(teamNow(), teamNow(), rec.id); return 0; }
+    const stillOpen = all.some((r) => {
+        if (r.status !== 'active') return false;
+        const as = db.prepare('SELECT status, is_principal AS isPrincipal FROM team_activity_assignees WHERE activity_id = ?').all(r.id);
+        return teamActivityState(as, false) !== 'done';
+    });
+    if (stillOpen) return 0;
+    const src = all[0];
+    const forTest = !!rec.is_test_data;
+    const active = new Set(listActiveUsersBrief(rec.client_id, forTest).map((u) => u.id));
+    let wanted = [];
+    try { wanted = JSON.parse(rec.user_ids) || []; } catch (err) { wanted = []; }
+    const people = wanted.filter((id) => active.has(id));
+    const principal = people.includes(rec.principal_user_id) ? rec.principal_user_id : null;
+    const claimers = db.prepare('SELECT user_id AS userId FROM team_activity_claimers WHERE activity_id = ?').all(src.id).map((c) => c.userId);
+    const now = teamNow();
+    let id = 0;
+    db.transaction(() => {
+        id = Number(db.prepare(`INSERT INTO team_activities (client_id, is_test_data, title, description, kind, urgent, realization, site_ids, area, department, due_date, seats_needed, claim_scope, recurrence_id, auto_born, created_by_user_id, created_by_label, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'periodica', ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`).run(rec.client_id, rec.is_test_data, src.title, src.description, src.urgent, src.realization, src.site_ids, src.area, src.department, today, src.seats_needed, src.claim_scope, rec.id, rec.created_by_user_id, rec.created_by_label || '', now, now).lastInsertRowid);
+        teamEvent(id, null, null, '', 'recurred', today);
+        people.forEach((uid) => {
+            db.prepare('INSERT INTO team_activity_assignees (activity_id, user_id, status, is_principal, assigned_by_user_id, assigned_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, uid, 'assigned', uid === principal ? 1 : 0, rec.created_by_user_id, now);
+            teamEvent(id, uid, null, '', 'assigned', '');
+        });
+        claimers.forEach((uid) => db.prepare('INSERT INTO team_activity_claimers (activity_id, user_id) VALUES (?, ?)').run(id, uid));
+        db.prepare('UPDATE team_recurrences SET next_due = ?, updated_at = ? WHERE id = ?').run(teamNextGrid(rec.anchor, rec.unit, rec.every, today), now, rec.id);
+    })();
+    publishTeamNotice({ recipientIds: people, event: 'recurred', activity: { id, title: src.title }, actorUserId: null, actorLabel: '' });
+    return id;
+}
+// Revisa las repeticiones activas (todas, las de una compañía o una sola) y crea las vueltas que toquen. Corre cada pocos minutos, al abrir el tablero y al cerrar una vuelta. Devuelve los ids creados.
+function teamRunRecurrences(opts) {
+    const o = opts || {};
+    const nowMs = o.nowMs == null ? Date.now() : o.nowMs;
+    const rows = o.recurrenceId != null ? db.prepare('SELECT * FROM team_recurrences WHERE id = ? AND active = 1').all(o.recurrenceId)
+        : o.clientId != null ? db.prepare('SELECT * FROM team_recurrences WHERE client_id = ? AND active = 1 AND next_due <= ?').all(o.clientId, teamLocalDay(-840, nowMs))
+            : db.prepare('SELECT * FROM team_recurrences WHERE active = 1 AND next_due <= ?').all(teamLocalDay(-840, nowMs));
+    const made = [];
+    rows.forEach((rec) => {
+        try { const id = teamRecurOne(rec, nowMs); if (id) made.push(id); } catch (err) { console.error('team recurrence failed', rec.id, err); }
+    });
+    return made;
+}
 // ¿Esta persona puede abrir el tablero de Equipo de Trabajo hoy? (lo mismo que la guarda de la pantalla)
 function teamUserHasScreen(clientId, userId) {
     const account = db.prepare('SELECT is_client_admin AS isAdmin FROM users WHERE id = ? AND client_id = ?').get(userId, clientId);
@@ -17566,6 +17717,9 @@ function createTeamActivity(clientId, userId, forTest, isAdmin, body, byLabel) {
     { const gate = teamAbsentGate(clientId, forTest, body, people.ids); if (gate) return gate; }
     let link = null;
     if (body && body.planItemId != null && body.planItemId !== '') { const chk = teamPlanLinkCheck(clientId, userId, body.planItemId, null); if (chk.error) return chk; link = chk; }
+    const repeat = cleanTeamRepeat(body);
+    if (repeat.error) return repeat;
+    if (repeat.unit && fields.value.kind !== 'periodica') return { error: 'TEAM_REPEAT_KIND', field: 'repeatUnit' };
     const v = fields.value;
     const now = teamNow();
     let id = 0;
@@ -17579,6 +17733,7 @@ function createTeamActivity(clientId, userId, forTest, isAdmin, body, byLabel) {
             teamEvent(id, uid, userId, byLabel, 'assigned', '');
         });
         claim.userIds.forEach((uid) => db.prepare('INSERT INTO team_activity_claimers (activity_id, user_id) VALUES (?, ?)').run(id, uid));
+        if (repeat.unit) teamSetRecurrence(db.prepare('SELECT * FROM team_activities WHERE id = ?').get(id), repeat, cleanTeamTz(body), people.ids, principal, userId, byLabel);
     })();
     publishTeamNotice({ recipientIds: people.ids, event: 'assigned', activity: { id, title: v.title }, actorUserId: userId, actorLabel: byLabel });
     return { activity: teamDetail(clientId, userId, forTest, isAdmin, teamActivityRowFor(clientId, forTest, id), true) };
@@ -17610,6 +17765,7 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
     if (row.status !== 'active') return { error: 'TEAM_CANCELLED' };
     const done = (extra) => {
         teamSyncPlanItem(clientId, row.id, byLabel);
+        if (row.recurrence_id != null) teamRunRecurrences({ recurrenceId: row.recurrence_id });
         return { activity: teamDetail(clientId, userId, forTest, isAdmin, teamActivityRowFor(clientId, forTest, row.id), true), ...(extra || {}) };
     };
     const names = teamNames(clientId);
@@ -17642,15 +17798,28 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
                 fields.value.plan_item_id = planChange.itemId;
             }
         }
+        // repetición (solo una Periódica): repeatUnit día | semana | mes la pone o la cambia; vacío la deja de repetir. Si cambia el tipo a otro que no sea Periódica, deja de repetirse.
+        let repeatChange = null;
+        const kindAfter = fields.value.kind || row.kind;
+        if (Object.prototype.hasOwnProperty.call(b, 'repeatUnit')) {
+            const repeat = cleanTeamRepeat(b);
+            if (repeat.error) return repeat;
+            if (repeat.unit && kindAfter !== 'periodica') return { error: 'TEAM_REPEAT_KIND', field: 'repeatUnit' };
+            repeatChange = { repeat, tz: cleanTeamTz(b) };
+        } else if (fields.value.kind && fields.value.kind !== 'periodica' && row.recurrence_id != null) repeatChange = { repeat: { unit: '', every: 1 }, tz: 0 };
         const keys = Object.keys(fields.value);
-        if (!keys.length) return done();
+        if (!keys.length && !repeatChange) return done();
         db.transaction(() => {
-            db.prepare(`UPDATE team_activities SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`).run(...keys.map((k) => fields.value[k]), now, row.id);
+            db.prepare(`UPDATE team_activities SET ${[...keys.map((k) => `${k} = ?`), 'updated_at = ?'].join(', ')} WHERE id = ?`).run(...keys.map((k) => fields.value[k]), now, row.id);
             if (claim) {
                 db.prepare('DELETE FROM team_activity_claimers WHERE activity_id = ?').run(row.id);
                 claim.userIds.forEach((uid) => db.prepare('INSERT INTO team_activity_claimers (activity_id, user_id) VALUES (?, ?)').run(row.id, uid));
             }
-            teamEvent(row.id, null, userId, byLabel, 'edited', keys.join(', '));
+            if (keys.length) teamEvent(row.id, null, userId, byLabel, 'edited', keys.join(', '));
+            if (repeatChange) {
+                if (!repeatChange.repeat.unit) teamStopRecurrence(row, userId, byLabel);
+                else teamSetRecurrence({ ...row, due_date: Object.prototype.hasOwnProperty.call(fields.value, 'due_date') ? fields.value.due_date : row.due_date }, repeatChange.repeat, repeatChange.tz, detail.assignees.map((a) => a.userId), (detail.assignees.find((a) => a.isPrincipal) || {}).userId || null, userId, byLabel);
+            }
             if (planChange) teamEvent(row.id, null, userId, byLabel, planChange.itemId ? 'plan_linked' : 'plan_unlinked', planChange.title);
         })();
         // la fecha límite que se cambió la sigue el fin del renglón ligado
@@ -21586,7 +21755,7 @@ module.exports = {
     getUserGrants,
     setUserGrants,
     getUserGrantChangeLog,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, teamTimeline, teamLog, teamLinkableItems, teamPlanItemInfo, setTeamWorkday, setTeamNow, setUserPhoto, getUserPhoto, getUserPhotoVer, deleteUserPhoto, TEAM_PHOTO_MAX_BYTES, createTeamActivity, teamActivityAct, TEAM_LIMITS, teamActivityState, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, teamRunRecurrences, getTeamActivity, teamTimeline, teamLog, teamLinkableItems, teamPlanItemInfo, setTeamWorkday, setTeamNow, setUserPhoto, getUserPhoto, getUserPhotoVer, deleteUserPhoto, TEAM_PHOTO_MAX_BYTES, createTeamActivity, teamActivityAct, TEAM_LIMITS, teamActivityState, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
     MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices,
     THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,

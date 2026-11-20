@@ -74,6 +74,7 @@ const TABLES = {
     team_activity_claimers: { action: WIPE, group: 'captures' }, // pieza 2: las personas elegidas para tomar una actividad por asignar
     team_activity_passes: { action: WIPE, group: 'captures' }, // y los pases de una persona a otra (con su aprobación)
     team_workdays: { action: WIPE, group: 'captures' }, // pieza 4: dónde trabajó cada persona cada día
+    team_recurrences: { action: WIPE, group: 'captures' }, // pieza 6: las periódicas que se repiten solas (cada cuánto, desde cuándo y con quién)
     user_photos: { action: WIPE, group: 'clientUsers' }, // la foto de cada usuario (se va con sus usuarios)
     thread_comments: { action: WIPE, group: 'captures' }, // Hilos de comentarios genéricos (renglones y planes de trabajo, y los que vengan): inmutables, solo se van con la compañía (2b)
     thread_comment_mentions: { action: WIPE, group: 'captures' }, // a quién menciona cada comentario

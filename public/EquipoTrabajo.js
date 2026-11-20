@@ -68,6 +68,10 @@ const todayYmd = () => { const d = new Date(); return `${d.getFullYear()}-${pad2
 const deptName = (key) => { const d = data.departments.find((x) => x.key === key); return d ? (d.labelKey ? Dashboard.t(d.labelKey) : d.key) : ''; };
 const kindLabel = (k) => t(`main.twKind_${k}`);
 const realLabel = (r) => t(`main.twReal_${r}`);
+// Periódicas que se repiten solas: «Cada día», «Cada 2 semanas»…
+const REPEAT_UNITS = ['day', 'week', 'month'];
+const REPEAT_MAX = { day: 365, week: 52, month: 24 };
+const repeatText = (unit, every) => t(`main.twRep_${unit}_${Number(every) === 1 ? '1' : 'n'}`, { n: every });
 const fold = (text) => String(text == null ? '' : text).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 // ---- filtros (todos en el navegador: la lista ya trae lo que esta persona puede ver) --------------------------------------------------------------------------------
@@ -165,12 +169,13 @@ function card(a) {
     const takers = a.claim && (a.can.edit || a.can.assign) ? `<div class="tw-takers">${esc(a.claim.freeCount ? t('main.twFreeCan', { names: a.claim.freeNames.join(', ') + (a.claim.freeCount > a.claim.freeNames.length ? ` +${a.claim.freeCount - a.claim.freeNames.length}` : '') }) : t('main.twFreeNone'))}</div>` : '';
     const waiting = a.passes.map((p) => `<div class="tw-pass">${esc(t('main.twPassPending', { to: p.toNames.join(', '), name: p.approverName }))}</div>`).join('');
     const planChip = a.plan ? `<div class="tw-plan" title="${esc(a.plan.path)}"><i class="bx bx-link" aria-hidden="true"></i><span>${esc(`${a.plan.planTitle} › ${a.plan.itemTitle}`)}</span></div>` : '';
+    const repChip = a.repeat ? `<div class="tw-rep${a.repeat.waiting ? ' tw-rep-wait' : ''}"><i class="bx bx-refresh" aria-hidden="true"></i><span>${esc(repeatText(a.repeat.unit, a.repeat.every))}${a.repeat.waiting ? ` · ${esc(t('main.twRepWaiting'))}` : ''}</span></div>` : '';
     const mineBadge = a.myStatus ? `<span class="tw-me">${esc(t('main.twMine'))}</span>` : '';
     return `<article class="tw-card tw-k-${a.kind}" data-tw="open" data-id="${a.id}" tabindex="0" aria-label="${esc(a.title)}">
         <div class="tw-card-top"><span class="tw-kind">${esc(kindLabel(a.kind))}</span>${a.urgent ? `<span class="tw-urg">⚡ ${esc(t('main.twUrgentTag'))}</span>` : ''}${mineBadge}${due}</div>
         <b class="tw-card-title">${esc(a.title)}</b>
         <div class="tw-card-who">${personStack(a)}<span><span class="tw-names">${esc(names)}</span>${sub ? `<small>${esc(sub)}</small>` : ''}</span></div>
-        ${planChip}${per}${seats}${takers}${waiting}${cardActions(a)}</article>`;
+        ${planChip}${repChip}${per}${seats}${takers}${waiting}${cardActions(a)}</article>`;
 }
 function lanes(list) {
     return `<div class="tw-lanes" data-help-key="twLanes">${LANES.map((s) => {
@@ -269,6 +274,7 @@ function activityForm(existing, prefill) {
         <div class="tw-two"><div class="admin-field"><label for="tw-dept">${esc(t('main.twDept'))}</label><select id="tw-dept"><option value="">—</option>${data.departments.map((d) => `<option value="${esc(d.key)}"${a.department === d.key ? ' selected' : ''}>${esc(deptName(d.key))}</option>`).join('')}</select></div>
             <div class="admin-field"><label for="tw-area">${esc(t('main.twArea'))}</label><input id="tw-area" type="text" maxlength="60" list="tw-areas" value="${esc(a.area)}" autocomplete="off"><datalist id="tw-areas">${areas.map((x) => `<option value="${esc(x)}">`).join('')}</datalist></div></div>
         <div class="admin-field"><label for="tw-due">${esc(t('main.twF_due'))}</label><input id="tw-due" type="date" value="${esc(a.dueDate)}"></div>
+        <div class="admin-field" data-help-key="twRepeat"><label for="tw-repeat-every">${esc(t('main.twF_repeat'))}</label><div class="tw-repeat-row"><input id="tw-repeat-every" type="number" min="1" max="${a.repeat ? REPEAT_MAX[a.repeat.unit] : 365}" value="${a.repeat ? a.repeat.every : 1}"><select id="tw-repeat-unit" aria-label="${esc(t('main.twF_repeat'))}"><option value="">${esc(t('main.twRepNone'))}</option>${REPEAT_UNITS.map((u) => `<option value="${u}"${a.repeat && a.repeat.unit === u ? ' selected' : ''}>${esc(t(`main.twRepUnit_${u}`))}</option>`).join('')}</select></div></div>
         <div class="admin-field"><label for="tw-desc">${esc(t('main.twF_description'))}</label><textarea id="tw-desc" rows="2" maxlength="1000">${esc(a.description)}</textarea></div>
         <div class="admin-field" data-help-key="twPlanLink"><label for="tw-plan">${esc(t('main.twPlanLink'))}</label><select id="tw-plan"><option value="">${esc(t('main.twPlanNone'))}</option>${a.plan ? `<option value="${a.plan.itemId}" selected>${esc(a.plan.path)}</option>` : ''}</select></div>
         ${existing ? '' : `<fieldset class="tw-set"><legend>${esc(t('main.twF_who'))}</legend><div class="tw-opts">${radio('tw-who', 'now', t('main.twWho_now'), true)}${radio('tw-who', 'later', t('main.twWho_later'), false)}</div>
@@ -306,7 +312,20 @@ function activityForm(existing, prefill) {
         if (!ov.querySelector('#tw-title').value.trim()) ov.querySelector('#tw-title').value = o.dataset.title;
         if (!ov.querySelector('#tw-due').value && o.dataset.end) ov.querySelector('#tw-due').value = o.dataset.end;
     });
+    // «Se repite cada» solo vale para una Periódica; el número solo cuando hay unidad, y su tope cambia con la unidad
+    const syncRepeat = () => {
+        const per = (ov.querySelector('input[name="tw-kind"]:checked') || {}).value === 'periodica';
+        const unit = ov.querySelector('#tw-repeat-unit');
+        const every = ov.querySelector('#tw-repeat-every');
+        if (!per) unit.value = '';
+        unit.disabled = !per;
+        every.disabled = !per || !unit.value;
+        every.max = String(REPEAT_MAX[unit.value] || 365);
+        if (Number(every.value) > Number(every.max)) every.value = every.max;
+    };
+    syncRepeat();
     ov.addEventListener('change', (event) => {
+        if (event.target.name === 'tw-kind' || event.target.id === 'tw-repeat-unit') syncRepeat();
         if (event.target.name === 'tw-who') { const now = event.target.value === 'now'; ov.querySelector('#tw-who-now').hidden = !now; ov.querySelector('#tw-who-later').hidden = now; }
         if (event.target.id === 'tw-claim') { ov.querySelector('#tw-claim-chosen').hidden = event.target.value !== 'chosen'; ov.querySelector('#tw-seats-box').hidden = !event.target.value; }
     });
@@ -320,6 +339,8 @@ function activityForm(existing, prefill) {
         };
         const seats = ov.querySelector('#tw-seats');
         if (seats) body.seatsNeeded = Number(seats.value) || 1;
+        // la repetición: al crear solo se manda si se eligió; al cambiar, también para dejar de repetir; y el calendario de quien la pone (para el «hoy» de cada vuelta)
+        { const unit = ov.querySelector('#tw-repeat-unit').value; if (existing ? (existing.repeat || unit) : unit) { body.repeatUnit = unit; if (unit) body.repeatEvery = Number(ov.querySelector('#tw-repeat-every').value) || 1; } body.tzOffset = new Date().getTimezoneOffset(); }
         const claim = ov.querySelector('#tw-claim');
         const wantsClaim = existing || (ov.querySelector('input[name="tw-who"]:checked') || {}).value === 'later';
         if (claim && wantsClaim) { body.claimScope = claim.value; if (claim.value === 'chosen') body.claimUserIds = checkedPeople(ov, 'tw-c'); }
@@ -347,6 +368,7 @@ function activityForm(existing, prefill) {
 
 // el detalle de una actividad con lo que lleva cada persona y su línea de pasos
 function eventText(e) {
+    if (/^repeat_/.test(e.event) && String(e.detail || '').includes(':')) { const [unit, every] = e.detail.split(':'); return t(`main.twEv_${e.event}`, { rep: repeatText(unit, Number(every)).toLowerCase() }); }
     const who = e.userName || '';
     return t(`main.twEv_${e.event}`, { name: who, to: e.pass ? e.pass.toNames.join(', ') : '' });
 }
@@ -360,15 +382,16 @@ async function openDetail(id) {
     const actions = [c.claim && btn('claim', ''), c.confirm && btn('confirm', ''), c.start && btn('start', c.confirm ? ' btn-secondary' : ''), c.pause && btn('pause'), c.resume && btn('resume', ''), c.submit && btn('submit', ''), c.validate && btn('validate', ''), c.returnIt && btn('return'), c.pass && btn('pass'),
         c.edit && btn('edit'), c.assign && btn('assign'), c.cancel && btn('cancel')].filter(Boolean).join('');
     const rows = a.assignees.map((x) => `<li class="tw-asg tw-ps-${x.status}">${avatar(x.userId, x.name, x.photoVer, x.isMine || x.isMe ? '' : 'tw-av-out')}<div><b>${esc(x.name)}${x.isPrincipal ? ` <em>${esc(t('main.twPrincipal'))}</em>` : ''}</b><small>${esc(t(`main.twPs_${x.status}`))}${x.status === 'paused' && x.pauseReason ? ` · ${esc(x.pauseReason)}` : ''}</small></div>${c.unassign && ['assigned', 'confirmed'].includes(x.status) ? `<button type="button" class="admin-icon-btn" data-tw="unassign" data-id="${a.id}" data-user="${x.userId}" aria-label="${esc(t('main.twAct_unassign'))}" title="${esc(t('main.twAct_unassign'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</li>`).join('');
-    const events = a.events.map((e) => `<li class="tw-ev tw-ev-${e.event}"><span class="tw-ev-dot" aria-hidden="true"></span><div><b>${esc(eventText(e))}</b><small>${esc(e.actorName)} · ${esc(whenText(e.createdAt))}</small>${e.detail && ['paused', 'returned', 'cancelled', 'pass_requested', 'passed', 'pass_approved', 'pass_rejected', 'pass_cancelled', 'plan_linked'].includes(e.event) ? `<span class="tw-ev-note">${esc(e.detail)}</span>` : ''}</div></li>`).join('');
+    const events = a.events.map((e) => `<li class="tw-ev tw-ev-${e.event}"><span class="tw-ev-dot" aria-hidden="true"></span><div><b>${esc(eventText(e))}</b><small>${esc(e.actorName || t('main.twAuto'))} · ${esc(whenText(e.createdAt))}</small>${e.detail && ['paused', 'returned', 'cancelled', 'pass_requested', 'passed', 'pass_approved', 'pass_rejected', 'pass_cancelled', 'plan_linked'].includes(e.event) ? `<span class="tw-ev-note">${esc(e.detail)}</span>` : ''}</div></li>`).join('');
     const passes = a.passes.map((p) => passCard(p, a, false)).join('');
     const claimLine = a.claimScope && a.seatsOpen > 0 && a.status !== 'done' ? [t('main.twClaimLine', { who: t(`main.twClaim_${a.claimScope}`), n: a.seatsOpen }), a.claim && (c.edit || c.assign) ? (a.claim.freeCount ? t('main.twFreeCan', { names: a.claim.freeNames.join(', ') + (a.claim.freeCount > a.claim.freeNames.length ? ` +${a.claim.freeCount - a.claim.freeNames.length}` : '') }) : t('main.twFreeNone')) : ''].filter(Boolean).join(' · ') : '';
     const planLine = a.plan ? `<p class="tw-meta tw-meta-plan"><i class="bx bx-link" aria-hidden="true"></i> ${a.plan.canOpen ? `<a href="PlanesTrabajo.html#plan=${a.plan.planId}&item=${a.plan.itemId}">${esc(a.plan.path)}</a>` : esc(a.plan.path)}</p>` : '';
+    const repLine = a.repeat ? `<p class="tw-meta tw-meta-rep"><i class="bx bx-refresh" aria-hidden="true"></i> ${esc([repeatText(a.repeat.unit, a.repeat.every), t('main.twRepNext', { date: dayText(a.repeat.nextDue) }), a.repeat.waiting ? t('main.twRepWaiting') : ''].filter(Boolean).join(' · '))}</p>` : '';
     const meta = [realLabel(a.realization), a.sites.map((s) => s.name).join(', '), deptName(a.department), a.area, a.dueDate ? t('main.twDue', { date: dayText(a.dueDate) }) : ''].filter(Boolean);
     const ov = openModal(`<div class="tw-detail-head"><h3 id="tw-d-title">${esc(a.title)}</h3><button type="button" class="admin-icon-btn" data-tw-m="cancel" aria-label="${esc(t('main.twClose'))}" title="${esc(t('main.twClose'))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>
         <div class="tw-chips"><span class="tw-kind tw-k-${a.kind}">${esc(kindLabel(a.kind))}</span>${a.urgent ? `<span class="tw-urg">⚡ ${esc(t('main.twUrgentTag'))}</span>` : ''}<span class="tw-state tw-state-${a.status}">${esc(t(`main.twLane_${a.status}`))}</span></div>
-        <p class="tw-meta">${esc(meta.join(' · '))}</p>${planLine}${claimLine ? `<p class="tw-meta tw-meta-claim">${esc(claimLine)}</p>` : ''}${a.description ? `<p class="tw-desc">${esc(a.description)}</p>` : ''}
-        <p class="tw-created">${esc(t('main.twD_created', { name: a.createdBy.name, date: whenText(a.createdAt) }))}</p>
+        <p class="tw-meta">${esc(meta.join(' · '))}</p>${planLine}${repLine}${claimLine ? `<p class="tw-meta tw-meta-claim">${esc(claimLine)}</p>` : ''}${a.description ? `<p class="tw-desc">${esc(a.description)}</p>` : ''}
+        <p class="tw-created">${esc(t(a.autoBorn ? 'main.twD_recurred' : 'main.twD_created', { name: a.createdBy.name, date: whenText(a.createdAt) }))}</p>
         <h4>${esc(t('main.twD_assignees'))}</h4>${rows ? `<ul class="tw-asgs">${rows}</ul>` : `<p class="tw-none">${esc(t('main.twNoPeople'))} · ${esc(t('main.twSeats', { n: a.seatsNeeded }))}</p>`}
         ${passes ? `<h4>${esc(t('main.twPasses'))}</h4><div class="tw-pass-list">${passes}</div>` : ''}
         ${actions ? `<div class="tw-detail-act">${actions}</div>` : ''}${fieldErr('tw-d-error')}
