@@ -2434,3 +2434,31 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .wpapp-detail{ gap: 0.5rem; }
 .wpapp-detail .wpapp-acts{ flex-direction: row; }
 .wpapp-note{ margin: 0; font-size: 0.78rem; color: var(--home-text-secondary); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* ---- Administración de Equipo de Trabajo (App): se apoya en los estilos wpapp-* de Planes de trabajo ---- */
+.twapp-card{ grid-template-columns: auto minmax(0, 1fr); }
+.twapp-card .twapp-acts{ grid-column: 1 / -1; }
+.twapp-dot-paused{ color: #d98a1f; }
+.twapp-dot-review{ color: #2a6db3; }
+.twapp-dot-done{ color: #2e9d5d; }
+.twapp-dot-in_progress{ color: #d98a1f; }
+.twapp-dot-confirmed{ color: #2a6db3; }
+.twapp-acts{ display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.twapp-btn{ font-family: inherit; font-size: 0.78rem; font-weight: 700; padding: 0.5rem 0.95rem; border-radius: 1rem; border: 1px solid var(--home-border); background: var(--home-surface-2); color: var(--home-text-primary); cursor: pointer; }
+.twapp-btn.go{ background: var(--home-accent-strong-1); color: var(--home-on-accent); border-color: transparent; }
+.twapp-btn:active{ transform: scale(0.97); }
+.twapp-btn:disabled{ opacity: 0.5; }
+.twapp-today{ flex-direction: row; align-items: center; justify-content: space-between; gap: 0.8rem; }
+.twapp-today-text{ display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.twapp-today-text small{ font-size: 0.64rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--home-text-muted); }
+.twapp-today-text b{ font-size: 0.9rem; overflow-wrap: anywhere; }
+.twapp-pass{ gap: 0.35rem; }
+.twapp-sheet-actions{ display: flex; gap: 0.6rem; margin-top: 0.8rem; }
+.twapp-sheet-actions > *{ flex: 1; }
+.twapp-error{ margin: 0.3rem 0 0; font-size: 0.76rem; color: #c0392b; }
+.twapp-wrap{ flex-wrap: wrap; overflow: visible; }
+.twapp-events{ list-style: none; margin: 0 0 1rem; padding: 0 0 0 0.9rem; border-left: 2px solid var(--home-border); display: flex; flex-direction: column; gap: 0.7rem; }
+.twapp-ev{ display: flex; flex-direction: column; gap: 0.1rem; position: relative; }
+.twapp-ev::before{ content: ''; position: absolute; left: -1.3rem; top: 0.3rem; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--home-accent); }
+.twapp-ev b{ font-size: 0.8rem; }
+.twapp-ev small{ font-size: 0.68rem; color: var(--home-text-muted); }
+.twapp-ev-note{ font-size: 0.72rem; color: var(--home-text-secondary); overflow-wrap: anywhere; }

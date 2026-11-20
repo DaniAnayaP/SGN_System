@@ -366,6 +366,8 @@ const TOP_BAR_MENU_ITEMS = [
     { moduleKey: 'btn-notificaciones', elementId: 'home-menu-notifications', check: () => hasMainButtonPermission('btn-notificaciones') },
     // Planes de trabajo (después de Notificaciones, igual que el icono de la barra de arriba de la Web): no es un módulo contratado, solo la hoja del árbol; las cuentas de SaaS no tienen planes
     { moduleKey: 'planes-trabajo', elementId: 'home-menu-work-plans', noContract: true, check: () => hasMainButtonPermission('planes-trabajo') && !!(sessionUser && sessionUser.clientId) },
+    // Administración de Equipo de Trabajo (después de Planes, igual que en la Web): tampoco es un módulo contratado, solo la hoja del árbol; las cuentas de SaaS no la tienen
+    { moduleKey: 'equipo-trabajo', elementId: 'home-menu-team-work', noContract: true, check: () => hasMainButtonPermission('equipo-trabajo') && !!(sessionUser && sessionUser.clientId) },
     { moduleKey: 'btn-marcadores', elementId: 'home-menu-bookmarks', check: () => hasMainButtonPermission('btn-marcadores') },
     { moduleKey: 'btn-configuracion', elementId: 'home-menu-settings', check: hasSettingsAccess },
     { moduleKey: 'btn-datos-usuario', elementId: 'home-menu-user-info', check: () => hasMainButtonPermission('btn-datos-usuario') },
@@ -1414,6 +1416,47 @@ function renderNotifPendienteItem(item) {
     return el;
 }
 
+// Equipo de Trabajo (kind 'team-activity', ver publishTeamNotice en db.js): lo que le toca saber a cada persona de una actividad (asignada, tomada, por validar, pase por aprobar, nueva vuelta que se repite…). Toca el aviso para abrir la actividad (solo a quien tiene la pantalla).
+function renderNotifTeamItem(item) {
+    const el = document.createElement('div');
+    el.className = 'notif-item';
+    const tag = document.createElement('div');
+    tag.className = 'notif-item-desc';
+    tag.style.fontWeight = '700';
+    tag.textContent = t(`main.noticeTeam_${item.event}`);
+    const meta = document.createElement('div');
+    meta.className = 'notif-item-meta';
+    meta.textContent = `${item.label || ''} · ${formatNotificationDate(item.createdAt)}`;
+    const desc = document.createElement('div');
+    desc.className = 'notif-item-desc';
+    desc.textContent = [item.names, item.note].filter(Boolean).join(' · ') || '—';
+    el.append(tag, meta, desc);
+    if (item.actorLabel) {
+        const by = document.createElement('div');
+        by.className = 'notif-item-meta';
+        by.textContent = t('main.noticeChangedBy', { name: item.actorLabel });
+        el.append(by);
+    }
+    if (item.activityId && hasMainButtonPermission('equipo-trabajo') && sessionUser && sessionUser.clientId) {
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', () => { window.location.href = `AppEquipoTrabajo.html#actividad-${item.activityId}`; });
+    }
+    return el;
+}
+// Cualquier otro aviso del árbol que la App todavía no sabe dibujar (no trae tabla ni campo): una fila sencilla en vez de romper toda la lista.
+function renderNotifGenericItem(item) {
+    const el = document.createElement('div');
+    el.className = 'notif-item';
+    const tag = document.createElement('div');
+    tag.className = 'notif-item-desc';
+    tag.textContent = t('main.noticeSent');
+    const meta = document.createElement('div');
+    meta.className = 'notif-item-meta';
+    meta.textContent = formatNotificationDate(item.createdAt || item.created_at);
+    el.append(tag, meta);
+    return el;
+}
+
 function renderNotifTab(sheet, tabKey) {
     sheet.querySelectorAll('.notif-tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
     sheet.querySelector('.notif-active-label').textContent = t(`main.notificationsTab_${tabKey}`);
@@ -1428,6 +1471,8 @@ function renderNotifTab(sheet, tabKey) {
     } else {
         items.forEach((item) => {
             if (item.kind === 'catalog-request') list.appendChild(renderNotifCatalogRequestItem(item, tabKey === 'avisos'));
+            else if (item.kind === 'team-activity') list.appendChild(renderNotifTeamItem(item));
+            else if (item.kind && !item.table_key && tabKey === 'avisos') list.appendChild(renderNotifGenericItem(item));
             else if (tabKey === 'alertas') list.appendChild(renderNotifAlertItem(item));
             else if (tabKey === 'avisos') list.appendChild(renderNotifRequestItem(item, true));
             else if (tabKey === 'pendientes') list.appendChild(renderNotifPendienteItem(item));
@@ -1496,6 +1541,10 @@ document.getElementById('home-menu-notifications').addEventListener('click', asy
 document.getElementById('home-menu-work-plans').addEventListener('click', () => {
     closeHamburgerMenu();
     window.location.href = 'AppPlanesTrabajo.html';
+});
+document.getElementById('home-menu-team-work').addEventListener('click', () => {
+    closeHamburgerMenu();
+    window.location.href = 'AppEquipoTrabajo.html';
 });
 
 // --- Mensajes (full-screen, honest empty state — no message backend yet) --
