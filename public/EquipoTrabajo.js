@@ -26,7 +26,7 @@ const LOG_PERIODS = ['month', 'prev', '30d', '90d', 'year', 'all', 'custom'];
 const VIEW_KEY = 'sgn.teamWork.view';
 const LOG_PAGE = 300;
 const FILTERS_KEY = 'sgn.teamWork.filters';
-const DEFAULT_FILTERS = { q: '', person: 'all', kind: 'all', real: 'all', site: 'all', dept: 'all', area: 'all', urgent: false };
+const DEFAULT_FILTERS = { q: '', person: 'all', kind: 'all', real: 'all', site: 'all', dept: 'all', area: 'all', plan: 'all', urgent: false };
 let data = { activities: [], people: [], sites: [], departments: [], me: { id: 0, name: '', isAdmin: false, hasTeam: false } };
 let filters = { ...DEFAULT_FILTERS };
 try { const saved = JSON.parse(localStorage.getItem(FILTERS_KEY) || 'null'); if (saved && typeof saved === 'object') filters = { ...DEFAULT_FILTERS, ...saved, q: '' }; } catch (err) { /* sin almacenamiento: los filtros empiezan en «todos» */ }
@@ -78,6 +78,7 @@ function matches(a) {
     if (filters.dept !== 'all' && a.department !== filters.dept) return false;
     if (filters.area !== 'all' && a.area !== filters.area) return false;
     if (filters.urgent && !a.urgent) return false;
+    if (filters.plan !== 'all') { const pid = a.plan ? String(a.plan.planId) : ''; if (filters.plan === 'none' ? !!a.plan : pid !== String(filters.plan)) return false; }
     const p = filters.person;
     if (p === 'me' && !a.assignees.some((x) => x.isMe)) return false;
     if (p === 'team' && !a.assignees.some((x) => x.isMine)) return false;
@@ -99,6 +100,9 @@ function filterBar() {
     const people = viewPeople();
     const personOpts = [['me', t('main.twPersonMe')], ['team', t('main.twPersonTeam')], ['outside', t('main.twPersonOutside')], ...people.map((p) => [String(p.id), p.name])];
     const areas = [...new Set(viewItems().map((a) => a.area).filter(Boolean))].sort((x, y) => x.localeCompare(y, locale()));
+    const planMap = new Map();
+    viewItems().forEach((a) => { if (a.plan) planMap.set(String(a.plan.planId), a.plan.planTitle); });
+    const planOpts = [['none', t('main.twPlanNone')], ...[...planMap.entries()].sort((x, y) => x[1].localeCompare(y[1], locale()))];
     const field = (id, label, control, help) => `<label class="tw-flt" for="${id}"${help ? ` data-help-key="${help}"` : ''}><span>${esc(label)}</span>${control}</label>`;
     return `<div class="tw-filters" role="search" aria-label="${esc(t('main.twFilters'))}" data-help-key="twFilters">
         ${field('tw-f-q', t('main.twFilterSearch'), `<input id="tw-f-q" type="search" value="${esc(filters.q)}" autocomplete="off">`)}
@@ -108,6 +112,7 @@ function filterBar() {
         ${field('tw-f-site', t('main.twSite'), `<select id="tw-f-site">${options(data.sites.map((s) => [String(s.id), s.name]), filters.site, t('main.twSiteAll'))}</select>`)}
         ${field('tw-f-dept', t('main.twDept'), `<select id="tw-f-dept">${options(data.departments.map((d) => [d.key, deptName(d.key)]), filters.dept, t('main.twDeptAll'))}</select>`)}
         ${field('tw-f-area', t('main.twArea'), `<select id="tw-f-area">${options(areas.map((a) => [a, a]), filters.area, t('main.twAreaAll'))}</select>`)}
+        ${field('tw-f-plan', t('main.twPlan'), `<select id="tw-f-plan">${options(planOpts, filters.plan, t('main.twPlanAll'))}</select>`)}
         <label class="tw-flt tw-flt-check" for="tw-f-urgent"><input id="tw-f-urgent" type="checkbox"${filters.urgent ? ' checked' : ''}><span>${esc(t('main.twUrgent'))}</span></label>
         <button type="button" class="btn btn-secondary tw-small" data-tw="clear">${esc(t('main.twClear'))}</button></div>`;
 }
@@ -159,12 +164,13 @@ function card(a) {
     const seats = a.seatsOpen > 0 && (a.status === 'unassigned' || a.claimScope) ? `<div class="tw-seats">${esc(t('main.twSeatsOpen', { n: a.seatsOpen }))}</div>` : '';
     const takers = a.claim && (a.can.edit || a.can.assign) ? `<div class="tw-takers">${esc(a.claim.freeCount ? t('main.twFreeCan', { names: a.claim.freeNames.join(', ') + (a.claim.freeCount > a.claim.freeNames.length ? ` +${a.claim.freeCount - a.claim.freeNames.length}` : '') }) : t('main.twFreeNone'))}</div>` : '';
     const waiting = a.passes.map((p) => `<div class="tw-pass">${esc(t('main.twPassPending', { to: p.toNames.join(', '), name: p.approverName }))}</div>`).join('');
+    const planChip = a.plan ? `<div class="tw-plan" title="${esc(a.plan.path)}"><i class="bx bx-link" aria-hidden="true"></i><span>${esc(`${a.plan.planTitle} › ${a.plan.itemTitle}`)}</span></div>` : '';
     const mineBadge = a.myStatus ? `<span class="tw-me">${esc(t('main.twMine'))}</span>` : '';
     return `<article class="tw-card tw-k-${a.kind}" data-tw="open" data-id="${a.id}" tabindex="0" aria-label="${esc(a.title)}">
         <div class="tw-card-top"><span class="tw-kind">${esc(kindLabel(a.kind))}</span>${a.urgent ? `<span class="tw-urg">⚡ ${esc(t('main.twUrgentTag'))}</span>` : ''}${mineBadge}${due}</div>
         <b class="tw-card-title">${esc(a.title)}</b>
         <div class="tw-card-who">${personStack(a)}<span><span class="tw-names">${esc(names)}</span>${sub ? `<small>${esc(sub)}</small>` : ''}</span></div>
-        ${per}${seats}${takers}${waiting}${cardActions(a)}</article>`;
+        ${planChip}${per}${seats}${takers}${waiting}${cardActions(a)}</article>`;
 }
 function lanes(list) {
     return `<div class="tw-lanes" data-help-key="twLanes">${LANES.map((s) => {
@@ -249,8 +255,8 @@ function claimFields(a, withNone) {
 }
 
 // crear o cambiar una actividad
-function activityForm(existing) {
-    const a = existing || { title: '', description: '', kind: 'eventual', urgent: false, realization: 'presencial', sites: [], department: '', area: '', dueDate: '', seatsNeeded: 1 };
+function activityForm(existing, prefill) {
+    const a = existing || { title: '', description: '', kind: 'eventual', urgent: false, realization: 'presencial', sites: [], department: '', area: '', dueDate: '', seatsNeeded: 1, ...(prefill || {}) };
     const siteIds = new Set(a.sites.map((s) => s.id));
     const radio = (name, value, label, checked) => `<label class="tw-opt"><input type="radio" name="${name}" value="${value}"${checked ? ' checked' : ''}><span>${esc(label)}</span></label>`;
     const areas = [...new Set(data.activities.map((x) => x.area).filter(Boolean))];
@@ -264,8 +270,9 @@ function activityForm(existing) {
             <div class="admin-field"><label for="tw-area">${esc(t('main.twArea'))}</label><input id="tw-area" type="text" maxlength="60" list="tw-areas" value="${esc(a.area)}" autocomplete="off"><datalist id="tw-areas">${areas.map((x) => `<option value="${esc(x)}">`).join('')}</datalist></div></div>
         <div class="admin-field"><label for="tw-due">${esc(t('main.twF_due'))}</label><input id="tw-due" type="date" value="${esc(a.dueDate)}"></div>
         <div class="admin-field"><label for="tw-desc">${esc(t('main.twF_description'))}</label><textarea id="tw-desc" rows="2" maxlength="1000">${esc(a.description)}</textarea></div>
+        <div class="admin-field" data-help-key="twPlanLink"><label for="tw-plan">${esc(t('main.twPlanLink'))}</label><select id="tw-plan"><option value="">${esc(t('main.twPlanNone'))}</option>${a.plan ? `<option value="${a.plan.itemId}" selected>${esc(a.plan.path)}</option>` : ''}</select></div>
         ${existing ? '' : `<fieldset class="tw-set"><legend>${esc(t('main.twF_who'))}</legend><div class="tw-opts">${radio('tw-who', 'now', t('main.twWho_now'), true)}${radio('tw-who', 'later', t('main.twWho_later'), false)}</div>
-            <div id="tw-who-now">${peopleList(new Set(), [])}<div class="admin-field" id="tw-principal-box" hidden><label for="tw-principal">${esc(t('main.twF_principal'))}</label><select id="tw-principal"></select></div></div>
+            <div id="tw-who-now">${peopleList(new Set(a.userIds || []), [])}<div class="admin-field" id="tw-principal-box" hidden><label for="tw-principal">${esc(t('main.twF_principal'))}</label><select id="tw-principal"></select></div></div>
             <div id="tw-who-later" hidden>${claimFields(a, false)}</div></fieldset>`}
         ${existing ? claimFields(existing, true) : ''}
         ${fieldErr('tw-form-error')}
@@ -282,6 +289,23 @@ function activityForm(existing) {
         select.innerHTML = `<option value="">${esc(t('main.twNoPrincipal'))}</option>${ids.map((id) => `<option value="${id}"${String(id) === prev ? ' selected' : ''}>${esc((data.people.find((p) => p.id === id) || {}).name || '')}</option>`).join('')}`;
     };
     bindPeople(ov, refreshPrincipal);
+    if (prefill && prefill.userIds && prefill.userIds.length) refreshPrincipal();
+    // los renglones que se pueden ligar (de los planes donde se puede escribir); si viene uno de Planes, ya sale elegido
+    const planSelect = ov.querySelector('#tw-plan');
+    const addPlanOption = (it, selected) => {
+        if ([...planSelect.options].some((o) => o.value === String(it.itemId))) return;
+        const o = document.createElement('option');
+        o.value = String(it.itemId); o.textContent = it.label; o.dataset.title = it.title; o.dataset.end = it.endDate || ''; o.selected = !!selected;
+        planSelect.appendChild(o);
+    };
+    if (prefill && prefill.item) addPlanOption(prefill.item, true);
+    api('GET', '/plan-items').then((out) => { out.items.forEach((it) => addPlanOption(it, false)); }).catch(() => { /* sin la lista el selector queda en «Sin plan» */ });
+    planSelect.addEventListener('change', () => {
+        const o = planSelect.selectedOptions[0];
+        if (existing || !o || !o.dataset.title) return;
+        if (!ov.querySelector('#tw-title').value.trim()) ov.querySelector('#tw-title').value = o.dataset.title;
+        if (!ov.querySelector('#tw-due').value && o.dataset.end) ov.querySelector('#tw-due').value = o.dataset.end;
+    });
     ov.addEventListener('change', (event) => {
         if (event.target.name === 'tw-who') { const now = event.target.value === 'now'; ov.querySelector('#tw-who-now').hidden = !now; ov.querySelector('#tw-who-later').hidden = now; }
         if (event.target.id === 'tw-claim') { ov.querySelector('#tw-claim-chosen').hidden = event.target.value !== 'chosen'; ov.querySelector('#tw-seats-box').hidden = !event.target.value; }
@@ -299,6 +323,7 @@ function activityForm(existing) {
         const claim = ov.querySelector('#tw-claim');
         const wantsClaim = existing || (ov.querySelector('input[name="tw-who"]:checked') || {}).value === 'later';
         if (claim && wantsClaim) { body.claimScope = claim.value; if (claim.value === 'chosen') body.claimUserIds = checkedPeople(ov, 'tw-c'); }
+        { const wanted = planSelect.value ? Number(planSelect.value) : null; const current = existing && existing.plan ? existing.plan.itemId : null; if (existing ? wanted !== current : wanted) body.planItemId = wanted; }
         const submit = ov.querySelector('button[type="submit"]');
         submit.disabled = true;
         try {
@@ -335,13 +360,14 @@ async function openDetail(id) {
     const actions = [c.claim && btn('claim', ''), c.confirm && btn('confirm', ''), c.start && btn('start', c.confirm ? ' btn-secondary' : ''), c.pause && btn('pause'), c.resume && btn('resume', ''), c.submit && btn('submit', ''), c.validate && btn('validate', ''), c.returnIt && btn('return'), c.pass && btn('pass'),
         c.edit && btn('edit'), c.assign && btn('assign'), c.cancel && btn('cancel')].filter(Boolean).join('');
     const rows = a.assignees.map((x) => `<li class="tw-asg tw-ps-${x.status}">${avatar(x.userId, x.name, x.photoVer, x.isMine || x.isMe ? '' : 'tw-av-out')}<div><b>${esc(x.name)}${x.isPrincipal ? ` <em>${esc(t('main.twPrincipal'))}</em>` : ''}</b><small>${esc(t(`main.twPs_${x.status}`))}${x.status === 'paused' && x.pauseReason ? ` · ${esc(x.pauseReason)}` : ''}</small></div>${c.unassign && ['assigned', 'confirmed'].includes(x.status) ? `<button type="button" class="admin-icon-btn" data-tw="unassign" data-id="${a.id}" data-user="${x.userId}" aria-label="${esc(t('main.twAct_unassign'))}" title="${esc(t('main.twAct_unassign'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</li>`).join('');
-    const events = a.events.map((e) => `<li class="tw-ev tw-ev-${e.event}"><span class="tw-ev-dot" aria-hidden="true"></span><div><b>${esc(eventText(e))}</b><small>${esc(e.actorName)} · ${esc(whenText(e.createdAt))}</small>${e.detail && ['paused', 'returned', 'cancelled', 'pass_requested', 'passed', 'pass_approved', 'pass_rejected', 'pass_cancelled'].includes(e.event) ? `<span class="tw-ev-note">${esc(e.detail)}</span>` : ''}</div></li>`).join('');
+    const events = a.events.map((e) => `<li class="tw-ev tw-ev-${e.event}"><span class="tw-ev-dot" aria-hidden="true"></span><div><b>${esc(eventText(e))}</b><small>${esc(e.actorName)} · ${esc(whenText(e.createdAt))}</small>${e.detail && ['paused', 'returned', 'cancelled', 'pass_requested', 'passed', 'pass_approved', 'pass_rejected', 'pass_cancelled', 'plan_linked'].includes(e.event) ? `<span class="tw-ev-note">${esc(e.detail)}</span>` : ''}</div></li>`).join('');
     const passes = a.passes.map((p) => passCard(p, a, false)).join('');
     const claimLine = a.claimScope && a.seatsOpen > 0 && a.status !== 'done' ? [t('main.twClaimLine', { who: t(`main.twClaim_${a.claimScope}`), n: a.seatsOpen }), a.claim && (c.edit || c.assign) ? (a.claim.freeCount ? t('main.twFreeCan', { names: a.claim.freeNames.join(', ') + (a.claim.freeCount > a.claim.freeNames.length ? ` +${a.claim.freeCount - a.claim.freeNames.length}` : '') }) : t('main.twFreeNone')) : ''].filter(Boolean).join(' · ') : '';
+    const planLine = a.plan ? `<p class="tw-meta tw-meta-plan"><i class="bx bx-link" aria-hidden="true"></i> ${a.plan.canOpen ? `<a href="PlanesTrabajo.html#plan=${a.plan.planId}&item=${a.plan.itemId}">${esc(a.plan.path)}</a>` : esc(a.plan.path)}</p>` : '';
     const meta = [realLabel(a.realization), a.sites.map((s) => s.name).join(', '), deptName(a.department), a.area, a.dueDate ? t('main.twDue', { date: dayText(a.dueDate) }) : ''].filter(Boolean);
     const ov = openModal(`<div class="tw-detail-head"><h3 id="tw-d-title">${esc(a.title)}</h3><button type="button" class="admin-icon-btn" data-tw-m="cancel" aria-label="${esc(t('main.twClose'))}" title="${esc(t('main.twClose'))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>
         <div class="tw-chips"><span class="tw-kind tw-k-${a.kind}">${esc(kindLabel(a.kind))}</span>${a.urgent ? `<span class="tw-urg">⚡ ${esc(t('main.twUrgentTag'))}</span>` : ''}<span class="tw-state tw-state-${a.status}">${esc(t(`main.twLane_${a.status}`))}</span></div>
-        <p class="tw-meta">${esc(meta.join(' · '))}</p>${claimLine ? `<p class="tw-meta tw-meta-claim">${esc(claimLine)}</p>` : ''}${a.description ? `<p class="tw-desc">${esc(a.description)}</p>` : ''}
+        <p class="tw-meta">${esc(meta.join(' · '))}</p>${planLine}${claimLine ? `<p class="tw-meta tw-meta-claim">${esc(claimLine)}</p>` : ''}${a.description ? `<p class="tw-desc">${esc(a.description)}</p>` : ''}
         <p class="tw-created">${esc(t('main.twD_created', { name: a.createdBy.name, date: whenText(a.createdAt) }))}</p>
         <h4>${esc(t('main.twD_assignees'))}</h4>${rows ? `<ul class="tw-asgs">${rows}</ul>` : `<p class="tw-none">${esc(t('main.twNoPeople'))} · ${esc(t('main.twSeats', { n: a.seatsNeeded }))}</p>`}
         ${passes ? `<h4>${esc(t('main.twPasses'))}</h4><div class="tw-pass-list">${passes}</div>` : ''}
@@ -546,8 +572,8 @@ function logView() {
     if (!logData) return controls;
     const rows = logData.rows.filter(matches);
     const shown = rows.slice(0, logShown);
-    const cell = (r) => `<tr class="tw-log-row" data-tw="open" data-id="${r.activityId}" tabindex="0"><td>${esc(dateText(r.doneAt))}</td><td>${r.urgent ? '⚡ ' : ''}${esc(r.title)}</td><td>${esc(r.person.name)}${data.me.hasTeam && !r.person.isMine && !r.person.isMe ? ` <small>(${esc(t('main.twOutsideTeam'))})</small>` : ''}</td><td><span class="tw-kind tw-k-${r.kind}">${esc(kindLabel(r.kind))}</span></td><td>${esc(realLabel(r.realization))}</td><td>${esc(r.sites.map((s) => s.name).join(', '))}</td><td>${esc(deptName(r.department))}</td><td class="tw-num">${r.days}</td><td>${esc(r.validatedByName)}</td></tr>`;
-    const head = ['done', 'activity', 'person', 'kind', 'realization', 'site', 'department', 'days', 'validator'];
+    const cell = (r) => `<tr class="tw-log-row" data-tw="open" data-id="${r.activityId}" tabindex="0"><td>${esc(dateText(r.doneAt))}</td><td>${r.urgent ? '⚡ ' : ''}${esc(r.title)}</td><td>${esc(r.person.name)}${data.me.hasTeam && !r.person.isMine && !r.person.isMe ? ` <small>(${esc(t('main.twOutsideTeam'))})</small>` : ''}</td><td><span class="tw-kind tw-k-${r.kind}">${esc(kindLabel(r.kind))}</span></td><td>${esc(realLabel(r.realization))}</td><td>${esc(r.sites.map((s) => s.name).join(', '))}</td><td>${esc(deptName(r.department))}</td><td>${esc(r.plan ? r.plan.planTitle : '')}</td><td class="tw-num">${r.days}</td><td>${esc(r.validatedByName)}</td></tr>`;
+    const head = ['done', 'activity', 'person', 'kind', 'realization', 'site', 'department', 'plan', 'days', 'validator'];
     return `${controls}<p class="tw-log-count" role="status">${esc(t(rows.length === 1 ? 'main.twLogRowsOne' : 'main.twLogRows', { n: rows.length }))}${logData.truncated ? ` · ${esc(t('main.twTruncated'))}` : ''}</p>
         ${rows.length ? `<div class="tw-log-scroll"><table class="tw-log" aria-label="${esc(t('main.twTab_log'))}" data-help-key="twLog"><thead><tr>${head.map((k) => `<th scope="col"${k === 'days' ? ' class="tw-num"' : ''}>${esc(t(`main.twLogCol_${k}`))}</th>`).join('')}</tr></thead><tbody>${shown.map(cell).join('')}</tbody></table></div>
         ${rows.length > shown.length ? `<button type="button" class="btn btn-secondary tw-small" data-tw="more">${esc(t('main.twLogMore', { n: Math.min(LOG_PAGE, rows.length - shown.length) }))}</button>` : ''}` : `<p class="tw-empty">${esc(t('main.twLogEmpty'))}</p>`}`;
@@ -711,7 +737,7 @@ document.addEventListener('keydown', (event) => {
 });
 document.addEventListener('input', (event) => { if (event.target.id === 'tw-f-q') { filters.q = event.target.value; render(); } });
 document.addEventListener('change', (event) => {
-    const map = { 'tw-f-person': 'person', 'tw-f-kind': 'kind', 'tw-f-real': 'real', 'tw-f-site': 'site', 'tw-f-dept': 'dept', 'tw-f-area': 'area' };
+    const map = { 'tw-f-person': 'person', 'tw-f-kind': 'kind', 'tw-f-real': 'real', 'tw-f-site': 'site', 'tw-f-dept': 'dept', 'tw-f-area': 'area', 'tw-f-plan': 'plan' };
     if (map[event.target.id]) { filters[map[event.target.id]] = event.target.value; saveFilters(); render(); return; }
     if (event.target.id === 'tw-f-urgent') { filters.urgent = event.target.checked; saveFilters(); render(); return; }
     if (event.target.name === 'tw-group') { lineGroup = event.target.value; savePrefs(); render(); return; }
@@ -734,7 +760,20 @@ document.addEventListener('dashboard:language-changed', () => { if ($('tw-root')
 // al cambiar la propia foto (Datos de usuario) se vuelve a leer para que salga en la tira y en las tarjetas
 document.addEventListener('user-photo-changed', () => { if ($('tw-root').dataset.ready) loadView(true); });
 // un aviso de la campana abre la actividad aunque ya se esté en el tablero (solo cambia el # de la dirección)
-window.addEventListener('hashchange', () => { const m = /^#actividad-(\d+)$/.exec(location.hash); if (m && $('tw-root').dataset.ready) load(true).then(() => openDetail(Number(m[1]))); });
+// Enlaces: #actividad-12 abre ese detalle; #asignar-3-45 (el botón «Asignar en Equipo…» de Planes) abre el formulario ya con ese renglón: su nombre, su fecha y quien lo ejecuta.
+async function openFromHash() {
+    const asg = /^#asignar-(\d+)-(\d+)$/.exec(location.hash);
+    const act = /^#actividad-(\d+)$/.exec(location.hash);
+    if (!asg && !act) return;
+    try { history.replaceState(null, '', `${location.pathname}${location.search}`); } catch (err) { /* sin historial: el enlace se queda en la barra */ }
+    if (act) { await load(true); openDetail(Number(act[1])); return; }
+    try {
+        await load(true);
+        const it = (await api('GET', `/plan-items/${asg[2]}`)).item;
+        activityForm(null, { title: it.title, dueDate: it.endDate || '', userIds: it.executorUserId && data.people.some((p) => p.id === it.executorUserId) ? [it.executorUserId] : [], item: it });
+    } catch (err) { showError(errText(err)); }
+}
+window.addEventListener('hashchange', () => { if ($('tw-root').dataset.ready) openFromHash(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !overlay && $('tw-root').dataset.ready) loadView(true); });
 
 (async function init() {
@@ -744,8 +783,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && !o
         await load(false);
         if (view !== 'board') await loadView(false);
         $('tw-root').dataset.ready = '1';
-        const hash = /^#actividad-(\d+)$/.exec(location.hash);
-        if (hash) openDetail(Number(hash[1]));
+        openFromHash();
     } catch (err) {
         console.error('Administración de Equipo de Trabajo failed to initialize:', err);
     }

@@ -10,7 +10,7 @@
 'use strict';
 // la marca de cada paso en la barra: letra y clase
 const MARKS = {
-    assigned: ['A', 'a'], claimed: ['A', 'a'], confirmed: ['C', 'c'], started: ['▶', 'r'], resumed: ['▶', 'r'], paused: ['⏸', 'p'], submitted: ['V', 'v'], returned: ['↩', 'b'], validated: ['✓', 't'],
+    assigned: ['A', 'a'], claimed: ['A', 'a'], confirmed: ['C', 'c'], started: ['▶', 'r'], resumed: ['▶', 'r'], paused: ['⏸', 'p'], submitted: ['V', 'v'], returned: ['↩', 'b'], validated: ['✓', 't'], closed_by_plan: ['✓', 't'],
     passed: ['⇄', 'x'], pass_requested: ['⇄', 'x'], pass_approved: ['⇄', 'x'], pass_rejected: ['⇄', 'x'], pass_cancelled: ['⇄', 'x'], unassigned: ['✕', 'z'], cancelled: ['✕', 'z'],
 };
 const markOf = (type) => MARKS[type] || ['•', 'a'];
@@ -41,7 +41,7 @@ function analyze(steps, now) {
             case 'paused': begin('pause', s.ms); out.pauses += 1; out.state = 'paused'; break;
             case 'submitted': begin('val', s.ms); out.state = 'review'; break;
             case 'returned': out.returns += 1; begin('run', s.ms); out.state = 'in_progress'; break;
-            case 'validated': close(s.ms); out.doneAt = s.ms; out.endedAt = s.ms; out.state = 'done'; break;
+            case 'validated': case 'closed_by_plan': close(s.ms); out.doneAt = s.ms; out.endedAt = s.ms; out.state = 'done'; break;
             case 'passed': close(s.ms); out.endedAt = s.ms; out.state = 'passed'; break;
             case 'unassigned': close(s.ms); out.endedAt = s.ms; out.state = 'removed'; break;
             case 'cancelled': close(s.ms); out.endedAt = s.ms; out.state = 'cancelled'; break;
@@ -149,25 +149,25 @@ const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDat
 // El Registro: una fila por actividad terminada y persona.
 function buildLog(rows, fmt) {
     const t = fmt.t;
-    const head = ['done', 'activity', 'person', 'kind', 'realization', 'site', 'department', 'area', 'assigned', 'days', 'validator'].map((k) => t(`main.twLogCol_${k}`));
-    const data = rows.map((r) => [fmt.date(r.doneAt), r.urgent ? `⚡ ${r.title}` : r.title, r.person.name, fmt.kind(r.kind), fmt.real(r.realization), joinNames(r.sites), fmt.dept(r.department), r.area || '', fmt.date(r.assignedAt), r.days, r.validatedByName || '']);
-    const widths = [1.1, 3.2, 1.8, 1.1, 1.1, 1.8, 1.8, 1.5, 1.1, 0.6, 1.5];
+    const head = ['done', 'activity', 'person', 'kind', 'realization', 'site', 'department', 'plan', 'area', 'assigned', 'days', 'validator'].map((k) => t(`main.twLogCol_${k}`));
+    const data = rows.map((r) => [fmt.date(r.doneAt), r.urgent ? `⚡ ${r.title}` : r.title, r.person.name, fmt.kind(r.kind), fmt.real(r.realization), joinNames(r.sites), fmt.dept(r.department), r.plan ? r.plan.planTitle : '', r.area || '', fmt.date(r.assignedAt), r.days, r.validatedByName || '']);
+    const widths = [1.1, 3.2, 1.8, 1.1, 1.1, 1.8, 1.8, 1.8, 1.5, 1.1, 0.6, 1.5];
     return { title: t('main.twTab_log'), columns: head.map((label) => ({ label })), rows: data, widths, sections: [{ title: t('main.twTab_log'), columns: head.map((label) => ({ label })), rows: data, widths }] };
 }
 // La línea del tiempo: «Resumen» (una fila por actividad y persona, con sus tiempos) y «Pasos» (cada paso con quién y cuándo).
 function buildLine(activities, fmt, now) {
     const t = fmt.t;
     const dur = (ms) => (ms == null ? '' : fmt.duration(ms));
-    const sumHead = ['activity', 'kind', 'realization', 'site', 'department', 'person', 'state', 'assigned', 'confirmed', 'started', 'done', 'toConfirm', 'toFinish', 'pauses', 'pauseTime', 'returns'].map((k) => t(`main.twLineCol_${k}`));
+    const sumHead = ['activity', 'kind', 'realization', 'site', 'department', 'plan', 'person', 'state', 'assigned', 'confirmed', 'started', 'done', 'toConfirm', 'toFinish', 'pauses', 'pauseTime', 'returns'].map((k) => t(`main.twLineCol_${k}`));
     const stepHead = ['activity', 'person', 'site', 'step', 'when', 'by', 'note'].map((k) => t(`main.twLineCol_${k}`));
     const sumRows = []; const stepRows = [];
     activities.forEach((a) => a.people.forEach((p) => {
         const an = analyze(p.steps, now);
         const when = (ms) => (ms == null ? '' : fmt.dateTime(ms));
-        sumRows.push([a.title, fmt.kind(a.kind), fmt.real(a.realization), joinNames(a.sites), fmt.dept(a.department), p.name, fmt.state(an.state), when(an.assignedAt), when(an.confirmedAt), when(an.startedAt), when(an.doneAt), dur(an.confirmMs), dur(an.finishMs), an.pauses, an.pauseDurations.length ? dur(sum(an.pauseDurations)) : '', an.returns]);
+        sumRows.push([a.title, fmt.kind(a.kind), fmt.real(a.realization), joinNames(a.sites), fmt.dept(a.department), a.plan ? a.plan.planTitle : '', p.name, fmt.state(an.state), when(an.assignedAt), when(an.confirmedAt), when(an.startedAt), when(an.doneAt), dur(an.confirmMs), dur(an.finishMs), an.pauses, an.pauseDurations.length ? dur(sum(an.pauseDurations)) : '', an.returns]);
         an.markers.forEach((m) => stepRows.push([a.title, p.name, joinNames(a.sites), fmt.step(m), fmt.dateTime(m.at), m.by, m.note]));
     }));
-    const widths1 = [3, 1.1, 1.1, 1.6, 1.6, 1.6, 1.2, 1.5, 1.5, 1.5, 1.5, 1, 1, 0.7, 1, 0.7];
+    const widths1 = [3, 1.1, 1.1, 1.6, 1.6, 1.6, 1.6, 1.2, 1.5, 1.5, 1.5, 1.5, 1, 1, 0.7, 1, 0.7];
     const widths2 = [3, 1.6, 1.6, 2.2, 1.6, 1.6, 2.4];
     return { title: t('main.twTab_line'), columns: sumHead.map((label) => ({ label })), rows: sumRows, widths: widths1,
         sections: [{ title: t('main.twLineSheetSummary'), columns: sumHead.map((label) => ({ label })), rows: sumRows, widths: widths1 }, { title: t('main.twLineSheetSteps'), columns: stepHead.map((label) => ({ label })), rows: stepRows, widths: widths2 }] };

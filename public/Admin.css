@@ -10184,3 +10184,10 @@ input[type="color"].cli-company{ opacity: 0.55; }
 .tw-fich small{ display: block; font-size: 0.72rem; color: var(--color-text-secondary); }
 .tw-opts-col{ display: grid; gap: 0.4rem; }
 .tw-absent{ font-style: normal; font-size: 0.6rem; font-weight: 700; color: #c0392b; background: rgba(220, 70, 60, 0.13); border-radius: 1rem; padding: 0.05rem 0.45rem; margin-left: auto; white-space: nowrap; }
+/* ---- Equipo de Trabajo, pieza 5: liga con Planes de trabajo ---- */
+.tw-plan{ display: flex; align-items: flex-start; gap: 0.3rem; font-size: 0.68rem; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.tw-plan i{ flex: none; margin-top: 0.1rem; }
+.tw-meta-plan{ display: flex; align-items: flex-start; gap: 0.3rem; }
+.tw-meta-plan a{ color: var(--color-accent); text-decoration: underline; text-underline-offset: 0.15rem; overflow-wrap: anywhere; }
+.wp-team-tag{ display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.64rem; font-weight: 700; padding: 0.1rem 0.5rem; border-radius: 1rem; color: var(--color-text-primary); background: rgba(40, 170, 90, 0.16); border: 1px solid rgba(40, 170, 90, 0.5); text-decoration: none; white-space: nowrap; }
+a.wp-team-tag:hover{ background: rgba(40, 170, 90, 0.28); }

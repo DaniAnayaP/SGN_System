@@ -349,11 +349,21 @@ function rowButtons(plan, item) {
         if (item.status !== 'done') out.push(btn('status', 'bx-check', 'main.wpMarkDone', ' data-status="done"'));
         if (item.status !== 'pending') out.push(btn('status', 'bx-undo', 'main.wpMarkPending', ' data-status="pending"'));
     }
+    // Equipo de Trabajo: ligar la actividad a ese renglón (solo hojas por hacer, y si quien mira tiene el tablero)
+    if (plan.teamAccess && can.status && !item.childCount && item.status !== 'done' && !item.team) out.push(btn('team', 'bx-group', 'main.wpAssignTeam'));
     if (can.addChild) out.push(btn('add-child', 'bx-subdirectory-right', 'main.wpAddChild', ` data-child-label="${esc(levelLabel(plan, item.depth + 1))}"`));
     if (can.edit) out.push(btn('edit', 'bx-edit-alt', 'main.wpEditItem'));
     if (can.move) { out.push(btn('up', 'bx-up-arrow-alt', 'main.wpMoveUp')); out.push(btn('down', 'bx-down-arrow-alt', 'main.wpMoveDown')); }
     if (can.remove) out.push(btn('remove', 'bx-trash', 'main.wpRemoveItem'));
     return out.length ? `<span class="impl-act-btns" role="group" aria-label="${esc(t('main.wpNameActions'))}" data-help-key="wpItemActions">${out.join('')}</span>` : '';
+}
+// «En Equipo · En curso»: el renglón es también una actividad del tablero de Equipo de Trabajo y se mantienen al día entre sí
+function teamTag(plan, item) {
+    if (!item.team) return '';
+    const text = t('main.wpTeamTag', { state: t(`main.wpTeamState_${item.team.state}`) });
+    return plan.teamAccess
+        ? `<a class="wp-team-tag" href="EquipoTrabajo.html#actividad-${item.team.activityId}" data-help-key="wpTeamLink" title="${esc(t('main.wpTeamOpen'))}"><i class="bx bx-group" aria-hidden="true"></i>${esc(text)}</a>`
+        : `<span class="wp-team-tag" data-help-key="wpTeamLink"><i class="bx bx-group" aria-hidden="true"></i>${esc(text)}</span>`;
 }
 const statusText = (status) => t(`main.wpStatus_${status}`);
 const dot = (status) => `<span class="impl-dot impl-dot-${status === 'in_progress' ? 'running' : status}" role="img" aria-label="${esc(statusText(status))}" title="${esc(statusText(status))}"></span>`;
@@ -380,7 +390,7 @@ function nameCell(plan, item, collapsed) {
     const note = item.note ? `<i class="bx bx-note wp-note-ico" role="img" aria-label="${esc(t('main.wpHasNote'))}" title="${esc(item.note)}"></i>` : '';
     const count = item.childCount ? `<span class="impl-cnt">${esc(t('main.wpChildCount', { n: item.childCount }))}</span>` : '';
     return `<div class="impl-nm impl-act-nm wp-nm${item.childCount ? ' wp-node' : ''}" style="padding-left:${pad}rem" role="group" aria-label="${esc(item.title)}" data-help-key="wpItemRow"><span class="impl-act-line"><span class="impl-act-t">${toggle}${dot(status)}<span class="impl-act-name"><b class="wp-title" data-wp-row="comments" data-id="${item.id}" role="button" tabindex="0" title="${esc(t('main.wpOpenItem'))}">${esc(item.title)}</b> <span class="wp-lvl-tag">${esc(levelLabel(plan, item.depth))}</span> ${count}${note} ${commentChip(item)}</span></span></span>
-        <span class="impl-act-line impl-act-sub">${whoCell(item)}${rowButtons(plan, item)}</span></div>`;
+        <span class="impl-act-line impl-act-sub">${whoCell(item)}${teamTag(plan, item)}${rowButtons(plan, item)}</span></div>`;
 }
 function barCells(item, axis, today) {
     const weeks = axis.weeks;
@@ -778,6 +788,7 @@ async function rowAction(op, itemId, button) {
     if (op === 'comments') { openItemDetail(planId, itemId); return; }
     if (op === 'edit') { openForm('edit', planId, { id: itemId }); return; }
     if (op === 'add-child') { openForm('add', planId, { parentId: itemId }); return; }
+    if (op === 'team') { location.href = `EquipoTrabajo.html#asignar-${planId}-${itemId}`; return; }
     if (op === 'status') { await planWrite(planId, () => api('PATCH', `/${planId}/items/${itemId}`, { status: button.dataset.status })); return; }
     if (op === 'up' || op === 'down') { await planWrite(planId, () => api('POST', `/${planId}/items/${itemId}/move`, { direction: op })); return; }
     if (op === 'remove') {

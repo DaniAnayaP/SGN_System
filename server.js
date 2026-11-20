@@ -616,7 +616,7 @@ const {
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, teamTimeline, teamLog, setTeamWorkday, setTeamNow, setUserPhoto, getUserPhoto, getUserPhotoVer, deleteUserPhoto, TEAM_PHOTO_MAX_BYTES, createTeamActivity, teamActivityAct, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, teamTimeline, teamLog, teamLinkableItems, teamPlanItemInfo, setTeamWorkday, setTeamNow, setUserPhoto, getUserPhoto, getUserPhotoVer, deleteUserPhoto, TEAM_PHOTO_MAX_BYTES, createTeamActivity, teamActivityAct, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -2329,7 +2329,7 @@ app.delete('/api/business/work-plans/:id/items/:itemId', requireAuth, (req, res)
 // ---- Administración de Equipo de Trabajo (Daniel, 2026-11-19) · PIEZA 1 ----
 // Pantalla general (sección main, junto a Planes de trabajo): entra quien tiene la hoja main/equipo-trabajo en su árbol (el administrador del cliente, siempre) y su Estatus habilitado. Las cuentas de SaaS (sin compañía) no la tienen.
 // Cada persona ve lo que creó, lo que tiene y lo de las personas a su cargo; el administrador, todo. Quien puede qué lo decide db.js (teamActivityCan) y viaja en `can`. Cada movimiento queda en team_activity_events.
-const TEAM_HTTP = { TEAM_NOT_FOUND: 404, TEAM_NOT_ALLOWED: 403, TEAM_FORBIDDEN: 403, TEAM_STATE: 409, TEAM_CANCELLED: 409, TEAM_PEOPLE_EXIST: 409, TEAM_PEOPLE_LIMIT: 409, TEAM_FULL: 409, TEAM_PASS_PENDING: 409, TEAM_PASS_NOT_FOUND: 404, TEAM_PERSON_ABSENT: 409 };
+const TEAM_HTTP = { TEAM_NOT_FOUND: 404, TEAM_NOT_ALLOWED: 403, TEAM_FORBIDDEN: 403, TEAM_STATE: 409, TEAM_CANCELLED: 409, TEAM_PEOPLE_EXIST: 409, TEAM_PEOPLE_LIMIT: 409, TEAM_FULL: 409, TEAM_PASS_PENDING: 409, TEAM_PASS_NOT_FOUND: 404, TEAM_PERSON_ABSENT: 409, TEAM_PLAN_INVALID: 404, TEAM_PLAN_NOT_ALLOWED: 403, TEAM_PLAN_LOCKED: 409, TEAM_PLAN_ITEM_NOT_LEAF: 409, TEAM_PLAN_ITEM_DONE: 409, TEAM_PLAN_ITEM_LINKED: 409 };
 const TEAM_MESSAGES = {
     TEAM_NOT_FOUND: 'Esa actividad no existe.', TEAM_NOT_ALLOWED: 'No puedes hacer eso con esta actividad.', TEAM_FORBIDDEN: 'No tienes permiso para usar la Administración de Equipo de Trabajo.',
     TEAM_STATE: 'La actividad ya no está en ese paso.', TEAM_CANCELLED: 'La actividad está cancelada.', TEAM_REASON_REQUIRED: 'Escribe el motivo.', TEAM_TITLE_REQUIRED: 'Escribe qué hay que hacer.',
@@ -2339,12 +2339,14 @@ const TEAM_MESSAGES = {
     TEAM_PEOPLE_EXIST: 'Esas personas ya están en la actividad.', TEAM_PEOPLE_LIMIT: 'Una actividad no puede tener más de 20 personas.', TEAM_ACTION_INVALID: 'Esa acción no existe.',
     TEAM_CLAIM_INVALID: 'Elige quién puede tomarla (y, si son personas elegidas, al menos una).', TEAM_FULL: 'Ya se completaron las personas que necesita la actividad.',
     TEAM_PASS_PENDING: 'Esa persona ya tiene un pase esperando respuesta.', TEAM_PASS_NOT_FOUND: 'Ese pase ya no existe.', TEAM_PERIOD_INVALID: 'El periodo no es válido: elige una fecha de inicio y otra de fin posterior (hasta 5 años).',
+    TEAM_PLAN_INVALID: 'Ese renglón del plan ya no existe o no tienes acceso a su plan.', TEAM_PLAN_NOT_ALLOWED: 'No puedes cambiar el estado de ese renglón en el plan, así que no lo puedes ligar.', TEAM_PLAN_LOCKED: 'El plan ya no está activo: no se le pueden ligar actividades.',
+    TEAM_PLAN_ITEM_NOT_LEAF: 'Ese renglón tiene renglones debajo: liga uno de los de abajo.', TEAM_PLAN_ITEM_DONE: 'Ese renglón ya está hecho.', TEAM_PLAN_ITEM_LINKED: 'Ese renglón ya tiene una actividad abierta en Equipo de Trabajo.',
     TEAM_PERSON_ABSENT: 'Hay personas ausentes hoy: confirma si quieres asignarles de todos modos.', TEAM_WORKDAY_INVALID: 'Elige dónde se trabaja hoy (y, si está ausente, el motivo).', TEAM_NOW_INVALID: 'Solo puedes marcar como «ahora» una actividad tuya que esté en curso.',
 };
 function teamFail(res, result) {
     const code = result.error;
     const message = TEAM_MESSAGES[code] || 'No se pudo completar lo pedido.';
-    return res.status(TEAM_HTTP[code] || 400).json({ error: message, message, code, field: result.field, names: result.names });
+    return res.status(TEAM_HTTP[code] || 400).json({ error: message, message, code, field: result.field, names: result.names, activityId: result.activityId });
 }
 function teamGate(req, res) {
     if (req.user.clientId && isMainScreenStatusVisible(req.user.clientId, req.user.sub, 'equipo-trabajo')
@@ -2385,6 +2387,19 @@ app.put('/api/business/team-activities/workday', requireAuth, (req, res) => {
 app.put('/api/business/team-activities/now', requireAuth, (req, res) => {
     if (!teamGate(req, res)) return;
     const result = setTeamNow(req.user.clientId, req.user.sub, !!req.user.isTestAccount, req.body);
+    if (result.error) return teamFail(res, result);
+    res.set('Cache-Control', 'no-store');
+    res.json(result);
+});
+// pieza 5: los renglones de los planes que se pueden ligar (para el selector) y uno solo (el botón «Asignar en Equipo…» de Planes); antes de «/:id»
+app.get('/api/business/team-activities/plan-items', requireAuth, (req, res) => {
+    if (!teamGate(req, res)) return;
+    res.set('Cache-Control', 'no-store');
+    res.json({ items: teamLinkableItems(req.user.clientId, req.user.sub) });
+});
+app.get('/api/business/team-activities/plan-items/:itemId', requireAuth, (req, res) => {
+    if (!teamGate(req, res)) return;
+    const result = teamPlanItemInfo(req.user.clientId, req.user.sub, req.params.itemId);
     if (result.error) return teamFail(res, result);
     res.set('Cache-Control', 'no-store');
     res.json(result);

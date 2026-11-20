@@ -16142,6 +16142,8 @@ function workPlanItemsFor(row, access, userId) {
         const cc = commentCounts.get(i.id);
         i.commentCount = cc ? cc.commentCount : 0; i.unreadCount = cc ? cc.unreadCount : 0;
     });
+    const teamLinks = teamLinksForPlan(row.id);
+    items.forEach((i) => { i.team = teamLinks.get(i.id) || null; });
     return items;
 }
 // Lo propio de quien ve el plan que se suma al resumen: origen, rol, fijado (el del dueño es del plan; el de los demás, su preferencia), cuántas personas lo comparten, interruptor de la jefa, «Nuevo» y qué puede hacer.
@@ -16160,7 +16162,9 @@ const workPlanMemberCount = (planId) => db.prepare('SELECT COUNT(*) AS n FROM wo
 function workPlanSnapshot(row, userId, access) {
     const items = workPlanItemsFor(row, access, userId);
     const viewer = { access, prefs: access.role === 'owner' ? null : workPlanPrefsOf(row.id, userId), memberCount: workPlanMemberCount(row.id), comments: workPlanCommentCounts(row.client_id, userId, [row.id]).get(row.id) };
-    return { plan: summarizeWorkPlan(row, items, workPlanOwnerName(row.owner_user_id), viewer), items };
+    const plan = summarizeWorkPlan(row, items, workPlanOwnerName(row.owner_user_id), viewer);
+    plan.teamAccess = teamUserHasScreen(row.client_id, userId);
+    return { plan, items };
 }
 const touchWorkPlan = (planId) => { const now = workPlanNow(); db.prepare('UPDATE work_plans SET updated_at = ?, last_activity_at = ? WHERE id = ?').run(now, now, planId); return now; };
 // Los planes a los que esa persona tiene acceso: [{ row, access }] (propios, compartidos con ella y los de su equipo: jefa directa con el interruptor encendido).
@@ -16846,6 +16850,10 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_team_workdays_client_day ON team_workdays (client_id, is_test_data, day);
 `);
+// Pieza 5: la actividad ligada a un renglón de un plan de trabajo (sin llave foránea: si el renglón se quita, la actividad queda suelta).
+ensureColumn('team_activities', 'plan_id', 'INTEGER');
+ensureColumn('team_activities', 'plan_item_id', 'INTEGER');
+db.exec('CREATE INDEX IF NOT EXISTS idx_team_activities_plan_item ON team_activities (plan_item_id)');
 const teamNow = () => new Date().toISOString().replace('T', ' ').replace('Z', '');
 // En qué columna del tablero está una actividad, según lo que lleva cada persona: sin personas = por asignar; con responsable principal, lo que ella termina vale por todas.
 function teamActivityState(assignees, cancelled) {
@@ -16909,7 +16917,7 @@ function teamBuildCtx(clientId, userId, forTest, isAdmin, rows) {
         db.prepare(`SELECT activity_id AS activityId, user_id AS userId FROM team_activity_claimers WHERE activity_id IN (${marks})`).all(...ids).forEach((c) => { if (!claimers.has(c.activityId)) claimers.set(c.activityId, []); claimers.get(c.activityId).push(c.userId); });
         db.prepare(`SELECT * FROM team_activity_passes WHERE activity_id IN (${marks}) AND status = 'pending' ORDER BY id`).all(...ids).forEach((p) => { if (!passes.has(p.activity_id)) passes.set(p.activity_id, []); passes.get(p.activity_id).push(p); });
     }
-    return { clientId, forTest, viewer: teamViewer(clientId, userId, isAdmin), names: teamNames(clientId), sites: teamSiteMap(clientId, forTest), claimers, passes, scopes: new Map(), users: null, free: null, assignments: new Map() };
+    return { clientId, forTest, viewer: teamViewer(clientId, userId, isAdmin), names: teamNames(clientId), sites: teamSiteMap(clientId, forTest), claimers, passes, scopes: new Map(), users: null, free: null, assignments: new Map(), planLinks: teamLoadPlanLinks(rows) };
 }
 function teamCtxUsers(ctx) {
     if (!ctx.users) ctx.users = listActiveUsersBrief(ctx.clientId, ctx.forTest).map((u) => u.id);
@@ -17006,6 +17014,8 @@ function teamMapActivity(row, assigneeRows, ctx) {
         createdBy: { id: row.created_by_user_id, name: names.get(row.created_by_user_id) || row.created_by_label }, createdAt: row.created_at, updatedAt: row.updated_at, assignees, passes: pending,
     };
     out.can = teamActivityCan(row, assignees, viewer, scope, pending);
+    const planLink = row.plan_item_id != null ? ctx.planLinks.get(row.plan_item_id) : null;
+    out.plan = planLink ? { ...planLink, canOpen: teamCtxCanOpenPlan(ctx, planLink.planId) } : null;
     out.myStatus = (assignees.find((a) => a.userId === viewer.userId) || {}).status || '';
     // las personas libres que la pueden tomar (para quien la reparte)
     out.claim = null;
@@ -17175,7 +17185,7 @@ function teamTimeline(clientId, userId, forTest, isAdmin, query) {
         activities.push({
             id: r.id, title: r.title, kind: r.kind, urgent: !!r.urgent, realization: r.realization, department: r.department, area: r.area, dueDate: r.due_date || '', status: teamActivityState(mapped, r.status === 'cancelled'),
             sites: siteIds.map((id) => ctx.sites.get(id)).filter(Boolean), createdBy: { id: r.created_by_user_id, name: ctx.names.get(r.created_by_user_id) || r.created_by_label }, createdAt: teamIso(r.created_at),
-            assignees: people.map((p) => ({ userId: p.userId, name: p.name, isMe: p.isMe, isMine: p.isMine })), people,
+            assignees: people.map((p) => ({ userId: p.userId, name: p.name, isMe: p.isMe, isMine: p.isMine })), people, plan: teamPlanBrief(ctx, r),
         });
     });
     return { from: period.fromIso, to: period.toIso, activities, truncated, me: { id: userId, isAdmin: !!isAdmin } };
@@ -17210,7 +17220,7 @@ function teamLog(clientId, userId, forTest, isAdmin, query) {
         const person = { userId: a.user_id, name: ctx.names.get(a.user_id) || '', isMe: a.user_id === ctx.viewer.userId, isMine: ctx.viewer.reports.has(a.user_id) };
         out.push({
             activityId: r.id, title: r.title, kind: r.kind, urgent: !!r.urgent, realization: r.realization, department: r.department, area: r.area, sites: siteIds.map((id) => ctx.sites.get(id)).filter(Boolean),
-            person, assignees: [person], assignedAt: teamIso(a.assigned_at), startedAt: teamIso(a.started_at), doneAt: teamIso(a.done_at), days: days(a.assigned_at, a.done_at), validatedByName: a.validated_by_user_id == null ? '' : (ctx.names.get(a.validated_by_user_id) || ''),
+            person, assignees: [person], plan: teamPlanBrief(ctx, r), assignedAt: teamIso(a.assigned_at), startedAt: teamIso(a.started_at), doneAt: teamIso(a.done_at), days: days(a.assigned_at, a.done_at), validatedByName: a.validated_by_user_id == null ? '' : (ctx.names.get(a.validated_by_user_id) || ''),
         });
     });
     return { from: period.fromIso, to: period.toIso, rows: out, truncated, me: { id: userId, isAdmin: !!isAdmin } };
@@ -17337,6 +17347,170 @@ function teamTodayBlock(ctx, activities, day) {
     });
     return { day, weekDays, people, myInProgress: (seen.get(viewer.userId) || []).map((m) => ({ id: m.id, title: m.title, isNow: m.isNow })) };
 }
+// ---- PIEZA 5: liga con los Planes de trabajo (opcional y en los dos sentidos) ----
+// Una actividad puede ir suelta o ligada a UN renglón de un plan (una hoja: sin renglones debajo). Mientras estén ligados se mantienen al día:
+//  · tablero → renglón: en curso, en pausa o en validación dejan el renglón «En curso»; terminada lo deja «Hecha» (queda en el historial del plan, con «Equipo de Trabajo» como origen). El renglón nunca regresa solo.
+//  · renglón → tablero: marcar el renglón «Hecha» en el plan cierra la actividad (cada persona queda terminada; si estaba por asignar se cancela). Reabrir el renglón no reabre la tarjeta.
+//  · fecha: la fecha de fin del renglón y la fecha límite de la actividad se copian una a la otra.
+// Quien liga necesita poder cambiar el estado de ese renglón en el plan (administra el plan, o es de quien lo agregó o su responsable o ejecutor) y el plan debe estar activo. Un renglón tiene a lo más una actividad abierta.
+const TEAM_ITEM_STATE = { in_progress: 'in_progress', paused: 'in_progress', review: 'in_progress', done: 'done' };
+// Los renglones ligados: Map(itemId → { planId, planTitle, planStatus, itemId, itemTitle, path, itemStatus }) para las filas de actividades dadas. path = «Plan › Nivel › Renglón».
+function teamLoadPlanLinks(rows) {
+    const links = new Map();
+    const itemIds = [...new Set(rows.map((r) => r.plan_item_id).filter((id) => id != null))];
+    if (!itemIds.length) return links;
+    const items = db.prepare(`SELECT id, plan_id, parent_id, title, status FROM work_plan_items WHERE id IN (${itemIds.map(() => '?').join(',')})`).all(...itemIds);
+    const planIds = [...new Set(items.map((i) => i.plan_id))];
+    if (!planIds.length) return links;
+    const marks = planIds.map(() => '?').join(',');
+    const plans = new Map(db.prepare(`SELECT id, title, status FROM work_plans WHERE id IN (${marks})`).all(...planIds).map((p) => [p.id, p]));
+    const byId = new Map(db.prepare(`SELECT id, parent_id, title FROM work_plan_items WHERE plan_id IN (${marks})`).all(...planIds).map((i) => [i.id, i]));
+    items.forEach((it) => {
+        const path = [];
+        let cur = it;
+        for (let guard = 0; cur && guard < 30; guard += 1) { path.unshift(cur.title); cur = cur.parent_id == null ? null : byId.get(cur.parent_id); }
+        const plan = plans.get(it.plan_id);
+        links.set(it.id, { planId: it.plan_id, planTitle: plan ? plan.title : '', planStatus: plan ? plan.status : '', itemId: it.id, itemTitle: it.title, path: [plan ? plan.title : '', ...path].filter(Boolean).join(' › '), itemStatus: it.status });
+    });
+    return links;
+}
+function teamCtxCanOpenPlan(ctx, planId) {
+    if (!ctx.planAccess) ctx.planAccess = new Map();
+    if (!ctx.planAccess.has(planId)) ctx.planAccess.set(planId, !!findWorkPlanFor(ctx.clientId, ctx.viewer.userId, planId));
+    return ctx.planAccess.get(planId);
+}
+// La actividad abierta (no cancelada y con algo por hacer) que ya está ligada a ese renglón, o 0.
+function teamOpenActivityForItem(itemId, exceptId) {
+    const r = db.prepare(`SELECT t.id FROM team_activities t WHERE t.plan_item_id = ? AND t.status = 'active' AND t.id != ?
+        AND (NOT EXISTS (SELECT 1 FROM team_activity_assignees a WHERE a.activity_id = t.id) OR EXISTS (SELECT 1 FROM team_activity_assignees a WHERE a.activity_id = t.id AND a.status != 'done')) LIMIT 1`).get(Number(itemId), exceptId == null ? 0 : exceptId);
+    return r ? r.id : 0;
+}
+// ¿Esta persona puede ligar ese renglón? Devuelve { item, plan } o { error }.
+function teamPlanLinkCheck(clientId, userId, itemId, exceptActivityId) {
+    const id = Number(itemId);
+    const item = Number.isInteger(id) ? db.prepare('SELECT * FROM work_plan_items WHERE id = ?').get(id) : null;
+    const found = item ? findWorkPlanFor(clientId, userId, item.plan_id) : null;
+    if (!found) return { error: 'TEAM_PLAN_INVALID', field: 'planItemId' };
+    const { row, access } = found;
+    if (!workPlanCanWrite(access) || (!workPlanIsManager(access) && !(item.created_by_user_id === userId || item.responsible_user_id === userId || item.executor_user_id === userId))) return { error: 'TEAM_PLAN_NOT_ALLOWED', field: 'planItemId' };
+    if (workPlanLockError(row)) return { error: 'TEAM_PLAN_LOCKED', field: 'planItemId' };
+    if (db.prepare('SELECT 1 FROM work_plan_items WHERE parent_id = ?').get(item.id)) return { error: 'TEAM_PLAN_ITEM_NOT_LEAF', field: 'planItemId' };
+    if (item.status === 'done') return { error: 'TEAM_PLAN_ITEM_DONE', field: 'planItemId' };
+    const taken = teamOpenActivityForItem(item.id, exceptActivityId);
+    if (taken) return { error: 'TEAM_PLAN_ITEM_LINKED', activityId: taken, field: 'planItemId' };
+    return { item, plan: row };
+}
+// El renglón como lo necesita el formulario de crear: título, ruta, fechas y quien lo ejecuta.
+function teamPlanItemShape(item, plan, path) {
+    return { planId: plan.id, planTitle: plan.title, itemId: item.id, title: item.title, path, label: [plan.title, path].filter(Boolean).join(' › '), startDate: item.start_date || null, endDate: item.end_date || null, executorUserId: item.executor_user_id == null ? null : item.executor_user_id, executorName: item.executor_name || '', responsibleUserId: item.responsible_user_id == null ? null : item.responsible_user_id };
+}
+const teamItemPathOf = (item, byId) => { const parts = []; let cur = item; for (let g = 0; cur && g < 30; g += 1) { parts.unshift(cur.title); cur = cur.parent_id == null ? null : byId.get(cur.parent_id); } return parts.join(' › '); };
+// Un renglón a ligar (desde el botón «Asignar en Equipo…» de Planes): { item, plan, path } si se puede, o el error de por qué no.
+function teamPlanItemInfo(clientId, userId, itemId) {
+    const chk = teamPlanLinkCheck(clientId, userId, itemId, null);
+    if (chk.error) return chk;
+    const byId = new Map(db.prepare('SELECT id, parent_id, title FROM work_plan_items WHERE plan_id = ?').all(chk.plan.id).map((i) => [i.id, i]));
+    return { item: teamPlanItemShape(chk.item, chk.plan, teamItemPathOf(chk.item, byId)) };
+}
+// Los renglones que esta persona puede ligar hoy (de los planes activos donde puede escribir; hojas sin hecha ni actividad abierta), para el selector del formulario.
+function teamLinkableItems(clientId, userId) {
+    const out = [];
+    workPlanAccessibleEntries(clientId, userId).forEach(({ row, access }) => {
+        if (row.status !== 'active' || !workPlanCanWrite(access)) return;
+        const items = db.prepare('SELECT * FROM work_plan_items WHERE plan_id = ? ORDER BY depth, position, id').all(row.id);
+        const parents = new Set(items.map((i) => i.parent_id).filter((id) => id != null));
+        const byId = new Map(items.map((i) => [i.id, i]));
+        const taken = new Set(db.prepare(`SELECT t.plan_item_id AS id FROM team_activities t WHERE t.plan_id = ? AND t.status = 'active' AND t.plan_item_id IS NOT NULL
+            AND (NOT EXISTS (SELECT 1 FROM team_activity_assignees a WHERE a.activity_id = t.id) OR EXISTS (SELECT 1 FROM team_activity_assignees a WHERE a.activity_id = t.id AND a.status != 'done'))`).all(row.id).map((r) => r.id));
+        items.forEach((i) => {
+            if (parents.has(i.id) || i.status === 'done' || taken.has(i.id)) return;
+            if (!workPlanIsManager(access) && !(i.created_by_user_id === userId || i.responsible_user_id === userId || i.executor_user_id === userId)) return;
+            out.push(teamPlanItemShape(i, row, teamItemPathOf(i, byId)));
+        });
+    });
+    out.sort((a, b) => a.planTitle.localeCompare(b.planTitle) || a.path.localeCompare(b.path));
+    return out.slice(0, 500);
+}
+// tablero → renglón: después de cada movimiento de la actividad, el renglón ligado se pone al día (solo hacia delante; plan activo; hoja).
+function teamSyncPlanItem(clientId, activityId, byLabel) {
+    const row = db.prepare('SELECT * FROM team_activities WHERE id = ?').get(activityId);
+    if (!row || row.plan_item_id == null) return;
+    const state = teamActivityState(db.prepare('SELECT status, is_principal AS isPrincipal FROM team_activity_assignees WHERE activity_id = ?').all(row.id), row.status === 'cancelled');
+    const target = TEAM_ITEM_STATE[state];
+    if (!target) return;
+    const item = db.prepare('SELECT * FROM work_plan_items WHERE id = ?').get(row.plan_item_id);
+    if (!item || item.status === target || item.status === 'done') return;
+    if (db.prepare('SELECT 1 FROM work_plan_items WHERE parent_id = ?').get(item.id)) return;
+    const plan = db.prepare('SELECT * FROM work_plans WHERE id = ? AND client_id = ?').get(item.plan_id, clientId);
+    if (!plan || plan.status !== 'active') return;
+    db.transaction(() => { db.prepare('UPDATE work_plan_items SET status = ?, updated_at = ? WHERE id = ?').run(target, workPlanNow(), item.id); touchWorkPlan(plan.id); })();
+    logTableChange({
+        clientId, tableKey: WORK_PLAN_TABLE, recordId: plan.id, recordLabel: workPlanItemLabel(workPlanLevelsOf(plan), item.depth, item.title), action: 'update', fieldKey: 'main.workPlanFieldItemStatus',
+        oldValue: WORK_PLAN_ITEM_STATUS_ES[item.status], newValue: WORK_PLAN_ITEM_STATUS_ES[target], changedBy: byLabel ? `${byLabel} · Equipo de Trabajo` : 'Equipo de Trabajo',
+    });
+}
+// renglón → tablero: el renglón se marcó «Hecha» en el plan: la actividad ligada se cierra (cada persona queda terminada, validada por quien lo marcó; sin personas se cancela). Se avisa a quienes la tenían.
+function teamCloseFromPlan(clientId, itemId, actorUserId, actorLabel) {
+    const rows = db.prepare("SELECT * FROM team_activities WHERE plan_item_id = ? AND client_id = ? AND status = 'active'").all(itemId, clientId);
+    const now = teamNow();
+    rows.forEach((row) => {
+        const as = db.prepare('SELECT * FROM team_activity_assignees WHERE activity_id = ?').all(row.id);
+        if (as.length && as.every((a) => a.status === 'done')) return;
+        db.transaction(() => {
+            if (!as.length) {
+                db.prepare("UPDATE team_activities SET status = 'cancelled', cancel_reason = ?, updated_at = ? WHERE id = ?").run('Hecha en el plan', now, row.id);
+                teamEvent(row.id, null, actorUserId, actorLabel, 'cancelled', 'Hecha en el plan');
+            } else {
+                as.filter((a) => a.status !== 'done').forEach((a) => {
+                    db.prepare("UPDATE team_activity_assignees SET status = 'done', done_at = ?, review_at = COALESCE(review_at, ?), is_now = 0, validated_by_user_id = ? WHERE id = ?").run(now, now, actorUserId, a.id);
+                    teamEvent(row.id, a.user_id, actorUserId, actorLabel, 'closed_by_plan', '');
+                });
+            }
+            db.prepare("UPDATE team_activity_passes SET status = 'cancelled', resolved_at = ?, resolution_note = 'plan item done' WHERE activity_id = ? AND status = 'pending'").run(now, row.id);
+            db.prepare('UPDATE team_activities SET updated_at = ? WHERE id = ?').run(now, row.id);
+        })();
+        publishTeamNotice({ recipientIds: [...as.map((a) => a.user_id), row.created_by_user_id], event: 'plan_done', activity: row, actorUserId, actorLabel });
+    });
+}
+// fecha: la fecha límite de la actividad cambió: el fin del renglón ligado la sigue (si el renglón ya tiene fechas y no queda antes de su inicio).
+function teamMirrorDueToItem(clientId, planItemId, newDue, byLabel) {
+    if (planItemId == null || !newDue) return;
+    const item = db.prepare('SELECT * FROM work_plan_items WHERE id = ?').get(planItemId);
+    if (!item || !item.start_date || item.end_date === newDue || newDue < item.start_date) return;
+    const plan = db.prepare('SELECT * FROM work_plans WHERE id = ? AND client_id = ?').get(item.plan_id, clientId);
+    if (!plan || plan.status !== 'active') return;
+    db.transaction(() => { db.prepare('UPDATE work_plan_items SET end_date = ?, updated_at = ? WHERE id = ?').run(newDue, workPlanNow(), item.id); touchWorkPlan(plan.id); })();
+    logTableChange({
+        clientId, tableKey: WORK_PLAN_TABLE, recordId: plan.id, recordLabel: workPlanItemLabel(workPlanLevelsOf(plan), item.depth, item.title), action: 'update', fieldKey: 'main.workPlanFieldEnd',
+        oldValue: item.end_date || '', newValue: newDue, changedBy: byLabel ? `${byLabel} · Equipo de Trabajo` : 'Equipo de Trabajo',
+    });
+}
+// Lo que Planes enseña de cada renglón ligado: Map(itemId → { activityId, state }); si hubo varias (una terminada y otra nueva) manda la abierta.
+function teamLinksForPlan(planId) {
+    const out = new Map();
+    const acts = db.prepare("SELECT id, plan_item_id AS itemId FROM team_activities WHERE plan_id = ? AND status = 'active' AND plan_item_id IS NOT NULL ORDER BY id").all(planId);
+    if (!acts.length) return out;
+    const byAct = new Map();
+    db.prepare(`SELECT activity_id AS id, status, is_principal AS isPrincipal FROM team_activity_assignees WHERE activity_id IN (${acts.map(() => '?').join(',')})`).all(...acts.map((a) => a.id)).forEach((a) => { if (!byAct.has(a.id)) byAct.set(a.id, []); byAct.get(a.id).push(a); });
+    acts.forEach((a) => {
+        const state = teamActivityState(byAct.get(a.id) || [], false);
+        const prev = out.get(a.itemId);
+        if (prev && prev.state !== 'done') return;
+        out.set(a.itemId, { activityId: a.id, state });
+    });
+    return out;
+}
+// ¿Esta persona puede abrir el tablero de Equipo de Trabajo hoy? (lo mismo que la guarda de la pantalla)
+function teamUserHasScreen(clientId, userId) {
+    const account = db.prepare('SELECT is_client_admin AS isAdmin FROM users WHERE id = ? AND client_id = ?').get(userId, clientId);
+    if (!account) return false;
+    return isMainScreenStatusVisible(clientId, userId, 'equipo-trabajo') && (!!account.isAdmin || isTupleGranted(getUserEffectiveGrants(userId), 'main', 'equipo-trabajo', null));
+}
+// lo mínimo de la liga que se enseña en la línea del tiempo y el Registro
+function teamPlanBrief(ctx, row) {
+    const l = row.plan_item_id != null ? ctx.planLinks.get(row.plan_item_id) : null;
+    return l ? { planId: l.planId, planTitle: l.planTitle, itemTitle: l.itemTitle, path: l.path } : null;
+}
 const teamEvent = (activityId, userId, actorUserId, actorLabel, event, detail, passId) => db.prepare('INSERT INTO team_activity_events (activity_id, user_id, actor_user_id, actor_label, event, detail, created_at, pass_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(activityId, userId == null ? null : userId, actorUserId, actorLabel || '', event, String(detail || '').slice(0, 400), teamNow(), passId == null ? null : passId);
 // Lo que viene del formulario de crear o cambiar → datos limpios: { value } o { error, field }.
 function cleanTeamActivityFields(clientId, forTest, body, partial) {
@@ -17390,13 +17564,16 @@ function createTeamActivity(clientId, userId, forTest, isAdmin, body, byLabel) {
     const claim = cleanTeamClaim(clientId, forTest, body, people.ids.length ? '' : 'team_dept');
     if (claim.error) return claim;
     { const gate = teamAbsentGate(clientId, forTest, body, people.ids); if (gate) return gate; }
+    let link = null;
+    if (body && body.planItemId != null && body.planItemId !== '') { const chk = teamPlanLinkCheck(clientId, userId, body.planItemId, null); if (chk.error) return chk; link = chk; }
     const v = fields.value;
     const now = teamNow();
     let id = 0;
     db.transaction(() => {
-        id = Number(db.prepare(`INSERT INTO team_activities (client_id, is_test_data, title, description, kind, urgent, realization, site_ids, area, department, due_date, seats_needed, claim_scope, created_by_user_id, created_by_label, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(clientId, forTest ? 1 : 0, v.title, v.description, v.kind, v.urgent, v.realization, v.site_ids, v.area, v.department, v.due_date, v.seats_needed, claim.scope, userId, byLabel || '', now, now).lastInsertRowid);
+        id = Number(db.prepare(`INSERT INTO team_activities (client_id, is_test_data, title, description, kind, urgent, realization, site_ids, area, department, due_date, seats_needed, claim_scope, plan_id, plan_item_id, created_by_user_id, created_by_label, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(clientId, forTest ? 1 : 0, v.title, v.description, v.kind, v.urgent, v.realization, v.site_ids, v.area, v.department, v.due_date || (link ? link.item.end_date : null) || null, v.seats_needed, claim.scope, link ? link.item.plan_id : null, link ? link.item.id : null, userId, byLabel || '', now, now).lastInsertRowid);
         teamEvent(id, null, userId, byLabel, 'created', v.title);
+        if (link) teamEvent(id, null, userId, byLabel, 'plan_linked', link.item.title);
         people.ids.forEach((uid) => {
             db.prepare('INSERT INTO team_activity_assignees (activity_id, user_id, status, is_principal, assigned_by_user_id, assigned_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, uid, 'assigned', uid === principal ? 1 : 0, userId, now);
             teamEvent(id, uid, userId, byLabel, 'assigned', '');
@@ -17431,7 +17608,10 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
     const touch = () => db.prepare('UPDATE team_activities SET updated_at = ? WHERE id = ?').run(now, row.id);
     const reasonOf = () => { const r = typeof b.reason === 'string' ? workPlanText(b.reason) : ''; return r; };
     if (row.status !== 'active') return { error: 'TEAM_CANCELLED' };
-    const done = (extra) => ({ activity: teamDetail(clientId, userId, forTest, isAdmin, teamActivityRowFor(clientId, forTest, row.id), true), ...(extra || {}) });
+    const done = (extra) => {
+        teamSyncPlanItem(clientId, row.id, byLabel);
+        return { activity: teamDetail(clientId, userId, forTest, isAdmin, teamActivityRowFor(clientId, forTest, row.id), true), ...(extra || {}) };
+    };
     const names = teamNames(clientId);
     const nameOf = (id) => names.get(id) || '';
     const notify = (event, ids, extra) => publishTeamNotice({ recipientIds: ids, event, activity: row, actorUserId: userId, actorLabel: byLabel, ...(extra || {}) });
@@ -17447,6 +17627,21 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
             if (claim.error) return claim;
             fields.value.claim_scope = claim.scope;
         }
+        // ligar la actividad a un renglón de un plan o soltarla (planItemId vacío)
+        let planChange = null;
+        if (Object.prototype.hasOwnProperty.call(b, 'planItemId')) {
+            const wanted = b.planItemId === null || b.planItemId === '' ? null : Number(b.planItemId);
+            if (wanted !== (row.plan_item_id == null ? null : row.plan_item_id)) {
+                if (wanted === null) planChange = { itemId: null, planId: null, title: '' };
+                else {
+                    const chk = teamPlanLinkCheck(clientId, userId, wanted, row.id);
+                    if (chk.error) return chk;
+                    planChange = { itemId: chk.item.id, planId: chk.item.plan_id, title: chk.item.title };
+                }
+                fields.value.plan_id = planChange.planId;
+                fields.value.plan_item_id = planChange.itemId;
+            }
+        }
         const keys = Object.keys(fields.value);
         if (!keys.length) return done();
         db.transaction(() => {
@@ -17456,7 +17651,10 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
                 claim.userIds.forEach((uid) => db.prepare('INSERT INTO team_activity_claimers (activity_id, user_id) VALUES (?, ?)').run(row.id, uid));
             }
             teamEvent(row.id, null, userId, byLabel, 'edited', keys.join(', '));
+            if (planChange) teamEvent(row.id, null, userId, byLabel, planChange.itemId ? 'plan_linked' : 'plan_unlinked', planChange.title);
         })();
+        // la fecha límite que se cambió la sigue el fin del renglón ligado
+        if (Object.prototype.hasOwnProperty.call(fields.value, 'due_date')) teamMirrorDueToItem(clientId, planChange ? planChange.itemId : row.plan_item_id, fields.value.due_date, byLabel);
         return done();
     }
     if (action === 'cancel') {
@@ -17743,6 +17941,11 @@ function updateWorkPlanItem(clientId, userId, forTestAccount, planId, itemId, fi
                     next.note != null ? next.note : item.note, next.status != null ? next.status : item.status, now, item.id);
             touchWorkPlan(row.id);
         })();
+    }
+    if (changes.length) {
+        // Equipo de Trabajo: «Hecha» cierra la actividad ligada y la fecha de fin la sigue la fecha límite
+        if (next.status === 'done' && item.status !== 'done') teamCloseFromPlan(clientId, item.id, userId, workPlanOwnerName(userId));
+        if (next.dates && next.dates.end !== (item.end_date || null)) db.prepare("UPDATE team_activities SET due_date = ?, updated_at = ? WHERE plan_item_id = ? AND status = 'active'").run(next.dates.end || null, teamNow(), item.id);
     }
     return workPlanItemResult(clientId, userId, row.id, item.id, { changes });
 }
@@ -21383,7 +21586,7 @@ module.exports = {
     getUserGrants,
     setUserGrants,
     getUserGrantChangeLog,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, teamTimeline, teamLog, setTeamWorkday, setTeamNow, setUserPhoto, getUserPhoto, getUserPhotoVer, deleteUserPhoto, TEAM_PHOTO_MAX_BYTES, createTeamActivity, teamActivityAct, TEAM_LIMITS, teamActivityState, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, teamTimeline, teamLog, teamLinkableItems, teamPlanItemInfo, setTeamWorkday, setTeamNow, setUserPhoto, getUserPhoto, getUserPhotoVer, deleteUserPhoto, TEAM_PHOTO_MAX_BYTES, createTeamActivity, teamActivityAct, TEAM_LIMITS, teamActivityState, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
     MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices,
     THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,
