@@ -13052,6 +13052,16 @@ function supportReopenFlow(req, rec, { said, toLevel = 'n1', byTeam = false }) {
     supportNoticeToLevel(req, toLevel, { variant: 'case-reopened', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, targetName: rec.reporter_name, to: toLevel, said, by });
     if (toLevel === 'n4') { try { publishSaasCaseArrived(rec.id, { by, reopened: true, said, actorUserId: req.user.sub }); } catch (err) { console.error('saas case reopened notice failed', err); } }
 }
+// Mapa de soporte › «Avisar al jefe directo cuando se cierra» (notifyClosed): al cerrar un caso (Terminado o Cerrado sin respuesta) el jefe directo de quien lo reportó recibe un aviso en la campana que dice cómo quedó. Solo informa: no pide
+// confirmar ni sube a nadie (a diferencia de los avisos de Urgente y de subir a Nivel 3 o 4). Si quien reportó no tiene jefe directo, o el jefe es quien cerró el caso, no se avisa a nadie.
+function supportNoticeClosedToBoss(rec, { status, by, actorUserId }) {
+    try {
+        if (!rec.reporter_user_id || getSupportMapRow(rec.client_id).notify_closed !== 1) return;
+        const boss = resolveDirectSupervisorUserId(rec.reporter_user_id);
+        if (!boss || boss === actorUserId || boss === rec.reporter_user_id) return;
+        publishSupportNotice({ recipients: [boss], actorUserId, actorLabel: by, payload: { variant: 'case-closed-boss', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, targetName: rec.reporter_name, noresp: status === 'noresp', by } });
+    } catch (err) { console.error('support closed boss notice failed', err); }
+}
 function supportClosingGate(req, res) {
     if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
     const id = Number(req.params.id);
@@ -13172,6 +13182,7 @@ app.post('/api/business/support-cases/:id/close', requireAuth, (req, res) => {
     addSupportEvent(rec, 'closed', { by, noresp: status === 'noresp', cause: causeName, attempts: status === 'noresp' ? listSupportAttempts(rec.id, rec.confirm_at).length : 0 }, { level: 'n1', authorName: by, authorUserId: req.user.sub });
     supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel('confirm'), supportStatusLabel(status));
     if (rec.general_id) closeSupportGeneralIfDone(rec.general_id);
+    supportNoticeClosedToBoss(rec, { status, by, actorUserId: req.user.sub });
     if (rec.reporter_user_id && rec.reporter_user_id !== req.user.sub) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-closed', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, noresp: status === 'noresp', until: new Date(Date.now() + SUPPORT_REOPEN_DAYS * 86400000).toISOString(), askRating: status === 'done' && getSupportMapRow(req.user.clientId).ask_user_rating === 1, by } });
     res.json({ status });
 });
@@ -14199,6 +14210,7 @@ app.post('/api/admin/support-cases/:id/close', requireAuth, requireAdmin, (req, 
     addSupportClosure({ caseId: rec.id, clientId: rec.client_id, kind: status === 'done' ? 'closed' : 'noresp', byUserId: req.user.sub, byName: by, fromLevel: 'n4', toLevel: 'n4', causeId, causeName, did, fileIds });
     addSupportEvent(rec, 'closed', { by, noresp: status === 'noresp', cause: causeName, attempts: status === 'noresp' ? listSupportAttempts(rec.id, rec.confirm_at).length : 0 }, { level: 'n4', authorName: by, authorUserId: req.user.sub });
     supportLogCaseChange(sreq, rec, 'main.colSpEstatus', supportStatusLabel('confirm'), supportStatusLabel(status));
+    supportNoticeClosedToBoss(rec, { status, by, actorUserId: req.user.sub });
     if (rec.reporter_user_id) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-closed', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, noresp: status === 'noresp', until: new Date(Date.now() + SUPPORT_REOPEN_DAYS * 86400000).toISOString(), askRating: status === 'done' && getSupportMapRow(rec.client_id).ask_user_rating === 1, by } });
     res.json({ status });
 });
