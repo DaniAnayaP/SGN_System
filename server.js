@@ -5439,7 +5439,7 @@ function autoEnableMinimums(grants, options = {}) {
 function autoEnablePersonMinimums(grants, req, extra = {}) {
     const limitCheck = personGrantLimitCheck(req.user.clientId, getUserVisibleStatuses(req.user.sub));
     const canAdd = extra.exclusions ? (tuple) => limitCheck(tuple) && !isTupleExcludedForUser(extra.exclusions, tuple) : limitCheck;
-    const out = expandPersonAccessMinimums(grants, { canAdd, baseGrants: extra.baseGrants });
+    const out = expandPersonAccessMinimums(grants, { canAdd, baseGrants: extra.baseGrants, cumulativeLevels: !!extra.cumulativeLevels });
     const name = (list) => list.slice(0, 30).map((p) => ({ access: accessLabelEs(p.access), related: accessLabelEs(p.related), count: p.count || 0 }));
     return { grants: out.grants, autoEnabled: name(out.autoEnabled), blocked: name(out.blocked) };
 }
@@ -6431,7 +6431,7 @@ app.put('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
         exclusionsAfter = { exclude: exclusions, keep: keep || [] };
     }
     // Relación de Accesos: el mínimo de lo que esta persona ya opera (con lo que le da su puesto, menos lo que se le quita) entra solo en sus adicionales, con «Ver y operar»; lo que el contrato no deja dar sale en «blocked»
-    const auto = autoEnablePersonMinimums(grants, req, { baseGrants: userPositionBaseGrants(req.params.id, exclusionsAfter), exclusions: exclusionsAfter });
+    const auto = autoEnablePersonMinimums(grants, req, { baseGrants: userPositionBaseGrants(req.params.id, exclusionsAfter), exclusions: exclusionsAfter, cumulativeLevels: true });
     const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: grantsBefore, after: auto.grants, allowedCenterIds: getHrAssignedCenterIds(req.params.id), limitMain: true });
     const savedGrants = setUserGrants(req.params.id, limited.allowed, changedByLabel(req));
     // Quitar a esta persona lo que le da su puesto: llega la lista completa de exclusiones y lo que se conserva de un permiso de contenedor (ver applyUserExclusions). Sin la lista, se deja como estaba.

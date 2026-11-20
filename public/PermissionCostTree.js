@@ -195,6 +195,9 @@
         // Relación de Accesos (pieza 5b): las reglas que manda GET /api/admin/access-relations/rules (ver AccessRules.js). Solo el árbol del plan y «+ Adicionales» de un cliente: lo mínimo de cada acceso habilitado se marca solo y queda
         // bloqueado (renglón teal con candado) y lo que el acceso toca sale recomendado (violeta). El servidor repite la misma regla al guardar.
         accessRules = null,
+        // Relación de Accesos para PERSONAS: las reglas de GET /api/business/access-rules (ver AccessRules.createPerson). Solo el árbol «Otorgar Accesos» de un usuario (clientTricolor interactivo con allowRemove): lo que el puesto le da (menos lo
+        // que se le quita) y sus adicionales cuentan juntos; si ya OPERA un acceso, su mínimo de la misma pantalla entra solo como adicional con «Ver y operar» (y su «Solo ver»), queda con candado (no se quita ni se excluye) y lo que se recomienda sale en violeta.
+        personAccessRules = null,
     } = {}) {
         let sectionsData = [];
         // Versión de lo que se ha marcado: sube con cada alta o baja en los conjuntos de permisos de este árbol (TrackedSet). Sirve para no repetir cuentas pesadas (el conjunto efectivo del cliente y las
@@ -205,7 +208,8 @@
             delete(value) { dataVersion += 1; return super.delete(value); }
             clear() { dataVersion += 1; super.clear(); }
         }
-        const accessEngine = accessRules && window.AccessRules && (mode === 'grantReadonlyCost' || (mode === 'clientTricolor' && interactive && allowRemoveExtras)) ? window.AccessRules.create(accessRules) : null;
+        const personEngine = mode === 'clientTricolor' && interactive && allowRemove && personAccessRules && window.AccessRules && window.AccessRules.createPerson ? window.AccessRules.createPerson(personAccessRules) : null;
+        const accessEngine = personEngine || (accessRules && window.AccessRules && (mode === 'grantReadonlyCost' || (mode === 'clientTricolor' && interactive && allowRemoveExtras)) ? window.AccessRules.create(accessRules) : null);
         let accessRequired = new Map(); // llave -> nombres de los accesos habilitados que la necesitan
         let accessTouched = new Map(); // llave del acceso que se toca -> nombres de quien lo recomienda
         let accessReady = false; // después de abrir el árbol, lo que entra solo se avisa
@@ -216,6 +220,7 @@
         // Lo que no está habilitado para servicio en el Árbol Maestro no entra (sale en blocked). Regresa { added, addedBy, blocked }.
         function recomputeAccessRules() {
             if (!accessEngine || !accessEngine.hasRules) { accessRequired = new Map(); accessTouched = new Map(); return { added: [], addedBy: [], blocked: [] }; }
+            if (personEngine) return recomputePersonAccessRules();
             const isClient = mode === 'clientTricolor';
             const triggers = () => (isClient ? effectiveClientSet() : grantSet);
             const options = isClient
@@ -230,6 +235,33 @@
             accessTouched = touchedResult.touched;
             accessTouchedKeys = touchedResult.touchedKeys;
             return { added: first.added, addedBy: first.addedBy, blocked: first.blocked };
+        }
+        // Relación de Accesos para PERSONAS (árbol «Otorgar Accesos» de un usuario): con lo que el puesto le da (menos lo que se le quita) y sus adicionales juntos, el mínimo de lo que ya opera entra solo como adicional («Ver y operar» y su
+        // «Solo ver»: aquí los niveles se suman) y se marcan el candado y lo recomendado. Lo que se le quitó a esta persona no se le vuelve a dar solo. El candado: la columna o botón mínimo no baja de nivel ni se excluye mientras el acceso se opere.
+        function recomputePersonAccessRules() {
+            const keys = [];
+            planGrantSet.forEach((k) => { if (!excludedKeys.has(k)) keys.push(k); });
+            effectiveClientSet().forEach((k) => keys.push(k));
+            const out = personEngine.resolve(keys, { cumulative: true, canAdd: (k) => !isLimitLocked(k) && !excludedKeys.has(k) });
+            out.added.forEach((k) => stageAdd(k));
+            const have = new Set(keys);
+            out.added.forEach((k) => have.add(k));
+            // las llaves bloqueadas (con los niveles que de verdad tiene la persona: si el mínimo lo cubre un «Editar» del puesto, ese es el que no se quita)
+            const required = new Map();
+            const put = (k, names) => { if (!required.has(k)) required.set(k, names); };
+            out.locks.forEach((lock, base) => {
+                put(base, lock.names); // la fila de la columna o del botón (se llama por su llave sin nivel)
+                if (lock.rank === 0) return;
+                put(`${base}/solo-ver`, lock.names);
+                if (lock.rank >= 2) {
+                    if (have.has(`${base}/ver-y-operar`)) put(`${base}/ver-y-operar`, lock.names);
+                    else if (have.has(`${base}/editar`)) put(`${base}/editar`, lock.names);
+                }
+            });
+            accessRequired = required;
+            accessTouched = out.touched;
+            accessTouchedKeys = [];
+            return { added: out.added, addedBy: out.addedBy, blocked: out.blocked };
         }
         // Lo que cuesta lo mínimo que entró solo (ya va sumado en el contrato o en los adicionales) y lo que costaría lo recomendado si se agrega. Regresa null si no hay nada de Relación de Accesos que mostrar.
         function computeAccessCostSummary() {
@@ -292,7 +324,8 @@
                     row.appendChild(badge);
                 }
             }
-            const touchedBy = accessTouched.get(key);
+            // en el árbol de una persona la fila de una columna se llama por su «<columna>/solo-ver»; lo recomendado es la columna (el acceso)
+            const touchedBy = accessTouched.get(personEngine && /\/solo-ver$/.test(String(key)) ? String(key).slice(0, -'/solo-ver'.length) : key);
             const have = mode === 'clientTricolor' ? (planGrantSet.has(key) || effectiveClientSet().has(key)) : grantSet.has(key);
             if (touchedBy && !have) {
                 row.classList.add('perm-tree-row-touch');
@@ -413,7 +446,8 @@
             else pendingAdditions.add(k);
         }
         function stageDrop(k) {
-            if (accessEngine && isRequiredKey(k) && effectiveClientSet().has(k)) { noteLockedKeys([k]); return; } // mínimo indispensable de un acceso habilitado: no se quita
+            // mínimo indispensable de un acceso habilitado: no se quita (en una persona tampoco se le excluye lo que le da su puesto)
+            if (accessEngine && isRequiredKey(k) && (effectiveClientSet().has(k) || (personEngine && planGrantSet.has(k)))) { noteLockedKeys([k]); return; }
             pendingAdditions.delete(k);
             if (!canRemove) return;
             if (allowRemove && planGrantSet.has(k) && !String(k).startsWith('main::')) excludedKeys.add(k); // lo que da el puesto no se borra de su Rol: se le resta a esta persona
@@ -1281,7 +1315,8 @@
                         icon: COLUMN_LEVEL_ICONS[level.id],
                         label: t(level.labelKey),
                         checked: locked || removableLevel || (interactive && pendingAdditions.has(levelKey)),
-                        disabled: removableLevel ? false : (locked || !interactive || !verGranted || isLimitLocked(levelKey)),
+                        // un nivel que es el mínimo de un acceso que se opera no se quita (Relación de Accesos)
+                        disabled: removableLevel ? isRequiredKey(levelKey) : (locked || !interactive || !verGranted || isLimitLocked(levelKey)),
                         lockedColor: levelColor !== 'red' ? levelColor : undefined,
                         onChange: (checked) => { if (checked) stageAdd(levelKey); else stageDrop(levelKey); render(); },
                     };
@@ -1617,6 +1652,7 @@
         // Lo que se avisa es lo de siempre: lo bloqueado se repite en cada dibujo, y lo que entró solo se avisa una vez (en el dibujo siguiente ya no hay nada nuevo que agregar).
         let accessResultVersion = -1;
         let accessResultBlocked = [];
+        const personAnnouncedBlocked = new Set();
         function render() {
             if (accessEngine) {
                 let live;
@@ -1628,10 +1664,15 @@
                     accessResultVersion = dataVersion; // después de la cuenta: lo que ella misma marcó ya cuenta
                 }
                 if (accessReady && live.addedBy.length) accessToast(t('admin.minAutoLive', { access: accessNamesText(live.addedBy) }), 'info');
-                if (accessReady && live.blocked.length) accessToast(t('admin.minAutoBlockedLive', { access: accessNamesText(live.blocked) }), 'warning');
+                if (personEngine) {
+                    // lo que no se pudo dar a una persona se avisa una sola vez (no en cada dibujo)
+                    const fresh = live.blocked.filter((name) => !personAnnouncedBlocked.has(name));
+                    fresh.forEach((name) => personAnnouncedBlocked.add(name));
+                    if (accessReady && fresh.length) accessToast(t('admin.minAutoBlockedPersonLive', { access: accessNamesText(fresh) }), 'warning');
+                } else if (accessReady && live.blocked.length) accessToast(t('admin.minAutoBlockedLive', { access: accessNamesText(live.blocked) }), 'warning');
             }
             container.innerHTML = '';
-            if (accessEngine) renderAccessSummary();
+            if (accessEngine && !personEngine) renderAccessSummary();
             if (mode === 'grantReadonlyCost') {
                 const header = document.createElement('div');
                 header.className = 'perm-tree-app-header';

@@ -173,7 +173,8 @@
             return { label: r.label || r.access, access, icon: !!r.icon, web, touches: r.touches || [], own };
         }).filter((r) => r.access.item && r.access.sub && (r.web.length || r.touches.length));
 
-        // opciones: canAdd(llave) → false si no se puede dar (contrato o Estatus). Regresa { added: [llaves], removed: [llaves del «Solo ver» que sube], addedBy, blocked, locks, touched }.
+        // opciones: canAdd(llave) → false si no se puede dar (contrato o Estatus); cumulative: los niveles se SUMAN (el árbol por usuario guarda «Solo ver» y encima «Ver y operar»): al dar «Ver y operar» también se da el «Solo ver» que falte y nunca se quita
+        // (en el árbol del puesto los niveles se excluyen y el «Solo ver» sube). Regresa { added: [llaves], removed: [llaves del «Solo ver» que sube], addedBy, blocked, locks, touched }.
         function resolve(keys, options = {}) {
             const have = new Set();
             const index = new Map(); // «sección|área» → rutas que la persona tiene en Web
@@ -213,9 +214,12 @@
                         if (options.canAdd && !options.canAdd(tuple.key)) { blocked.add(rule.label); return; }
                         const lv = PERSON_LEVEL_RE.exec(tuple.key);
                         if (lv && lv[2] === 'ver-y-operar') {
-                            // los niveles se excluyen: al subir a «Ver y operar» se quita el «Solo ver» de esa columna o botón
                             const solo = `${lv[1]}/solo-ver`;
-                            if (have.has(solo)) {
+                            if (options.cumulative) {
+                                // los niveles se suman: «Ver y operar» lleva su «Solo ver»
+                                if (!have.has(solo) && (!options.canAdd || options.canAdd(solo))) { have.add(solo); note(solo); added.push(solo); }
+                            } else if (have.has(solo)) {
+                                // los niveles se excluyen: al subir a «Ver y operar» se quita el «Solo ver» de esa columna o botón
                                 have.delete(solo);
                                 const at = added.indexOf(solo);
                                 if (at >= 0) added.splice(at, 1); else removed.push(solo);

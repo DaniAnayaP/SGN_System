@@ -131,9 +131,11 @@ async function openGrantAccessModal(user) {
         // offered a módulo their own client hasn't contracted.
         const order = await fetch(`/api/business/permission-order?level=usuario&entityId=${user.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const classOverrides = await fetch(`/api/business/permission-classifications?level=usuario&entityId=${user.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
+        // Relación de Accesos para personas: el candado del mínimo y el «Recomendado» en vivo (si no cargan, el árbol funciona igual y el servidor aplica lo mismo al guardar)
+        const personAccessRules = await fetch('/api/business/access-rules', { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.rules) || null).catch(() => null);
         grantTree = window.PermissionCostTree.create(grantAccessContainer, {
             order, classOverrides, mode: 'clientTricolor', interactive: true, allowRemove: true, allowedSectionIds, columnLevels: true, costCenters,
-            grantLimits: grantLimitsForUser(data),
+            grantLimits: grantLimitsForUser(data), personAccessRules,
             historyEndpoint: '/api/business/user-grant-change-log', historyParams: { userId: user.id },
         });
         await grantTree.init(data.jobPositionGrants || [], [], data.grants || [], null, data.exclusions || []);

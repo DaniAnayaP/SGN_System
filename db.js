@@ -13596,7 +13596,8 @@ function expandAccessMinimums(grants, options = {}) {
 //   · solo cuenta el mínimo que está en la MISMA pantalla del acceso (su botón, su columna): lo de otra pantalla (p. ej. la bandeja de TI de «Pedir alta») se queda como recomendación, no se le da a la persona sola;
 //   · una columna o botón marcado como mínimo entra con «Ver y operar» (nunca Autorizar, Eliminar ni Notificar: esos los marca el administrador a mano); un contenedor (grupo, pantalla) marcado como mínimo entra solo con «Solo ver» en cada columna y botón;
 //   · el acceso cuenta como habilitado para la persona cuando ya OPERA algo de él (Ver y operar, Editar, Autorizar o Eliminar, o el ícono marcado): quien solo lo ve no recibe de pronto el botón de crear. Lo que es el mínimo del propio acceso no cuenta para habilitarlo (si no, el botón que entró solo lo dejaría habilitado, y bloqueado, para siempre);
-//   · nunca baja un nivel (si ya tiene «Editar», no se le pone «Ver y operar») y, al subir de «Solo ver» a «Ver y operar», quita el «Solo ver» (los niveles se excluyen, como en el árbol);
+//   · nunca baja un nivel (si ya tiene «Editar», no se le pone «Ver y operar») y, al subir de «Solo ver» a «Ver y operar», quita el «Solo ver» (los niveles se excluyen, como en el árbol del puesto). En el árbol por USUARIO los niveles se SUMAN: ahí
+//     «Ver y operar» lleva su «Solo ver» y nunca se quita (options.cumulativeLevels);
 //   · solo lo que el contrato y el Estatus de quien da el permiso dejan dar (canAdd); lo demás sale en «blocked». General (main) no lleva reglas de personas.
 // ---------------------------------------------------------------------------
 const PERSON_LEVEL_RANK = { 'solo-ver': 1, 'ver-y-operar': 2, editar: 3 };
@@ -13710,9 +13711,15 @@ function expandPersonAccessMinimums(grants, options = {}) {
                     if (options.canAdd && !options.canAdd(tuple)) { blocked.set(pairKey, { access: rel.access, related: rel.related }); continue; }
                     const lv = levelOf(tuple.submenuId);
                     if (lv && lv.level === 'ver-y-operar') {
-                        // los niveles se excluyen: al subir a «Ver y operar» se quita el «Solo ver» de esa columna o botón
-                        const soloKey = keyOf({ ...tuple, submenuId: `${lv.base}/solo-ver${lv.sfx}` });
-                        if (have.has(soloKey)) { have.delete(soloKey); all = all.filter((g) => keyOf(g) !== soloKey); mine = mine.filter((g) => keyOf(g) !== soloKey); }
+                        const soloTuple = { ...tuple, submenuId: `${lv.base}/solo-ver${lv.sfx}` };
+                        const soloKey = keyOf(soloTuple);
+                        if (options.cumulativeLevels) {
+                            // el árbol por usuario SUMA los niveles (guarda «Solo ver» y encima «Ver y operar»): «Ver y operar» lleva su «Solo ver» (si el límite lo deja dar) y nunca se quita
+                            if (!have.has(soloKey) && (!options.canAdd || options.canAdd(soloTuple))) { all.push(soloTuple); mine.push(soloTuple); have.add(soloKey); }
+                        } else if (have.has(soloKey)) {
+                            // los niveles se excluyen: al subir a «Ver y operar» se quita el «Solo ver» de esa columna o botón
+                            have.delete(soloKey); all = all.filter((g) => keyOf(g) !== soloKey); mine = mine.filter((g) => keyOf(g) !== soloKey);
+                        }
                     }
                     all.push(tuple);
                     mine.push(tuple);
