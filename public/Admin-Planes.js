@@ -735,6 +735,101 @@ planCostSaveBtn.addEventListener('click', async () => {
     }
 });
 
+// Costo de los planes: de hoy y por accesos incluidos (solo lectura; lo que se cobra no cambia). Una fila por plan y, debajo, el «Costo Contratado» de cada cliente con ese plan en los dos casos.
+const costCompareModal = document.getElementById('plan-cost-compare-modal');
+const costCompareBody = document.getElementById('plan-cost-compare-body');
+const costCompareError = document.getElementById('plan-cost-compare-error');
+document.getElementById('plan-cost-compare-close').addEventListener('click', () => { costCompareModal.hidden = true; });
+costCompareModal.addEventListener('click', (event) => { if (event.target === costCompareModal) costCompareModal.hidden = true; });
+function costCompareCell(text, className) {
+    const td = document.createElement('td');
+    td.textContent = text;
+    if (className) td.className = className;
+    return td;
+}
+function renderCostCompare(plans) {
+    costCompareBody.innerHTML = '';
+    if (!plans.length) { const p = document.createElement('p'); p.className = 'admin-hint'; p.textContent = Dashboard.t('admin.costCompareNone'); costCompareBody.appendChild(p); return; }
+    const money = (amount, currency) => Dashboard.formatCurrency(amount, currency);
+    const signedMoney = (amount, currency) => `${amount < 0 ? '−' : amount > 0 ? '+' : ''}${Dashboard.formatCurrency(Math.abs(amount), currency)}`;
+    const diffClass = (delta) => (delta < 0 ? 'plan-cmp-down' : delta > 0 ? 'plan-cmp-up' : '');
+    const table = document.createElement('table');
+    table.className = 'plan-cmp';
+    const head = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    [['admin.costCompareColPlan', ''], ['admin.costCompareColNow', 'num'], ['admin.costCompareColNew', 'num'], ['admin.costCompareColDelta', 'num']].forEach(([key, cls]) => {
+        const th = document.createElement('th');
+        th.scope = 'col';
+        th.textContent = Dashboard.t(key);
+        if (cls) th.className = cls;
+        headRow.appendChild(th);
+    });
+    head.appendChild(headRow);
+    table.appendChild(head);
+    const body = document.createElement('tbody');
+    const totals = new Map(); // moneda -> { now, next }
+    plans.forEach((plan) => {
+        const row = document.createElement('tr');
+        row.className = 'plan-cmp-plan';
+        const name = document.createElement('td');
+        const strong = document.createElement('b');
+        strong.textContent = plan.name;
+        name.appendChild(strong);
+        const small = document.createElement('small');
+        small.textContent = ' · ' + Dashboard.t(plan.clients.length === 1 ? 'admin.costCompareOneClient' : 'admin.costCompareClients', { n: plan.clients.length });
+        name.appendChild(small);
+        row.append(name, costCompareCell(money(plan.current, plan.currency), 'num'), costCompareCell(money(plan.proposed, plan.currency), 'num'), costCompareCell(signedMoney(plan.delta, plan.currency), `num ${diffClass(plan.delta)}`));
+        body.appendChild(row);
+        plan.clients.forEach((client) => {
+            const sub = document.createElement('tr');
+            sub.className = 'plan-cmp-client';
+            sub.append(costCompareCell(`${client.name} · ${Dashboard.t('admin.costCompareContracted')}`), costCompareCell(money(client.contractedNow, plan.currency), 'num'), costCompareCell(money(client.contractedNew, plan.currency), 'num'), costCompareCell(signedMoney(client.contractedNew - client.contractedNow, plan.currency),`num ${diffClass(client.contractedNew - client.contractedNow)}`));
+            body.appendChild(sub);
+            const sum = totals.get(plan.currency) || { now: 0, next: 0 };
+            sum.now += client.contractedNow;
+            sum.next += client.contractedNew;
+            totals.set(plan.currency, sum);
+        });
+    });
+    table.appendChild(body);
+    if (totals.size) {
+        const foot = document.createElement('tfoot');
+        totals.forEach((sum, currency) => {
+            const row = document.createElement('tr');
+            row.append(costCompareCell(`${Dashboard.t('admin.costCompareTotal')} (${currency})`), costCompareCell(money(sum.now, currency), 'num'), costCompareCell(money(sum.next, currency), 'num'), costCompareCell(signedMoney(sum.next - sum.now, currency),`num ${diffClass(sum.next - sum.now)}`));
+            foot.appendChild(row);
+        });
+        table.appendChild(foot);
+    }
+    costCompareBody.appendChild(table);
+}
+async function openCostCompareModal() {
+    costCompareError.hidden = true;
+    costCompareBody.innerHTML = '';
+    costCompareModal.hidden = false;
+    try {
+        const res = await fetch('/api/admin/plans/cost-comparison', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        renderCostCompare((await res.json()).plans || []);
+    } catch {
+        costCompareError.textContent = Dashboard.t('admin.loadError');
+        costCompareError.hidden = false;
+    }
+}
+function renderCostCompareButton() {
+    const wrapper = document.querySelector('[data-table-id="mis-planes"]');
+    const toolbar = wrapper?.previousElementSibling;
+    if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;
+    if (toolbar.querySelector('.plan-cmp-btn')) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-new-record-btn plan-cmp-btn';
+    btn.setAttribute('data-help-key', 'planCostCompare');
+    btn.innerHTML = `<i class="bx bx-git-compare" aria-hidden="true"></i><span>${Dashboard.t('admin.costCompareBtn')}</span>`;
+    btn.addEventListener('click', openCostCompareModal);
+    toolbar.prepend(btn);
+}
+
 // Per-plan change history modal -- see Dashboard.openPlanChangeHistory (Dashboard.js).
 
 // "+ Nuevo Plan" — same toolbar-button placement/style as "+ Nuevo
@@ -775,6 +870,7 @@ document.addEventListener('dashboard:language-changed', () => {
             return;
         }
         renderNewPlanButton();
+        renderCostCompareButton();
         await loadBusinessSectors();
         await loadPlans();
     } catch (err) {

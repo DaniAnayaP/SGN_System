@@ -525,7 +525,7 @@ const {
     setMasterPermissionCosts,
     getMasterCostSettings,
     applyMasterCostCurrencyChange,
-    computeAccessCostTotal,
+    computeAccessCostTotal, computePlanCostComparison,
     getSectorCostAdjustDefault,
     setSectorCostAdjustDefault,
     getSectorPermissionCostAdjustments,
@@ -4033,6 +4033,13 @@ app.get('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {
     if (denySaasScreen(req, res, ['saas-plans','saas-clients'])) return;
     const plans = listPlans().map((plan) => ({ ...plan, accessPermissionsCost: computeAccessCostTotal(plan.id) }));
     res.json({ plans, devModeOverride: DEV_MODE_ALLOW_LOCKED_PLAN_EDITS });
+});
+
+// Costo del plan: lo que se cobra hoy contra lo que costaría contando solo lo que el plan incluye (solo lectura; antes de las rutas con :id).
+app.get('/api/admin/plans/cost-comparison', requireAuth, requireAdmin, (req, res) => {
+    if (denySaasScreen(req, res, ['saas-plans', 'saas-clients'])) return;
+    res.set('Cache-Control', 'no-store');
+    res.json({ plans: computePlanCostComparison() });
 });
 
 app.post('/api/admin/plans', requireAuth, requireAdmin, (req, res) => {

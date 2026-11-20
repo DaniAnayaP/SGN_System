@@ -10193,3 +10193,16 @@ a.wp-team-tag:hover{ background: rgba(40, 170, 90, 0.28); }
 .admin-field .tw-repeat-row{ display: flex; align-items: center; gap: 0.5rem; }
 .admin-field .tw-repeat-row input{ width: 5rem; flex: none; }
 .admin-field .tw-repeat-row select{ flex: 1 1 8rem; min-width: 0; }
+/* ---- Nuestros Planes: comparación del costo (de hoy y por accesos incluidos) ---- */
+.plan-cmp-scroll{ overflow: auto; max-height: 62vh; border: 1px solid var(--color-border); border-radius: 0.7rem; background: var(--color-surface); }
+.plan-cmp{ border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+.plan-cmp th{ position: sticky; top: 0; z-index: 2; text-align: left; font-size: 0.7rem; font-weight: 700; color: var(--color-text-secondary); background: var(--color-surface); padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+.plan-cmp td{ padding: 0.5rem 0.75rem; border-top: 1px solid var(--color-border); vertical-align: top; }
+.plan-cmp th.num, .plan-cmp td.num{ text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.plan-cmp .plan-cmp-plan td{ background: rgba(120, 130, 160, 0.08); }
+.plan-cmp .plan-cmp-plan small{ color: var(--color-text-secondary); font-weight: 400; }
+.plan-cmp .plan-cmp-client td{ color: var(--color-text-secondary); font-size: 0.78rem; }
+.plan-cmp .plan-cmp-client td:first-child{ padding-left: 1.6rem; }
+.plan-cmp tfoot td{ font-weight: 700; border-top: 2px solid var(--color-border); }
+.plan-cmp .plan-cmp-down{ color: #1d7a46; }
+.plan-cmp .plan-cmp-up{ color: #c0392b; }

@@ -14044,6 +14044,26 @@ function computeAccessCostTotal(planId) {
     return total;
 }
 
+// Lo que costaría un plan si solo se contara lo que SÍ incluye (sus permisos, plan_grants): la misma suma que ya usan los adicionales de un cliente (computeCostTotalForGrantSet) sobre los precios del plan.
+// Todavía NO es lo que se cobra: computeAccessCostTotal (arriba) sigue sumando todo lo que tiene precio; esto solo sirve para compararlos (computePlanCostComparison) antes de decidir si se cambia.
+function computeAccessCostFromGrants(planId) {
+    const grantSet = new Set(getPlanGrants(planId).map((g) => planTupleKey(g.sectionId, g.itemId, g.submenuId)));
+    return computeCostTotalForGrantSet(grantSet, buildCascadedCostMapForPlan(planId));
+}
+// Por plan: lo que se cobra hoy, lo que costaría contando solo lo incluido y, por cada cliente con ese plan, su «Costo Contratado» (accesos + centros de costos del plan) en los dos casos.
+function computePlanCostComparison() {
+    const clients = listClients();
+    return listPlans().map((plan) => {
+        const current = computeAccessCostTotal(plan.id);
+        const proposed = computeAccessCostFromGrants(plan.id);
+        const centersBase = (plan.costCentersLimit || 0) * (plan.costPerCostCenter || 0);
+        return {
+            planId: plan.id, name: plan.name, status: plan.status || '', currency: plan.currency || 'MXN', current, proposed, delta: proposed - current, centersBase,
+            clients: clients.filter((c) => c.plan === plan.name).map((c) => ({ id: c.id, name: c.company_name, status: c.status || '', contractedNow: current + centersBase, contractedNew: proposed + centersBase })),
+        };
+    });
+}
+
 function getClientPermissionGrants(clientId) {
     return db
         .prepare('SELECT section_id AS sectionId, item_id AS itemId, submenu_id AS submenuId FROM client_permission_grants WHERE client_id = ?')
@@ -21745,7 +21765,7 @@ module.exports = {
     getMasterCostSettings,
     setMasterCostSettings,
     applyMasterCostCurrencyChange,
-    computeAccessCostTotal,
+    computeAccessCostTotal, computePlanCostComparison, computeAccessCostFromGrants,
     getSectorCostAdjustDefault,
     setSectorCostAdjustDefault,
     getSectorPermissionCostAdjustments,
