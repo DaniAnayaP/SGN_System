@@ -10082,3 +10082,67 @@ input[type="color"].cli-company{ opacity: 0.55; }
 .tw-ev-pass_requested .tw-ev-dot{ background: #e08a1e; }
 .tw-ev-pass_approved .tw-ev-dot, .tw-ev-passed .tw-ev-dot{ background: #3f9bb0; }
 .tw-ev-pass_rejected .tw-ev-dot, .tw-ev-pass_cancelled .tw-ev-dot{ background: #c0392b; }
+/* ---- Equipo de Trabajo, pieza 3: línea del tiempo y Registro ---- */
+.tw-views{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.9rem; }
+.tw-view{ border: 1px solid var(--color-border); border-radius: 1rem; background: var(--color-surface); color: var(--color-text-secondary); font-family: inherit; font-size: 0.78rem; font-weight: 600; padding: 0.35rem 0.95rem; cursor: pointer; }
+.tw-view.on{ background: var(--color-accent); color: var(--color-accent-text); border-color: var(--color-accent); }
+.tw-view:focus-visible{ outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.tw-views small{ margin-left: 0.4rem; font-size: 0.7rem; color: var(--color-text-secondary); }
+.tw-view-head{ display: flex; flex-wrap: wrap; gap: 0.6rem 0.8rem; align-items: flex-end; margin-bottom: 0.8rem; }
+.tw-view-head .tw-flt{ max-width: 12rem; }
+.tw-seg2{ display: inline-flex; border: 1px solid var(--color-border); border-radius: 0.6rem; overflow: hidden; background: var(--color-surface); }
+.tw-seg2 label{ position: relative; cursor: pointer; }
+.tw-seg2 input{ position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.tw-seg2 span{ display: block; padding: 0.42rem 0.85rem; font-size: 0.76rem; font-weight: 600; color: var(--color-text-secondary); white-space: nowrap; }
+.tw-seg2 input:checked + span{ background: var(--color-accent); color: var(--color-accent-text); }
+.tw-seg2 input:focus-visible + span{ outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.tw-legend{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.5rem; margin-bottom: 0.7rem; font-size: 0.72rem; color: var(--color-text-secondary); }
+.tw-legend .tw-mk{ position: static; transform: none; margin-left: 0.4rem; }
+.tw-tiles{ grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); }
+.tw-trk-wrap{ overflow-x: auto; padding: 0.3rem 0.8rem 0.5rem; border: 1px solid var(--color-border); border-radius: 0.7rem; background: var(--color-surface); }
+.tw-trk-axis, .tw-trk-row{ display: grid; grid-template-columns: minmax(9rem, 13rem) minmax(22rem, 1fr) minmax(8rem, 13rem); gap: 0.9rem; align-items: center; min-width: 46rem; }
+.tw-trk-row{ padding: 0.6rem 0.3rem; border-top: 1px solid var(--color-border); border-radius: 0; }
+.tw-trk-row[data-tw="open"], .tw-trk-line[data-tw="open"]{ cursor: pointer; }
+.tw-trk-row[data-tw="open"]:hover, .tw-trk-line[data-tw="open"]:hover{ background: var(--color-bg); }
+.tw-trk-row:focus-visible, .tw-trk-line:focus-visible, .tw-log-row:focus-visible{ outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.tw-ax{ position: relative; height: 1.1rem; font-size: 0.64rem; color: var(--color-text-secondary); }
+.tw-ax span{ position: absolute; top: 0; white-space: nowrap; padding-left: 0.2rem; border-left: 1px solid var(--color-border); }
+.tw-trk-lab{ display: grid; gap: 0.15rem; min-width: 0; }
+.tw-trk-lab b{ font-size: 0.82rem; overflow-wrap: anywhere; }
+.tw-trk-lab small{ font-size: 0.68rem; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.tw-trk-meta{ font-size: 0.7rem; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.tw-trk-body{ min-width: 0; }
+.tw-trk-stack{ display: grid; gap: 0.4rem; }
+.tw-trk-line{ display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.45rem; align-items: center; border-radius: 0.4rem; }
+.tw-cap{ display: inline-flex; align-items: center; gap: 0.3rem; width: 9.5rem; font-size: 0.68rem; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tw-who{ font-style: normal; font-size: 0.55rem; font-weight: 700; background: var(--color-accent); color: var(--color-accent-text); border-radius: 50%; width: 1.35rem; height: 1.35rem; display: inline-grid; place-items: center; flex: none; }
+.tw-trk{ position: relative; height: 1.7rem; border-radius: 0.4rem; background: var(--color-bg); }
+.tw-seg{ position: absolute; top: 50%; height: 0.55rem; transform: translateY(-50%); border-radius: 0.3rem; }
+.tw-seg-run{ background: rgba(60, 130, 220, 0.55); }
+.tw-seg-pause{ background: rgba(240, 160, 40, 0.65); }
+.tw-seg-val{ background: rgba(138, 92, 214, 0.6); }
+.tw-today{ position: absolute; top: -2px; bottom: -2px; width: 2px; background: #c0392b; opacity: 0.55; z-index: 1; }
+.tw-mk{ position: absolute; top: 50%; transform: translate(-50%, -50%); z-index: 2; width: 1.2rem; height: 1.2rem; border-radius: 50%; display: inline-grid; place-items: center; font-size: 0.56rem; font-weight: 700; line-height: 1; color: #fff; background: var(--color-accent); box-shadow: 0 0 0 2px var(--color-surface); cursor: default; }
+.tw-mk-a{ background: #6b7280; }
+.tw-mk-c{ background: #3f9bb0; }
+.tw-mk-r{ background: #3c82dc; }
+.tw-mk-p{ background: #e08a1e; }
+.tw-mk-v{ background: #7a4fc2; }
+.tw-mk-t{ background: #278a52; }
+.tw-mk-b{ background: #c0392b; }
+.tw-mk-x{ background: #3f9bb0; }
+.tw-mk-z{ background: #c0392b; }
+.tw-log-count{ margin: 0 0 0.5rem; font-size: 0.76rem; color: var(--color-text-secondary); }
+.tw-log-scroll{ overflow: auto; max-height: 70vh; border: 1px solid var(--color-border); border-radius: 0.7rem; background: var(--color-surface); margin-bottom: 0.6rem; }
+.tw-log{ border-collapse: collapse; width: 100%; min-width: 56rem; font-size: 0.8rem; }
+.tw-log th{ position: sticky; top: 0; z-index: 3; background: var(--color-surface); text-align: left; font-size: 0.7rem; font-weight: 700; color: var(--color-text-secondary); padding: 0.55rem 0.65rem; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+.tw-log td{ padding: 0.5rem 0.65rem; border-top: 1px solid var(--color-border); vertical-align: top; }
+.tw-log tbody tr:first-child td{ border-top: 0; }
+.tw-log-row{ cursor: pointer; }
+.tw-log-row:hover{ background: var(--color-bg); }
+.tw-log small{ color: var(--color-text-secondary); }
+.tw-num{ text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 760px){
+    .tw-views small{ flex-basis: 100%; margin-left: 0; }
+    .tw-view-head .tw-flt{ max-width: none; }
+}

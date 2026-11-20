@@ -616,7 +616,7 @@ const {
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
     listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, createTeamActivity, teamActivityAct, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, teamTimeline, teamLog, createTeamActivity, teamActivityAct, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
 const { GROUPS_TO_DELETE, GROUPS_TO_KEEP, MAX_BACKUP_AGE_MS, FILE_PREFIXES } = require('./systemReset');
@@ -2311,7 +2311,7 @@ const TEAM_MESSAGES = {
     TEAM_DATE_INVALID: 'La fecha no es válida.', TEAM_SEATS_INVALID: 'Las personas que se necesitan van de 1 a 20.', TEAM_PERSON_INVALID: 'Una de las personas no es válida: elige a alguien activo de tu compañía.',
     TEAM_PEOPLE_EXIST: 'Esas personas ya están en la actividad.', TEAM_PEOPLE_LIMIT: 'Una actividad no puede tener más de 20 personas.', TEAM_ACTION_INVALID: 'Esa acción no existe.',
     TEAM_CLAIM_INVALID: 'Elige quién puede tomarla (y, si son personas elegidas, al menos una).', TEAM_FULL: 'Ya se completaron las personas que necesita la actividad.',
-    TEAM_PASS_PENDING: 'Esa persona ya tiene un pase esperando respuesta.', TEAM_PASS_NOT_FOUND: 'Ese pase ya no existe.',
+    TEAM_PASS_PENDING: 'Esa persona ya tiene un pase esperando respuesta.', TEAM_PASS_NOT_FOUND: 'Ese pase ya no existe.', TEAM_PERIOD_INVALID: 'El periodo no es válido: elige una fecha de inicio y otra de fin posterior (hasta 5 años).',
 };
 function teamFail(res, result) {
     const code = result.error;
@@ -2336,6 +2336,18 @@ app.post('/api/business/team-activities', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.status(201).json(result);
 });
+// pieza 3: la línea del tiempo y el Registro (antes de «/:id», que si no los toma por un id). El periodo viaja como ?from=&to= (instantes ISO; `to` no se incluye). Los demás filtros los aplica la pantalla.
+function teamHistory(read) {
+    return (req, res) => {
+        if (!teamGate(req, res)) return;
+        const result = read(req.user.clientId, req.user.sub, !!req.user.isTestAccount, !!req.user.isClientAdmin, req.query);
+        if (result.error) return teamFail(res, result);
+        res.set('Cache-Control', 'no-store');
+        res.json(result);
+    };
+}
+app.get('/api/business/team-activities/timeline', requireAuth, teamHistory(teamTimeline));
+app.get('/api/business/team-activities/log', requireAuth, teamHistory(teamLog));
 app.get('/api/business/team-activities/:id', requireAuth, (req, res) => {
     if (!teamGate(req, res)) return;
     const result = getTeamActivity(req.user.clientId, req.user.sub, !!req.user.isTestAccount, !!req.user.isClientAdmin, req.params.id);

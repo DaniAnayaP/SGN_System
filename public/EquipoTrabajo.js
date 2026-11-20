@@ -19,6 +19,12 @@ const KINDS = ['fija', 'eventual', 'periodica'];
 const REALS = ['presencial', 'remoto', 'mixta'];
 const LANES = ['unassigned', 'assigned', 'in_progress', 'paused', 'review', 'done'];
 const CLAIM_SCOPES = ['team_dept', 'team', 'company', 'chosen'];
+const VIEWS = ['board', 'line', 'log'];
+const GROUPS = ['activity', 'user', 'site'];
+const LINE_PERIODS = ['7d', '14d', '30d', 'week', 'month', 'prev', 'custom'];
+const LOG_PERIODS = ['month', 'prev', '30d', '90d', 'year', 'all', 'custom'];
+const VIEW_KEY = 'sgn.teamWork.view';
+const LOG_PAGE = 300;
 const FILTERS_KEY = 'sgn.teamWork.filters';
 const DEFAULT_FILTERS = { q: '', person: 'all', kind: 'all', real: 'all', site: 'all', dept: 'all', area: 'all', urgent: false };
 let data = { activities: [], people: [], sites: [], departments: [], me: { id: 0, name: '', isAdmin: false, hasTeam: false } };
@@ -26,6 +32,21 @@ let filters = { ...DEFAULT_FILTERS };
 try { const saved = JSON.parse(localStorage.getItem(FILTERS_KEY) || 'null'); if (saved && typeof saved === 'object') filters = { ...DEFAULT_FILTERS, ...saved, q: '' }; } catch (err) { /* sin almacenamiento: los filtros empiezan en «todos» */ }
 const saveFilters = () => { try { localStorage.setItem(FILTERS_KEY, JSON.stringify({ ...filters, q: '' })); } catch (err) { /* se queda solo en esta visita */ } };
 let detailId = null;
+let view = 'board';
+let lineGroup = 'activity';
+let periods = { line: { kind: '14d', from: '', to: '' }, log: { kind: 'month', from: '', to: '' } };
+let lineData = null;
+let logData = null;
+let logShown = LOG_PAGE;
+try {
+    const saved = JSON.parse(localStorage.getItem(VIEW_KEY) || 'null');
+    if (saved && typeof saved === 'object') {
+        if (VIEWS.includes(saved.view)) view = saved.view;
+        if (GROUPS.includes(saved.lineGroup)) lineGroup = saved.lineGroup;
+        if (saved.periods && LINE_PERIODS.includes(saved.periods.line && saved.periods.line.kind)) periods.line = { kind: saved.periods.line.kind, from: String(saved.periods.line.from || ''), to: String(saved.periods.line.to || '') };
+        if (saved.periods && LOG_PERIODS.includes(saved.periods.log && saved.periods.log.kind)) periods.log = { kind: saved.periods.log.kind, from: String(saved.periods.log.from || ''), to: String(saved.periods.log.to || '') };
+    }
+} catch (err) { /* sin almacenamiento: empieza en el tablero */ }
 
 async function api(method, path, body) {
     const res = await fetch(`${API}${path}`, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -75,9 +96,9 @@ const visible = () => data.activities.filter(matches);
 // ---- el tablero -------------------------------------------------------------------------------------------------------------------------------------------------------------
 function options(list, current, allLabel) { return [`<option value="all">${esc(allLabel)}</option>`, ...list.map(([v, label]) => `<option value="${esc(v)}"${String(current) === String(v) ? ' selected' : ''}>${esc(label)}</option>`)].join(''); }
 function filterBar() {
-    const people = data.people.filter((p) => data.activities.some((a) => a.assignees.some((x) => x.userId === p.id)));
+    const people = viewPeople();
     const personOpts = [['me', t('main.twPersonMe')], ['team', t('main.twPersonTeam')], ['outside', t('main.twPersonOutside')], ...people.map((p) => [String(p.id), p.name])];
-    const areas = [...new Set(data.activities.map((a) => a.area).filter(Boolean))].sort((x, y) => x.localeCompare(y, locale()));
+    const areas = [...new Set(viewItems().map((a) => a.area).filter(Boolean))].sort((x, y) => x.localeCompare(y, locale()));
     const field = (id, label, control, help) => `<label class="tw-flt" for="${id}"${help ? ` data-help-key="${help}"` : ''}><span>${esc(label)}</span>${control}</label>`;
     return `<div class="tw-filters" role="search" aria-label="${esc(t('main.twFilters'))}" data-help-key="twFilters">
         ${field('tw-f-q', t('main.twFilterSearch'), `<input id="tw-f-q" type="search" value="${esc(filters.q)}" autocomplete="off">`)}
@@ -157,8 +178,9 @@ function render() {
     const list = visible();
     const keepFocus = document.activeElement && document.activeElement.id;
     const caret = keepFocus === 'tw-f-q' ? document.activeElement.selectionStart : null;
+    const body = view === 'line' ? lineView() : view === 'log' ? logView() : `${counters(list)}${passTray()}${data.activities.length ? '' : `<p class="tw-empty">${esc(t('main.twEmpty'))}</p>`}${lanes(list)}`;
     root.innerHTML = `<div class="tw-head"><h2>${esc(t('main.twBoard'))}</h2><button type="button" class="btn" data-tw="create" data-help-key="twCreate"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.twCreate'))}</button></div>
-        ${filterBar()}${counters(list)}${passTray()}${data.activities.length ? '' : `<p class="tw-empty">${esc(t('main.twEmpty'))}</p>`}${lanes(list)}`;
+        ${viewTabs()}${filterBar()}${body}`;
     if (keepFocus === 'tw-f-q') { const el = $('tw-f-q'); if (el) { el.focus(); if (caret != null) el.setSelectionRange(caret, caret); } }
 }
 async function load(quiet) {
@@ -384,6 +406,200 @@ async function doAct(id, op, passId) {
     await run(op);
 }
 
+// ---- PIEZA 3: línea del tiempo y Registro ------------------------------------------------------------------------------------------------------------------------------------
+// Dos vistas más con los MISMOS filtros que el tablero. Los pasos de cada persona los entrega el servidor (GET /timeline y /log, solo lectura); el cálculo de tramos, tiempos y archivos está en TeamTimeline.js.
+const dateText = (value) => { const d = value instanceof Date ? value : new Date(value); if (Number.isNaN(d.getTime())) return ''; const months = locale() === 'en-US' ? ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] : ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']; return `${pad2(d.getDate())}/${months[d.getMonth()]}/${d.getFullYear()}`; };
+const dateTimeText = (ms) => { const d = new Date(ms); return Number.isNaN(d.getTime()) ? '' : `${dateText(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const shortDay = (d) => d.toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
+const durText = (ms) => (ms == null ? '—' : window.TeamTimeline.durationText(ms, { min: (n) => t('main.twDur_min', { n }), h: (n) => t('main.twDur_h', { n }), d: (n) => t(n === 1 ? 'main.twDur_d1' : 'main.twDur_d', { n }) }));
+const stepText = (m) => {
+    if (m.type === 'assigned' && m.via === 'pass') return t('main.twStep_assigned_pass', { name: m.fromName });
+    return t(`main.twStep_${m.type}`, { to: (m.toNames || []).join(', ') });
+};
+const stepTitle = (m) => [stepText(m), dateTimeText(m.at), m.by, m.note].filter(Boolean).join(' · ');
+
+// el periodo de cada vista (día calendario de quien mira; el servidor recibe los instantes)
+const periodRange = (which) => {
+    const p = periods[which];
+    const now = new Date();
+    const day = (y, m, d) => new Date(y, m, d, 0, 0, 0, 0);
+    const today = day(now.getFullYear(), now.getMonth(), now.getDate());
+    const plus = (d, n) => day(d.getFullYear(), d.getMonth(), d.getDate() + n);
+    let from; let to = plus(today, 1);
+    const days = /^(\d+)d$/.exec(p.kind);
+    if (days) from = plus(today, -(Number(days[1]) - 1));
+    else if (p.kind === 'week') { from = plus(today, -((today.getDay() + 6) % 7)); to = plus(from, 7); }
+    else if (p.kind === 'month') { from = day(now.getFullYear(), now.getMonth(), 1); to = day(now.getFullYear(), now.getMonth() + 1, 1); }
+    else if (p.kind === 'prev') { from = day(now.getFullYear(), now.getMonth() - 1, 1); to = day(now.getFullYear(), now.getMonth(), 1); }
+    else if (p.kind === 'year') { from = day(now.getFullYear(), 0, 1); to = day(now.getFullYear() + 1, 0, 1); }
+    else if (p.kind === 'all') from = plus(today, -1820);
+    else {
+        const a = /^(\d{4})-(\d{2})-(\d{2})$/.exec(p.from); const b = /^(\d{4})-(\d{2})-(\d{2})$/.exec(p.to);
+        from = a ? day(Number(a[1]), Number(a[2]) - 1, Number(a[3])) : plus(today, -13);
+        to = b ? plus(day(Number(b[1]), Number(b[2]) - 1, Number(b[3])), 1) : plus(today, 1);
+        if (to <= from) to = plus(from, 1);
+    }
+    return { from, to, fromMs: from.getTime(), toMs: to.getTime() };
+};
+const periodQuery = (r) => `?from=${encodeURIComponent(r.from.toISOString())}&to=${encodeURIComponent(r.to.toISOString())}`;
+async function loadLine(quiet) {
+    const range = periodRange('line');
+    try { lineData = { ...(await api('GET', `/timeline${periodQuery(range)}`)), range }; if (!quiet) showError(''); } catch (err) { if (!quiet) showError(errText(err)); }
+    render();
+}
+async function loadLog(quiet) {
+    const range = periodRange('log');
+    try { logData = { ...(await api('GET', `/log${periodQuery(range)}`)), range }; logShown = LOG_PAGE; if (!quiet) showError(''); } catch (err) { if (!quiet) showError(errText(err)); }
+    render();
+}
+const loadView = (quiet) => (view === 'line' ? loadLine(quiet) : view === 'log' ? loadLog(quiet) : load(quiet));
+// lo que alimenta los filtros de la vista (personas, áreas): el tablero, la línea del tiempo o el Registro
+const viewItems = () => (view === 'line' ? (lineData ? lineData.activities : []) : view === 'log' ? (logData ? logData.rows : []) : data.activities);
+function viewPeople() {
+    const seen = new Map();
+    viewItems().forEach((a) => a.assignees.forEach((x) => { if (!seen.has(x.userId)) seen.set(x.userId, { id: x.userId, name: x.name }); }));
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name, locale()));
+}
+const savePrefs = () => { try { localStorage.setItem(VIEW_KEY, JSON.stringify({ view, lineGroup, periods })); } catch (err) { /* solo esta visita */ } };
+
+function viewTabs() {
+    return `<div class="tw-views" role="tablist" aria-label="${esc(t('main.twViews'))}" data-help-key="twViews">${VIEWS.map((v) => `<button type="button" role="tab" aria-selected="${view === v}" class="tw-view${view === v ? ' on' : ''}" data-tw="view" data-view="${v}">${esc(t(`main.twTab_${v}`))}</button>`).join('')}<small>${esc(t('main.twViewsHint'))}</small></div>`;
+}
+function periodControls(which) {
+    const kinds = which === 'line' ? LINE_PERIODS : LOG_PERIODS;
+    const p = periods[which];
+    const custom = p.kind === 'custom';
+    return `<label class="tw-flt" for="tw-period" data-help-key="twPeriod"><span>${esc(t('main.twPeriod'))}</span><select id="tw-period" data-which="${which}">${kinds.map((k) => `<option value="${k}"${p.kind === k ? ' selected' : ''}>${esc(t(`main.twPeriod_${k}`))}</option>`).join('')}</select></label>${custom
+        ? `<label class="tw-flt" for="tw-per-from"><span>${esc(t('main.twPeriodFrom'))}</span><input id="tw-per-from" type="date" value="${esc(p.from || todayYmd())}" data-which="${which}"></label><label class="tw-flt" for="tw-per-to"><span>${esc(t('main.twPeriodTo'))}</span><input id="tw-per-to" type="date" value="${esc(p.to || todayYmd())}" data-which="${which}"></label>` : ''}`;
+}
+const downloadBtn = () => `<button type="button" class="btn btn-secondary tw-small" data-tw="download" data-help-key="twDownload"><i class="bx bx-download" aria-hidden="true"></i> ${esc(t('main.twDownload'))}</button>`;
+
+// ---- línea del tiempo ----
+function axisHtml(range) {
+    const span = range.toMs - range.fromMs;
+    const days = Math.max(1, Math.round(span / 86400000));
+    const step = Math.max(1, Math.ceil(days / 12));
+    const ticks = [];
+    for (let i = 0; i < days; i += step) { const d = new Date(range.from.getFullYear(), range.from.getMonth(), range.from.getDate() + i); ticks.push(`<span style="left:${(((d.getTime() - range.fromMs) / span) * 100).toFixed(2)}%">${esc(shortDay(d))}</span>`); }
+    return `<div class="tw-trk-axis"><span class="tw-trk-lab"></span><div class="tw-ax">${ticks.join('')}</div><span class="tw-trk-meta"></span></div>`;
+}
+function trackHtml(track, range, now) {
+    const an = track.analysis;
+    const segs = an.segments.map((g) => { const c = window.TeamTimeline.clipSegment(g, range.fromMs, range.toMs); return c ? `<span class="tw-seg tw-seg-${g.kind}" style="left:${c.left.toFixed(2)}%;width:${c.width.toFixed(2)}%"></span>` : ''; }).join('');
+    const marks = window.TeamTimeline.spreadMarkers(an.markers, range.fromMs, range.toMs, 3.6).map((m) => { const mk = window.TeamTimeline.markOf(m.type); return `<span class="tw-mk tw-mk-${mk[1]}" style="left:${m.x.toFixed(2)}%" title="${esc(stepTitle(m))}">${mk[0]}</span>`; }).join('');
+    const today = now >= range.fromMs && now <= range.toMs ? `<span class="tw-today" style="left:${(((now - range.fromMs) / (range.toMs - range.fromMs)) * 100).toFixed(2)}%"></span>` : '';
+    return `<div class="tw-trk" role="img" aria-label="${esc(`${track.person.name} · ${track.activity.title}`)}">${today}${segs}${marks}</div>`;
+}
+function rowMeta(row) {
+    const mt = row.metrics;
+    const parts = [];
+    if (mt.confirmAvg != null) parts.push(t(row.tracks.length > 1 ? 'main.twMetaConfirmAvg' : 'main.twMetaConfirm', { time: durText(mt.confirmAvg) }));
+    if (mt.finishAvg != null) parts.push(t('main.twMetaFinish', { time: durText(mt.finishAvg) }));
+    const paused = row.analyses.reduce((n, a) => n + a.pauseDurations.reduce((x, y) => x + y, 0), 0);
+    if (paused > 0) parts.push(t('main.twMetaPause', { time: durText(paused) }));
+    Object.entries(row.byState).forEach(([state, n]) => parts.push(t(`main.twMetaState_${state}`, { n })));
+    return parts.join(' · ');
+}
+function lineRow(row, group, range, now) {
+    const who = (p) => `<i class="tw-who" title="${esc(p.name)}">${esc(initials(p.name))}</i>`;
+    const open = (activityId) => ` data-tw="open" data-id="${activityId}" tabindex="0"`;
+    let label; let body;
+    if (group === 'user') {
+        const p = row.person;
+        label = `<b>${esc(p.name)}</b><small>${esc([row.sites.join(' · '), data.me.hasTeam && !p.isMine && !p.isMe ? t('main.twOutsideTeam') : ''].filter(Boolean).join(' · '))}</small>`;
+        body = `<div class="tw-trk-stack">${row.tracks.map((tr) => `<div class="tw-trk-line"${open(tr.activity.id)}><span class="tw-cap" title="${esc(tr.activity.title)}">${esc(tr.activity.title)}</span>${trackHtml(tr, range, now)}</div>`).join('')}</div>`;
+    } else if (group === 'site') {
+        label = `<b>${esc(row.site.name || t('main.twNoSite'))}</b><small>${esc(t(row.activities === 1 ? 'main.twActivitiesOne' : 'main.twActivitiesN', { n: row.activities }))}</small>`;
+        body = `<div class="tw-trk-stack">${row.tracks.map((tr) => `<div class="tw-trk-line"${open(tr.activity.id)}><span class="tw-cap" title="${esc(tr.activity.title)}">${who(tr.person)} ${esc(tr.activity.title)}</span>${trackHtml(tr, range, now)}</div>`).join('')}</div>`;
+    } else {
+        const a = row.activity;
+        label = `<b>${esc(a.title)}</b><small><span class="tw-kind">${esc(kindLabel(a.kind))}</span>${a.urgent ? ' ⚡' : ''} ${esc([a.assignees.map((x) => x.name).join(' + '), a.sites.map((s) => s.name).join(', '), realLabel(a.realization)].filter(Boolean).join(' · '))}</small>`;
+        body = row.tracks.length > 1
+            ? `<div class="tw-trk-stack">${row.tracks.map((tr) => `<div class="tw-trk-line">${who(tr.person)}${trackHtml(tr, range, now)}</div>`).join('')}</div>`
+            : (row.tracks[0] ? trackHtml(row.tracks[0], range, now) : '');
+    }
+    return `<div class="tw-trk-row"${group === 'activity' ? open(row.activity.id) : ''}><div class="tw-trk-lab">${label}</div><div class="tw-trk-body">${body}</div><span class="tw-trk-meta">${esc(rowMeta(row))}</span></div>`;
+}
+const LEGEND = [['assigned', 'a'], ['confirmed', 'c'], ['started', 'r'], ['paused', 'p'], ['submitted', 'v'], ['returned', 'b'], ['validated', 't'], ['passed', 'x']];
+function lineView() {
+    const controls = `<div class="tw-view-head">${periodControls('line')}<div class="tw-seg2" role="radiogroup" aria-label="${esc(t('main.twGroupBy'))}" data-help-key="twGroup">${GROUPS.map((g) => `<label><input type="radio" name="tw-group" value="${g}"${lineGroup === g ? ' checked' : ''}><span>${esc(t(`main.twGroup_${g}`))}</span></label>`).join('')}</div>${downloadBtn()}</div>`;
+    if (!lineData) return controls;
+    const range = lineData.range;
+    const now = Date.now();
+    const acts = lineData.activities.filter(matches);
+    const analyses = acts.flatMap((a) => a.people.map((p) => window.TeamTimeline.analyze(p.steps, now)));
+    const mt = window.TeamTimeline.metrics(analyses);
+    const tile = (value, label) => `<div class="tw-cnt"><b>${esc(value)}</b><small>${esc(label)}</small></div>`;
+    const rows = window.TeamTimeline.build(acts, lineGroup, now);
+    const legend = `<div class="tw-legend" data-help-key="twLegend">${LEGEND.map(([type, cls]) => `<span class="tw-mk tw-mk-${cls}">${window.TeamTimeline.markOf(type)[0]}</span>${esc(t(`main.twLegend_${type}`))}`).join(' ')}</div>`;
+    return `${controls}${legend}<div class="tw-counters tw-tiles" role="list" data-help-key="twTiles">${tile(durText(mt.confirmAvg), t('main.twTileConfirm'))}${tile(durText(mt.finishAvg), t('main.twTileFinish'))}${tile(durText(mt.pauseAvg), t('main.twTilePause'))}${tile(mt.returns, t('main.twTileReturns'))}</div>
+        ${lineData.truncated ? `<p class="tw-empty">${esc(t('main.twTruncated'))}</p>` : ''}${rows.length ? `<div class="tw-trk-wrap">${axisHtml(range)}${rows.map((r) => lineRow(r, lineGroup, range, now)).join('')}</div>` : `<p class="tw-empty">${esc(t('main.twLineEmpty'))}</p>`}`;
+}
+
+// ---- Registro ----
+function logView() {
+    const controls = `<div class="tw-view-head">${periodControls('log')}${downloadBtn()}</div>`;
+    if (!logData) return controls;
+    const rows = logData.rows.filter(matches);
+    const shown = rows.slice(0, logShown);
+    const cell = (r) => `<tr class="tw-log-row" data-tw="open" data-id="${r.activityId}" tabindex="0"><td>${esc(dateText(r.doneAt))}</td><td>${r.urgent ? '⚡ ' : ''}${esc(r.title)}</td><td>${esc(r.person.name)}${data.me.hasTeam && !r.person.isMine && !r.person.isMe ? ` <small>(${esc(t('main.twOutsideTeam'))})</small>` : ''}</td><td><span class="tw-kind tw-k-${r.kind}">${esc(kindLabel(r.kind))}</span></td><td>${esc(realLabel(r.realization))}</td><td>${esc(r.sites.map((s) => s.name).join(', '))}</td><td>${esc(deptName(r.department))}</td><td class="tw-num">${r.days}</td><td>${esc(r.validatedByName)}</td></tr>`;
+    const head = ['done', 'activity', 'person', 'kind', 'realization', 'site', 'department', 'days', 'validator'];
+    return `${controls}<p class="tw-log-count" role="status">${esc(t(rows.length === 1 ? 'main.twLogRowsOne' : 'main.twLogRows', { n: rows.length }))}${logData.truncated ? ` · ${esc(t('main.twTruncated'))}` : ''}</p>
+        ${rows.length ? `<div class="tw-log-scroll"><table class="tw-log" aria-label="${esc(t('main.twTab_log'))}" data-help-key="twLog"><thead><tr>${head.map((k) => `<th scope="col"${k === 'days' ? ' class="tw-num"' : ''}>${esc(t(`main.twLogCol_${k}`))}</th>`).join('')}</tr></thead><tbody>${shown.map(cell).join('')}</tbody></table></div>
+        ${rows.length > shown.length ? `<button type="button" class="btn btn-secondary tw-small" data-tw="more">${esc(t('main.twLogMore', { n: Math.min(LOG_PAGE, rows.length - shown.length) }))}</button>` : ''}` : `<p class="tw-empty">${esc(t('main.twLogEmpty'))}</p>`}`;
+}
+
+// ---- descargar (Excel o PDF) ----
+function saveFile(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function downloadModal() {
+    const kind = view;
+    if (kind !== 'line' && kind !== 'log') return;
+    const source = kind === 'log' ? (logData ? logData.rows.filter(matches) : []) : (lineData ? lineData.activities.filter(matches) : []);
+    if (!source.length) { Dashboard.showToast(t('main.twDlNone'), 'error'); return; }
+    const fmt = {
+        t, dateTime: dateTimeText, date: (iso) => dateText(iso), duration: (ms) => durText(ms), kind: kindLabel, real: realLabel, dept: deptName,
+        state: (s) => t(`main.twState_${s}`), step: stepText,
+    };
+    const built = kind === 'log' ? window.TeamTimeline.buildLog(source, fmt) : window.TeamTimeline.buildLine(source, fmt, Date.now());
+    const range = (kind === 'log' ? logData : lineData).range;
+    const baseName = `${window.TeamTimeline.slug(t(kind === 'log' ? 'main.twTab_log' : 'main.twTab_line'))}_${todayYmd()}`;
+    const count = kind === 'log' ? source.length : built.sections[0].rows.length;
+    const ov = openModal(`<h3 data-help-key="twDownload">${esc(t('main.twDlTitle'))}</h3><p class="admin-hint">${esc(t(kind === 'log' ? 'main.twDlLog' : 'main.twDlLine', { n: count }))} · ${esc(`${dateText(range.from)} – ${dateText(new Date(range.toMs - 1))}`)}</p>
+        <fieldset class="wp-rep-set"><legend>${esc(t('main.twDlFormat'))}</legend><div class="wp-rep-seg" role="radiogroup" aria-label="${esc(t('main.twDlFormat'))}"><label><input type="radio" name="tw-dl-format" value="xlsx" checked><span>Excel (.xlsx)</span></label><label><input type="radio" name="tw-dl-format" value="pdf"><span>PDF</span></label></div></fieldset>
+        <div class="admin-field"><span class="wp-rep-legend">${esc(t('main.twDlFile'))}</span><div class="wp-rep-fname" id="tw-dl-name">${esc(baseName)}.xlsx</div></div>${fieldErr('tw-dl-error')}
+        <div class="admin-form-actions"><button type="button" class="btn" data-tw-m="ok"><i class="bx bx-download" aria-hidden="true"></i> ${esc(t('main.twDlGo'))}</button><button type="button" class="btn btn-secondary" data-tw-m="cancel">${esc(t('main.wpCancel'))}</button></div>`);
+    ov.addEventListener('change', (event) => { if (event.target.name === 'tw-dl-format') ov.querySelector('#tw-dl-name').textContent = `${baseName}.${event.target.value}`; });
+    ov.addEventListener('click', async (event) => {
+        const b = event.target.closest('[data-tw-m]');
+        if (!b) return;
+        if (b.dataset.twM === 'cancel') { closeModal(); return; }
+        const format = ov.querySelector('input[name="tw-dl-format"]:checked').value;
+        b.disabled = true;
+        try {
+            const header = [[t('main.twDlReport'), t(kind === 'log' ? 'main.twTab_log' : 'main.twTab_line')], [t('main.twPeriod'), `${dateText(range.from)} – ${dateText(new Date(range.toMs - 1))}`], [t('main.twDlBy'), data.me.name || ''], [t('main.twDlDate'), dateText(new Date())]];
+            const body = { title: built.title, filename: baseName, header, columns: built.columns, rows: built.rows, sections: built.sections, widths: built.widths, wrap: true };
+            const res = await fetch(`/api/business/export/${format}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (!res.ok) throw new Error(`export ${format} failed`);
+            saveFile(await res.blob(), `${baseName}.${format}`);
+            closeModal();
+            Dashboard.showToast(t('main.twDlDone'), 'success');
+        } catch (err) {
+            console.error('Equipo de Trabajo: no se pudo preparar el archivo', err);
+            setErr('tw-dl-error', t('main.twDlError'));
+            b.disabled = false;
+        }
+    });
+}
+
 // ---- eventos de la pantalla ----------------------------------------------------------------------------------------------------------------------------------------------
 document.addEventListener('click', (event) => {
     const el = event.target.closest('[data-tw]');
@@ -391,29 +607,48 @@ document.addEventListener('click', (event) => {
     const op = el.dataset.tw;
     if (op === 'create') { activityForm(null); return; }
     if (op === 'clear') { filters = { ...DEFAULT_FILTERS }; saveFilters(); render(); return; }
+    if (op === 'view') { view = el.dataset.view; savePrefs(); render(); loadView(true); return; }
+    if (op === 'download') { downloadModal(); return; }
+    if (op === 'more') { logShown += LOG_PAGE; render(); return; }
     if (op === 'act') { event.stopPropagation(); doAct(el.dataset.id, el.dataset.act, el.dataset.pass); return; }
     if (op === 'unassign') { event.stopPropagation(); api('POST', `/${el.dataset.id}/unassign`, { userId: Number(el.dataset.user) }).then(() => load(true)).then(() => openDetail(Number(el.dataset.id))).catch((err) => setErr('tw-d-error', errText(err))); return; }
     if (op === 'open' && !event.target.closest('button')) openDetail(Number(el.dataset.id));
 });
 document.addEventListener('keydown', (event) => {
-    if ((event.key === 'Enter' || event.key === ' ') && event.target.matches && event.target.matches('.tw-card') && event.target === document.activeElement) { event.preventDefault(); openDetail(Number(event.target.dataset.id)); }
+    if ((event.key === 'Enter' || event.key === ' ') && event.target.matches && event.target.matches('[data-tw="open"]') && event.target === document.activeElement) { event.preventDefault(); openDetail(Number(event.target.dataset.id)); }
 });
 document.addEventListener('input', (event) => { if (event.target.id === 'tw-f-q') { filters.q = event.target.value; render(); } });
 document.addEventListener('change', (event) => {
     const map = { 'tw-f-person': 'person', 'tw-f-kind': 'kind', 'tw-f-real': 'real', 'tw-f-site': 'site', 'tw-f-dept': 'dept', 'tw-f-area': 'area' };
     if (map[event.target.id]) { filters[map[event.target.id]] = event.target.value; saveFilters(); render(); return; }
-    if (event.target.id === 'tw-f-urgent') { filters.urgent = event.target.checked; saveFilters(); render(); }
+    if (event.target.id === 'tw-f-urgent') { filters.urgent = event.target.checked; saveFilters(); render(); return; }
+    if (event.target.name === 'tw-group') { lineGroup = event.target.value; savePrefs(); render(); return; }
+    const which = event.target.dataset && event.target.dataset.which;
+    if (event.target.id === 'tw-period' && which) {
+        const before = periodRange(which);
+        periods[which].kind = event.target.value;
+        if (event.target.value === 'custom' && !periods[which].from) { periods[which].from = window.TeamTimeline.ymd(before.from); periods[which].to = window.TeamTimeline.ymd(new Date(before.toMs - 1)); }
+        savePrefs();
+        (which === 'line' ? loadLine : loadLog)(false);
+        return;
+    }
+    if ((event.target.id === 'tw-per-from' || event.target.id === 'tw-per-to') && which) {
+        periods[which][event.target.id === 'tw-per-from' ? 'from' : 'to'] = event.target.value;
+        savePrefs();
+        (which === 'line' ? loadLine : loadLog)(false);
+    }
 });
 document.addEventListener('dashboard:language-changed', () => { if ($('tw-root').dataset.ready) render(); });
 // un aviso de la campana abre la actividad aunque ya se esté en el tablero (solo cambia el # de la dirección)
 window.addEventListener('hashchange', () => { const m = /^#actividad-(\d+)$/.exec(location.hash); if (m && $('tw-root').dataset.ready) load(true).then(() => openDetail(Number(m[1]))); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && !overlay && $('tw-root').dataset.ready) load(true); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !overlay && $('tw-root').dataset.ready) loadView(true); });
 
 (async function init() {
     try {
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
         await load(false);
+        if (view !== 'board') await loadView(false);
         $('tw-root').dataset.ready = '1';
         const hash = /^#actividad-(\d+)$/.exec(location.hash);
         if (hash) openDetail(Number(hash[1]));

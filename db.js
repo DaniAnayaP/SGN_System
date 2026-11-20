@@ -17042,7 +17042,8 @@ function getTeamActivity(clientId, userId, forTest, isAdmin, id) {
     if (!row) return { error: 'TEAM_NOT_FOUND' };
     const ctx = teamBuildCtx(clientId, userId, forTest, isAdmin, [row]);
     const as = db.prepare('SELECT * FROM team_activity_assignees WHERE activity_id = ?').all(row.id);
-    if (!teamSees(row, as, ctx.viewer, teamScopeOf(ctx, row))) return { error: 'TEAM_NOT_FOUND' };
+    // el detalle lo abre quien la ve en el tablero y también quien participó aunque ya no la tenga (la hizo, la asignó o la pasó): es lo que muestran la línea del tiempo y el Registro
+    if (!teamSees(row, as, ctx.viewer, teamScopeOf(ctx, row)) && !teamInvolvedIds(ctx.viewer, [row.id]).has(row.id)) return { error: 'TEAM_NOT_FOUND' };
     return { activity: teamDetail(clientId, userId, forTest, isAdmin, row, true) };
 }
 // Aviso de la campana (kind 'team-activity', pestaña Avisos): lo que le toca saber a cada persona. event = assigned | unassigned | claimed | submitted | validated | returned | cancelled | pass_requested | pass_approved | pass_rejected | pass_cancelled | passed;
@@ -17054,6 +17055,128 @@ function publishTeamNotice({ recipientIds, event, activity, names = '', note = '
     const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'team-activity', 'data', ?, ?, ?)");
     db.transaction(() => ids.forEach((id) => insert.run(id, payload, actorUserId == null ? null : actorUserId, actorLabel || '')))();
     return ids;
+}
+// ---- PIEZA 3: línea del tiempo y Registro (solo lectura; salen de los movimientos que ya se guardan y que nadie edita) ----
+const TEAM_HISTORY_LIMITS = { activities: 2000, logRows: 5000, spanDays: 1830 };
+// El periodo viene del navegador como dos instantes (ISO, UTC): `from` incluido y `to` sin incluir. Devuelve { fromDb, toDb } en el formato en que se guardan las horas, o { error }.
+function teamPeriod(query) {
+    const q = query && typeof query === 'object' ? query : {};
+    const a = new Date(String(q.from || ''));
+    const b = new Date(String(q.to || ''));
+    if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) || b <= a || (b - a) / 86400000 > TEAM_HISTORY_LIMITS.spanDays) return { error: 'TEAM_PERIOD_INVALID' };
+    const toDb = (d) => d.toISOString().replace('T', ' ').replace('Z', '');
+    return { fromDb: toDb(a), toDb: toDb(b), fromIso: a.toISOString(), toIso: b.toISOString() };
+}
+const teamIso = (dbTime) => (dbTime ? `${String(dbTime).replace(' ', 'T')}Z` : '');
+// ¿Quién ve el historial de una actividad? Lo mismo que el tablero, y además quien tuvo algo que ver con ella aunque ya no la tenga (la hizo, la asignó o la pasó) y quien tiene a su cargo a alguien que la tuvo.
+function teamInvolvedIds(viewer, activityIds) {
+    if (!activityIds.length) return new Set();
+    const marks = activityIds.map(() => '?').join(',');
+    const reports = [...viewer.reports];
+    const rep = reports.length ? ` OR user_id IN (${reports.map(() => '?').join(',')})` : '';
+    return new Set(db.prepare(`SELECT DISTINCT activity_id AS id FROM team_activity_events WHERE activity_id IN (${marks}) AND (user_id = ? OR actor_user_id = ?${rep})`).all(...activityIds, viewer.userId, viewer.userId, ...reports).map((r) => r.id));
+}
+// Los pasos de cada persona de una actividad, en orden, a partir de sus movimientos. type: assigned | claimed | confirmed | started | paused | resumed | submitted | validated | returned | unassigned | passed | pass_requested | pass_rejected | pass_cancelled | cancelled.
+// El pase (passed) cierra la línea de quien la tenía y abre la de quien la recibe (assigned con via 'pass').
+function teamPeopleSteps(events, passes, ctx) {
+    const people = new Map();
+    const personOf = (uid) => {
+        if (!people.has(uid)) people.set(uid, { userId: uid, name: ctx.names.get(uid) || '', isMe: uid === ctx.viewer.userId, isMine: ctx.viewer.reports.has(uid), current: false, steps: [] });
+        return people.get(uid);
+    };
+    const step = (uid, e, type, extra) => personOf(uid).steps.push({ at: teamIso(e.created_at), type, by: e.actor_label || ctx.names.get(e.actor_user_id) || '', note: e.detail || '', ...(extra || {}) });
+    events.forEach((e) => {
+        const uid = e.user_id;
+        if (e.event === 'created' || e.event === 'edited') return;
+        if (e.event === 'cancelled') { [...people.keys()].forEach((id) => step(id, e, 'cancelled')); return; }
+        if (uid == null) return;
+        if (e.event === 'passed') {
+            const pass = passes.get(e.pass_id);
+            let to = [];
+            try { to = pass ? JSON.parse(pass.to_user_ids) || [] : []; } catch (err) { to = []; }
+            step(uid, e, 'passed', { toNames: to.map((id) => ctx.names.get(id) || '') });
+            to.forEach((id) => step(id, e, 'assigned', { via: 'pass', fromName: ctx.names.get(uid) || '' }));
+            return;
+        }
+        if (e.event === 'pass_requested') { const pass = passes.get(e.pass_id); let to = []; try { to = pass ? JSON.parse(pass.to_user_ids) || [] : []; } catch (err) { to = []; } step(uid, e, 'pass_requested', { toNames: to.map((id) => ctx.names.get(id) || '') }); return; }
+        step(uid, e, e.event);
+    });
+    return [...people.values()];
+}
+// La línea del tiempo: las actividades que se movieron dentro del periodo (o que siguen abiertas) y que esta persona puede ver, con los pasos de cada persona. Los filtros de persona, tipo, sitio… los aplica la pantalla.
+function teamTimeline(clientId, userId, forTest, isAdmin, query) {
+    const period = teamPeriod(query);
+    if (period.error) return period;
+    const rows = db.prepare(`SELECT t.* FROM team_activities t WHERE t.client_id = ? AND t.is_test_data = ? AND (
+            EXISTS (SELECT 1 FROM team_activity_events e WHERE e.activity_id = t.id AND e.created_at >= ? AND e.created_at < ?)
+            OR (t.status = 'active' AND t.created_at < ? AND EXISTS (SELECT 1 FROM team_activity_assignees a WHERE a.activity_id = t.id AND a.status != 'done'))
+        ) ORDER BY t.id DESC LIMIT ?`).all(clientId, forTest ? 1 : 0, period.fromDb, period.toDb, period.toDb, TEAM_HISTORY_LIMITS.activities + 1);
+    const truncated = rows.length > TEAM_HISTORY_LIMITS.activities;
+    if (truncated) rows.pop();
+    const ctx = teamBuildCtx(clientId, userId, forTest, isAdmin, rows);
+    const ids = rows.map((r) => r.id);
+    const assigneesOf = new Map();
+    const eventsOf = new Map();
+    const passesOf = new Map();
+    if (ids.length) {
+        const marks = ids.map(() => '?').join(',');
+        db.prepare(`SELECT * FROM team_activity_assignees WHERE activity_id IN (${marks}) ORDER BY id`).all(...ids).forEach((a) => { if (!assigneesOf.has(a.activity_id)) assigneesOf.set(a.activity_id, []); assigneesOf.get(a.activity_id).push(a); });
+        db.prepare(`SELECT * FROM team_activity_events WHERE activity_id IN (${marks}) ORDER BY id`).all(...ids).forEach((e) => { if (!eventsOf.has(e.activity_id)) eventsOf.set(e.activity_id, []); eventsOf.get(e.activity_id).push(e); });
+        db.prepare(`SELECT * FROM team_activity_passes WHERE activity_id IN (${marks})`).all(...ids).forEach((p) => { if (!passesOf.has(p.activity_id)) passesOf.set(p.activity_id, new Map()); passesOf.get(p.activity_id).set(p.id, p); });
+    }
+    const involved = ctx.viewer.isAdmin ? null : teamInvolvedIds(ctx.viewer, ids);
+    const activities = [];
+    rows.forEach((r) => {
+        const as = assigneesOf.get(r.id) || [];
+        if (!(ctx.viewer.isAdmin || teamSees(r, as, ctx.viewer, teamScopeOf(ctx, r)) || involved.has(r.id))) return;
+        const people = teamPeopleSteps(eventsOf.get(r.id) || [], passesOf.get(r.id) || new Map(), ctx);
+        const current = new Set(as.map((a) => a.user_id));
+        people.forEach((p) => { p.current = current.has(p.userId); });
+        let siteIds = [];
+        try { siteIds = JSON.parse(r.site_ids); } catch (err) { siteIds = []; }
+        const mapped = as.map((a) => teamMapAssignee(a, ctx.names, ctx.viewer));
+        activities.push({
+            id: r.id, title: r.title, kind: r.kind, urgent: !!r.urgent, realization: r.realization, department: r.department, area: r.area, dueDate: r.due_date || '', status: teamActivityState(mapped, r.status === 'cancelled'),
+            sites: siteIds.map((id) => ctx.sites.get(id)).filter(Boolean), createdBy: { id: r.created_by_user_id, name: ctx.names.get(r.created_by_user_id) || r.created_by_label }, createdAt: teamIso(r.created_at),
+            assignees: people.map((p) => ({ userId: p.userId, name: p.name, isMe: p.isMe, isMine: p.isMine })), people,
+        });
+    });
+    return { from: period.fromIso, to: period.toIso, activities, truncated, me: { id: userId, isAdmin: !!isAdmin } };
+}
+// El Registro: lo que cada persona ya TERMINÓ (validado) dentro del periodo; una fila por actividad y persona.
+function teamLog(clientId, userId, forTest, isAdmin, query) {
+    const period = teamPeriod(query);
+    if (period.error) return period;
+    const done = db.prepare(`SELECT a.*, t.id AS tid FROM team_activity_assignees a JOIN team_activities t ON t.id = a.activity_id
+        WHERE t.client_id = ? AND t.is_test_data = ? AND a.status = 'done' AND a.done_at >= ? AND a.done_at < ? ORDER BY a.done_at DESC, a.id DESC LIMIT ?`).all(clientId, forTest ? 1 : 0, period.fromDb, period.toDb, TEAM_HISTORY_LIMITS.logRows + 1);
+    const truncated = done.length > TEAM_HISTORY_LIMITS.logRows;
+    if (truncated) done.pop();
+    const activityIds = [...new Set(done.map((a) => a.activity_id))];
+    const rowsById = new Map();
+    if (activityIds.length) db.prepare(`SELECT * FROM team_activities WHERE id IN (${activityIds.map(() => '?').join(',')})`).all(...activityIds).forEach((r) => rowsById.set(r.id, r));
+    const ctx = teamBuildCtx(clientId, userId, forTest, isAdmin, [...rowsById.values()]);
+    const assigneesOf = new Map();
+    if (activityIds.length) db.prepare(`SELECT * FROM team_activity_assignees WHERE activity_id IN (${activityIds.map(() => '?').join(',')})`).all(...activityIds).forEach((a) => { if (!assigneesOf.has(a.activity_id)) assigneesOf.set(a.activity_id, []); assigneesOf.get(a.activity_id).push(a); });
+    const involved = ctx.viewer.isAdmin ? null : teamInvolvedIds(ctx.viewer, activityIds);
+    const visible = new Map();
+    const canSee = (r) => {
+        if (!visible.has(r.id)) visible.set(r.id, ctx.viewer.isAdmin || teamSees(r, assigneesOf.get(r.id) || [], ctx.viewer, teamScopeOf(ctx, r)) || involved.has(r.id));
+        return visible.get(r.id);
+    };
+    const days = (a, b) => Math.max(1, Math.ceil((new Date(teamIso(b)) - new Date(teamIso(a))) / 86400000));
+    const out = [];
+    done.forEach((a) => {
+        const r = rowsById.get(a.activity_id);
+        if (!r || !canSee(r)) return;
+        let siteIds = [];
+        try { siteIds = JSON.parse(r.site_ids); } catch (err) { siteIds = []; }
+        const person = { userId: a.user_id, name: ctx.names.get(a.user_id) || '', isMe: a.user_id === ctx.viewer.userId, isMine: ctx.viewer.reports.has(a.user_id) };
+        out.push({
+            activityId: r.id, title: r.title, kind: r.kind, urgent: !!r.urgent, realization: r.realization, department: r.department, area: r.area, sites: siteIds.map((id) => ctx.sites.get(id)).filter(Boolean),
+            person, assignees: [person], assignedAt: teamIso(a.assigned_at), startedAt: teamIso(a.started_at), doneAt: teamIso(a.done_at), days: days(a.assigned_at, a.done_at), validatedByName: a.validated_by_user_id == null ? '' : (ctx.names.get(a.validated_by_user_id) || ''),
+        });
+    });
+    return { from: period.fromIso, to: period.toIso, rows: out, truncated, me: { id: userId, isAdmin: !!isAdmin } };
 }
 const teamEvent = (activityId, userId, actorUserId, actorLabel, event, detail, passId) => db.prepare('INSERT INTO team_activity_events (activity_id, user_id, actor_user_id, actor_label, event, detail, created_at, pass_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(activityId, userId == null ? null : userId, actorUserId, actorLabel || '', event, String(detail || '').slice(0, 400), teamNow(), passId == null ? null : passId);
 // Lo que viene del formulario de crear o cambiar → datos limpios: { value } o { error, field }.
@@ -21097,7 +21220,7 @@ module.exports = {
     getUserGrants,
     setUserGrants,
     getUserGrantChangeLog,
-    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, createTeamActivity, teamActivityAct, TEAM_LIMITS, teamActivityState, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
+    WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, getTeamActivity, teamTimeline, teamLog, createTeamActivity, teamActivityAct, TEAM_LIMITS, teamActivityState, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem,
     addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan,
     MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices,
     THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, listUnreadCommentThreads, countUnreadComments, touchWorkPlan,
