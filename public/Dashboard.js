@@ -1520,6 +1520,11 @@ function computeAreaOnlyPages(rawMenu) {
     return new Set([...inAreas].filter((href) => !general.has(href)));
 }
 function leaveScreenIfOutOfArea() {
+    // Pantallas de General (<body data-shell="general">, ver initDashboardInner): se abren sin departamento ni área; en cuanto la persona elige uno de los dos, la pantalla se cierra y se va a Panel, con lo que está operando (Daniel, 2026-11-20).
+    if (document.body && document.body.dataset && document.body.dataset.shell === 'general') {
+        if (selectedDepartment || selectedArea) location.href = 'Panel.html';
+        return;
+    }
     const page = document.body && document.body.dataset ? document.body.dataset.activePage : '';
     const grant = page && typeof SCREEN_GRANT_PATHS !== 'undefined' ? SCREEN_GRANT_PATHS[page] : null;
     if (grant) {
@@ -14410,6 +14415,13 @@ async function initDashboardInner({ activePage } = {}) {
             localStorage.setItem('department', selectedDepartment || '');
             selectedArea = null;
             localStorage.setItem('area', '');
+        }
+        // Pantallas de General (<body data-shell="general">: Planes de trabajo, Equipo de Trabajo; Daniel, 2026-11-20): no dependen del departamento ni del área, así que se abren con los dos SIN elegir. Como el
+        // Sitio y los Centros de costos se habilitan con el Área, también quedan bloqueados, y la barra lateral queda sin opciones (misma regla de siempre: sin departamento ni área no sale nada). Solo vale para esta pantalla: lo que
+        // se había elegido NO se borra de lo guardado, y vuelve en las demás pantallas; si en esta se elige un departamento o un área, funciona como siempre.
+        if (document.body.dataset.shell === 'general') {
+            selectedDepartment = null;
+            selectedArea = null;
         }
         renderDeptPickerOptions();
     } else {
