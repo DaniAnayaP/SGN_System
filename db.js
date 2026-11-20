@@ -13667,6 +13667,76 @@ function setAccessRelations(accessKey, minimum, touches, updatedBy) {
     return { added, removed };
 }
 
+// ---------------------------------------------------------------------------
+// Carga de una sola vez (2026-11-19, «Sí a las recomendaciones»): las relaciones de los accesos de CÓDIGOS DE TI (mínimo indispensable / lo que toca). Solo llena los accesos que todavía NO tienen ninguna relación marcada en «Relación de
+// Accesos» (SaaS): lo que ya se marcó a mano nunca se sobreescribe, y como la llave de la carga queda guardada, si luego alguien quita estas marcas no vuelven a aparecer. Lo ya contratado no cambia: las relaciones se aplican la próxima vez que se guarde un Giro, un Plan o los accesos de un cliente.
+//   · «Pedir alta de código» (en cada área donde existe): mínimo = su botón «Autorización para Crear» + la bandeja de TI «Solicitudes de alta de código»; toca = Alta Nuestros Artículos y Relación Código.
+//   · TI › «Solicitudes de alta de código»: mínimo = su botón «Gestionar solicitudes»; toca = Habilitación de Códigos, Edición Código y Alta Nuestros Artículos.
+//   · TI › «Habilitación de Códigos»: mínimo = la columna «Habilitado en» + su botón «Autorización para Habilitar»; toca = la columna «Dónde está» y Relación Código.
+//   · TI › «Alta Nuestros Artículos (Sku)»: mínimo = la columna «Descripción Única» + su botón «Autorización para Crear»; toca = Presentaciones de Distribución, los catálogos (categorías, clasificaciones, unidad de medida y marcas), Edición Código y Habilitación de Códigos.
+//   · Centro de Distribución › «Relación Código»: mínimo = su botón «Autorización para Crear»; toca = Layout, Capacidad de Almacenamiento y Habilitación de Códigos.
+// Cada llave se busca en el catálogo real del árbol (buildAccessCatalog); la que no exista se salta. Se valida con validateAccessRelations (sin ciclos) y deja una línea en el historial de «Relación de Accesos» por acceso.
+// ---------------------------------------------------------------------------
+const CODIGOS_TI_RELATIONS_SEED_KEY = 'seed-codigos-ti-access-relations-v1';
+const CODIGOS_TI_RELATIONS_AUTHOR = 'Sistema (carga inicial de Códigos de TI)';
+function seedCodigosTiAccessRelations() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(CODIGOS_TI_RELATIONS_SEED_KEY)) return;
+    const catalog = buildAccessCatalog();
+    const T = planTupleKey;
+    const TI = ['information-technology', 'it-area-operations'];
+    const OPS = 'cat-operaciones';
+    const CATS = 'cat-catalogos';
+    const screenKey = (section, area, category, id) => T(section, area, `${category}/${id}`);
+    const leaf = (section, area, screenId, rest) => T(section, area, `${OPS}/${screenId}/${rest}`);
+    const tiScreen = (id) => screenKey(TI[0], TI[1], OPS, id);
+    const tiLeaf = (screenId, rest) => leaf(TI[0], TI[1], screenId, rest);
+    const SOL_TI = 'cat-operaciones-ti-solicitudes-codigo';
+    const HAB = 'cat-operaciones-ti-habilitacion-codigos';
+    const ALTA = 'cat-operaciones-centro-dist-alta-articulos';
+    const EDICION = 'cat-operaciones-centro-dist-edicion-codigo';
+    const UDM = 'cat-operaciones-centro-dist-udm-distribucion';
+    const RELACION = screenKey('supply-chain', 'sc-area-distribution-center', OPS, 'cat-operaciones-centro-dist-relacion-codigo');
+    const catalogos = ['categorias-inventario', 'categorias-compra', 'categorias-almacenamiento', 'categorias-rotacion', 'categorias-manejo', 'categorias-riesgo', 'categorias-vidautil', 'categorias-tipocodigo', 'clasificaciones', 'unidad-medida', 'marcas']
+        .map((c) => screenKey(TI[0], TI[1], CATS, `cat-catalogos-centro-dist-${c}`));
+    // (nombre en el historial, llave del acceso, mínimo, toca)
+    const NAMES = {
+        pedir: 'Pedir alta de código', solTi: 'Solicitudes de alta de código (TI)', hab: 'Habilitación de Códigos (TI)', alta: 'Alta Nuestros Artículos (Sku)', rel: 'Relación Código',
+    };
+    const plan = [];
+    catalog.nodes.filter((n) => n.ty === 'pantalla' && n.k.endsWith('::cat-operaciones/cat-operaciones-pedir-alta-codigo')).forEach((n) => {
+        plan.push({ name: NAMES.pedir, key: n.k, minimum: [`${n.k}/class-botones/colSolCreateAuth`, tiScreen(SOL_TI)], touches: [tiScreen(ALTA), RELACION] });
+    });
+    plan.push({ name: NAMES.solTi, key: tiScreen(SOL_TI), minimum: [tiLeaf(SOL_TI, 'class-botones/colSolTiGestionar')], touches: [tiScreen(HAB), tiScreen(EDICION), tiScreen(ALTA)] });
+    plan.push({ name: NAMES.hab, key: tiScreen(HAB), minimum: [tiLeaf(HAB, 'colHabHabilitado'), tiLeaf(HAB, 'class-botones/colHabCreateAuth')], touches: [tiLeaf(HAB, 'colHabDondeEsta'), RELACION] });
+    plan.push({ name: NAMES.alta, key: tiScreen(ALTA), minimum: [tiLeaf(ALTA, 'colArticuloDescUnica'), tiLeaf(ALTA, 'class-botones/colArticuloCreateAuth')], touches: [tiScreen(UDM), ...catalogos, tiScreen(EDICION), tiScreen(HAB)] });
+    plan.push({
+        name: NAMES.rel, key: RELACION, minimum: [`${RELACION}/class-botones/colRelCreateAuth`],
+        touches: [screenKey('supply-chain', 'sc-area-distribution-center', OPS, 'cat-operaciones-centro-dist-layout'), screenKey('supply-chain', 'sc-area-distribution-center', OPS, 'cat-operaciones-centro-dist-capacidad-almacenamiento'), tiScreen(HAB)],
+    });
+    const hasMarks = db.prepare('SELECT 1 FROM access_relations WHERE access_key = ? LIMIT 1');
+    const insert = db.prepare('INSERT OR IGNORE INTO access_relations (access_key, related_key, kind, updated_by) VALUES (?, ?, ?, ?)');
+    const log = db.prepare("INSERT INTO saas_table_changes (table_key, record_id, record_label, action, field_key, old_value, new_value, changed_by) VALUES ('relacion-accesos', ?, ?, 'update', 'admin.relAccKind', '', ?, ?)");
+    let loaded = 0;
+    let skippedMarked = 0;
+    let skippedMissing = 0;
+    db.transaction(() => {
+        plan.forEach((p) => {
+            if (!catalog.keys.has(p.key)) { skippedMissing += 1; return; }
+            if (hasMarks.get(p.key)) { skippedMarked += 1; return; } // ya lo marcó una persona: no se toca
+            const minimum = p.minimum.filter((k) => catalog.keys.has(k));
+            const touches = p.touches.filter((k) => catalog.keys.has(k));
+            const clean = validateAccessRelations(p.key, minimum, touches);
+            if (clean.error) { console.warn(`[db] Códigos de TI: no se cargó la relación de ${p.key} (${clean.code}).`); return; }
+            clean.minimum.forEach((k) => insert.run(p.key, k, 'minimum', CODIGOS_TI_RELATIONS_AUTHOR));
+            clean.touches.forEach((k) => insert.run(p.key, k, 'touches', CODIGOS_TI_RELATIONS_AUTHOR));
+            log.run(p.key, p.name, `carga inicial de Códigos de TI: ${clean.minimum.length} mínimo(s) indispensable(s) y ${clean.touches.length} recomendado(s)`, CODIGOS_TI_RELATIONS_AUTHOR);
+            loaded += 1;
+        });
+        db.prepare('INSERT OR IGNORE INTO schema_migrations_data (key) VALUES (?)').run(CODIGOS_TI_RELATIONS_SEED_KEY);
+    })();
+    if (loaded || skippedMarked || skippedMissing) console.log(`[db] Relación de Accesos (Códigos de TI): ${loaded} acceso(s) con relaciones cargadas, ${skippedMarked} ya marcado(s) por una persona (no se tocaron), ${skippedMissing} sin acceso en el árbol.`);
+}
+
 function planTupleKey(sectionId, itemId, submenuId) {
     return `${sectionId}::${itemId || ''}::${submenuId || ''}`;
 }
@@ -21067,6 +21137,7 @@ seedPresentacionesCatalogGrants();
 seedRelacionEnvioGrants();
 seedAltaActivosGrants();
 seedImplementacionHistorialGrants();
+seedCodigosTiAccessRelations();
 seedEquipoRegistroGrants();
 seedEquipoRegistroHistoryIcon();
 seedGestionActivosGrants();
