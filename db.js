@@ -16788,6 +16788,34 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_team_events_activity ON team_activity_events (activity_id, id);
 `);
+// Pieza 2: quién puede tomar una actividad «por asignar» cuando se eligen personas, y los pases de una persona a otra (con la aprobación del jefe directo o al momento con aviso). El evento de un pase apunta a su fila (pass_id).
+ensureColumn('team_activity_events', 'pass_id', 'INTEGER');
+db.exec(`
+    CREATE TABLE IF NOT EXISTS team_activity_claimers (
+        activity_id INTEGER NOT NULL REFERENCES team_activities(id) ON DELETE CASCADE,
+        user_id     INTEGER NOT NULL,
+        PRIMARY KEY (activity_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS team_activity_passes (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        activity_id          INTEGER NOT NULL REFERENCES team_activities(id) ON DELETE CASCADE,
+        from_user_id         INTEGER NOT NULL,
+        to_user_ids          TEXT NOT NULL DEFAULT '[]',
+        reason               TEXT NOT NULL DEFAULT '',
+        mode                 TEXT NOT NULL DEFAULT 'direct',
+        status               TEXT NOT NULL DEFAULT 'pending',
+        approver_user_id     INTEGER,
+        requested_by_user_id INTEGER,
+        requested_by_label   TEXT NOT NULL DEFAULT '',
+        requested_at         TEXT NOT NULL,
+        resolved_by_user_id  INTEGER,
+        resolved_by_label    TEXT NOT NULL DEFAULT '',
+        resolved_at          TEXT,
+        resolution_note      TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_team_passes_activity ON team_activity_passes (activity_id, status);
+`);
+const TEAM_CLAIM_SCOPES = ['team_dept', 'team', 'company', 'chosen'];
 const teamNow = () => new Date().toISOString().replace('T', ' ').replace('Z', '');
 // En qué columna del tablero está una actividad, según lo que lleva cada persona: sin personas = por asignar; con responsable principal, lo que ella termina vale por todas.
 function teamActivityState(assignees, cancelled) {
@@ -16823,41 +16851,156 @@ function teamMapAssignee(a, names, viewer) {
         pausedAt: a.paused_at, reviewAt: a.review_at, doneAt: a.done_at, isMe: a.user_id === viewer.userId, isMine: viewer.reports.has(a.user_id),
     };
 }
+// ---- PIEZA 2: «La tomo» (actividades por asignar que toma quien esté libre), pases con aprobación del jefe directo y avisos de campana ----
+// Quién puede tomar una actividad dejada «por asignar» (claim_scope): team_dept = mi equipo (las personas a cargo de quien la creó) y mi departamento (quienes tienen asignado el departamento de la actividad, o el de quien la creó si no trae uno);
+// team = solo mi equipo; company = cualquiera de la compañía; chosen = las personas elegidas (team_activity_claimers); '' = nadie la toma (solo se asigna).
+// «Libre» = la persona no tiene ninguna actividad en curso. Las personas con acceso al tablero se guardan 30 s (leer los permisos de cada una cuesta).
+const teamScreenCache = new Map();
+function teamScreenSet(clientId, forTest) {
+    const key = `${clientId}:${forTest ? 1 : 0}`;
+    const hit = teamScreenCache.get(key);
+    if (hit && Date.now() - hit.at < 30000) return hit.ids;
+    const status = resolveMasterNodeStatus('main', 'equipo-trabajo', null, getLimitsContext(clientId).overrides);
+    const ids = new Set();
+    db.prepare('SELECT id, is_test_account AS isTest, is_client_admin AS isAdmin FROM users WHERE client_id = ? AND active != 0 AND COALESCE(is_test_account, 0) = ?').all(clientId, forTest ? 1 : 0).forEach((u) => {
+        if (!u.isTest && !new Set(getUserVisibleStatuses(u.id)).has(status)) return;
+        if (u.isAdmin || isTupleGranted(getUserEffectiveGrants(u.id), 'main', 'equipo-trabajo', null)) ids.add(u.id);
+    });
+    teamScreenCache.set(key, { at: Date.now(), ids });
+    return ids;
+}
+// Lo que se necesita para dibujar una o varias actividades (se arma una vez por petición): quién mira, nombres, sitios, quién puede tomar (elegidos), pases por aprobar, y de forma perezosa las personas activas, las libres y la asignación de cada una.
+function teamBuildCtx(clientId, userId, forTest, isAdmin, rows) {
+    const ids = rows.map((r) => r.id);
+    const claimers = new Map();
+    const passes = new Map();
+    if (ids.length) {
+        const marks = ids.map(() => '?').join(',');
+        db.prepare(`SELECT activity_id AS activityId, user_id AS userId FROM team_activity_claimers WHERE activity_id IN (${marks})`).all(...ids).forEach((c) => { if (!claimers.has(c.activityId)) claimers.set(c.activityId, []); claimers.get(c.activityId).push(c.userId); });
+        db.prepare(`SELECT * FROM team_activity_passes WHERE activity_id IN (${marks}) AND status = 'pending' ORDER BY id`).all(...ids).forEach((p) => { if (!passes.has(p.activity_id)) passes.set(p.activity_id, []); passes.get(p.activity_id).push(p); });
+    }
+    return { clientId, forTest, viewer: teamViewer(clientId, userId, isAdmin), names: teamNames(clientId), sites: teamSiteMap(clientId, forTest), claimers, passes, scopes: new Map(), users: null, free: null, assignments: new Map() };
+}
+function teamCtxUsers(ctx) {
+    if (!ctx.users) ctx.users = listActiveUsersBrief(ctx.clientId, ctx.forTest).map((u) => u.id);
+    return ctx.users;
+}
+function teamCtxFree(ctx) {
+    if (!ctx.free) {
+        const busy = new Set(db.prepare("SELECT DISTINCT a.user_id AS id FROM team_activity_assignees a JOIN team_activities t ON t.id = a.activity_id WHERE t.client_id = ? AND t.is_test_data = ? AND t.status = 'active' AND a.status = 'in_progress'").all(ctx.clientId, ctx.forTest ? 1 : 0).map((r) => r.id));
+        ctx.free = new Set(teamCtxUsers(ctx).filter((id) => !busy.has(id)));
+    }
+    return ctx.free;
+}
+function teamCtxAssignment(ctx, uid) {
+    if (!ctx.assignments.has(uid)) ctx.assignments.set(uid, uid == null ? null : hrWorkerAssignmentOf(uid));
+    return ctx.assignments.get(uid);
+}
+function teamScopeOf(ctx, row) {
+    if (ctx.scopes.has(row.id)) return ctx.scopes.get(row.id);
+    const scope = row.claim_scope;
+    let out = new Set();
+    if (scope === 'company') out = new Set(teamCtxUsers(ctx));
+    else if (scope === 'chosen') out = new Set(ctx.claimers.get(row.id) || []);
+    else if (scope === 'team' || scope === 'team_dept') {
+        out = new Set(row.created_by_user_id == null ? [] : workPlanDirectReports(ctx.clientId, row.created_by_user_id).map((r) => r.userId));
+        if (scope === 'team_dept') {
+            const mine = teamCtxAssignment(ctx, row.created_by_user_id);
+            const wanted = row.department ? [row.department] : ((mine && mine.departments) || []);
+            if (wanted === 'all') teamCtxUsers(ctx).forEach((id) => out.add(id));
+            else if (wanted.length) {
+                teamCtxUsers(ctx).forEach((id) => {
+                    const a = teamCtxAssignment(ctx, id);
+                    if (a && (a.departments === 'all' || (Array.isArray(a.departments) && a.departments.some((d) => wanted.includes(d))))) out.add(id);
+                });
+            }
+        }
+    }
+    ctx.scopes.set(row.id, out);
+    return out;
+}
+const TEAM_PASSABLE = ['assigned', 'confirmed', 'in_progress', 'paused'];
+// El jefe directo de una persona si sigue activo (quien aprueba sus pases); null = sin jefe directo.
+function teamBossOf(clientId, userId) {
+    const boss = workPlanBossOf(clientId, userId);
+    if (!boss) return null;
+    const account = db.prepare('SELECT active FROM users WHERE id = ? AND client_id = ?').get(boss, clientId);
+    return account && account.active !== 0 ? boss : null;
+}
+function teamMapPass(p, ctx, row) {
+    let to = [];
+    try { to = JSON.parse(p.to_user_ids) || []; } catch (err) { to = []; }
+    const viewer = ctx.viewer;
+    const pending = p.status === 'pending';
+    return {
+        id: p.id, fromUserId: p.from_user_id, fromName: ctx.names.get(p.from_user_id) || '', toUserIds: to, toNames: to.map((id) => ctx.names.get(id) || ''), reason: p.reason, mode: p.mode, status: p.status,
+        approverUserId: p.approver_user_id, approverName: p.approver_user_id == null ? '' : (ctx.names.get(p.approver_user_id) || ''), requestedByName: p.requested_by_label || ctx.names.get(p.requested_by_user_id) || '', requestedAt: p.requested_at,
+        resolvedAt: p.resolved_at || '', resolutionNote: p.resolution_note || '',
+        canResolve: pending && p.mode === 'approval' && (viewer.isAdmin || p.approver_user_id === viewer.userId),
+        canCancel: pending && (viewer.isAdmin || p.requested_by_user_id === viewer.userId || row.created_by_user_id === viewer.userId),
+    };
+}
 // Lo que esta persona puede hacer con la actividad (el servidor decide; la pantalla solo dibuja los botones).
-function teamActivityCan(clientId, row, assignees, viewer) {
+function teamActivityCan(row, assignees, viewer, scope, pending) {
     const creator = row.created_by_user_id === viewer.userId;
     const bossOfAny = assignees.some((a) => viewer.reports.has(a.userId));
     const open = row.status === 'active';
     const mine = assignees.find((a) => a.userId === viewer.userId);
     const reviewers = assignees.filter((a) => a.status === 'review' && (viewer.isAdmin || creator || viewer.reports.has(a.userId)));
+    const seatsOpen = Math.max(0, row.seats_needed - assignees.length);
+    const waiting = new Set(pending.map((p) => p.fromUserId));
+    const passUserIds = open ? assignees.filter((a) => TEAM_PASSABLE.includes(a.status) && !waiting.has(a.userId) && (a.userId === viewer.userId || viewer.isAdmin || creator || viewer.reports.has(a.userId))).map((a) => a.userId) : [];
     return {
         edit: open && (viewer.isAdmin || creator), cancel: open && (viewer.isAdmin || creator) && !(assignees.length && assignees.every((a) => a.status === 'done')),
         assign: open && (viewer.isAdmin || creator || bossOfAny), unassign: open && (viewer.isAdmin || creator || bossOfAny),
         confirm: open && !!mine && mine.status === 'assigned', start: open && !!mine && (mine.status === 'assigned' || mine.status === 'confirmed'),
         pause: open && !!mine && mine.status === 'in_progress', resume: open && !!mine && mine.status === 'paused', submit: open && !!mine && mine.status === 'in_progress',
         validate: open && reviewers.length > 0, returnIt: open && reviewers.length > 0, reviewUserIds: reviewers.map((a) => a.userId),
+        claim: open && !!row.claim_scope && !mine && seatsOpen > 0 && scope.has(viewer.userId),
+        pass: passUserIds.length > 0, passUserIds,
     };
 }
-function teamMapActivity(row, assigneeRows, names, sites, viewer, clientId) {
+function teamMapActivity(row, assigneeRows, ctx) {
+    const { viewer, names, sites } = ctx;
     const assignees = assigneeRows.map((a) => teamMapAssignee(a, names, viewer));
     let siteIds = [];
     try { siteIds = JSON.parse(row.site_ids); } catch (err) { siteIds = []; }
+    const pending = (ctx.passes.get(row.id) || []).map((p) => teamMapPass(p, ctx, row));
+    const scope = teamScopeOf(ctx, row);
+    const seatsOpen = Math.max(0, row.seats_needed - assignees.length);
+    const open = row.status === 'active';
     const out = {
         id: row.id, title: row.title, description: row.description, kind: row.kind, urgent: !!row.urgent, realization: row.realization, area: row.area, department: row.department, dueDate: row.due_date || '',
-        seatsNeeded: row.seats_needed, claimScope: row.claim_scope, sites: siteIds.map((id) => sites.get(id)).filter(Boolean), status: teamActivityState(assignees, row.status === 'cancelled'), cancelReason: row.cancel_reason,
-        createdBy: { id: row.created_by_user_id, name: names.get(row.created_by_user_id) || row.created_by_label }, createdAt: row.created_at, updatedAt: row.updated_at, assignees,
+        seatsNeeded: row.seats_needed, seatsOpen, claimScope: row.claim_scope, sites: siteIds.map((id) => sites.get(id)).filter(Boolean), status: teamActivityState(assignees, row.status === 'cancelled'), cancelReason: row.cancel_reason,
+        createdBy: { id: row.created_by_user_id, name: names.get(row.created_by_user_id) || row.created_by_label }, createdAt: row.created_at, updatedAt: row.updated_at, assignees, passes: pending,
     };
-    out.can = teamActivityCan(clientId, row, assignees, viewer);
+    out.can = teamActivityCan(row, assignees, viewer, scope, pending);
     out.myStatus = (assignees.find((a) => a.userId === viewer.userId) || {}).status || '';
+    // las personas libres que la pueden tomar (para quien la reparte)
+    out.claim = null;
+    if (open && row.claim_scope && seatsOpen > 0) {
+        const taken = new Set(assignees.map((a) => a.userId));
+        const free = teamCtxFree(ctx);
+        const granted = teamScreenSet(ctx.clientId, ctx.forTest);
+        const ids = [...scope].filter((id) => !taken.has(id) && free.has(id) && granted.has(id));
+        out.claim = { freeCount: ids.length, freeNames: ids.slice(0, 4).map((id) => names.get(id) || '') };
+    }
+    if (out.can.edit) out.claimUserIds = ctx.claimers.get(row.id) || [];
+    // quién aprueba el pase de la propia persona (null = se hace al momento y se avisa a todos)
+    const mine = assignees.find((a) => a.userId === viewer.userId);
+    out.passApprover = null;
+    if (open && mine && out.can.passUserIds.includes(viewer.userId) && !viewer.isAdmin && row.created_by_user_id !== viewer.userId) {
+        const boss = teamBossOf(ctx.clientId, viewer.userId);
+        if (boss) out.passApprover = { userId: boss, name: names.get(boss) || '' };
+    }
     return out;
 }
-const teamSees = (row, assignees, viewer) => viewer.isAdmin || row.created_by_user_id === viewer.userId || assignees.some((a) => a.user_id === viewer.userId || viewer.reports.has(a.user_id));
+const teamSees = (row, assignees, viewer, scope) => viewer.isAdmin || row.created_by_user_id === viewer.userId || assignees.some((a) => a.user_id === viewer.userId || viewer.reports.has(a.user_id))
+    || (!!row.claim_scope && assignees.length < row.seats_needed && scope.has(viewer.userId));
 // La lista del tablero: lo que esta persona puede ver (sin las canceladas y sin las terminadas hace más de 90 días; el registro de la pieza 3 trae lo viejo), con los catálogos para los filtros y para crear.
 function listTeamActivities(clientId, userId, forTest, isAdmin) {
-    const viewer = teamViewer(clientId, userId, isAdmin);
-    const names = teamNames(clientId);
-    const sites = teamSiteMap(clientId, forTest);
     const rows = db.prepare("SELECT * FROM team_activities WHERE client_id = ? AND is_test_data = ? AND status = 'active' ORDER BY id DESC LIMIT ?").all(clientId, forTest ? 1 : 0, TEAM_LIMITS.activities);
+    const ctx = teamBuildCtx(clientId, userId, forTest, isAdmin, rows);
     const byActivity = new Map();
     if (rows.length) {
         db.prepare(`SELECT * FROM team_activity_assignees WHERE activity_id IN (${rows.map(() => '?').join(',')}) ORDER BY id`).all(...rows.map((r) => r.id)).forEach((a) => { if (!byActivity.has(a.activity_id)) byActivity.set(a.activity_id, []); byActivity.get(a.activity_id).push(a); });
@@ -16866,27 +17009,30 @@ function listTeamActivities(clientId, userId, forTest, isAdmin) {
     const activities = [];
     rows.forEach((r) => {
         const as = byActivity.get(r.id) || [];
-        if (!teamSees(r, as, viewer)) return;
+        if (!teamSees(r, as, ctx.viewer, teamScopeOf(ctx, r))) return;
         if (as.length && as.every((a) => a.status === 'done') && as.every((a) => (a.done_at || '') < cutoff)) return;
-        activities.push(teamMapActivity(r, as, names, sites, viewer, clientId));
+        activities.push(teamMapActivity(r, as, ctx));
     });
-    const reports = new Set(viewer.reports);
-    const people = listActiveUsersBrief(clientId, forTest).map((u) => ({ id: u.id, name: implementationLine(u.name) || u.username, mine: reports.has(u.id) }));
+    const reports = ctx.viewer.reports;
+    const free = teamCtxFree(ctx);
+    const granted = teamScreenSet(clientId, forTest);
+    const people = listActiveUsersBrief(clientId, forTest).map((u) => ({ id: u.id, name: implementationLine(u.name) || u.username, mine: reports.has(u.id), free: free.has(u.id), hasScreen: granted.has(u.id) }));
     const departments = listContractedDepartmentKeys(clientId).map((key) => ({ key, labelKey: (MODULE_CATALOG.find((m) => m.key === key) || {}).labelKey || '' }));
-    return { activities, people, sites: [...sites.values()], departments, me: { id: userId, name: names.get(userId) || '', isAdmin: !!isAdmin, hasTeam: reports.size > 0 } };
+    return { activities, people, sites: [...ctx.sites.values()], departments, me: { id: userId, name: ctx.names.get(userId) || '', isAdmin: !!isAdmin, hasTeam: reports.size > 0 } };
 }
 function teamActivityRowFor(clientId, forTest, id) {
     const n = Number(id);
     return Number.isInteger(n) ? db.prepare('SELECT * FROM team_activities WHERE id = ? AND client_id = ? AND is_test_data = ?').get(n, clientId, forTest ? 1 : 0) : null;
 }
 function teamDetail(clientId, userId, forTest, isAdmin, row, withEvents) {
-    const viewer = teamViewer(clientId, userId, isAdmin);
-    const names = teamNames(clientId);
+    const ctx = teamBuildCtx(clientId, userId, forTest, isAdmin, [row]);
     const as = db.prepare('SELECT * FROM team_activity_assignees WHERE activity_id = ? ORDER BY id').all(row.id);
-    const out = teamMapActivity(row, as, names, teamSiteMap(clientId, forTest), viewer, clientId);
+    const out = teamMapActivity(row, as, ctx);
     if (withEvents) {
+        const passes = new Map(db.prepare('SELECT * FROM team_activity_passes WHERE activity_id = ?').all(row.id).map((p) => [p.id, teamMapPass(p, ctx, row)]));
         out.events = db.prepare('SELECT * FROM team_activity_events WHERE activity_id = ? ORDER BY id').all(row.id).map((e) => ({
-            id: e.id, event: e.event, userId: e.user_id, userName: e.user_id == null ? '' : (names.get(e.user_id) || ''), actorName: e.actor_label || names.get(e.actor_user_id) || '', detail: e.detail, createdAt: e.created_at,
+            id: e.id, event: e.event, userId: e.user_id, userName: e.user_id == null ? '' : (ctx.names.get(e.user_id) || ''), actorName: e.actor_label || ctx.names.get(e.actor_user_id) || '', detail: e.detail, createdAt: e.created_at,
+            pass: e.pass_id != null && passes.has(e.pass_id) ? passes.get(e.pass_id) : null,
         }));
     }
     return out;
@@ -16894,12 +17040,22 @@ function teamDetail(clientId, userId, forTest, isAdmin, row, withEvents) {
 function getTeamActivity(clientId, userId, forTest, isAdmin, id) {
     const row = teamActivityRowFor(clientId, forTest, id);
     if (!row) return { error: 'TEAM_NOT_FOUND' };
-    const viewer = teamViewer(clientId, userId, isAdmin);
+    const ctx = teamBuildCtx(clientId, userId, forTest, isAdmin, [row]);
     const as = db.prepare('SELECT * FROM team_activity_assignees WHERE activity_id = ?').all(row.id);
-    if (!teamSees(row, as, viewer)) return { error: 'TEAM_NOT_FOUND' };
+    if (!teamSees(row, as, ctx.viewer, teamScopeOf(ctx, row))) return { error: 'TEAM_NOT_FOUND' };
     return { activity: teamDetail(clientId, userId, forTest, isAdmin, row, true) };
 }
-const teamEvent = (activityId, userId, actorUserId, actorLabel, event, detail) => db.prepare('INSERT INTO team_activity_events (activity_id, user_id, actor_user_id, actor_label, event, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(activityId, userId == null ? null : userId, actorUserId, actorLabel || '', event, String(detail || '').slice(0, 400), teamNow());
+// Aviso de la campana (kind 'team-activity', pestaña Avisos): lo que le toca saber a cada persona. event = assigned | unassigned | claimed | submitted | validated | returned | cancelled | pass_requested | pass_approved | pass_rejected | pass_cancelled | passed;
+// names = las personas de que se trata (para un pase: «De → A»), note = el motivo o comentario. Nadie recibe aviso de lo que hizo él mismo. Devuelve a quién le llegó.
+function publishTeamNotice({ recipientIds, event, activity, names = '', note = '', actorUserId, actorLabel }) {
+    const ids = [...new Set((recipientIds || []).filter((id) => id != null && id !== actorUserId))];
+    if (!ids.length) return [];
+    const payload = JSON.stringify({ event, activityId: activity.id, label: String(activity.title || '').slice(0, 160), names: String(names || '').slice(0, 200), note: String(note || '').slice(0, 200) });
+    const insert = db.prepare("INSERT INTO saas_tree_notices (user_id, kind, scope, payload, actor_user_id, actor_label) VALUES (?, 'team-activity', 'data', ?, ?, ?)");
+    db.transaction(() => ids.forEach((id) => insert.run(id, payload, actorUserId == null ? null : actorUserId, actorLabel || '')))();
+    return ids;
+}
+const teamEvent = (activityId, userId, actorUserId, actorLabel, event, detail, passId) => db.prepare('INSERT INTO team_activity_events (activity_id, user_id, actor_user_id, actor_label, event, detail, created_at, pass_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(activityId, userId == null ? null : userId, actorUserId, actorLabel || '', event, String(detail || '').slice(0, 400), teamNow(), passId == null ? null : passId);
 // Lo que viene del formulario de crear o cambiar → datos limpios: { value } o { error, field }.
 function cleanTeamActivityFields(clientId, forTest, body, partial) {
     const b = body && typeof body === 'object' ? body : {};
@@ -16948,19 +17104,36 @@ function createTeamActivity(clientId, userId, forTest, isAdmin, body, byLabel) {
     if (people.error) return people;
     const principal = body && body.principalUserId != null && body.principalUserId !== '' ? Number(body.principalUserId) : null;
     if (principal != null && !people.ids.includes(principal)) return { error: 'TEAM_PERSON_INVALID' };
+    // quién puede tomarla: sin personas queda «por asignar» y la toma mi equipo y mi departamento (salvo que se elija otra cosa); con personas, nadie la toma (salvo que se pida)
+    const claim = cleanTeamClaim(clientId, forTest, body, people.ids.length ? '' : 'team_dept');
+    if (claim.error) return claim;
     const v = fields.value;
     const now = teamNow();
     let id = 0;
     db.transaction(() => {
-        id = Number(db.prepare(`INSERT INTO team_activities (client_id, is_test_data, title, description, kind, urgent, realization, site_ids, area, department, due_date, seats_needed, created_by_user_id, created_by_label, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(clientId, forTest ? 1 : 0, v.title, v.description, v.kind, v.urgent, v.realization, v.site_ids, v.area, v.department, v.due_date, v.seats_needed, userId, byLabel || '', now, now).lastInsertRowid);
+        id = Number(db.prepare(`INSERT INTO team_activities (client_id, is_test_data, title, description, kind, urgent, realization, site_ids, area, department, due_date, seats_needed, claim_scope, created_by_user_id, created_by_label, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(clientId, forTest ? 1 : 0, v.title, v.description, v.kind, v.urgent, v.realization, v.site_ids, v.area, v.department, v.due_date, v.seats_needed, claim.scope, userId, byLabel || '', now, now).lastInsertRowid);
         teamEvent(id, null, userId, byLabel, 'created', v.title);
         people.ids.forEach((uid) => {
             db.prepare('INSERT INTO team_activity_assignees (activity_id, user_id, status, is_principal, assigned_by_user_id, assigned_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, uid, 'assigned', uid === principal ? 1 : 0, userId, now);
             teamEvent(id, uid, userId, byLabel, 'assigned', '');
         });
+        claim.userIds.forEach((uid) => db.prepare('INSERT INTO team_activity_claimers (activity_id, user_id) VALUES (?, ?)').run(id, uid));
     })();
+    publishTeamNotice({ recipientIds: people.ids, event: 'assigned', activity: { id, title: v.title }, actorUserId: userId, actorLabel: byLabel });
     return { activity: teamDetail(clientId, userId, forTest, isAdmin, teamActivityRowFor(clientId, forTest, id), true) };
+}
+// «¿Quién puede tomarla?» del formulario (claimScope y, si son personas elegidas, claimUserIds) → { scope, userIds } o { error }. `fallback` = lo que vale cuando no se manda nada.
+function cleanTeamClaim(clientId, forTest, body, fallback) {
+    const b = body && typeof body === 'object' ? body : {};
+    const raw = b.claimScope === undefined || b.claimScope === null ? fallback : b.claimScope;
+    const scope = typeof raw === 'string' ? raw : null;
+    if (scope === null || (scope !== '' && !TEAM_CLAIM_SCOPES.includes(scope))) return { error: 'TEAM_CLAIM_INVALID', field: 'claimScope' };
+    if (scope !== 'chosen') return { scope, userIds: [] };
+    const chosen = cleanTeamPeople(clientId, forTest, b.claimUserIds);
+    if (chosen.error) return chosen;
+    if (!chosen.ids.length) return { error: 'TEAM_CLAIM_INVALID', field: 'claimUserIds' };
+    return { scope, userIds: chosen.ids };
 }
 // Todos los movimientos de una actividad. action: edit | assign | unassign | cancel | confirm | start | pause | resume | submit | validate | return. Cada uno revisa quién puede (teamActivityCan) y deja su evento.
 function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action, body, byLabel) {
@@ -16976,13 +17149,31 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
     const reasonOf = () => { const r = typeof b.reason === 'string' ? workPlanText(b.reason) : ''; return r; };
     if (row.status !== 'active') return { error: 'TEAM_CANCELLED' };
     const done = (extra) => ({ activity: teamDetail(clientId, userId, forTest, isAdmin, teamActivityRowFor(clientId, forTest, row.id), true), ...(extra || {}) });
+    const names = teamNames(clientId);
+    const nameOf = (id) => names.get(id) || '';
+    const notify = (event, ids, extra) => publishTeamNotice({ recipientIds: ids, event, activity: row, actorUserId: userId, actorLabel: byLabel, ...(extra || {}) });
     if (action === 'edit') {
         if (!can.edit) return { error: 'TEAM_NOT_ALLOWED' };
         const fields = cleanTeamActivityFields(clientId, forTest, b, true);
         if (fields.error) return fields;
+        // quién puede tomarla (solo si lo mandan): el tipo y, si son personas elegidas, quiénes
+        let claim = null;
+        if (Object.prototype.hasOwnProperty.call(b, 'claimScope') || (row.claim_scope === 'chosen' && Object.prototype.hasOwnProperty.call(b, 'claimUserIds'))) {
+            const currentClaimers = db.prepare('SELECT user_id AS userId FROM team_activity_claimers WHERE activity_id = ?').all(row.id).map((r) => r.userId);
+            claim = cleanTeamClaim(clientId, forTest, { claimScope: Object.prototype.hasOwnProperty.call(b, 'claimScope') ? b.claimScope : row.claim_scope, claimUserIds: b.claimUserIds === undefined ? currentClaimers : b.claimUserIds }, row.claim_scope);
+            if (claim.error) return claim;
+            fields.value.claim_scope = claim.scope;
+        }
         const keys = Object.keys(fields.value);
         if (!keys.length) return done();
-        db.transaction(() => { db.prepare(`UPDATE team_activities SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`).run(...keys.map((k) => fields.value[k]), now, row.id); teamEvent(row.id, null, userId, byLabel, 'edited', keys.join(', ')); })();
+        db.transaction(() => {
+            db.prepare(`UPDATE team_activities SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`).run(...keys.map((k) => fields.value[k]), now, row.id);
+            if (claim) {
+                db.prepare('DELETE FROM team_activity_claimers WHERE activity_id = ?').run(row.id);
+                claim.userIds.forEach((uid) => db.prepare('INSERT INTO team_activity_claimers (activity_id, user_id) VALUES (?, ?)').run(row.id, uid));
+            }
+            teamEvent(row.id, null, userId, byLabel, 'edited', keys.join(', '));
+        })();
         return done();
     }
     if (action === 'cancel') {
@@ -16990,7 +17181,12 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
         const reason = reasonOf();
         if (!reason) return { error: 'TEAM_REASON_REQUIRED' };
         if (workPlanLen(reason) > TEAM_LIMITS.reason) return { error: 'TEAM_TEXT_TOO_LONG' };
-        db.transaction(() => { db.prepare("UPDATE team_activities SET status = 'cancelled', cancel_reason = ?, updated_at = ? WHERE id = ?").run(reason, now, row.id); teamEvent(row.id, null, userId, byLabel, 'cancelled', reason); })();
+        db.transaction(() => {
+            db.prepare("UPDATE team_activities SET status = 'cancelled', cancel_reason = ?, updated_at = ? WHERE id = ?").run(reason, now, row.id);
+            db.prepare("UPDATE team_activity_passes SET status = 'cancelled', resolved_at = ?, resolution_note = ? WHERE activity_id = ? AND status = 'pending'").run(now, 'activity cancelled', row.id);
+            teamEvent(row.id, null, userId, byLabel, 'cancelled', reason);
+        })();
+        notify('cancelled', detail.assignees.map((a) => a.userId), { note: reason });
         return done();
     }
     if (action === 'assign') {
@@ -17008,6 +17204,7 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
             if (principal != null) { db.prepare('UPDATE team_activity_assignees SET is_principal = CASE WHEN user_id = ? THEN 1 ELSE 0 END WHERE activity_id = ?').run(principal, row.id); }
             touch();
         })();
+        notify('assigned', fresh);
         return done();
     }
     if (action === 'unassign') {
@@ -17016,7 +17213,13 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
         const target = detail.assignees.find((a) => a.userId === uid);
         if (!target) return { error: 'TEAM_PERSON_INVALID' };
         if (!['assigned', 'confirmed'].includes(target.status)) return { error: 'TEAM_STATE' };
-        db.transaction(() => { db.prepare('DELETE FROM team_activity_assignees WHERE activity_id = ? AND user_id = ?').run(row.id, uid); teamEvent(row.id, uid, userId, byLabel, 'unassigned', ''); touch(); })();
+        db.transaction(() => {
+            db.prepare('DELETE FROM team_activity_assignees WHERE activity_id = ? AND user_id = ?').run(row.id, uid);
+            db.prepare("UPDATE team_activity_passes SET status = 'cancelled', resolved_at = ?, resolution_note = ? WHERE activity_id = ? AND from_user_id = ? AND status = 'pending'").run(now, 'person removed', row.id, uid);
+            teamEvent(row.id, uid, userId, byLabel, 'unassigned', '');
+            touch();
+        })();
+        notify('unassigned', [uid]);
         return done();
     }
     if (['confirm', 'start', 'pause', 'resume', 'submit'].includes(action)) {
@@ -17045,6 +17248,8 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
         if (action === 'resume') { if (st !== 'paused') return { error: 'TEAM_STATE' }; set({ status: 'in_progress', pause_reason: '' }, 'resumed', ''); return done(); }
         if (st !== 'in_progress') return { error: 'TEAM_STATE' };
         set({ status: 'review', review_at: now }, 'submitted', '');
+        // lo recibe quien puede validarlo: quien creó la actividad y el jefe directo de quien la entrega
+        notify('submitted', [row.created_by_user_id, teamBossOf(clientId, userId)], { names: nameOf(userId) });
         return done();
     }
     if (action === 'validate' || action === 'return') {
@@ -17063,9 +17268,111 @@ function teamActivityAct(clientId, userId, forTest, isAdmin, activityId, action,
             });
             touch();
         })();
+        notify(action === 'validate' ? 'validated' : 'returned', targets, { note: reason });
+        return done();
+    }
+    if (action === 'claim') {
+        if (!can.claim) return { error: row.claim_scope && !mineRow && detail.seatsOpen === 0 ? 'TEAM_FULL' : 'TEAM_NOT_ALLOWED' };
+        db.transaction(() => {
+            db.prepare('INSERT INTO team_activity_assignees (activity_id, user_id, status, is_principal, assigned_by_user_id, assigned_at, confirmed_at) VALUES (?, ?, ?, 0, ?, ?, ?)').run(row.id, userId, 'confirmed', userId, now, now);
+            teamEvent(row.id, userId, userId, byLabel, 'claimed', '');
+            teamEvent(row.id, userId, userId, byLabel, 'confirmed', '');
+            touch();
+        })();
+        // «La tomo»: queda confirmada a su nombre y se avisa a quien la creó y al jefe directo de quien la tomó
+        notify('claimed', [row.created_by_user_id, teamBossOf(clientId, userId)], { names: nameOf(userId) });
+        return done();
+    }
+    if (action === 'pass') {
+        const fromId = b.fromUserId != null && b.fromUserId !== '' ? Number(b.fromUserId) : userId;
+        const target = Number.isInteger(fromId) ? detail.assignees.find((a) => a.userId === fromId) : null;
+        if (!target) return { error: 'TEAM_PERSON_INVALID' };
+        // pasa la propia persona, o quien la reparte (quien creó la actividad, su jefe directo o el administrador del cliente)
+        if (!(fromId === userId || isAdmin || row.created_by_user_id === userId || target.isMine)) return { error: 'TEAM_NOT_ALLOWED' };
+        if (detail.passes.some((p) => p.fromUserId === fromId)) return { error: 'TEAM_PASS_PENDING' };
+        if (!TEAM_PASSABLE.includes(target.status)) return { error: 'TEAM_STATE' };
+        const check = teamPassCheck(clientId, forTest, row.id, fromId, b.userIds);
+        if (check.error) return check;
+        const reason = reasonOf();
+        if (!reason) return { error: 'TEAM_REASON_REQUIRED' };
+        if (workPlanLen(reason) > TEAM_LIMITS.reason) return { error: 'TEAM_TEXT_TOO_LONG' };
+        const route = `${nameOf(fromId)} → ${check.ids.map(nameOf).join(', ')}`;
+        // quien la pasa tiene jefe directo (y no es quien la creó ni el administrador): el jefe lo aprueba; si no, se hace al momento y se avisa a todos
+        const boss = fromId === userId && !isAdmin && row.created_by_user_id !== userId ? teamBossOf(clientId, userId) : null;
+        const insertPass = db.prepare('INSERT INTO team_activity_passes (activity_id, from_user_id, to_user_ids, reason, mode, status, approver_user_id, requested_by_user_id, requested_by_label, requested_at, resolved_by_user_id, resolved_by_label, resolved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        if (boss) {
+            db.transaction(() => {
+                const passId = Number(insertPass.run(row.id, fromId, JSON.stringify(check.ids), reason, 'approval', 'pending', boss, userId, byLabel || '', now, null, '', null).lastInsertRowid);
+                teamEvent(row.id, fromId, userId, byLabel, 'pass_requested', reason, passId);
+                touch();
+            })();
+            notify('pass_requested', [boss], { names: route, note: reason });
+            return done();
+        }
+        db.transaction(() => {
+            const passId = Number(insertPass.run(row.id, fromId, JSON.stringify(check.ids), reason, 'direct', 'approved', null, userId, byLabel || '', now, userId, byLabel || '', now).lastInsertRowid);
+            teamPassMove(row.id, fromId, check.ids, userId, now);
+            teamEvent(row.id, fromId, userId, byLabel, 'passed', reason, passId);
+            touch();
+        })();
+        notify('passed', [row.created_by_user_id, ...detail.assignees.map((a) => a.userId), ...check.ids], { names: route, note: reason });
+        return done();
+    }
+    if (action === 'pass_approve' || action === 'pass_reject' || action === 'pass_cancel') {
+        const pass = detail.passes.find((p) => p.id === Number(b.passId));
+        if (!pass) return { error: 'TEAM_PASS_NOT_FOUND' };
+        const note = reasonOf();
+        if (workPlanLen(note) > TEAM_LIMITS.reason) return { error: 'TEAM_TEXT_TOO_LONG' };
+        const route = `${pass.fromName} → ${pass.toNames.join(', ')}`;
+        const close = (status, event) => {
+            db.prepare('UPDATE team_activity_passes SET status = ?, resolved_by_user_id = ?, resolved_by_label = ?, resolved_at = ?, resolution_note = ? WHERE id = ?').run(status, userId, byLabel || '', now, note, pass.id);
+            teamEvent(row.id, pass.fromUserId, userId, byLabel, event, note, pass.id);
+        };
+        const requester = db.prepare('SELECT requested_by_user_id AS id FROM team_activity_passes WHERE id = ?').get(pass.id).id;
+        if (action === 'pass_cancel') {
+            if (!pass.canCancel) return { error: 'TEAM_NOT_ALLOWED' };
+            db.transaction(() => { close('cancelled', 'pass_cancelled'); touch(); })();
+            notify('pass_cancelled', [pass.approverUserId], { names: route, note });
+            return done();
+        }
+        if (!pass.canResolve) return { error: 'TEAM_NOT_ALLOWED' };
+        if (action === 'pass_reject') {
+            db.transaction(() => { close('rejected', 'pass_rejected'); touch(); })();
+            notify('pass_rejected', [requester], { names: route, note });
+            return done();
+        }
+        const check = teamPassCheck(clientId, forTest, row.id, pass.fromUserId, pass.toUserIds);
+        if (check.error) return check;
+        db.transaction(() => {
+            teamPassMove(row.id, pass.fromUserId, check.ids, userId, now);
+            close('approved', 'pass_approved');
+            teamEvent(row.id, pass.fromUserId, userId, byLabel, 'passed', pass.reason, pass.id);
+            touch();
+        })();
+        notify('pass_approved', [requester], { names: route, note });
+        notify('passed', [row.created_by_user_id, ...detail.assignees.map((a) => a.userId).filter((id) => id !== requester), ...check.ids], { names: route, note: pass.reason });
         return done();
     }
     return { error: 'TEAM_ACTION_INVALID' };
+}
+// Un pase: ¿se puede pasar de esta persona a esas? Devuelve { ids } (las que reciben, ya limpias) o { error }. Se vuelve a revisar al aprobar (todo pudo cambiar mientras esperaba).
+function teamPassCheck(clientId, forTest, activityId, fromId, toIds) {
+    const as = db.prepare('SELECT user_id AS userId, status FROM team_activity_assignees WHERE activity_id = ?').all(activityId);
+    const from = as.find((a) => a.userId === fromId);
+    if (!from) return { error: 'TEAM_PERSON_INVALID' };
+    if (!TEAM_PASSABLE.includes(from.status)) return { error: 'TEAM_STATE' };
+    const people = cleanTeamPeople(clientId, forTest, toIds);
+    if (people.error) return people;
+    if (!people.ids.length) return { error: 'TEAM_PERSON_INVALID' };
+    if (people.ids.some((id) => id === fromId || as.some((a) => a.userId === id))) return { error: 'TEAM_PEOPLE_EXIST' };
+    if (as.length - 1 + people.ids.length > TEAM_LIMITS.people) return { error: 'TEAM_PEOPLE_LIMIT' };
+    return { ids: people.ids };
+}
+// El movimiento del pase (dentro de una transacción): sale quien la tenía y entran quienes la reciben «por confirmar»; si quien la pasa era la responsable principal, la primera de las que reciben lo es.
+function teamPassMove(activityId, fromId, toIds, actorUserId, now) {
+    const from = db.prepare('SELECT is_principal AS isPrincipal FROM team_activity_assignees WHERE activity_id = ? AND user_id = ?').get(activityId, fromId);
+    db.prepare('DELETE FROM team_activity_assignees WHERE activity_id = ? AND user_id = ?').run(activityId, fromId);
+    toIds.forEach((uid, i) => db.prepare('INSERT INTO team_activity_assignees (activity_id, user_id, status, is_principal, assigned_by_user_id, assigned_at) VALUES (?, ?, ?, ?, ?, ?)').run(activityId, uid, 'assigned', from && from.isPrincipal && i === 0 ? 1 : 0, actorUserId, now));
 }
 // El texto de quien es responsable o ejecuta (el nombre actual de la persona ligada, o el texto libre).
 function workPlanPersonShown(clientId, forTestAccount, person) {

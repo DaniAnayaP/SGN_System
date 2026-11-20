@@ -2302,7 +2302,7 @@ app.delete('/api/business/work-plans/:id/items/:itemId', requireAuth, (req, res)
 // ---- Administración de Equipo de Trabajo (Daniel, 2026-11-19) · PIEZA 1 ----
 // Pantalla general (sección main, junto a Planes de trabajo): entra quien tiene la hoja main/equipo-trabajo en su árbol (el administrador del cliente, siempre) y su Estatus habilitado. Las cuentas de SaaS (sin compañía) no la tienen.
 // Cada persona ve lo que creó, lo que tiene y lo de las personas a su cargo; el administrador, todo. Quien puede qué lo decide db.js (teamActivityCan) y viaja en `can`. Cada movimiento queda en team_activity_events.
-const TEAM_HTTP = { TEAM_NOT_FOUND: 404, TEAM_NOT_ALLOWED: 403, TEAM_FORBIDDEN: 403, TEAM_STATE: 409, TEAM_CANCELLED: 409, TEAM_PEOPLE_EXIST: 409, TEAM_PEOPLE_LIMIT: 409 };
+const TEAM_HTTP = { TEAM_NOT_FOUND: 404, TEAM_NOT_ALLOWED: 403, TEAM_FORBIDDEN: 403, TEAM_STATE: 409, TEAM_CANCELLED: 409, TEAM_PEOPLE_EXIST: 409, TEAM_PEOPLE_LIMIT: 409, TEAM_FULL: 409, TEAM_PASS_PENDING: 409, TEAM_PASS_NOT_FOUND: 404 };
 const TEAM_MESSAGES = {
     TEAM_NOT_FOUND: 'Esa actividad no existe.', TEAM_NOT_ALLOWED: 'No puedes hacer eso con esta actividad.', TEAM_FORBIDDEN: 'No tienes permiso para usar la Administración de Equipo de Trabajo.',
     TEAM_STATE: 'La actividad ya no está en ese paso.', TEAM_CANCELLED: 'La actividad está cancelada.', TEAM_REASON_REQUIRED: 'Escribe el motivo.', TEAM_TITLE_REQUIRED: 'Escribe qué hay que hacer.',
@@ -2310,6 +2310,8 @@ const TEAM_MESSAGES = {
     TEAM_REALIZATION_INVALID: 'La realización debe ser presencial, remoto o mixta.', TEAM_SITE_INVALID: 'Uno de los sitios no es válido.', TEAM_DEPARTMENT_INVALID: 'Ese departamento no está habilitado en la compañía.',
     TEAM_DATE_INVALID: 'La fecha no es válida.', TEAM_SEATS_INVALID: 'Las personas que se necesitan van de 1 a 20.', TEAM_PERSON_INVALID: 'Una de las personas no es válida: elige a alguien activo de tu compañía.',
     TEAM_PEOPLE_EXIST: 'Esas personas ya están en la actividad.', TEAM_PEOPLE_LIMIT: 'Una actividad no puede tener más de 20 personas.', TEAM_ACTION_INVALID: 'Esa acción no existe.',
+    TEAM_CLAIM_INVALID: 'Elige quién puede tomarla (y, si son personas elegidas, al menos una).', TEAM_FULL: 'Ya se completaron las personas que necesita la actividad.',
+    TEAM_PASS_PENDING: 'Esa persona ya tiene un pase esperando respuesta.', TEAM_PASS_NOT_FOUND: 'Ese pase ya no existe.',
 };
 function teamFail(res, result) {
     const code = result.error;
@@ -2351,7 +2353,9 @@ function teamAct(action) {
     };
 }
 app.patch('/api/business/team-activities/:id', requireAuth, teamAct('edit'));
-['assign', 'unassign', 'cancel', 'confirm', 'start', 'pause', 'resume', 'submit', 'validate', 'return'].forEach((action) => app.post(`/api/business/team-activities/:id/${action}`, requireAuth, teamAct(action)));
+['assign', 'unassign', 'cancel', 'confirm', 'start', 'pause', 'resume', 'submit', 'validate', 'return', 'claim', 'pass'].forEach((action) => app.post(`/api/business/team-activities/:id/${action}`, requireAuth, teamAct(action)));
+// pieza 2: responder o retirar un pase (body: { passId, reason? }); la ruta lleva el guion, la acción del servidor el guion bajo
+[['pass-approve', 'pass_approve'], ['pass-reject', 'pass_reject'], ['pass-cancel', 'pass_cancel']].forEach(([path, action]) => app.post(`/api/business/team-activities/:id/${path}`, requireAuth, teamAct(action)));
 // ---- Hilos de comentarios genéricos (pieza 2b) ----
 // Un hilo es (tipo, id). Cada tipo se registra con UNA entrada en THREAD_TYPES: { guard?, notFound?, resolve(req, id) }. `guard` es la guarda de la pantalla dueña del tipo (responde ella misma); `resolve` devuelve null (no existe o no tiene acceso: 404) o
 // { label (título para mostrar), canRead, canPost, postError (código HTTP-4xx propio de la pantalla cuando no se puede comentar ahora), participants: [{id, name}] (las personas mencionables = las que hoy tienen acceso, de la misma compañía), canMention, planId? }.

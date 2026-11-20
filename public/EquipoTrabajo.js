@@ -18,6 +18,7 @@ const pad2 = (n) => String(n).padStart(2, '0');
 const KINDS = ['fija', 'eventual', 'periodica'];
 const REALS = ['presencial', 'remoto', 'mixta'];
 const LANES = ['unassigned', 'assigned', 'in_progress', 'paused', 'review', 'done'];
+const CLAIM_SCOPES = ['team_dept', 'team', 'company', 'chosen'];
 const FILTERS_KEY = 'sgn.teamWork.filters';
 const DEFAULT_FILTERS = { q: '', person: 'all', kind: 'all', real: 'all', site: 'all', dept: 'all', area: 'all', urgent: false };
 let data = { activities: [], people: [], sites: [], departments: [], me: { id: 0, name: '', isAdmin: false, hasTeam: false } };
@@ -89,10 +90,24 @@ function filterBar() {
         <label class="tw-flt tw-flt-check" for="tw-f-urgent"><input id="tw-f-urgent" type="checkbox"${filters.urgent ? ' checked' : ''}><span>${esc(t('main.twUrgent'))}</span></label>
         <button type="button" class="btn btn-secondary tw-small" data-tw="clear">${esc(t('main.twClear'))}</button></div>`;
 }
+// los pases que esta persona puede aprobar o rechazar (cuentan aunque haya filtros puestos)
+const passesToResolve = () => data.activities.flatMap((a) => a.passes.filter((p) => p.canResolve).map((p) => ({ ...p, activity: a })));
 function counters(list) {
     const by = (s) => list.filter((a) => a.status === s).length;
-    const tile = (n, label) => `<div class="tw-cnt"><b>${n}</b><small>${esc(label)}</small></div>`;
-    return `<div class="tw-counters" role="list" aria-label="${esc(t('main.twCounters'))}" data-help-key="twCounters">${tile(list.length, t('main.twCnt_total'))}${LANES.map((s) => tile(by(s), t(`main.twLane_${s}`))).join('')}</div>`;
+    const tile = (n, label, extra) => `<div class="tw-cnt${extra ? ` ${extra}` : ''}"><b>${n}</b><small>${esc(label)}</small></div>`;
+    const waiting = passesToResolve().length;
+    return `<div class="tw-counters" role="list" aria-label="${esc(t('main.twCounters'))}" data-help-key="twCounters">${tile(list.length, t('main.twCnt_total'))}${LANES.map((s) => tile(by(s), t(`main.twLane_${s}`))).join('')}${waiting ? tile(waiting, t('main.twPassTray'), 'tw-cnt-warn') : ''}</div>`;
+}
+// un pase: quién → a quién, quién lo pidió y su motivo, con sus botones (aprobar o rechazar quien le toca; retirar quien lo pidió)
+function passCard(p, a, inTray) {
+    const act = (op, cls) => `<button type="button" class="btn${cls} tw-small" data-tw="act" data-act="${op}" data-id="${a.id}" data-pass="${p.id}">${esc(t(`main.twAct_${op.replace('-', '_')}`))}</button>`;
+    const buttons = [p.canResolve ? act('pass-approve', '') : '', p.canResolve ? act('pass-reject', ' btn-secondary') : '', p.canCancel && !inTray ? act('pass-cancel', ' btn-secondary') : ''].join('');
+    return `<div class="tw-pass-card">${inTray ? `<b>${esc(a.title)}</b>` : ''}<small>${esc(`${p.fromName} → ${p.toNames.join(', ')}`)} · ${esc(t('main.twPassBy', { name: p.requestedByName, date: whenText(p.requestedAt) }))}</small><span class="tw-pass-note">${esc(t('main.twPassNote', { reason: p.reason }))}</span>${buttons ? `<div class="tw-card-act">${buttons}</div>` : ''}</div>`;
+}
+function passTray() {
+    const list = passesToResolve();
+    if (!list.length) return '';
+    return `<section class="tw-tray" aria-label="${esc(t('main.twPassTray'))}" data-help-key="twPassTray"><h3>${esc(t('main.twPassTray'))}<em>${list.length}</em></h3>${list.map((p) => passCard(p, p.activity, true)).join('')}</section>`;
 }
 function personStack(a) {
     if (!a.assignees.length) return `<span class="tw-av tw-av-none" aria-hidden="true">?</span>`;
@@ -102,6 +117,7 @@ function cardActions(a) {
     const c = a.can || {};
     const btn = (op, extra) => `<button type="button" class="btn${extra ? ` ${extra}` : ' btn-secondary'} tw-small" data-tw="act" data-act="${op}" data-id="${a.id}">${esc(t(`main.twAct_${op}`))}</button>`;
     const out = [];
+    if (c.claim) out.push(btn('claim', ''));
     if (c.confirm) out.push(btn('confirm', ''));
     if (c.start) out.push(btn('start', c.confirm ? 'btn-secondary' : ''));
     if (c.pause) out.push(btn('pause'));
@@ -109,6 +125,7 @@ function cardActions(a) {
     if (c.submit) out.push(btn('submit', ''));
     if (c.validate) out.push(btn('validate', ''));
     if (c.returnIt) out.push(btn('return'));
+    if (c.pass && (c.passUserIds || []).includes(data.me.id)) out.push(btn('pass'));
     return out.length ? `<div class="tw-card-act">${out.join('')}</div>` : '';
 }
 function card(a) {
@@ -118,13 +135,15 @@ function card(a) {
     const names = a.assignees.length ? a.assignees.map((x) => x.name).join(' + ') : t('main.twNoPeople');
     const sub = [a.sites.map((s) => s.name).join(', '), realLabel(a.realization), deptName(a.department)].filter(Boolean).join(' · ');
     const per = a.assignees.length > 1 ? `<div class="tw-per">${a.assignees.map((x) => `<span class="tw-per-i tw-ps-${x.status}"><i></i>${esc(x.name.split(' ')[0])} · ${esc(t(`main.twPs_${x.status}`))}</span>`).join('')}</div>` : '';
-    const free = a.status === 'unassigned' ? `<div class="tw-seats">${esc(t('main.twSeats', { n: a.seatsNeeded }))}</div>` : '';
+    const seats = a.seatsOpen > 0 && (a.status === 'unassigned' || a.claimScope) ? `<div class="tw-seats">${esc(t('main.twSeatsOpen', { n: a.seatsOpen }))}</div>` : '';
+    const takers = a.claim && (a.can.edit || a.can.assign) ? `<div class="tw-takers">${esc(a.claim.freeCount ? t('main.twFreeCan', { names: a.claim.freeNames.join(', ') + (a.claim.freeCount > a.claim.freeNames.length ? ` +${a.claim.freeCount - a.claim.freeNames.length}` : '') }) : t('main.twFreeNone'))}</div>` : '';
+    const waiting = a.passes.map((p) => `<div class="tw-pass">${esc(t('main.twPassPending', { to: p.toNames.join(', '), name: p.approverName }))}</div>`).join('');
     const mineBadge = a.myStatus ? `<span class="tw-me">${esc(t('main.twMine'))}</span>` : '';
     return `<article class="tw-card tw-k-${a.kind}" data-tw="open" data-id="${a.id}" tabindex="0" aria-label="${esc(a.title)}">
         <div class="tw-card-top"><span class="tw-kind">${esc(kindLabel(a.kind))}</span>${a.urgent ? `<span class="tw-urg">⚡ ${esc(t('main.twUrgentTag'))}</span>` : ''}${mineBadge}${due}</div>
         <b class="tw-card-title">${esc(a.title)}</b>
         <div class="tw-card-who">${personStack(a)}<span><span class="tw-names">${esc(names)}</span>${sub ? `<small>${esc(sub)}</small>` : ''}</span></div>
-        ${per}${free}${cardActions(a)}</article>`;
+        ${per}${seats}${takers}${waiting}${cardActions(a)}</article>`;
 }
 function lanes(list) {
     return `<div class="tw-lanes" data-help-key="twLanes">${LANES.map((s) => {
@@ -139,7 +158,7 @@ function render() {
     const keepFocus = document.activeElement && document.activeElement.id;
     const caret = keepFocus === 'tw-f-q' ? document.activeElement.selectionStart : null;
     root.innerHTML = `<div class="tw-head"><h2>${esc(t('main.twBoard'))}</h2><button type="button" class="btn" data-tw="create" data-help-key="twCreate"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.twCreate'))}</button></div>
-        ${filterBar()}${counters(list)}${data.activities.length ? '' : `<p class="tw-empty">${esc(t('main.twEmpty'))}</p>`}${lanes(list)}`;
+        ${filterBar()}${counters(list)}${passTray()}${data.activities.length ? '' : `<p class="tw-empty">${esc(t('main.twEmpty'))}</p>`}${lanes(list)}`;
     if (keepFocus === 'tw-f-q') { const el = $('tw-f-q'); if (el) { el.focus(); if (caret != null) el.setSelectionRange(caret, caret); } }
 }
 async function load(quiet) {
@@ -171,33 +190,41 @@ const fieldErr = (id) => `<p class="admin-error" id="${id}" role="alert" hidden>
 function setErr(id, text) { const el = overlay && overlay.querySelector(`#${id}`); if (el) { el.textContent = text || ''; el.hidden = !text; } }
 
 // una pregunta corta con su motivo (pausar, regresar, cancelar)
-function askReason(titleKey, onOk) {
+function askReason(titleKey, onOk, optional) {
     const prev = detailId;
-    const ov = openModal(`<h3>${esc(t(titleKey))}</h3><div class="admin-field"><label for="tw-reason">${esc(t('main.twReason'))}</label><input id="tw-reason" type="text" maxlength="300" autocomplete="off"></div>${fieldErr('tw-r-error')}
+    const ov = openModal(`<h3>${esc(t(titleKey))}</h3><div class="admin-field"><label for="tw-reason">${esc(t(optional ? 'main.twComment' : 'main.twReason'))}</label><input id="tw-reason" type="text" maxlength="300" autocomplete="off"></div>${fieldErr('tw-r-error')}
         <div class="admin-form-actions"><button type="button" class="btn" data-tw-m="ok">${esc(t('main.wpSave'))}</button><button type="button" class="btn btn-secondary" data-tw-m="cancel">${esc(t('main.wpCancel'))}</button></div>`);
     detailId = prev;
     const input = ov.querySelector('#tw-reason');
     setTimeout(() => input.focus(), 0);
-    const go = async () => { const reason = input.value.trim(); if (!reason) { setErr('tw-r-error', t('main.twErr_TEAM_REASON_REQUIRED')); return; } try { await onOk(reason); } catch (err) { setErr('tw-r-error', errText(err)); } };
+    const go = async () => { const reason = input.value.trim(); if (!reason && !optional) { setErr('tw-r-error', t('main.twErr_TEAM_REASON_REQUIRED')); return; } try { await onOk(reason); } catch (err) { setErr('tw-r-error', errText(err)); } };
     input.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); go(); } });
     ov.addEventListener('click', (event) => { const b = event.target.closest('[data-tw-m]'); if (!b) return; if (b.dataset.twM === 'cancel') closeModal(); else go(); });
 }
 
 // la lista de personas con buscador, en dos grupos (mi equipo y las demás)
-function peopleList(selected, excluded) {
+function peopleList(selected, excluded, name) {
     const ex = new Set(excluded || []);
-    const row = (p) => `<label class="tw-person" data-name="${esc(fold(p.name))}"><input type="checkbox" name="tw-p" value="${p.id}"${selected.has(p.id) ? ' checked' : ''}><span class="tw-av">${esc(initials(p.name))}</span><span>${esc(p.name)}</span></label>`;
+    const field = name || 'tw-p';
+    const row = (p) => `<label class="tw-person" data-name="${esc(fold(p.name))}"><input type="checkbox" name="${field}" value="${p.id}"${selected.has(p.id) ? ' checked' : ''}><span class="tw-av">${esc(initials(p.name))}</span><span class="tw-person-name">${esc(p.name)}</span>${p.free ? `<em class="tw-free">${esc(t('main.twFree'))}</em>` : ''}${p.hasScreen === false ? `<em class="tw-noscreen">${esc(t('main.twNoScreen'))}</em>` : ''}</label>`;
     const mine = data.people.filter((p) => p.mine && !ex.has(p.id));
     const others = data.people.filter((p) => !p.mine && !ex.has(p.id));
     return `<div class="tw-people"><input type="search" class="tw-people-q" placeholder="${esc(t('main.twPeopleSearch'))}" aria-label="${esc(t('main.twPeopleSearch'))}" autocomplete="off">
         ${mine.length ? `<h5>${esc(t('main.twPeopleTeam'))}</h5>${mine.map(row).join('')}` : ''}${others.length ? `<h5>${esc(t('main.twPeopleOthers'))}</h5>${others.map(row).join('')}` : ''}</div>`;
 }
 function bindPeople(ov, onChange) {
-    const q = ov.querySelector('.tw-people-q');
-    if (q) q.addEventListener('input', () => { const text = fold(q.value); ov.querySelectorAll('.tw-person').forEach((el) => { el.hidden = !!text && !el.dataset.name.includes(text); }); });
+    ov.querySelectorAll('.tw-people-q').forEach((q) => q.addEventListener('input', () => { const text = fold(q.value); q.closest('.tw-people').querySelectorAll('.tw-person').forEach((el) => { el.hidden = !!text && !el.dataset.name.includes(text); }); }));
     ov.addEventListener('change', (event) => { if (event.target.name === 'tw-p' && onChange) onChange(); });
 }
-const checkedPeople = (ov) => [...ov.querySelectorAll('input[name="tw-p"]:checked')].map((i) => Number(i.value));
+const checkedPeople = (ov, name) => [...ov.querySelectorAll(`input[name="${name || 'tw-p'}"]:checked`)].map((i) => Number(i.value));
+// «¿Quién puede tomarla?» y cuántas personas se necesitan (al dejarla por asignar, o al abrir una ya repartida a que otras la tomen)
+function claimFields(a, withNone) {
+    const current = a.claimScope === undefined ? 'team_dept' : a.claimScope;
+    const scopes = [...(withNone ? [''] : []), ...CLAIM_SCOPES];
+    return `<div class="admin-field" data-help-key="twClaim"><label for="tw-claim">${esc(t('main.twClaim'))}</label><select id="tw-claim">${scopes.map((sc) => `<option value="${sc}"${current === sc ? ' selected' : ''}>${esc(t(sc ? `main.twClaim_${sc}` : 'main.twClaim_none'))}</option>`).join('')}</select></div>
+        <div id="tw-claim-chosen"${current === 'chosen' ? '' : ' hidden'}>${peopleList(new Set(a.claimUserIds || []), [], 'tw-c')}</div>
+        <div class="admin-field" id="tw-seats-box"${current ? '' : ' hidden'}><label for="tw-seats">${esc(t('main.twF_seats'))}</label><input id="tw-seats" type="number" min="1" max="20" value="${a.seatsNeeded || 1}"></div>`;
+}
 
 // crear o cambiar una actividad
 function activityForm(existing) {
@@ -217,8 +244,8 @@ function activityForm(existing) {
         <div class="admin-field"><label for="tw-desc">${esc(t('main.twF_description'))}</label><textarea id="tw-desc" rows="2" maxlength="1000">${esc(a.description)}</textarea></div>
         ${existing ? '' : `<fieldset class="tw-set"><legend>${esc(t('main.twF_who'))}</legend><div class="tw-opts">${radio('tw-who', 'now', t('main.twWho_now'), true)}${radio('tw-who', 'later', t('main.twWho_later'), false)}</div>
             <div id="tw-who-now">${peopleList(new Set(), [])}<div class="admin-field" id="tw-principal-box" hidden><label for="tw-principal">${esc(t('main.twF_principal'))}</label><select id="tw-principal"></select></div></div>
-            <div id="tw-who-later" hidden><div class="admin-field"><label for="tw-seats">${esc(t('main.twF_seats'))}</label><input id="tw-seats" type="number" min="1" max="20" value="${a.seatsNeeded || 1}"></div></div></fieldset>`}
-        ${existing ? `<div class="admin-field" ${a.assignees && a.assignees.length ? 'hidden' : ''}><label for="tw-seats">${esc(t('main.twF_seats'))}</label><input id="tw-seats" type="number" min="1" max="20" value="${a.seatsNeeded || 1}"></div>` : ''}
+            <div id="tw-who-later" hidden>${claimFields(a, false)}</div></fieldset>`}
+        ${existing ? claimFields(existing, true) : ''}
         ${fieldErr('tw-form-error')}
         <div class="admin-form-actions"><button type="submit" class="btn">${esc(t('main.wpSave'))}</button><button type="button" class="btn btn-secondary" data-tw-m="cancel">${esc(t('main.wpCancel'))}</button></div></form>`;
     const ov = openModal(html, true);
@@ -233,7 +260,10 @@ function activityForm(existing) {
         select.innerHTML = `<option value="">${esc(t('main.twNoPrincipal'))}</option>${ids.map((id) => `<option value="${id}"${String(id) === prev ? ' selected' : ''}>${esc((data.people.find((p) => p.id === id) || {}).name || '')}</option>`).join('')}`;
     };
     bindPeople(ov, refreshPrincipal);
-    ov.addEventListener('change', (event) => { if (event.target.name === 'tw-who') { const now = event.target.value === 'now'; ov.querySelector('#tw-who-now').hidden = !now; ov.querySelector('#tw-who-later').hidden = now; } });
+    ov.addEventListener('change', (event) => {
+        if (event.target.name === 'tw-who') { const now = event.target.value === 'now'; ov.querySelector('#tw-who-now').hidden = !now; ov.querySelector('#tw-who-later').hidden = now; }
+        if (event.target.id === 'tw-claim') { ov.querySelector('#tw-claim-chosen').hidden = event.target.value !== 'chosen'; ov.querySelector('#tw-seats-box').hidden = !event.target.value; }
+    });
     ov.addEventListener('click', (event) => { if (event.target.closest('[data-tw-m="cancel"]')) closeModal(); });
     ov.querySelector('#tw-form').addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -244,6 +274,9 @@ function activityForm(existing) {
         };
         const seats = ov.querySelector('#tw-seats');
         if (seats) body.seatsNeeded = Number(seats.value) || 1;
+        const claim = ov.querySelector('#tw-claim');
+        const wantsClaim = existing || (ov.querySelector('input[name="tw-who"]:checked') || {}).value === 'later';
+        if (claim && wantsClaim) { body.claimScope = claim.value; if (claim.value === 'chosen') body.claimUserIds = checkedPeople(ov, 'tw-c'); }
         const submit = ov.querySelector('button[type="submit"]');
         submit.disabled = true;
         try {
@@ -265,7 +298,7 @@ function activityForm(existing) {
 // el detalle de una actividad con lo que lleva cada persona y su línea de pasos
 function eventText(e) {
     const who = e.userName || '';
-    return t(`main.twEv_${e.event}`, { name: who });
+    return t(`main.twEv_${e.event}`, { name: who, to: e.pass ? e.pass.toNames.join(', ') : '' });
 }
 async function openDetail(id) {
     let out;
@@ -274,16 +307,19 @@ async function openDetail(id) {
     detailId = id;
     const c = a.can;
     const btn = (op, cls) => `<button type="button" class="btn${cls || ' btn-secondary'} tw-small" data-tw="act" data-act="${op}" data-id="${a.id}">${esc(t(`main.twAct_${op}`))}</button>`;
-    const actions = [c.confirm && btn('confirm', ''), c.start && btn('start', c.confirm ? ' btn-secondary' : ''), c.pause && btn('pause'), c.resume && btn('resume', ''), c.submit && btn('submit', ''), c.validate && btn('validate', ''), c.returnIt && btn('return'),
+    const actions = [c.claim && btn('claim', ''), c.confirm && btn('confirm', ''), c.start && btn('start', c.confirm ? ' btn-secondary' : ''), c.pause && btn('pause'), c.resume && btn('resume', ''), c.submit && btn('submit', ''), c.validate && btn('validate', ''), c.returnIt && btn('return'), c.pass && btn('pass'),
         c.edit && btn('edit'), c.assign && btn('assign'), c.cancel && btn('cancel')].filter(Boolean).join('');
     const rows = a.assignees.map((x) => `<li class="tw-asg tw-ps-${x.status}"><span class="tw-av${x.isMine || x.isMe ? '' : ' tw-av-out'}">${esc(initials(x.name))}</span><div><b>${esc(x.name)}${x.isPrincipal ? ` <em>${esc(t('main.twPrincipal'))}</em>` : ''}</b><small>${esc(t(`main.twPs_${x.status}`))}${x.status === 'paused' && x.pauseReason ? ` · ${esc(x.pauseReason)}` : ''}</small></div>${c.unassign && ['assigned', 'confirmed'].includes(x.status) ? `<button type="button" class="admin-icon-btn" data-tw="unassign" data-id="${a.id}" data-user="${x.userId}" aria-label="${esc(t('main.twAct_unassign'))}" title="${esc(t('main.twAct_unassign'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</li>`).join('');
-    const events = a.events.map((e) => `<li class="tw-ev tw-ev-${e.event}"><span class="tw-ev-dot" aria-hidden="true"></span><div><b>${esc(eventText(e))}</b><small>${esc(e.actorName)} · ${esc(whenText(e.createdAt))}</small>${e.detail && ['paused', 'returned', 'cancelled'].includes(e.event) ? `<span class="tw-ev-note">${esc(e.detail)}</span>` : ''}</div></li>`).join('');
+    const events = a.events.map((e) => `<li class="tw-ev tw-ev-${e.event}"><span class="tw-ev-dot" aria-hidden="true"></span><div><b>${esc(eventText(e))}</b><small>${esc(e.actorName)} · ${esc(whenText(e.createdAt))}</small>${e.detail && ['paused', 'returned', 'cancelled', 'pass_requested', 'passed', 'pass_approved', 'pass_rejected', 'pass_cancelled'].includes(e.event) ? `<span class="tw-ev-note">${esc(e.detail)}</span>` : ''}</div></li>`).join('');
+    const passes = a.passes.map((p) => passCard(p, a, false)).join('');
+    const claimLine = a.claimScope && a.seatsOpen > 0 && a.status !== 'done' ? [t('main.twClaimLine', { who: t(`main.twClaim_${a.claimScope}`), n: a.seatsOpen }), a.claim && (c.edit || c.assign) ? (a.claim.freeCount ? t('main.twFreeCan', { names: a.claim.freeNames.join(', ') + (a.claim.freeCount > a.claim.freeNames.length ? ` +${a.claim.freeCount - a.claim.freeNames.length}` : '') }) : t('main.twFreeNone')) : ''].filter(Boolean).join(' · ') : '';
     const meta = [realLabel(a.realization), a.sites.map((s) => s.name).join(', '), deptName(a.department), a.area, a.dueDate ? t('main.twDue', { date: dayText(a.dueDate) }) : ''].filter(Boolean);
     const ov = openModal(`<div class="tw-detail-head"><h3 id="tw-d-title">${esc(a.title)}</h3><button type="button" class="admin-icon-btn" data-tw-m="cancel" aria-label="${esc(t('main.twClose'))}" title="${esc(t('main.twClose'))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>
         <div class="tw-chips"><span class="tw-kind tw-k-${a.kind}">${esc(kindLabel(a.kind))}</span>${a.urgent ? `<span class="tw-urg">⚡ ${esc(t('main.twUrgentTag'))}</span>` : ''}<span class="tw-state tw-state-${a.status}">${esc(t(`main.twLane_${a.status}`))}</span></div>
-        <p class="tw-meta">${esc(meta.join(' · '))}</p>${a.description ? `<p class="tw-desc">${esc(a.description)}</p>` : ''}
+        <p class="tw-meta">${esc(meta.join(' · '))}</p>${claimLine ? `<p class="tw-meta tw-meta-claim">${esc(claimLine)}</p>` : ''}${a.description ? `<p class="tw-desc">${esc(a.description)}</p>` : ''}
         <p class="tw-created">${esc(t('main.twD_created', { name: a.createdBy.name, date: whenText(a.createdAt) }))}</p>
         <h4>${esc(t('main.twD_assignees'))}</h4>${rows ? `<ul class="tw-asgs">${rows}</ul>` : `<p class="tw-none">${esc(t('main.twNoPeople'))} · ${esc(t('main.twSeats', { n: a.seatsNeeded }))}</p>`}
+        ${passes ? `<h4>${esc(t('main.twPasses'))}</h4><div class="tw-pass-list">${passes}</div>` : ''}
         ${actions ? `<div class="tw-detail-act">${actions}</div>` : ''}${fieldErr('tw-d-error')}
         <h4>${esc(t('main.twD_timeline'))}</h4><ol class="tw-events" data-help-key="twTimeline">${events}</ol>`, true);
     ov.querySelector('.modal-panel').setAttribute('aria-labelledby', 'tw-d-title');
@@ -303,12 +339,45 @@ function assignModal(a) {
         try { await api('POST', `/${a.id}/assign`, { userIds: ids }); await load(true); Dashboard.showToast(t('main.twAssigned'), 'success'); closeModal(); } catch (err) { setErr('tw-a-error', errText(err)); }
     });
 }
+// Pasar una actividad a otra persona: quién la pasa (si el que mira puede pasar la de varias), a quién y el motivo. Con jefe directo se pide su aprobación; si no, se hace al momento y se avisa a todos (lo decide el servidor).
+function passModal(a) {
+    const meId = data.me.id;
+    const fromIds = a.can.passUserIds;
+    const nameOfUser = (id) => (a.assignees.find((x) => x.userId === id) || {}).name || '';
+    const fromBox = fromIds.length > 1 ? `<div class="admin-field"><label for="tw-p-from">${esc(t('main.twPassFrom'))}</label><select id="tw-p-from">${fromIds.map((id) => `<option value="${id}"${id === meId ? ' selected' : ''}>${esc(nameOfUser(id))}</option>`).join('')}</select></div>` : `<p class="tw-pass-from">${esc(t('main.twPassFrom'))}: <b>${esc(nameOfUser(fromIds[0]))}</b></p>`;
+    const ov = openModal(`<h3 data-help-key="twPass">${esc(t('main.twPassTitle'))}</h3><p class="admin-hint">${esc(a.title)}</p>${fromBox}<h4>${esc(t('main.twPassTo'))}</h4>${peopleList(new Set(), a.assignees.map((x) => x.userId))}
+        <div class="admin-field"><label for="tw-p-reason">${esc(t('main.twReason'))}</label><input id="tw-p-reason" type="text" maxlength="300" autocomplete="off"></div>
+        <div class="tw-approve" id="tw-p-info" role="status"></div>${fieldErr('tw-p-error')}
+        <div class="admin-form-actions"><button type="button" class="btn" id="tw-p-go" data-tw-m="ok"></button><button type="button" class="btn btn-secondary" data-tw-m="cancel">${esc(t('main.wpCancel'))}</button></div>`);
+    bindPeople(ov);
+    const fromNow = () => (fromIds.length > 1 ? Number(ov.querySelector('#tw-p-from').value) : fromIds[0]);
+    const approverNow = () => (fromNow() === meId ? a.passApprover : null);
+    const sync = () => { const approver = approverNow(); ov.querySelector('#tw-p-info').textContent = approver ? t('main.twPassApprover', { name: approver.name }) : t('main.twPassDirect'); ov.querySelector('#tw-p-go').textContent = t(approver ? 'main.twPassAsk' : 'main.twPassDo'); };
+    sync();
+    const select = ov.querySelector('#tw-p-from');
+    if (select) select.addEventListener('change', sync);
+    ov.addEventListener('click', async (event) => {
+        const b = event.target.closest('[data-tw-m]');
+        if (!b) return;
+        if (b.dataset.twM === 'cancel') { closeModal(); return; }
+        const ids = checkedPeople(ov);
+        const reason = ov.querySelector('#tw-p-reason').value.trim();
+        if (!ids.length) { setErr('tw-p-error', t('main.twErr_TEAM_PERSON_INVALID')); return; }
+        if (!reason) { setErr('tw-p-error', t('main.twErr_TEAM_REASON_REQUIRED')); return; }
+        const asked = !!approverNow();
+        try { await api('POST', `/${a.id}/pass`, { fromUserId: fromNow(), userIds: ids, reason }); await load(true); Dashboard.showToast(t(asked ? 'main.twPassAsked' : 'main.twPassDone'), 'success'); closeModal(); } catch (err) { setErr('tw-p-error', errText(err)); }
+    });
+}
 const find = (id) => data.activities.find((a) => a.id === Number(id));
-async function doAct(id, op) {
+async function doAct(id, op, passId) {
     const a = find(id);
     const run = async (path, body, done) => { try { await api('POST', `/${id}/${path}`, body || {}); await load(true); if (done) done(); if (detailId === Number(id) && overlay) await openDetail(Number(id)); } catch (err) { if (overlay && overlay.querySelector('#tw-d-error')) setErr('tw-d-error', errText(err)); else showError(errText(err)); await load(true); } };
     if (op === 'edit') { const out = await api('GET', `/${id}`).catch(() => null); if (out) activityForm(out.activity); return; }
     if (op === 'assign') { if (a) assignModal(a); return; }
+    if (op === 'pass') { if (a) passModal(a); return; }
+    if (op === 'pass-reject') { askReason('main.twPassRejectTitle', async (reason) => { await api('POST', `/${id}/pass-reject`, { passId: Number(passId), reason }); await load(true); closeModal(); }, true); return; }
+    if (op === 'pass-approve' || op === 'pass-cancel') { await run(op, { passId: Number(passId) }, () => Dashboard.showToast(t(op === 'pass-approve' ? 'main.twPassApproved' : 'main.twPassWithdrawn'), 'success')); return; }
+    if (op === 'claim') { await run(op, {}, () => Dashboard.showToast(t('main.twClaimed'), 'success')); return; }
     if (op === 'pause') { askReason('main.twReasonPause', async (reason) => { await api('POST', `/${id}/pause`, { reason }); await load(true); closeModal(); }); return; }
     if (op === 'return') { askReason('main.twReasonReturn', async (reason) => { await api('POST', `/${id}/return`, { reason }); await load(true); closeModal(); }); return; }
     if (op === 'cancel') { askReason('main.twReasonCancel', async (reason) => { await api('POST', `/${id}/cancel`, { reason }); await load(true); closeModal(); Dashboard.showToast(t('main.twCancelled'), 'success'); }); return; }
@@ -322,7 +391,7 @@ document.addEventListener('click', (event) => {
     const op = el.dataset.tw;
     if (op === 'create') { activityForm(null); return; }
     if (op === 'clear') { filters = { ...DEFAULT_FILTERS }; saveFilters(); render(); return; }
-    if (op === 'act') { event.stopPropagation(); doAct(el.dataset.id, el.dataset.act); return; }
+    if (op === 'act') { event.stopPropagation(); doAct(el.dataset.id, el.dataset.act, el.dataset.pass); return; }
     if (op === 'unassign') { event.stopPropagation(); api('POST', `/${el.dataset.id}/unassign`, { userId: Number(el.dataset.user) }).then(() => load(true)).then(() => openDetail(Number(el.dataset.id))).catch((err) => setErr('tw-d-error', errText(err))); return; }
     if (op === 'open' && !event.target.closest('button')) openDetail(Number(el.dataset.id));
 });
@@ -336,6 +405,8 @@ document.addEventListener('change', (event) => {
     if (event.target.id === 'tw-f-urgent') { filters.urgent = event.target.checked; saveFilters(); render(); }
 });
 document.addEventListener('dashboard:language-changed', () => { if ($('tw-root').dataset.ready) render(); });
+// un aviso de la campana abre la actividad aunque ya se esté en el tablero (solo cambia el # de la dirección)
+window.addEventListener('hashchange', () => { const m = /^#actividad-(\d+)$/.exec(location.hash); if (m && $('tw-root').dataset.ready) load(true).then(() => openDetail(Number(m[1]))); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !overlay && $('tw-root').dataset.ready) load(true); });
 
 (async function init() {

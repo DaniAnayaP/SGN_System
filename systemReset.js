@@ -71,6 +71,8 @@ const TABLES = {
     team_activities: { action: WIPE, group: 'captures' }, // Administración de Equipo de Trabajo: las actividades (2026-11-19)
     team_activity_assignees: { action: WIPE, group: 'captures' }, // y quién las tiene y en qué va cada persona
     team_activity_events: { action: WIPE, group: 'captures' }, // y todo movimiento (la línea del tiempo)
+    team_activity_claimers: { action: WIPE, group: 'captures' }, // pieza 2: las personas elegidas para tomar una actividad por asignar
+    team_activity_passes: { action: WIPE, group: 'captures' }, // y los pases de una persona a otra (con su aprobación)
     thread_comments: { action: WIPE, group: 'captures' }, // Hilos de comentarios genéricos (renglones y planes de trabajo, y los que vengan): inmutables, solo se van con la compañía (2b)
     thread_comment_mentions: { action: WIPE, group: 'captures' }, // a quién menciona cada comentario
     thread_reads: { action: WIPE, group: 'captures' }, // hasta qué comentario leyó cada persona en cada hilo

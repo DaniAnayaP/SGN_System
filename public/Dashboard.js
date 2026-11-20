@@ -11094,6 +11094,35 @@ function renderImplementationNoticeRow(item) {
     return row;
 }
 
+// Equipo de Trabajo (kind 'team-activity', ver publishTeamNotice en db.js): lo que le toca saber a cada persona de una actividad (asignada, tomada, lista para validar, pase por aprobar…). Abre el tablero en esa actividad (solo a quien tiene el tablero).
+function renderTeamNoticeRow(item) {
+    const row = document.createElement('div');
+    row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
+    const tag = document.createElement('div');
+    tag.className = 'notifications-item-meta';
+    tag.style.fontWeight = '700';
+    tag.textContent = t(`main.noticeTeam_${item.event}`);
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.textContent = `${item.label || ''} · ${formatNotificationDate(item.createdAt)}`;
+    meta.title = timeStampTitle(item.createdAt);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    desc.textContent = [item.names, item.note].filter(Boolean).join(' · ') || '—';
+    const by = document.createElement('div');
+    by.className = 'notifications-item-meta';
+    by.textContent = t('main.noticeChangedBy', { name: item.actorLabel || '—' });
+    row.append(tag, meta, desc, by);
+    if (item.activityId && hasMainButtonPermission('equipo-trabajo')) {
+        const link = document.createElement('a');
+        link.href = `EquipoTrabajo.html#actividad-${item.activityId}`;
+        link.className = 'notifications-item-meta';
+        link.textContent = t('main.teamView');
+        row.append(link);
+    }
+    return row;
+}
+
 // Cambios de accesos (kind 'access-change', ver publishAccessChangeNotice en db.js): quién lo hizo, a quién, el detalle (dado / editado / quitado) y por qué te llegó.
 const ACCESS_LEVEL_LABEL_KEYS = {
     'solo-ver': 'main.permSoloVer', 'ver-y-operar': 'main.permVerYOperar', editar: 'main.permEditar', autorizar: 'main.permAutorizar', eliminar: 'main.permEliminar',
@@ -11390,6 +11419,7 @@ function renderTreeNoticeRow(item) {
     if (item.kind === 'expansion') return renderExpansionNoticeRow(item);
     if (item.kind === 'training') return renderTrainingNoticeRow(item);
     if (item.kind === 'implementation') return renderImplementationNoticeRow(item);
+    if (item.kind === 'team-activity') return renderTeamNoticeRow(item);
     if (item.kind === 'access-change') return renderAccessChangeNoticeRow(item);
     const row = document.createElement('div');
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
@@ -11817,7 +11847,7 @@ function renderActiveNotificationTab() {
     } else {
         items.forEach((item) => {
             let row;
-            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance' || item.kind === 'asset-alert' || item.kind === 'asset-activity' || item.kind === 'support' || item.kind === 'sku-request' || item.kind === 'expansion' || item.kind === 'training' || item.kind === 'implementation') row = renderTreeNoticeRow(item);
+            if (item.kind === 'color-updated' || item.kind === 'order-updated' || item.kind === 'notice-sent' || item.kind === 'access-denied' || item.kind === 'data-change' || item.kind === 'access-change' || item.kind === 'calibration' || item.kind === 'maintenance' || item.kind === 'asset-alert' || item.kind === 'asset-activity' || item.kind === 'support' || item.kind === 'sku-request' || item.kind === 'expansion' || item.kind === 'training' || item.kind === 'implementation' || item.kind === 'team-activity') row = renderTreeNoticeRow(item);
             else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (item.kind === 'asset-auth') row = renderAssetAuthRow(item, activeNotificationTab);

@@ -10058,3 +10058,27 @@ input[type="color"].cli-company{ opacity: 0.55; }
     .tw-flt:first-child{ flex-basis: 100%; }
     .tw-due{ margin-left: 0; }
 }
+/* ---- Equipo de Trabajo, pieza 2: «La tomo», libres, pases ---- */
+.tw-cnt-warn{ border-color: #e08a1e; }
+.tw-cnt-warn b{ color: #b45f06; }
+.tw-takers{ font-size: 0.7rem; color: #278a52; background: rgba(40, 170, 90, 0.12); border-radius: 0.5rem; padding: 0.25rem 0.5rem; overflow-wrap: anywhere; }
+.tw-pass{ font-size: 0.7rem; font-weight: 600; color: #b45f06; background: rgba(240, 160, 40, 0.16); border-radius: 0.5rem; padding: 0.3rem 0.5rem; overflow-wrap: anywhere; }
+.tw-tray{ display: grid; gap: 0.5rem; margin-bottom: 0.9rem; padding: 0.7rem 0.8rem; border: 1px solid rgba(240, 160, 40, 0.55); border-radius: 0.7rem; background: rgba(240, 160, 40, 0.08); }
+.tw-tray h3{ display: flex; align-items: center; gap: 0.5rem; margin: 0; font-size: 0.8rem; color: #b45f06; }
+.tw-tray h3 em{ font-style: normal; font-size: 0.68rem; font-weight: 700; min-width: 1.3rem; text-align: center; padding: 0.05rem 0.4rem; border-radius: 1rem; background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-primary); }
+.tw-pass-card{ display: grid; gap: 0.25rem; padding: 0.55rem 0.65rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); }
+.tw-pass-card b{ font-size: 0.84rem; overflow-wrap: anywhere; }
+.tw-pass-card small{ font-size: 0.72rem; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.tw-pass-note{ font-size: 0.74rem; overflow-wrap: anywhere; }
+.tw-pass-list{ display: grid; gap: 0.5rem; margin-bottom: 0.4rem; }
+.tw-pass-from{ margin: 0 0 0.4rem; font-size: 0.84rem; }
+.tw-approve{ margin: 0.6rem 0; padding: 0.5rem 0.7rem; border: 1px solid rgba(40, 170, 90, 0.55); border-radius: 0.6rem; background: rgba(40, 170, 90, 0.12); font-size: 0.8rem; font-weight: 600; }
+.tw-meta-claim{ color: #278a52; font-weight: 600; }
+.tw-free{ font-style: normal; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #278a52; background: rgba(40, 170, 90, 0.14); border-radius: 1rem; padding: 0.05rem 0.45rem; margin-left: auto; }
+.tw-noscreen{ font-style: normal; font-size: 0.6rem; font-weight: 600; color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: 1rem; padding: 0.05rem 0.45rem; margin-left: auto; white-space: nowrap; }
+.tw-person .tw-free + .tw-noscreen{ margin-left: 0.3rem; }
+.tw-person-name{ min-width: 0; overflow-wrap: anywhere; }
+.tw-ev-claimed .tw-ev-dot{ background: #278a52; }
+.tw-ev-pass_requested .tw-ev-dot{ background: #e08a1e; }
+.tw-ev-pass_approved .tw-ev-dot, .tw-ev-passed .tw-ev-dot{ background: #3f9bb0; }
+.tw-ev-pass_rejected .tw-ev-dot, .tw-ev-pass_cancelled .tw-ev-dot{ background: #c0392b; }
