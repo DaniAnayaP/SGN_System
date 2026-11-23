@@ -8596,6 +8596,16 @@
     "calFileAfterSignal": "El archivo no se envía sin señal: cuando haya conexión, abre el certificado y súbelo.",
     "calFileFailed": "El archivo no se pudo subir: ábrelo en el certificado y súbelo otra vez.",
     "calSavedOffline": "Sin señal: el cambio quedó en tu celular y se enviará solo.",
+    "spappForbidden": "Tu cuenta no tiene la pestaña Soporte. Pídela a quien administra tus accesos.",
+    "spappNoData": "Sin señal y todavía no hay solicitudes guardadas en tu celular.",
+    "spappCached": "Sin señal: estas son tus solicitudes de la última vez que abriste la pantalla.",
+    "spappEmpty": "Todavía no has pedido soporte.",
+    "spappNoForm": "Sin señal y todavía no se guardó el formulario en tu celular. Ábrelo una vez con señal.",
+    "spappSavedOffline": "Sin señal: quedó en tu celular y se enviará solo.",
+    "spappMsgPlaceholder": "Escribe un mensaje…",
+    "spappCaseForbidden": "No tienes permiso para ver ese caso.",
+    "spappCaseOffline": "Sin señal: no se pudo abrir el caso.",
+    "spappNoFilesOffline": "Las fotos y archivos se agregan con señal. Puedes enviar la solicitud sin ellos y agregarlos después desde la Web.",
     "wpappCached": "Sin señal: estas son tus actividades de la última vez que abriste la pantalla.",
     "wpappNoData": "Sin señal y todavía no hay actividades guardadas en tu celular.",
     "wpappSavedOffline": "Sin señal: el cambio quedó en tu celular y se enviará solo.",
@@ -8706,6 +8716,38 @@
     "appCalCertificados": {
       "what": "Un activo puede tener varios certificados: el más reciente es el vigente y los demás quedan de historial. Este vínculo deja ver solo los de ese activo.",
       "example": "H001 · «2 certificados»."
+    },
+    "appSpNew": {
+      "what": "Abre el formulario para pedir soporte: qué pasó, en qué pantalla, qué implica y cuándo te afecta. La prioridad se calcula sola con lo que marques.",
+      "example": "Tocas «Nueva solicitud» porque no puedes cerrar un pedido."
+    },
+    "appSpList": {
+      "what": "Tus solicitudes de soporte, con su estatus, su nivel y quién las atiende. Toca una para ver su chat y lo que ha pasado con ella. Las que mandaste sin señal salen marcadas «En tu celular» hasta que se envían.",
+      "example": "SP-0012 · No puedo cerrar el pedido · En trabajo · Nivel 1."
+    },
+    "appSpChat": {
+      "what": "La conversación de tu caso con la Mesa de ayuda. Aquí lees sus respuestas y escribes las tuyas; se actualiza sola mientras está abierta. Los renglones chicos dicen lo que le pasó al caso (lo tomaron, subió de nivel, se resolvió).",
+      "example": "Ana: «¿Me pasas la captura del error?» Tú: «Ya la subí»."
+    },
+    "appSpForm": {
+      "what": "El mismo formulario de la Web: lo que pasó, la pantalla y la acción, el mensaje del error (escrito o con una imagen), la categoría, qué implica, cuándo te afecta y si puedes seguir trabajando. Los campos con * son obligatorios.",
+      "example": "Resumen: «No puedo cerrar el pedido 5521». Categoría: Falla del sistema."
+    },
+    "appSpImpact": {
+      "what": "Qué tanto te afecta cada cosa: Riesgo operativo, Costos, Tiempos… De Ninguno a Alto. Con esto y con «cuándo te afecta» se calcula la prioridad.",
+      "example": "Riesgo operativo: Alto."
+    },
+    "appSpWhen": {
+      "what": "Cuándo te afecta (ya, hoy, esta semana o no es urgente) y si puedes seguir trabajando mientras te ayudan.",
+      "example": "Me afecta: ya. ¿Puedes seguir trabajando?: No."
+    },
+    "appSpPriority": {
+      "what": "La prioridad que sale de lo que marcaste, el nivel por donde entra tu solicitud y en cuánto tiempo debe recibir la primera respuesta. Se calcula con las mismas reglas de la Web.",
+      "example": "Prioridad: Urgente · Entra a: Nivel 1 · Primera respuesta: 5 min."
+    },
+    "appSpEvidence": {
+      "what": "Lo que pide la categoría para atender mejor tu caso: textos, capturas o archivos. Adjúntalos con la cámara o la galería de tu celular. Necesitan señal.",
+      "example": "Captura de pantalla del error."
     },
     "appWpTabs": {
       "what": "Cambia entre tus actividades («Mis actividades») y las de tu gente («Mi equipo», solo si tienes personas a tu cargo). Cada pestaña lleva cuántas faltan.",

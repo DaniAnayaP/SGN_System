@@ -8597,6 +8597,16 @@
     "calFileAfterSignal": "The file is not sent without signal: when you are connected, open the certificate and upload it.",
     "calFileFailed": "The file could not be uploaded: open the certificate and upload it again.",
     "calSavedOffline": "No signal: the change is saved on your phone and will be sent by itself.",
+    "spappForbidden": "Your account does not have the Support tab. Ask whoever manages your access.",
+    "spappNoData": "No signal and no requests saved on your phone yet.",
+    "spappCached": "No signal: these are your requests from the last time you opened the screen.",
+    "spappEmpty": "You have not asked for support yet.",
+    "spappNoForm": "No signal and the form is not saved on your phone yet. Open it once with signal.",
+    "spappSavedOffline": "No signal: it was saved on your phone and will be sent automatically.",
+    "spappMsgPlaceholder": "Write a message…",
+    "spappCaseForbidden": "You do not have permission to see that case.",
+    "spappCaseOffline": "No signal: the case could not be opened.",
+    "spappNoFilesOffline": "Photos and files are added with signal. You can send the request without them and add them later from the Web.",
     "wpappCached": "No signal: these are your activities from the last time you opened the screen.",
     "wpappNoData": "No signal and there are no activities saved on your phone yet.",
     "wpappSavedOffline": "No signal: the change is saved on your phone and will be sent by itself.",
@@ -8707,6 +8717,38 @@
     "appCalCertificados": {
       "what": "An asset can have several certificates: the most recent one is the valid one and the others stay as history. This link shows only the certificates of that asset.",
       "example": "H001 · «2 certificates»."
+    },
+    "appSpNew": {
+      "what": "Opens the form to ask for support: what happened, on which screen, what it affects and when. The priority is calculated from what you mark.",
+      "example": "You tap «New request» because you cannot close an order."
+    },
+    "appSpList": {
+      "what": "Your support requests, with their status, level and who is handling them. Tap one to see its chat and what has happened to it. The ones you sent without signal are marked «On your phone» until they are sent.",
+      "example": "SP-0012 · I cannot close the order · Working · Level 1."
+    },
+    "appSpChat": {
+      "what": "The conversation of your case with the Help desk. You read their answers and write yours here; it updates itself while it is open. The small lines say what happened to the case (taken, moved up, resolved).",
+      "example": "Ana: «Can you send me a screenshot of the error?» You: «I just uploaded it»."
+    },
+    "appSpForm": {
+      "what": "The same form as the Web: what happened, the screen and action, the error message (typed or as an image), the category, what it affects, when it affects you and whether you can keep working. Fields with * are required.",
+      "example": "Summary: «I cannot close order 5521». Category: System failure."
+    },
+    "appSpImpact": {
+      "what": "How much each thing affects you: Operational risk, Costs, Time… From None to High. With this and «when it affects you» the priority is calculated.",
+      "example": "Operational risk: High."
+    },
+    "appSpWhen": {
+      "what": "When it affects you (now, today, this week or not urgent) and whether you can keep working while they help you.",
+      "example": "It affects me: now. Can you keep working?: No."
+    },
+    "appSpPriority": {
+      "what": "The priority that comes from what you marked, the level your request enters through and how soon it should get a first response. It uses the same rules as the Web.",
+      "example": "Priority: Urgent · Enters: Level 1 · First response: 5 min."
+    },
+    "appSpEvidence": {
+      "what": "What the category asks for to handle your case better: text, screenshots or files. Attach them with your phone camera or gallery. They need signal.",
+      "example": "Screenshot of the error."
     },
     "appWpTabs": {
       "what": "Switches between your activities (\"My activities\") and those of your people (\"My team\", only if you have people under you). Each tab shows how many are left.",

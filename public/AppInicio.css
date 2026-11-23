@@ -2462,3 +2462,44 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .twapp-ev b{ font-size: 0.8rem; }
 .twapp-ev small{ font-size: 0.68rem; color: var(--home-text-muted); }
 .twapp-ev-note{ font-size: 0.72rem; color: var(--home-text-secondary); overflow-wrap: anywhere; }
+
+/* Soporte (App): Mis solicitudes, el caso con su chat y Nueva solicitud (AppSoporte.js); se apoya en los estilos wpapp-* de Planes de trabajo */
+.spapp-top{ display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.7rem; }
+.spapp-new{ align-self: flex-start; display: inline-flex; align-items: center; gap: 0.4rem; }
+.spapp-desk{ margin: 0; font-size: 0.74rem; color: var(--home-text-muted); }
+.spapp-note{ margin: 0 0 0.6rem; font-size: 0.74rem; color: var(--home-text-muted); }
+.spapp-card{ grid-template-columns: minmax(0, 1fr) auto; width: 100%; text-align: left; font-family: inherit; color: inherit; cursor: pointer; }
+.spapp-go{ align-self: center; font-size: 1.2rem; color: var(--home-text-muted); }
+.spapp-chat{ display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.7rem; }
+.spapp-msgs{ display: flex; flex-direction: column; gap: 0.45rem; max-height: 46vh; overflow-y: auto; padding: 0.2rem; -webkit-overflow-scrolling: touch; }
+.spapp-bub{ align-self: flex-start; max-width: 88%; padding: 0.5rem 0.7rem; border-radius: 0.9rem; border: 1px solid var(--home-border); background: var(--home-surface); }
+.spapp-bub.me{ align-self: flex-end; background: var(--home-surface-2); }
+.spapp-bub.queued{ border-style: dashed; opacity: 0.85; }
+.spapp-who{ display: flex; gap: 0.5rem; align-items: baseline; font-size: 0.66rem; color: var(--home-text-muted); }
+.spapp-who b{ color: var(--home-text-primary); font-size: 0.72rem; }
+.spapp-txt{ font-size: 0.82rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.spapp-file{ font-size: 0.72rem; color: var(--home-text-muted); margin-top: 0.2rem; }
+.spapp-sep{ align-self: center; text-align: center; font-size: 0.68rem; color: var(--home-text-muted); display: flex; flex-direction: column; gap: 0.1rem; padding: 0.15rem 0.5rem; }
+.spapp-composer{ display: flex; gap: 0.5rem; align-items: flex-end; }
+.spapp-input, .spapp-form input[type="text"], .spapp-form textarea, .spapp-form select{ width: 100%; font-family: inherit; font-size: 0.85rem; padding: 0.5rem 0.65rem; border-radius: 0.7rem; border: 1px solid var(--home-border); background: var(--home-surface); color: var(--home-text-primary); box-sizing: border-box; }
+.spapp-input{ flex: 1; min-width: 0; resize: vertical; }
+.spapp-composer .spapp-send{ flex: none; width: auto; min-width: 5.5rem; padding: 0.65rem 1.1rem; }
+.spapp-composer .spapp-input{ flex: 1 1 auto; width: auto; min-width: 0; }
+.spapp-form{ display: flex; flex-direction: column; gap: 0.7rem; }
+.spapp-field{ display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.74rem; color: var(--home-text-secondary); }
+.spapp-screenpick{ display: flex; flex-direction: column; gap: 0.7rem; }
+.spapp-sec{ display: flex; flex-direction: column; gap: 0.45rem; padding: 0.7rem 0.75rem; border: 1px solid var(--home-border); border-radius: 0.9rem; background: var(--home-surface); }
+.spapp-sec h4{ margin: 0; font-size: 0.8rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.spapp-impact{ display: flex; flex-direction: column; gap: 0.25rem; }
+.spapp-impact small{ display: block; color: var(--home-text-muted); font-size: 0.68rem; }
+.spapp-chips{ margin-bottom: 0; }
+.spapp-calc{ background: var(--home-surface-2); }
+.spapp-hint{ font-size: 0.72rem; color: var(--home-text-muted); margin: 0; }
+.spapp-slot{ display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; }
+.spapp-slot-row{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.spapp-attach{ display: inline-flex; align-items: center; gap: 0.35rem; cursor: pointer; }
+.spapp-attach.disabled{ opacity: 0.5; pointer-events: none; }
+.spapp-ok{ font-size: 0.72rem; color: #1d7a46; overflow-wrap: anywhere; }
+.spapp-rm{ width: 2rem; height: 2rem; display: inline-grid; place-items: center; border-radius: 50%; border: 1px solid var(--home-border); background: var(--home-surface-2); color: var(--home-text-primary); }
+.spapp-submit{ width: 100%; margin-bottom: 1rem; }
+.dark-mode .spapp-ok, .futuristic-mode .spapp-ok, .institutional-mode .spapp-ok{ color: #6fd49b; }

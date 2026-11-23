@@ -45,6 +45,7 @@ const FILES = [
     'AppTemperaturas.html', 'AppTemperaturas.js',
     'AppActividadesActivos.html', 'AppActividadesActivos.js', 'AssetSchedule.js',
     'AppCalibraciones.html', 'AppCalibraciones.js',
+    'AppSoporte.html', 'AppSoporte.js', 'SupportRules.js',
     'AppPlanesTrabajo.html', 'AppPlanesTrabajo.js',
     'AppEquipoTrabajo.html', 'AppEquipoTrabajo.js',
     'AppCapacidadAlmacenamiento.html', 'AppCapacidadAlmacenamiento.js',

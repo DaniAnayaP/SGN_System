@@ -360,11 +360,19 @@ function hasSettingsAccess() {
         return SETTINGS_SUBITEM_IDS.some((id) => g.submenuId === id || g.submenuId.startsWith(`${id}/`));
     });
 }
+// Soporte (App): lo ve quien tiene la pestaña Soporte de la campana (Notificaciones › Soporte en el árbol) o el icono Notificaciones completo, o el administrador de la empresa: la misma regla que aplica el servidor en /api/business/my-support.
+function hasSupportTabPermission() {
+    if (!(sessionUser && sessionUser.clientId)) return false;
+    if (isUnrestrictedClientAdmin()) return adminMainCovers('btn-notificaciones', 'notif-soporte');
+    return effectiveGrants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-notificaciones' && (!g.submenuId || g.submenuId === 'notif-soporte'));
+}
 const TOP_BAR_MENU_ITEMS = [
     { moduleKey: 'btn-mensajes', elementId: 'home-menu-messages', check: () => hasMainButtonPermission('btn-mensajes') },
     { moduleKey: 'btn-chatbot', elementId: 'home-menu-chatbot', check: () => hasMainButtonPermission('btn-chatbot') },
     { moduleKey: 'btn-notificaciones', elementId: 'home-menu-notifications', check: () => hasMainButtonPermission('btn-notificaciones') },
     // Planes de trabajo (después de Notificaciones, igual que el icono de la barra de arriba de la Web): no es un módulo contratado, solo la hoja del árbol; las cuentas de SaaS no tienen planes
+    // Soporte (después de Notificaciones, igual que su pestaña en la campana de la Web): no es un módulo contratado, solo la hoja del árbol; las cuentas de SaaS tienen su Soporte en la Web
+    { moduleKey: 'soporte', elementId: 'home-menu-support', noContract: true, check: hasSupportTabPermission },
     { moduleKey: 'planes-trabajo', elementId: 'home-menu-work-plans', noContract: true, check: () => hasMainButtonPermission('planes-trabajo') && !!(sessionUser && sessionUser.clientId) },
     // Administración de Equipo de Trabajo (después de Planes, igual que en la Web): tampoco es un módulo contratado, solo la hoja del árbol; las cuentas de SaaS no la tienen
     { moduleKey: 'equipo-trabajo', elementId: 'home-menu-team-work', noContract: true, check: () => hasMainButtonPermission('equipo-trabajo') && !!(sessionUser && sessionUser.clientId) },
@@ -1538,6 +1546,10 @@ document.getElementById('home-menu-notifications').addEventListener('click', asy
     openNotificationsSheet();
 });
 
+document.getElementById('home-menu-support').addEventListener('click', () => {
+    closeHamburgerMenu();
+    window.location.href = 'AppSoporte.html';
+});
 document.getElementById('home-menu-work-plans').addEventListener('click', () => {
     closeHamburgerMenu();
     window.location.href = 'AppPlanesTrabajo.html';
