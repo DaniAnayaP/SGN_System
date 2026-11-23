@@ -6,7 +6,9 @@
 //   · Pieza 2: calificar la atención (estrellas, etiquetas y comentario) cuando el caso se resuelve, reabrir un caso cerrado (dentro de los días que da GEIPSA) y mandar y ver fotos y archivos dentro del chat.
 //   · Pieza 3 (en AppInicio.js): la pestaña Soporte y los avisos de Soporte en la campana de la App.
 //   · Pieza 4: «Ayuda rápida» (Nivel 0): los errores explicados y manuales que arma la empresa (TI › Catálogos › Errores y ayuda); se busca, se lee qué pasó y qué se requiere, y se dice si «me sirvió» o «no me sirvió, pedir ayuda» (abre la solicitud ya con el título y el error escritos).
-//   Mi cola y Soportes cerrados se quedan en la Web por ahora (siguientes piezas).
+//   · Mi cola, parte A (ver y tomar): para quien atiende en la Mesa de ayuda (hoja «Mi cola» del árbol) sale una tercera pestaña «Mi cola» con lo mismo que el panel de la Web: «Mi cola» (lo que atiendo) y «Mi nivel» (lo que espera en mi
+//     nivel), la cuenta regresiva de la primera respuesta, el aviso de un caso Urgente sin tomar, el botón «Tomar» (hoja «Tomar casos») y abrir el caso. Pausar, retomar y decidir ante un Urgente, atender el caso (estatus, resolver, notas),
+//     subir o devolver de nivel y el cierre con el usuario son las siguientes partes; Soportes cerrados y Casos de soporte se quedan en la Web por ahora.
 // Sin señal funciona: lo último que se bajó se guarda en el celular; una solicitud nueva o un mensaje escritos sin señal esperan en la cola (AppOfflineSync.js, recordKey «soporte:new:<hora>», «soporte:msg:<caso>», «soporte:rate:<caso>», «soporte:reopen:<caso>» y «soporte:help:<artículo>») marcados
 // «En tu celular»; las fotos y archivos (al pedir soporte y dentro del chat) solo se pueden mandar con señal (el caso todavía no existe para el servidor). Si al reconectar el servidor rechaza alguno se avisa en «No se aplicó». El servidor es el mismo de la Web
 // (/api/business/my-support*, /api/business/support-cases/:id y /messages). Quien no tiene la pestaña Soporte en el árbol (Notificaciones › Soporte) no ve la pantalla.
@@ -137,6 +139,7 @@ async function loadBrandingForTheme() {
 // --- Estado ----------------------------------------------------------------------------------------------------------------------------
 const API = '/api/business/my-support';
 const CASES = '/api/business/support-cases';
+const QUEUE = '/api/business/support-queue?probe=1';   // Mi cola (con ?probe=1 quien no tiene la hoja recibe {allowed:false} y no un error)
 const RECORD_PREFIX = 'soporte';
 const NEW_URL = /\/api\/business\/my-support$/;                       // una solicitud nueva que espera sin señal
 const MSG_URL = /\/api\/business\/support-cases\/(\d+)\/messages$/;   // un mensaje del chat que espera sin señal
@@ -169,12 +172,26 @@ let pendingHelp = new Set();                   // artículos con un «me sirvió
 let helpAnswered = new Set();                  // artículos que ya contesté en esta sesión
 let helpQuery = '';
 let helpOpen = null;
+let mineAllowed = true;                        // false si esta cuenta no tiene la pestaña Soporte pero sí la hoja «Mi cola»
+let queueData = null;                          // Mi cola (GET /support-queue): { me, levels, map, canTake, canPause, mine, level, urgent }
+let queueAllowed = false;                      // tiene la hoja «Mi cola» del árbol
+let queueCached = false;                       // lo que se ve es lo último que se bajó (sin señal)
+let queueSub = 'mine';                         // 'mine' (lo que atiendo) | 'level' (lo que espera en mi nivel)
+let queueBusy = false;                         // hay una carga o un «Tomar» en camino
+let queueTick = null;                          // la cuenta regresiva (cada segundo)
+let queuePoll = null;                          // el refresco de la cola (cada 30 s)
 const store = {
     get(key) { try { return localStorage.getItem(key); } catch { return null; } },
     set(key, value) { try { localStorage.setItem(key, value); } catch { /* sin almacenamiento */ } },
 };
 // la pestaña de la lista: la primera vez, la ayuda (el Nivel 0 va antes que pedir soporte) si la empresa tiene; después, la última que se usó
-const listTab = () => { const saved = store.get(TAB_KEY); if (saved === 'help' || saved === 'mine') return saved; return help.length ? 'help' : 'mine'; };
+const availableTabs = () => [...(mineAllowed ? ['help', 'mine'] : []), ...(queueAllowed && queueData ? ['queue'] : [])];
+const listTab = () => {
+    const available = availableTabs(); const saved = store.get(TAB_KEY);
+    if (available.includes(saved)) return saved;
+    if (available.includes('queue')) return 'queue';   // quien atiende empieza por su cola
+    return mineAllowed && help.length ? 'help' : 'mine';
+};
 let rateForm = { stars: 0, tags: new Set(), comment: '' };
 
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined && text !== null) node.textContent = text; return node; };
@@ -225,7 +242,7 @@ function cacheDb() {
 async function cacheSave() {
     try {
         const db = await cacheDb();
-        const value = { clientId: currentUser ? (currentUser.clientId ?? null) : null, userId: currentUser ? (currentUser.sub ?? currentUser.id ?? null) : null, mine: mineData, form: formOptions, help, at: Date.now() };
+        const value = { clientId: currentUser ? (currentUser.clientId ?? null) : null, userId: currentUser ? (currentUser.sub ?? currentUser.id ?? null) : null, mine: mineData, form: formOptions, help, mineAllowed, queue: queueData, queueAllowed, at: Date.now() };
         await new Promise((resolve, reject) => {
             const tx = db.transaction('kv', 'readwrite');
             tx.objectStore('kv').put(value, 'data');
@@ -264,16 +281,25 @@ async function loadFormOptions() {
 }
 async function loadData() {
     const clientId = currentUser ? (currentUser.clientId ?? null) : null;
-    try {
-        mineData = await getJson(API);
+    // «Mis solicitudes» (la pestaña Soporte) y «Mi cola» (la hoja del árbol) son permisos distintos: se piden juntos y cada uno decide si su pestaña sale
+    const [mineRes, queueRes] = await Promise.allSettled([getJson(API), getJson(QUEUE)]);
+    const mineErr = mineRes.status === 'rejected' ? mineRes.reason : null;
+    const mineForbidden = !!(mineErr && mineErr.forbidden);
+    const queueDenied = queueRes.status === 'fulfilled' && queueRes.value && queueRes.value.allowed === false;
+    if (mineRes.status === 'fulfilled') { mineData = mineRes.value; mineAllowed = true; } else if (mineForbidden) mineAllowed = false;
+    if (queueRes.status === 'fulfilled') {
+        if (queueDenied) { queueAllowed = false; queueData = null; } else { queueData = queueRes.value; queueAllowed = true; queueCached = false; }
+    }
+    if (mineRes.status === 'fulfilled' || (queueRes.status === 'fulfilled' && !queueDenied)) {
         dataState = 'online';
-        try { await loadFormOptions(); } catch { /* el formulario se pide otra vez al abrirlo */ }
-        try { help = (await getJson('/api/business/support-help')).articles || []; } catch { /* sin ayuda: queda lo último que se bajó */ }
+        if (mineRes.status === 'fulfilled') {
+            try { await loadFormOptions(); } catch { /* el formulario se pide otra vez al abrirlo */ }
+            try { help = (await getJson('/api/business/support-help')).articles || []; } catch { /* sin ayuda: queda lo último que se bajó */ }
+        }
         cacheSave();
         return;
-    } catch (err) {
-        if (err && err.forbidden) { dataState = 'forbidden'; return; }
     }
+    if (mineForbidden && queueDenied) { dataState = 'forbidden'; return; }
     try {
         const saved = await cacheRead();
         // lo guardado solo sirve si es de la misma empresa y la misma persona (otra cuenta en el mismo celular no ve solicitudes ajenas)
@@ -282,6 +308,10 @@ async function loadData() {
             mineData = saved.mine || mineData;
             formOptions = saved.form || formOptions;
             help = saved.help || help;
+            mineAllowed = saved.mineAllowed !== false;
+            queueAllowed = !!saved.queueAllowed && !!saved.queue;
+            queueData = queueAllowed ? saved.queue : null;
+            queueCached = queueAllowed;
             dataState = 'cached';
             return;
         }
@@ -309,6 +339,7 @@ document.getElementById('carga-progress-label').hidden = true;
 
 function render() {
     stopPolling();
+    stopQueueTimers();
     bodyEl.innerHTML = '';
     if (screen === 'form') renderForm();
     else if (screen === 'case') renderCase();
@@ -332,19 +363,23 @@ function renderList() {
     if (dataState === 'loading') { bodyEl.appendChild(el('p', 'home-empty', t('admin.loading'))); return; }
     if (dataState === 'forbidden') { bodyEl.appendChild(el('p', 'home-empty', t('home.spappForbidden'))); return; }
     if (dataState === 'none') { bodyEl.appendChild(el('p', 'home-empty', t('home.spappNoData'))); return; }
-    if (dataState === 'cached') bodyEl.appendChild(el('p', 'spapp-note', t('home.spappCached')));
     const tab = listTab();
-    const tabs = el('div', 'wpapp-tabs');
+    if (tab === 'queue' ? queueCached : dataState === 'cached') bodyEl.appendChild(el('p', 'spapp-note', t(tab === 'queue' ? 'home.spqCached' : 'home.spappCached')));
+    const defs = [];
+    if (mineAllowed) defs.push(['help', t('main.soHelpTitle'), help.length], ['mine', t('main.soMineTitle'), (mineData.cases || []).length + pendingNew.length]);
+    if (queueAllowed && queueData) defs.push(['queue', t('main.qTitle'), queueData.mine.length, queueData.urgent.length > 0]);
+    const tabs = el('div', `wpapp-tabs${defs.length > 2 ? ' spapp-tabs-3' : ''}`);
     tabs.setAttribute('role', 'tablist');
     tabs.setAttribute('data-help-key', 'appSpTabs');
-    [['help', t('main.soHelpTitle'), help.length], ['mine', t('main.soMineTitle'), (mineData.cases || []).length + pendingNew.length]].forEach(([key, label, n]) => {
+    defs.forEach(([key, label, n, hot]) => {
         const b = el('button', `wpapp-tab${tab === key ? ' active' : ''}`);
         b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(tab === key));
-        b.append(document.createTextNode(label), el('i', '', String(n)));
+        b.append(document.createTextNode(label), el('i', hot ? 'spapp-hot' : '', String(n)));
         b.addEventListener('click', () => { store.set(TAB_KEY, key); listScroll = 0; render(); });
         tabs.appendChild(b);
     });
-    bodyEl.appendChild(tabs);
+    if (defs.length > 1) bodyEl.appendChild(tabs);   // con una sola pestaña (quien atiende y no tiene la pestaña Soporte) no hace falta la barra
+    if (tab === 'queue') { renderQueue(); return; }
     if (tab === 'help') { renderHelp(); return; }
     renderMine();
 }
@@ -480,6 +515,145 @@ function renderHelp() {
     bodyEl.appendChild(host);
 }
 
+// ---- Mi cola (para quien atiende en la Mesa de ayuda) -----------------------------------------------------------------------------------------
+// Lo mismo que el panel «Mi cola» de la Web: lo que yo atiendo («Mi cola»), lo que espera en el nivel que atiendo («Mi nivel»), el aviso de un caso Urgente sin tomar y «Tomar» (hoja «Tomar casos»). Tomar pide señal: depende de lo que esté libre
+// en ese momento (alguien más pudo tomarlo antes); sin señal se ve lo último que se bajó. Se actualiza sola cada 30 segundos mientras está abierta.
+const fmtClock = (iso) => new Date(iso).toLocaleTimeString(localeOf(), { hour: '2-digit', minute: '2-digit' });
+function qLeft(iso) {
+    const ms = new Date(iso).getTime() - Date.now();
+    const abs = Math.abs(ms); const m = Math.floor(abs / 60000); const s = Math.floor((abs % 60000) / 1000);
+    return { over: ms < 0, text: m >= 120 ? `${Math.floor(m / 60)} h` : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` };
+}
+function timerNode(iso) {
+    const left = qLeft(iso);
+    const b = el('b', `spapp-qtimer${left.over ? ' over' : ''}`, `${left.over ? '−' : ''}${left.text}`);
+    b.dataset.qTimer = iso;
+    return b;
+}
+function stopQueueTimers() {
+    if (queueTick) { clearInterval(queueTick); queueTick = null; }
+    if (queuePoll) { clearInterval(queuePoll); queuePoll = null; }
+}
+function startQueueTimers() {
+    stopQueueTimers();
+    queueTick = setInterval(() => {
+        document.querySelectorAll('[data-q-timer]').forEach((n) => { const left = qLeft(n.dataset.qTimer); n.textContent = `${left.over ? '−' : ''}${left.text}`; n.classList.toggle('over', left.over); });
+    }, 1000);
+    queuePoll = setInterval(() => { if (screen === 'list' && listTab() === 'queue') fetchQueue({ redraw: true }); }, 30000);
+}
+// vuelve a pedir la cola (y la guarda en el celular); con redraw la lista abierta se dibuja otra vez sin perder dónde iba
+async function fetchQueue({ redraw } = {}) {
+    if (queueBusy || !navigator.onLine || document.hidden) return false;
+    queueBusy = true;
+    let ok = false;
+    try {
+        const d = await getJson(QUEUE);
+        if (d && d.allowed === false) { queueAllowed = false; queueData = null; } else { queueData = d; queueAllowed = true; queueCached = false; }
+        ok = true;
+        cacheSave();
+    } catch { /* se vuelve a intentar */ }
+    queueBusy = false;
+    if (ok && redraw && screen === 'list') { const keep = bodyEl.scrollTop; render(); bodyEl.scrollTop = keep; }
+    return ok;
+}
+// Tomar: el caso queda a mi nombre (y sale de «Abierto»). Depende del servidor, así que pide señal.
+async function takeCase(id, btn) {
+    if (!navigator.onLine) { showToast(t('home.spqNeedSignal')); return false; }
+    if (queueBusy) return false;
+    queueBusy = true;
+    if (btn) btn.disabled = true;
+    let ok = false;
+    try {
+        const res = await fetch(apiUrl(`${CASES}/${id}/take`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: '{}' });
+        if (res.status === 401) { window.location.replace('Login.html'); return false; }
+        const out = await res.json().catch(() => ({}));
+        if (res.ok) { ok = true; showToast(t('main.qDoneTake')); } else showToast(out.message || t('admin.saveError'));
+    } catch { showToast(t('admin.saveError')); }
+    queueBusy = false;
+    if (btn && !ok) btn.disabled = false;
+    return ok;
+}
+function takeButton(r) {
+    const btn = el('button', 'home-carga-new-btn spapp-qtake', t('main.qTake'));
+    btn.type = 'button';
+    // tome o no (alguien más pudo tomarlo antes), la lista se actualiza para mostrar cómo quedó
+    btn.addEventListener('click', async () => { await takeCase(r.id, btn); if (navigator.onLine) await fetchQueue({ redraw: true }); });
+    return btn;
+}
+function queueRow(r) {
+    const card = el('div', `wpapp-row spapp-card spapp-qrow${r.priority <= 2 ? ' hot' : ''}${r.status === 'paused' ? ' paused' : ''}`);
+    const open = el('button', 'wpapp-main spapp-qopen');
+    open.type = 'button';
+    const title = el('div', 'wpapp-title');
+    title.innerHTML = `<b>${esc(r.folio)}</b> · ${esc(r.summary)}`;
+    open.appendChild(title);
+    const crumbs = [r.reporter, fmtTime(r.createdAt), r.assigneeName && !r.mine ? t('main.qAssignee', { name: r.assigneeName }) : '', r.status === 'paused' && r.pausedAt ? t('main.qPausedSince', { when: fmtClock(r.pausedAt) }) : ''].filter(Boolean).join(' · ');
+    open.appendChild(el('span', 'wpapp-crumbs', crumbs));
+    const chips = el('div', 'wpapp-chips');
+    chips.append(chip(t(`main.msPri_${r.priority}`), r.priority <= 2 ? 'wpapp-chip-late' : ''), chip(t(`main.sopLevel_${r.level}`)), chip(t(`main.spStatus_${r.status}`), r.status === 'paused' ? 'wpapp-chip-in_progress' : ''));
+    open.appendChild(chips);
+    if (r.dueAt && !r.firstResponseAt) {
+        const line = el('span', 'wpapp-crumbs spapp-qdue');
+        line.append(document.createTextNode(`${t('main.qFirstResponse')} `), timerNode(r.dueAt));
+        open.appendChild(line);
+    }
+    open.addEventListener('click', () => { listScroll = bodyEl.scrollTop; openCase(r.id); });
+    card.append(open, el('i', 'bx bx-chevron-right spapp-go'));
+    if (r.canTake && !queueCached) { const act = el('div', 'spapp-qact'); act.appendChild(takeButton(r)); card.appendChild(act); }
+    return card;
+}
+// un caso Urgente que nadie ha tomado en mi nivel (la decisión de pausar lo que traigo o terminarlo primero llega en la siguiente parte)
+function urgentCard(u) {
+    const box = el('div', 'pm-app-card spapp-qalert');
+    const head = el('b', 'pm-app-title');
+    head.innerHTML = `<i class="bx bx-error" aria-hidden="true"></i> ${esc(t('main.qUrgentTitle', { priority: t(`main.msPri_${u.priority}`), level: t(`main.sopLevel_${u.level}`) }))}`;
+    box.appendChild(head);
+    const open = el('button', 'wpapp-main spapp-qopen');
+    open.type = 'button';
+    const title = el('div', 'wpapp-title');
+    title.innerHTML = `<b>${esc(u.folio)}</b> · ${esc(u.summary)}`;
+    open.append(title, el('span', 'wpapp-crumbs', u.reporter || '—'));
+    open.addEventListener('click', () => { listScroll = bodyEl.scrollTop; openCase(u.id); });
+    box.appendChild(open);
+    if (u.dueAt && !u.firstResponseAt) {
+        const line = el('div', 'spapp-qdue');
+        line.append(document.createTextNode(`${t('main.qFirstResponse')} `), timerNode(u.dueAt));
+        box.appendChild(line);
+    }
+    if ((u.impacts || []).length) {
+        const chips = el('div', 'wpapp-chips');
+        u.impacts.forEach((i) => chips.appendChild(chip(`${i.name} · ${t(`main.spLevel_${i.level}`)}`)));
+        box.appendChild(chips);
+    }
+    if (u.canTake && !queueCached) { const act = el('div', 'spapp-qact'); act.appendChild(takeButton(u)); box.appendChild(act); }
+    return box;
+}
+function renderQueue() {
+    const d = queueData;
+    const host = el('div', 'spapp-queue');
+    host.setAttribute('data-help-key', 'appSpQueue');
+    d.urgent.forEach((u) => host.appendChild(urgentCard(u)));
+    const sub = el('div', 'wpapp-filters spapp-qtabs');
+    sub.setAttribute('role', 'tablist');
+    [['mine', t('main.qTabMine'), d.mine.length], ['level', t('main.qTabLevel'), d.level.length]].forEach(([key, label, n]) => {
+        const b = el('button', `wpapp-pill${queueSub === key ? ' active' : ''}`, `${label} (${n})`);
+        b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(queueSub === key));
+        b.addEventListener('click', () => { queueSub = key; listScroll = 0; render(); });
+        sub.appendChild(b);
+    });
+    host.appendChild(sub);
+    const list = queueSub === 'mine' ? d.mine : d.level;
+    const listEl = el('div', 'spapp-list');
+    if (!list.length) listEl.appendChild(el('p', 'home-empty', t(queueSub === 'mine' ? 'main.qEmptyMine' : 'main.qEmptyLevel')));
+    list.forEach((r) => listEl.appendChild(queueRow(r)));
+    host.appendChild(listEl);
+    bodyEl.appendChild(host);
+    bodyEl.scrollTop = listScroll;
+    startQueueTimers();
+}
+window.addEventListener('online', () => { if (screen === 'list' && queueAllowed && listTab() === 'queue') fetchQueue({ redraw: true }); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && screen === 'list' && queueAllowed && listTab() === 'queue') fetchQueue({ redraw: true }); });
+
 // ---- Un caso: lo que se ve y el chat ------------------------------------------------------------------------------------------------------
 async function openCase(id) {
     screen = 'case'; openId = id; detail = null; messages = []; ratings = null; attach = null; reopenText = ''; rateForm = { stars: 0, tags: new Set(), comment: '' };
@@ -578,6 +752,7 @@ function renderCase() {
     const meta = el('div', 'pm-app-meta');
     meta.innerHTML = rows.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
     bodyEl.appendChild(meta);
+    if (detail.takeCan) bodyEl.appendChild(takeCard());
     const closing = closingCard(c);
     if (closing) bodyEl.appendChild(closing);
     const rating = ratingCard();
@@ -591,6 +766,19 @@ function renderCase() {
     if (detail.chat && detail.chat.canSend && (!['done', 'noresp'].includes(c.status) || (c.status === 'noresp' && detail.reopenCan))) chatBox.appendChild(composerNode(list));
     bodyEl.appendChild(chatBox);
     startPolling(list);
+}
+// un caso que nadie atiende y que esta persona puede tomar (su hoja «Tomar casos» y el nivel donde está el caso)
+function takeCard() {
+    const card = el('div', 'pm-app-card spapp-take');
+    card.appendChild(el('b', 'pm-app-title', t('home.spqFree')));
+    const btn = el('button', 'home-carga-new-btn spapp-submit-inline', t('main.qTake'));
+    btn.type = 'button';
+    btn.addEventListener('click', async () => {
+        const id = openId;
+        if (await takeCase(id, btn)) { await loadCase(id, { quiet: true }); fetchQueue(); }
+    });
+    card.appendChild(btn);
+    return card;
 }
 function composerNode(list) {
     const wrap = el('div', 'spapp-composer-wrap');
@@ -807,7 +995,10 @@ function startPolling(list) {
     }, 12000);
 }
 function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
-function goList() { screen = 'list'; openId = null; detail = null; messages = []; form = null; render(); }
+function goList() {
+    screen = 'list'; openId = null; detail = null; messages = []; form = null; render();
+    if (queueAllowed && listTab() === 'queue') fetchQueue({ redraw: true });   // lo que pasó con el caso que se abrió
+}
 
 // ---- Pedir soporte: el mismo formulario de la Web (menos la grabación de pantalla) ----------------------------------------------------------
 const SR = () => window.SupportRules;
@@ -1065,6 +1256,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
         applyStyle(getStoredStyle());
         await refreshQueued();
         await loadData();
+        if (new URLSearchParams(location.search).get('tab') === 'queue') store.set(TAB_KEY, 'queue');   // AppSoporte.html?tab=queue abre Mi cola
         render();
         // llegar desde un aviso: AppSoporte.html?id=<caso> abre ese caso
         const wanted = Number(new URLSearchParams(location.search).get('id'));

@@ -13614,7 +13614,8 @@ function supportAssignTo(req, rec, { auto = false } = {}) {
 }
 app.get('/api/business/support-queue', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
-    if (!supportHasCol(req, 'colSpMiCola')) return res.status(403).json({ message: 'No tienes permiso para Mi cola.' });
+    // ?probe=1 (la App): quien no tiene la hoja recibe 200 {allowed:false} en vez de 403, para preguntar sin llenar la consola de errores
+    if (!supportHasCol(req, 'colSpMiCola')) return req.query.probe === '1' ? res.json({ allowed: false }) : res.status(403).json({ message: 'No tienes permiso para Mi cola.' });
     try { processSupportUrgent(); } catch (err) { console.error('support urgent failed', err); }
     const me = req.user.sub;
     const levels = ['n1', 'n2', 'n3', 'n4'].filter((l) => supportCanActOnLevel(req, { level: l }));

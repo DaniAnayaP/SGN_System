@@ -366,13 +366,18 @@ function hasSupportTabPermission() {
     if (isUnrestrictedClientAdmin()) return adminMainCovers('btn-notificaciones', 'notif-soporte');
     return effectiveGrants.some((g) => g.sectionId === 'main' && g.itemId === 'btn-notificaciones' && (!g.submenuId || g.submenuId === 'notif-soporte'));
 }
+// La entrada «Soporte» del menú también la ve quien atiende en la Mesa de ayuda (la hoja «Mi cola» del árbol, en cualquiera de sus niveles) aunque no tenga la pestaña Soporte: ahí tiene su cola (AppSoporte.js).
+function hasMiColaGrant() {
+    if (!(sessionUser && sessionUser.clientId)) return false;
+    return effectiveGrants.some((g) => typeof g.submenuId === 'string' && /(^|\/)colSpMiCola\/(solo-ver|ver-y-operar|editar)$/.test(g.submenuId));
+}
 const TOP_BAR_MENU_ITEMS = [
     { moduleKey: 'btn-mensajes', elementId: 'home-menu-messages', check: () => hasMainButtonPermission('btn-mensajes') },
     { moduleKey: 'btn-chatbot', elementId: 'home-menu-chatbot', check: () => hasMainButtonPermission('btn-chatbot') },
     { moduleKey: 'btn-notificaciones', elementId: 'home-menu-notifications', check: () => hasMainButtonPermission('btn-notificaciones') },
     // Planes de trabajo (después de Notificaciones, igual que el icono de la barra de arriba de la Web): no es un módulo contratado, solo la hoja del árbol; las cuentas de SaaS no tienen planes
     // Soporte (después de Notificaciones, igual que su pestaña en la campana de la Web): no es un módulo contratado, solo la hoja del árbol; las cuentas de SaaS tienen su Soporte en la Web
-    { moduleKey: 'soporte', elementId: 'home-menu-support', noContract: true, check: hasSupportTabPermission },
+    { moduleKey: 'soporte', elementId: 'home-menu-support', noContract: true, check: () => hasSupportTabPermission() || hasMiColaGrant() },
     { moduleKey: 'planes-trabajo', elementId: 'home-menu-work-plans', noContract: true, check: () => hasMainButtonPermission('planes-trabajo') && !!(sessionUser && sessionUser.clientId) },
     // Administración de Equipo de Trabajo (después de Planes, igual que en la Web): tampoco es un módulo contratado, solo la hoja del árbol; las cuentas de SaaS no la tienen
     { moduleKey: 'equipo-trabajo', elementId: 'home-menu-team-work', noContract: true, check: () => hasMainButtonPermission('equipo-trabajo') && !!(sessionUser && sessionUser.clientId) },

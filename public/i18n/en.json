@@ -8600,6 +8600,9 @@
     "spappForbidden": "Your account does not have the Support tab. Ask whoever manages your access.",
     "spappNoData": "No signal and no requests saved on your phone yet.",
     "spappCached": "No signal: these are your requests from the last time you opened the screen.",
+    "spqCached": "No signal: this is your queue from the last time you opened the screen. You need signal to take a case.",
+    "spqNeedSignal": "You need signal to take a case: it depends on what is free right now.",
+    "spqFree": "Nobody is handling this case yet.",
     "spappEmpty": "You have not asked for support yet.",
     "spappNoForm": "No signal and the form is not saved on your phone yet. Open it once with signal.",
     "spappSavedOffline": "No signal: it was saved on your phone and will be sent automatically.",
@@ -8732,8 +8735,12 @@
       "example": "Photo of the screen with the error."
     },
     "appSpTabs": {
-      "what": "Switches between Quick help (the explained errors your company writes, so you can solve it yourself) and My requests (what you already asked the Help desk).",
+      "what": "Switches between Quick help (the explained errors your company writes, so you can solve it yourself), My requests (what you already asked the Help desk) and My queue (only if you work at the Help desk: the cases you have to solve).",
       "example": "You open Support: you see the help first; if it does not solve it, you go on to ask for support."
+    },
+    "appSpQueue": {
+      "what": "Your work at the Help desk. “My queue” are the cases you already handle; “My level” are the ones waiting for someone at your level, which you can pick up with “Take”. Each case shows its priority, its level and how long is left for the first response (red if it already passed). At the top you see the alert when an Urgent case arrives that nobody has taken. Tap a case to open it. It refreshes by itself; you need signal to take a case.",
+      "example": "SP-0012 · I cannot close the order · Urgent · Level 1 · First response in 04:32 → “Take”."
     },
     "appSpHelp": {
       "what": "Search what happened with a word of the error or of what you wanted to do, open the article to read what happened and what is required, and tell us whether it helped. If it did not, a request opens with the title and the error already written.",
