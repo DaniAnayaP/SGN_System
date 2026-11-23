@@ -12,7 +12,9 @@
 //     la App recomienda terminar primero (si es menos de lo que el Urgente puede esperar) o pausar, y yo elijo («Pausar X y atender Y» o «Terminar primero», que queda anotado con la hora límite). Todo esto pide señal.
 //   · Mi cola, parte C (atender el caso): quien atiende puede cambiar el estatus (en revisión, en trabajo, en pruebas), «Marcar resuelto» (qué hizo y al menos una evidencia: foto o archivo del celular; el caso regresa a la Mesa de ayuda por
 //     confirmar con el usuario) y dejar notas internas en el chat (solo el equipo las ve; se marcan «Nota interna»). Cada uno con su hoja del árbol (Cambiar estatus, Marcar resuelto, Notas internas). Estatus y resolver piden señal.
-//     Subir o devolver de nivel y el cierre con el usuario son las siguientes partes; Soportes cerrados y Casos de soporte se quedan en la Web por ahora.
+//   · Mi cola, parte D (subir, devolver y calificar): la tarjeta «Por dónde pasó el caso» (cuánto estuvo en cada nivel), «Subir de nivel» y «Devolver» (motivo, qué hizo, notas para el siguiente nivel y al menos una evidencia; avisa si falta una
+//     evidencia que pide la categoría), el detalle de cada traspaso en el chat del equipo y las calificaciones entre niveles (cómo te llegó el caso —obligatoria antes de empezar si la empresa lo pide—, calificar a quien lo recibió y el historial).
+//     Todo pide señal. El cierre con el usuario es la parte siguiente; Soportes cerrados y Casos de soporte se quedan en la Web por ahora.
 // Sin señal funciona: lo último que se bajó se guarda en el celular; una solicitud nueva o un mensaje escritos sin señal esperan en la cola (AppOfflineSync.js, recordKey «soporte:new:<hora>», «soporte:msg:<caso>», «soporte:rate:<caso>», «soporte:reopen:<caso>» y «soporte:help:<artículo>») marcados
 // «En tu celular»; las fotos y archivos (al pedir soporte y dentro del chat) solo se pueden mandar con señal (el caso todavía no existe para el servidor). Si al reconectar el servidor rechaza alguno se avisa en «No se aplicó». El servidor es el mismo de la Web
 // (/api/business/my-support*, /api/business/support-cases/:id y /messages). Quien no tiene la pestaña Soporte en el árbol (Notificaciones › Soporte) no ve la pantalla.
@@ -176,6 +178,9 @@ let reopenText = '';
 let closing = null;                            // el cierre del caso abierto para el equipo (GET /support-cases/:id/closing): si puede marcarlo resuelto, quién lo resolvió y qué hizo
 let noteMode = false;                          // el siguiente mensaje del chat es una nota interna (solo el equipo la ve)
 let resolveForm = null;                        // «Marcar resuelto»: { did, blobs: [{ blob, name, uploaded? }], sending }
+let moves = null;                              // por dónde pasó el caso abierto, para el equipo (GET /moves): tiempo en cada nivel, a qué niveles puede subir o devolver, los motivos y qué evidencias faltan
+let moveForm = null;                           // subir o devolver: { dir, to, reason, did, notes, blobs, confirmMissing, sending }
+let teamRates = {};                            // calificaciones entre niveles del caso abierto: «receive:<traspaso>» o «deliver:<traspaso>» -> { stars, tags, comment, sending }
 let help = [];                                 // la ayuda rápida de la empresa (GET /support-help)
 let pendingHelp = new Set();                   // artículos con un «me sirvió» guardado sin señal
 let helpAnswered = new Set();                  // artículos que ya contesté en esta sesión
@@ -352,6 +357,7 @@ function render() {
     bodyEl.innerHTML = '';
     if (screen === 'form') renderForm();
     else if (screen === 'resolve') renderResolve();
+    else if (screen === 'move') renderMove();
     else if (screen === 'case') renderCase();
     else renderList();
 }
@@ -728,7 +734,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && sc
 
 // ---- Un caso: lo que se ve y el chat ------------------------------------------------------------------------------------------------------
 async function openCase(id) {
-    screen = 'case'; openId = id; detail = null; messages = []; ratings = null; closing = null; noteMode = false; resolveForm = null; attach = null; reopenText = ''; rateForm = { stars: 0, tags: new Set(), comment: '' };
+    screen = 'case'; openId = id; detail = null; messages = []; ratings = null; closing = null; moves = null; moveForm = null; teamRates = {}; noteMode = false; resolveForm = null; attach = null; reopenText = ''; rateForm = { stars: 0, tags: new Set(), comment: '' };
     render();
     await loadCase(id, {});
 }
@@ -736,10 +742,11 @@ async function loadCase(id, { quiet }) {
     try {
         const [d, m, rt] = await Promise.all([getJson(`${CASES}/${id}`), getJson(`${CASES}/${id}/messages`), getJson(`${CASES}/${id}/ratings`).catch(() => null)]);
         if (openId !== id) return;
-        // el equipo también trae el cierre (si puede marcarlo resuelto, quién lo resolvió y qué hizo)
-        const cl = d.closingCan ? await getJson(`${CASES}/${id}/closing`).catch(() => null) : null;
+        // el equipo también trae el cierre (si puede marcarlo resuelto, quién lo resolvió y qué hizo) y por dónde ha pasado el caso (y si puede subirlo o devolverlo)
+        const team = !!(d.chat && d.chat.canSee && !d.chat.isReporter);
+        const [cl, mv] = await Promise.all([d.closingCan ? getJson(`${CASES}/${id}/closing`).catch(() => null) : null, team ? getJson(`${CASES}/${id}/moves`).catch(() => null) : null]);
         if (openId !== id) return;
-        detail = d; messages = m.messages || []; ratings = rt; closing = cl;
+        detail = d; messages = m.messages || []; ratings = rt; closing = cl; moves = mv;
         if (!quiet || screen === 'case') render();
     } catch (err) {
         if (openId !== id) return;
@@ -777,6 +784,17 @@ function messageNode(m) {
         if (!text) return null;
         const sep = el('div', 'spapp-sep');
         sep.append(el('span', '', text), el('time', '', fmtTime(m.createdAt)));
+        // el detalle de un traspaso (motivo, qué hizo, notas y cuántas evidencias) solo lo ve el equipo con las notas internas
+        const d = m.eventData || {};
+        if (m.eventKey === 'moved' && d.reason && detail && detail.chat && detail.chat.canSeeNotes) {
+            const why = el('div', 'spapp-why');
+            const line = (k, v) => { const p = el('div'); p.append(el('b', '', `${k}: `), document.createTextNode(v)); why.appendChild(p); };
+            line(t('main.mvReasonLabel'), t(`main.mvReason_${d.reason}`));
+            if (d.did) line(t('main.mvDidShort'), d.did);
+            if (d.notes) line(t('main.mvNotesShort'), d.notes);
+            if ((d.fileIds || []).length) line(t('main.mvFilesShort'), String(d.fileIds.length));
+            sep.appendChild(why);
+        }
         return sep;
     }
     const note = m.kind === 'note';
@@ -834,8 +852,13 @@ function renderCase() {
     bodyEl.appendChild(meta);
     const caseActions = caseActionsCard();
     if (caseActions) bodyEl.appendChild(caseActions);
+    // lo que hay que calificar antes de empezar va primero (si no, las acciones del caso piden calificar)
+    const teamRate = teamRatingsCard();
+    if (teamRate) bodyEl.appendChild(teamRate);
     const attend = attendCard(c);
     if (attend) bodyEl.appendChild(attend);
+    const lane = laneCard();
+    if (lane) bodyEl.appendChild(lane);
     const closeCard = closingCard(c);
     if (closeCard) bodyEl.appendChild(closeCard);
     const rating = ratingCard();
@@ -885,6 +908,43 @@ function attendCard(c) {
     }
     return card;
 }
+// La evidencia de lo que se hizo (al resolver y al subir o devolver): la foto o el archivo se escoge del celular (cámara, galería o archivos); las imágenes se achican antes de guardarlas; se puede quitar una antes de enviar.
+function evidenceField(f) {
+    const ev = el('div', 'spapp-field wide');
+    ev.appendChild(el('span', '', `${t('main.mvFiles')} *`));
+    const listEl = el('div', 'spapp-evlist');
+    const drawList = () => {
+        listEl.innerHTML = '';
+        f.blobs.forEach((x, i) => {
+            const row = el('div', 'spapp-slot-row');
+            const rm = el('button', 'spapp-rm'); rm.type = 'button'; rm.disabled = f.sending; rm.setAttribute('aria-label', t('main.scRemove')); rm.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+            rm.addEventListener('click', () => { f.blobs.splice(i, 1); drawList(); });
+            row.append(el('span', 'spapp-ok', `✓ ${x.name} · ${fmtSize(x.blob.size)}`), rm);
+            listEl.appendChild(row);
+        });
+    };
+    drawList();
+    ev.appendChild(listEl);
+    ev.appendChild(filePicker('main.scAttach', 'bx-paperclip', '', async (file) => {
+        const item = /^image\//.test(file.type) ? await pickImage(file) : { blob: file, name: file.name };
+        if (item.blob.size > MAX_EVIDENCE_BYTES) { showToast(t('main.spTooBig', { name: item.name, mb: 12 })); return; }
+        f.blobs.push(item); drawList();
+    }));
+    ev.appendChild(el('p', 'spapp-hint', t('home.spqEvidenceHint')));
+    return ev;
+}
+// Sube las evidencias del formulario (?move=1: no salen como renglón aparte) y regresa sus ids; lo que ya se subió en un intento anterior no se sube dos veces. Si una falla avisa y regresa null.
+async function uploadEvidence(caseId, f) {
+    const ids = [];
+    for (const item of f.blobs) {
+        if (item.uploaded) { ids.push(item.uploaded); continue; }
+        const res = await fetch(apiUrl(`${CASES}/${caseId}/files?move=1`), { method: 'POST', headers: { 'Content-Type': item.blob.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(item.name) }, credentials: 'include', body: item.blob });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) { showToast(t('main.spFileFailed', { name: item.name, why: out.message || t('admin.saveError') })); return null; }
+        item.uploaded = out.file.id; ids.push(out.file.id);
+    }
+    return ids;
+}
 // ---- «Marcar resuelto»: qué hice y evidencia (una pantalla propia, como las de la Web son una ventana) -------------------------------------------------
 // Las evidencias se suben antes (?move=1: no salen como renglón aparte) y el caso las lleva en «fileIds»; sin señal no se puede (el servidor tiene que recibirlas). El caso regresa a la Mesa de ayuda por confirmar con el usuario.
 function openResolve() {
@@ -910,29 +970,7 @@ function renderResolve() {
     did.addEventListener('input', () => { f.did = did.value; });
     wrap.appendChild(field(`${t('main.rsDid')} *`, did, true));
     wrap.appendChild(el('p', 'spapp-hint', t('main.mvDidHint')));
-    const ev = el('div', 'spapp-field wide');
-    ev.appendChild(el('span', '', `${t('main.mvFiles')} *`));
-    const listEl = el('div', 'spapp-evlist');
-    const drawList = () => {
-        listEl.innerHTML = '';
-        f.blobs.forEach((x, i) => {
-            const row = el('div', 'spapp-slot-row');
-            const rm = el('button', 'spapp-rm'); rm.type = 'button'; rm.disabled = f.sending; rm.setAttribute('aria-label', t('main.scRemove')); rm.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
-            rm.addEventListener('click', () => { f.blobs.splice(i, 1); drawList(); });
-            row.append(el('span', 'spapp-ok', `✓ ${x.name} · ${fmtSize(x.blob.size)}`), rm);
-            listEl.appendChild(row);
-        });
-    };
-    drawList();
-    ev.appendChild(listEl);
-    // la foto o el archivo se escoge del celular (cámara, galería o archivos); las imágenes se achican antes de guardarlas
-    ev.appendChild(filePicker('main.scAttach', 'bx-paperclip', '', async (file) => {
-        const item = /^image\//.test(file.type) ? await pickImage(file) : { blob: file, name: file.name };
-        if (item.blob.size > MAX_EVIDENCE_BYTES) { showToast(t('main.spTooBig', { name: item.name, mb: 12 })); return; }
-        f.blobs.push(item); drawList();
-    }));
-    ev.appendChild(el('p', 'spapp-hint', t('home.spqEvidenceHint')));
-    wrap.appendChild(ev);
+    wrap.appendChild(evidenceField(f));
     const send = el('button', 'home-carga-new-btn spapp-submit', t('main.rsSend'));
     send.type = 'button';
     send.addEventListener('click', () => submitResolve(send));
@@ -949,14 +987,8 @@ async function submitResolve(btn) {
     const id = openId;
     const back = () => { f.sending = false; btn.disabled = false; btn.textContent = t('main.rsSend'); };
     try {
-        const ids = [];
-        for (const item of f.blobs) {
-            if (item.uploaded) { ids.push(item.uploaded); continue; }   // lo que ya se subió en un intento anterior no se sube dos veces
-            const res = await fetch(apiUrl(`${CASES}/${id}/files?move=1`), { method: 'POST', headers: { 'Content-Type': item.blob.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(item.name) }, credentials: 'include', body: item.blob });
-            const out = await res.json().catch(() => ({}));
-            if (!res.ok) { showToast(t('main.spFileFailed', { name: item.name, why: out.message || t('admin.saveError') })); back(); return; }
-            item.uploaded = out.file.id; ids.push(out.file.id);
-        }
+        const ids = await uploadEvidence(id, f);
+        if (!ids) { back(); return; }
         const res = await fetch(apiUrl(`${CASES}/${id}/resolve`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ did: f.did, fileIds: ids }) });
         const out = await res.json().catch(() => ({}));
         if (!res.ok) { showToast(out.message || t('admin.saveError')); back(); return; }
@@ -965,6 +997,210 @@ async function submitResolve(btn) {
         await loadCase(id, { quiet: true });
         fetchQueue();
     } catch { showToast(t('admin.saveError')); back(); }
+}
+// ---- Por dónde pasó el caso, y subirlo o devolverlo (el equipo) ---------------------------------------------------------------------------------------------
+// La tarjeta dice cuánto tiempo estuvo el caso en cada nivel y trae los botones «Subir de nivel» / «Devolver» (cada uno con su hoja del árbol; el servidor ya dijo cuáles puede). La pantalla pide el motivo, lo que se hizo en el nivel, las notas
+// para el siguiente y al menos una evidencia (foto o archivo); al subir avisa si falta alguna evidencia que pide la categoría y hay que confirmarlo. Lo escrito no se edita ni se borra. Sin señal no se puede (el servidor decide).
+const fmtDuration = (min) => {
+    const n = Math.max(0, Number(min) || 0);
+    if (n < 1) return '< 1 min';
+    if (n < 60) return `${n} min`;
+    if (n < 1440) return `${Math.floor(n / 60)} h${n % 60 ? ` ${n % 60} min` : ''}`;
+    return `${Math.floor(n / 1440)} d${Math.floor((n % 1440) / 60) ? ` ${Math.floor((n % 1440) / 60)} h` : ''}`;
+};
+const lvName = (l) => t(`main.sopLevel_${l}`);
+function laneCard() {
+    const m = moves;
+    if (!m || (!(m.moves || []).length && !m.canUp && !m.canDown)) return null;
+    const card = el('div', 'pm-app-card spapp-lane');
+    card.setAttribute('data-help-key', 'appSpLane');
+    card.appendChild(el('b', 'pm-app-title', t('main.mvLaneTitle')));
+    const meta = el('div', 'pm-app-meta');
+    meta.innerHTML = (m.segments || []).map((s) => `<div><span>${esc(lvName(s.level))}</span><b>${esc(`${fmtTime(s.startAt)} · ${fmtDuration(s.minutes)}${s.endAt ? '' : ` · ${t('main.mvNow')}`} · ${t(`main.mvHow_${s.how}`)}`)}</b></div>`).join('');
+    card.appendChild(meta);
+    if (m.canUp || m.canDown) {
+        const acts = el('div', 'spapp-qact');
+        const button = (label, primary, dir) => {
+            const b = el('button', `${primary ? 'home-carga-new-btn' : 'home-carga-secondary-btn'} spapp-qtake`, label);
+            b.type = 'button';
+            b.addEventListener('click', () => openMove(dir));
+            return b;
+        };
+        if (m.canUp) acts.appendChild(button(`↑ ${t('main.mvUp')}`, true, 'up'));
+        if (m.canDown) acts.appendChild(button(`↓ ${t('main.mvDown')}`, !m.canUp, 'down'));
+        card.appendChild(acts);
+    }
+    return card;
+}
+function openMove(dir) {
+    if (!navigator.onLine) { showToast(t('home.spqNeedSignal')); return; }
+    moveForm = { dir, to: (dir === 'up' ? moves.upTo : moves.downTo)[0], reason: '', did: '', notes: '', blobs: [], confirmMissing: false, sending: false };
+    screen = 'move';
+    render();
+}
+function closeMove() {
+    const f = moveForm;
+    if (f && f.sending) return;
+    if (f && (f.did.trim() || f.notes.trim() || f.blobs.length) && !window.confirm(t('home.spqDiscardMove'))) return;
+    moveForm = null;
+    screen = 'case';
+    render();
+}
+function renderMove() {
+    const f = moveForm; const m = moves;
+    if (!f || !m || !detail) { titleEl.textContent = t('menu.support'); bodyEl.appendChild(el('p', 'home-empty', t('admin.loading'))); return; }
+    titleEl.textContent = t(f.dir === 'up' ? 'main.mvUp' : 'main.mvDown');
+    const wrap = el('div', 'spapp-form');
+    wrap.setAttribute('data-help-key', 'appSpMove');
+    wrap.appendChild(el('p', 'spapp-hint', t('main.mvHint')));
+    // si puede subir y devolver, escoge cuál (cambiar de uno al otro cambia los niveles y los motivos)
+    if (m.canUp && m.canDown) wrap.appendChild(chipRow([['up', `↑ ${t('main.mvUp')}`], ['down', `↓ ${t('main.mvDown')}`]], f.dir, (v) => { f.dir = v; f.to = (v === 'up' ? m.upTo : m.downTo)[0]; f.reason = ''; f.confirmMissing = false; render(); }));
+    const options = f.dir === 'up' ? m.upTo : m.downTo;
+    const to = el('select');
+    options.forEach((l) => { const o = el('option', '', lvName(l)); o.value = l; if (l === f.to) o.selected = true; to.appendChild(o); });
+    to.addEventListener('change', () => { f.to = to.value; render(); });
+    wrap.appendChild(field(`${t('main.mvTo')} *`, to, true));
+    const reasons = section(`${t('main.mvReason')} *`);
+    reasons.appendChild(chipRow((m.reasons[f.dir] || []).map((r) => [r, t(`main.mvReason_${r}`)]), f.reason, (v) => { f.reason = v; }));
+    wrap.appendChild(reasons);
+    const did = el('textarea'); did.rows = 3; did.maxLength = m.maxText || 1000; did.value = f.did;
+    did.addEventListener('input', () => { f.did = did.value; });
+    wrap.appendChild(field(`${t('main.mvDid')} *`, did, true));
+    wrap.appendChild(el('p', 'spapp-hint', t('main.mvDidHint')));
+    const notes = el('textarea'); notes.rows = 3; notes.maxLength = m.maxText || 1000; notes.value = f.notes;
+    notes.addEventListener('input', () => { f.notes = notes.value; });
+    wrap.appendChild(field(`${t('main.mvNotes')} *`, notes, true));
+    wrap.appendChild(el('p', 'spapp-hint', t('main.mvNotesHint')));
+    wrap.appendChild(evidenceField(f));
+    // al subir, si falta alguna evidencia que pide la categoría hay que confirmar que se sube así (es probable que lo devuelvan)
+    if (f.dir === 'up' && (m.missingEvidence || []).length) {
+        const warn = el('div', 'spapp-warn');
+        warn.append(el('b', '', `${t('main.mvMissing')} `), document.createTextNode(m.missingEvidence.map((e) => e.name).join(', ')));
+        const lab = el('label', 'spapp-check');
+        const cb = el('input'); cb.type = 'checkbox'; cb.checked = f.confirmMissing;
+        cb.addEventListener('change', () => { f.confirmMissing = cb.checked; });
+        lab.append(cb, document.createTextNode(` ${t('main.mvMissingConfirm')}`));
+        warn.appendChild(lab);
+        wrap.appendChild(warn);
+    }
+    const sendLabel = () => t(f.dir === 'up' ? 'main.mvSendUp' : 'main.mvSendDown', { level: lvName(f.to) });
+    const send = el('button', 'home-carga-new-btn spapp-submit', sendLabel());
+    send.type = 'button';
+    send.addEventListener('click', () => submitMove(send, sendLabel));
+    wrap.appendChild(send);
+    bodyEl.appendChild(wrap);
+}
+async function submitMove(btn, sendLabel) {
+    const f = moveForm; const m = moves;
+    if (!f || !m || f.sending) return;
+    const need = (cond, key) => { if (!cond) { showToast(t(key)); return false; } return true; };
+    if (!need(f.reason, 'main.mvErrReason') || !need(f.did.trim().length >= m.minText, 'main.mvErrDid') || !need(f.notes.trim().length >= m.minText, 'main.mvErrNotes') || !need(f.blobs.length, 'main.mvErrFiles')) return;
+    if (!navigator.onLine) { showToast(t('home.spqNeedSignal')); return; }
+    f.sending = true; btn.disabled = true; btn.textContent = t('main.spFSending');
+    const id = openId;
+    const back = () => { f.sending = false; btn.disabled = false; btn.textContent = sendLabel(); };
+    try {
+        const ids = await uploadEvidence(id, f);
+        if (!ids) { back(); return; }
+        const res = await fetch(apiUrl(`${CASES}/${id}/moves`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ direction: f.dir, toLevel: f.to, reason: f.reason, did: f.did, notes: f.notes, fileIds: ids, confirmMissing: f.confirmMissing }) });
+        const out = await res.json().catch(() => ({}));
+        // lo ya subido se queda marcado para el siguiente intento: no se vuelve a mandar
+        if (!res.ok) { showToast(out.message || t('admin.saveError')); back(); return; }
+        showToast(t(f.dir === 'up' ? 'main.mvDoneUp' : 'main.mvDoneDown', { level: lvName(out.level) }));
+        moveForm = null; screen = 'case';
+        await loadCase(id, { quiet: true });
+        fetchQueue();
+    } catch { showToast(t('admin.saveError')); back(); }
+}
+// ---- Calificar entre niveles (el equipo) -------------------------------------------------------------------------------------------------------------------------------------------
+// Quien recibe un caso califica cómo le llegó (1 clic; obligatoria antes de empezar si el Mapa de soporte lo pide: si no, las acciones del caso avisan «califica cómo te llegó») y quien lo pasó hacia arriba puede calificar (opcional) al nivel
+// que lo recibió. Las calificaciones entre niveles son internas: solo las ve quien tenga la columna del árbol. Lo escrito no se edita ni se borra. Pide señal.
+function rateFormNode(key, kind, redraw) {
+    const f = teamRates[key] || (teamRates[key] = { stars: 0, tags: new Set(), comment: '', sending: false });
+    const box = el('div', 'spapp-rate');
+    const stars = el('div', 'spapp-stars');
+    stars.setAttribute('role', 'group'); stars.setAttribute('aria-label', t('main.rtStarsLabel'));
+    [1, 2, 3, 4, 5].forEach((n) => {
+        const b = el('button', `spapp-star${f.stars >= n ? ' on' : ''}`, '★');
+        b.type = 'button'; b.disabled = f.sending; b.setAttribute('aria-label', String(n)); b.setAttribute('aria-pressed', String(f.stars === n));
+        b.addEventListener('click', () => { f.stars = n; redraw(); });
+        stars.appendChild(b);
+    });
+    box.appendChild(stars);
+    const tg = (ratings.tags && ratings.tags[kind]) || { good: [], bad: [] };
+    const tags = el('div', 'wpapp-filters spapp-tags');
+    [...tg.good, ...tg.bad].forEach((k) => {
+        const b = el('button', `wpapp-pill${f.tags.has(k) ? ' active' : ''}`, t(`main.rtTag_${kind}_${k}`));
+        b.type = 'button'; b.disabled = f.sending; b.setAttribute('aria-pressed', String(f.tags.has(k)));
+        b.addEventListener('click', () => { if (f.tags.has(k)) f.tags.delete(k); else f.tags.add(k); b.classList.toggle('active'); b.setAttribute('aria-pressed', String(f.tags.has(k))); });
+        tags.appendChild(b);
+    });
+    box.appendChild(tags);
+    const ta = el('textarea', 'spapp-input'); ta.rows = 2; ta.maxLength = ratings.maxComment || 500; ta.value = f.comment; ta.disabled = f.sending; ta.placeholder = t('main.rtComment'); ta.setAttribute('aria-label', t('main.rtComment'));
+    ta.addEventListener('input', () => { f.comment = ta.value; });
+    box.appendChild(ta);
+    const btn = el('button', 'home-carga-new-btn spapp-submit-inline', t(f.sending ? 'main.spFSending' : 'main.rtSend'));
+    btn.type = 'button'; btn.disabled = f.sending;
+    btn.addEventListener('click', () => submitTeamRate(key, kind, redraw));
+    box.appendChild(btn);
+    return box;
+}
+async function submitTeamRate(key, kind, redraw) {
+    const f = teamRates[key];
+    if (!f || f.sending) return;
+    if (!f.stars) { showToast(t('main.rtStarsErr')); return; }
+    if (!navigator.onLine) { showToast(t('home.spqNeedSignal')); return; }
+    f.sending = true; redraw();
+    const id = openId;
+    let ok = false;
+    try {
+        const res = await fetch(apiUrl(`${CASES}/${id}/ratings`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ kind, moveId: Number(key.split(':')[1]), stars: f.stars, tags: [...f.tags], comment: f.comment }) });
+        const out = await res.json().catch(() => ({}));
+        if (res.ok) ok = true; else showToast(out.message || t('admin.saveError'));
+    } catch { showToast(t('admin.saveError')); }
+    f.sending = false;
+    if (!ok) { redraw(); return; }
+    delete teamRates[key];
+    showToast(t('main.rtSaved'));
+    await loadCase(id, { quiet: true });
+    fetchQueue();
+}
+function teamRatingsCard() {
+    const d = ratings;
+    if (!d || !detail || !detail.chat || detail.chat.isReporter) return null;
+    const pending = d.pending; const deliver = d.deliver || []; const history = d.canSeeAll ? (d.all || []) : [];
+    if (!pending && !deliver.length && !history.length) return null;
+    const card = el('div', 'pm-app-card spapp-trate');
+    card.setAttribute('data-help-key', 'appSpTeamRate');
+    const draw = () => {
+        card.innerHTML = '';
+        card.appendChild(el('b', 'pm-app-title', t('main.rtTitle')));
+        if (pending) {
+            card.appendChild(el('h4', 'spapp-sub', t('main.rtPendingTitle')));
+            card.appendChild(el('p', 'spapp-hint', t('main.rtPendingWho', { by: pending.by || '—', from: lvName(pending.from), to: lvName(pending.to), when: fmtTime(pending.at) })));
+            card.appendChild(rateFormNode(`receive:${pending.id}`, 'receive', draw));
+        }
+        deliver.forEach((mv) => {
+            card.appendChild(el('h4', 'spapp-sub', t('main.rtDeliverTitle', { level: lvName(mv.to) })));
+            card.appendChild(el('p', 'spapp-hint', t('main.rtOptional')));
+            card.appendChild(rateFormNode(`deliver:${mv.id}`, 'deliver', draw));
+        });
+        if (history.length) {
+            card.appendChild(el('h4', 'spapp-sub', t('main.rtHistTitle')));
+            history.forEach((r) => {
+                const row = el('div', 'spapp-hrow');
+                const head = el('div'); head.append(el('b', '', t(`main.rtKind_${r.kind}`)), el('span', 'spapp-hint', ` ${lvName(r.raterLevel)} ${r.by || '—'} → ${lvName(r.targetLevel)} ${r.targetName || ''}`));
+                row.appendChild(head);
+                row.appendChild(el('div', 'spapp-stars-text', starsText(r.stars)));
+                if ((r.tags || []).length) row.appendChild(el('div', 'spapp-hint', r.tags.map((k) => t(`main.rtTag_${r.kind}_${k}`)).join(', ')));
+                if (r.comment) row.appendChild(el('div', 'spapp-hint', r.comment));
+                row.appendChild(el('time', 'spapp-hint', fmtTime(r.createdAt)));
+                card.appendChild(row);
+            });
+        }
+    };
+    draw();
+    return card;
 }
 // lo que quien atiende puede hacer con el caso abierto: tomarlo (nadie lo atiende, su hoja «Tomar casos» y el nivel donde está), pausarlo o retomarlo (su hoja «Pausar casos»); el servidor ya dijo cuáles puede
 function caseActionsCard() {
@@ -1478,6 +1714,7 @@ async function submitForm(btn) {
 
 document.getElementById('carga-back').addEventListener('click', () => {
     if (screen === 'resolve') { closeResolve(); return; }
+    if (screen === 'move') { closeMove(); return; }
     if (screen === 'form') { if (form && !form.sending) goList(); return; }
     if (screen === 'case') { goList(); return; }
     window.location.href = 'AppInicio.html';

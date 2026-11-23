@@ -8606,6 +8606,7 @@
     "spqCloseWeb": "Closing the case with the user is done from the Web for now.",
     "spqDiscard": "Leave without marking it solved? What you wrote and the photos you picked will be lost.",
     "spqEvidenceHint": "At least one: a photo of what you did or a file from your phone (up to 12 MB each). Needs signal.",
+    "spqDiscardMove": "Leave without moving the case? What you wrote and the photos you picked will be lost.",
     "spappEmpty": "You have not asked for support yet.",
     "spappNoForm": "No signal and the form is not saved on your phone yet. Open it once with signal.",
     "spappSavedOffline": "No signal: it was saved on your phone and will be sent automatically.",
@@ -8768,6 +8769,18 @@
     "appSpResolved": {
       "what": "The case is already solved: here you see who solved it, when and what they did. Now the Help desk confirms it with the user and closes it.",
       "example": "Solved by Ana · “Fixed the order date”; the Help desk closes it with the user."
+    },
+    "appSpLane": {
+      "what": "Where the case has been: how long it spent at each level and how it got there (entry, moved up or sent back). If your permission allows, below you have “Move up a level” (pass it to a higher level) and “Send back” (return it to a lower one). Needs signal.",
+      "example": "Level 1 · 20 min · entry → Level 2 · 1 h 5 min · now · moved up."
+    },
+    "appSpMove": {
+      "what": "To pass the case to another level: pick the level and the reason, say what you did at your level (required), leave notes for whoever receives it and attach at least one piece of evidence (photo or file). If moving up lacks an evidence the category asks for, tick that you move it like that (it will probably be sent back). What you write stays in the record and is not edited.",
+      "example": "Move up a level to Level 2 · Reason “Requires permissions or configuration” · “I checked the permission and it is not a user one” · photo of the screen."
+    },
+    "appSpTeamRate": {
+      "what": "Ratings between levels. When a case reaches you, rate how it arrived (1 tap: stars and, if you want, tags); if your company asks for it, you must do it before starting. If you passed the case up, you can rate (optional) whoever received it. Below you see the history if your permission allows. Needs signal.",
+      "example": "“It arrived with clear notes and the evidence”: 5 stars."
     },
     "appSpHelp": {
       "what": "Search what happened with a word of the error or of what you wanted to do, open the article to read what happened and what is required, and tell us whether it helped. If it did not, a request opens with the title and the error already written.",

@@ -8605,6 +8605,7 @@
     "spqCloseWeb": "El cierre con el usuario se hace por ahora desde la Web.",
     "spqDiscard": "¿Salir sin marcar resuelto? Se pierde lo que escribiste y las fotos que elegiste.",
     "spqEvidenceHint": "Al menos una: una foto de lo que hiciste o un archivo del celular (hasta 12 MB cada una). Necesita señal.",
+    "spqDiscardMove": "¿Salir sin pasar el caso? Se pierde lo que escribiste y las fotos que elegiste.",
     "spappEmpty": "Todavía no has pedido soporte.",
     "spappNoForm": "Sin señal y todavía no se guardó el formulario en tu celular. Ábrelo una vez con señal.",
     "spappSavedOffline": "Sin señal: quedó en tu celular y se enviará solo.",
@@ -8767,6 +8768,18 @@
     "appSpResolved": {
       "what": "El caso ya se resolvió: aquí ves quién lo resolvió, cuándo y qué hizo. Ahora la Mesa de ayuda lo confirma con el usuario y lo cierra.",
       "example": "Lo resolvió Ana · «Se corrigió la fecha del pedido»; la Mesa de ayuda cierra con el usuario."
+    },
+    "appSpLane": {
+      "what": "Por dónde ha pasado el caso: cuánto tiempo estuvo en cada nivel y cómo llegó (de entrada, subido o devuelto). Si tu permiso lo deja, abajo tienes «Subir de nivel» (pasarlo a un nivel más arriba) y «Devolver» (regresarlo a uno más abajo). Necesita señal.",
+      "example": "Nivel 1 · 20 min · de entrada → Nivel 2 · 1 h 5 min · ahora · subido."
+    },
+    "appSpMove": {
+      "what": "Para pasar el caso a otro nivel: escoge el nivel y el motivo, cuenta qué hiciste en tu nivel (obligatorio), deja notas para quien lo recibe y adjunta al menos una evidencia (foto o archivo). Si al subir falta una evidencia que pide la categoría, marca que lo subes así (es probable que te lo devuelvan). Lo escrito queda en el registro y no se edita.",
+      "example": "Subir a Nivel 2 · Motivo «Requiere permisos o configuración» · «Revisé el permiso y no es de usuario» · foto de la pantalla."
+    },
+    "appSpTeamRate": {
+      "what": "Calificaciones entre niveles. Cuando te llega un caso, califica cómo te llegó (1 clic: estrellas y, si quieres, etiquetas); si tu empresa lo pide, hay que hacerlo antes de empezar. Si tú pasaste el caso hacia arriba, puedes calificar (es opcional) a quien lo recibió. Abajo ves el historial si tu permiso lo deja. Necesita señal.",
+      "example": "«Me llegó con las notas claras y la evidencia»: 5 estrellas."
     },
     "appSpHelp": {
       "what": "Busca lo que te pasó con una palabra del error o de lo que querías hacer, abre el artículo para leer qué pasó y qué se requiere, y dinos si te sirvió. Si no te sirvió, se abre una solicitud ya con el título y el error escritos.",
