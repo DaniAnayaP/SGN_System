@@ -14153,6 +14153,16 @@ function saasSupportKpiCompute({ period, type, clientId }) {
     const inN4Now = all.filter((c) => atN4Live(c) && ['open', 'review', 'working', 'testing', 'paused', 'confirm'].includes(c.status));
     const untakenNow = all.filter((c) => atN4Live(c) && c.status === 'open' && !c.assignee_user_id);
     const direct = cs.filter((c) => !intoN4(c));
+    // ---- plazos de GEIPSA cumplidos (Reglas de atención): solo los casos que llegaron al Nivel 4 con plazos propios (n4_first_due_at / n4_resolve_due_at). Se juzga por la última llegada al Nivel 4 (n4_at): la primera respuesta
+    // del Nivel 4 contra su plazo y la resolución (el último «resuelto» del Nivel 4 desde esa llegada) contra «Resolver en». Un caso en curso que todavía no vence queda «en curso» y no se cuenta; uno vencido y sin respuesta o sin resolver
+    // que sigue en el Nivel 4 cuenta como NO cumplido; uno que ya salió del Nivel 4 sin responder o sin resolver (lo devolvieron) no se juzga.
+    const lastResolvedAt = (c) => { const zs = (closuresBy.get(c.id) || []).filter((z) => z.kind === 'resolved' && z.from_level === 'n4' && c.n4_at && ts(z.created_at) >= ts(c.n4_at)); return zs.length ? ts(zs[zs.length - 1].created_at) : null; };
+    const judgeFirst = (c) => { if (!c.n4_first_due_at) return null; const due = ts(c.n4_first_due_at); if (c.n4_first_response_at) return { ok: ts(c.n4_first_response_at) <= due }; if (!atN4Live(c)) return null; return due < nowMs ? { ok: false } : { pending: true }; };
+    const judgeResolve = (c) => { if (!c.n4_resolve_due_at) return null; const due = ts(c.n4_resolve_due_at); const rz = lastResolvedAt(c); if (rz !== null) return { ok: rz <= due }; if (!atN4Live(c)) return null; return due < nowMs ? { ok: false } : { pending: true }; };
+    const tally = (list, judge) => { let n = 0; let of = 0; let pending = 0; list.forEach((c) => { const j = judge(c); if (!j) return; if (j.pending) pending += 1; else { of += 1; if (j.ok) n += 1; } }); return { n, of, pct: pct(n, of), pending }; };
+    const hasPlan = (c) => !!(c.n4_first_due_at || c.n4_resolve_due_at);
+    const withPlan = cs.filter(hasPlan);
+    const deadlines = { cases: withPlan.length, first: tally(withPlan, judgeFirst), resolve: tally(withPlan, judgeResolve), byPriority: [1, 2, 3, 4].map((p) => { const l = withPlan.filter((c) => c.priority === p); return { priority: p, cases: l.length, first: tally(l, judgeFirst), resolve: tally(l, judgeResolve) }; }) };
     const indicators = {
         received: cs.length, direct: direct.length, fromCompany: cs.length - direct.length, inN4Now: inN4Now.length,
         resolved: { n: resolved.length, of: cs.length, pct: pct(resolved.length, cs.length) },
@@ -14163,6 +14173,7 @@ function saasSupportKpiCompute({ period, type, clientId }) {
         receiveRating: { avg: avg1(receiveRatings.map((r) => r.stars)), n: receiveRatings.length, tags: [...tagCount].map(([tag, n]) => ({ tag, n, bad: SUPPORT_RATING_TAGS.receive.bad.includes(tag) })).sort((a, b) => b.n - a.n).slice(0, 6) },
         reopened: { n: reopened, pct: pct(reopened, cs.length) },
         untaken: { n: untakenNow.length, late: untakenNow.filter((c) => c.first_response_due_at && !c.first_response_at && ts(c.first_response_due_at) < nowMs).length },
+        deadlines,
     };
     // ---- casos que no se están tomando (ahora): desde cuándo llegaron y de qué empresa
     const untakenRows = untakenNow.slice().sort((a, b) => a.priority - b.priority || ts(arrivalOf(a)) - ts(arrivalOf(b))).slice(0, 100).map((c) => ({
@@ -14177,6 +14188,7 @@ function saasSupportKpiCompute({ period, type, clientId }) {
         const rep = list.map((c) => { const m = firstReplyOf(c); return m ? diffMin(arrivalOf(c), m.created_at) : null; }).filter((v) => v !== null);
         return { id, name: list[0].client_name, sector: list[0].sector_name || '', received: list.length, direct: list.filter((c) => !intoN4(c)).length, openNow: list.filter((c) => atN4Live(c)).length, resolved: res.length, returned: list.filter((c) => returnedBy(c)).length, resolutionMin: avg(res.map((x) => diffMin(arrivalOf(x.c), x.z.created_at))), firstReplyMin: avg(rep) };
     }).sort((a, b) => b.received - a.received || String(a.name).localeCompare(String(b.name)));
+    clientRows.forEach((r) => { const l = withPlan.filter((c) => c.client_id === r.id); r.deadlines = { cases: l.length, first: tally(l, judgeFirst), resolve: tally(l, judgeResolve) }; });
     // ---- por persona del equipo SaaS: quién tomó, quién respondió primero, quién resolvió y quién cerró
     const people = new Map();
     const person = (id, name) => { const key = id || `n:${name}`; if (!people.has(key)) people.set(key, { id: id || null, name: name || '—', taken: new Set(), firstReplies: [], resolved: 0, closed: 0, userStars: [] }); return people.get(key); };
@@ -14190,6 +14202,10 @@ function saasSupportKpiCompute({ period, type, clientId }) {
         });
     });
     const peopleRows = [...people.values()].map((p) => ({ id: p.id, name: p.name, taken: p.taken.size, firstReplyMin: avg(p.firstReplies), replies: p.firstReplies.length, resolved: p.resolved, closed: p.closed, userRating: avg1(p.userStars) })).sort((a, b) => (b.resolved + b.closed) - (a.resolved + a.closed) || b.taken - a.taken || String(a.name).localeCompare(String(b.name)));
+    // la primera respuesta de cada persona contra el plazo de GEIPSA del caso (solo casos con plazos propios, desde la última llegada al Nivel 4)
+    const firstOnTimeBy = new Map();
+    cs.forEach((c) => { const fr = firstReplyOf(c); if (!fr || !c.n4_first_due_at || !c.n4_at || ts(fr.created_at) < ts(c.n4_at)) return; const key = fr.author_user_id || `n:${fr.author_name}`; const v = firstOnTimeBy.get(key) || { n: 0, of: 0 }; v.of += 1; if (ts(fr.created_at) <= ts(c.n4_first_due_at)) v.n += 1; firstOnTimeBy.set(key, v); });
+    peopleRows.forEach((r) => { const v = firstOnTimeBy.get(r.id || `n:${r.name}`) || { n: 0, of: 0 }; r.onTime = { n: v.n, of: v.of, pct: pct(v.n, v.of) }; });
     // ---- por qué llegan: el motivo con que los subió la empresa, giro, departamento y categoría
     const reasonCount = new Map();
     cs.forEach((c) => { const m = intoN4(c); const key = m ? (m.reason || 'other') : 'direct'; reasonCount.set(key, (reasonCount.get(key) || 0) + 1); });

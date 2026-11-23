@@ -1401,6 +1401,14 @@
     "saasSpTabFree": "Sin asignar",
     "saasSpTabAll": "Todos",
     "saasSpTabKpi": "KPI del Nivel 4",
+    "saasKpiOnTimeFirst": "Primera respuesta a tiempo",
+    "saasKpiOnTimeResolve": "Resueltos a tiempo",
+    "saasKpiOnTimeDetail": "{n} de {of} dentro del plazo de GEIPSA · {pending} en curso",
+    "saasKpiOnTimeNone": "Aún no hay casos con plazos propios de GEIPSA",
+    "saasKpiDeadlinesTitle": "Plazos de GEIPSA por prioridad",
+    "saasKpiDeadlineCases": "Casos con plazo",
+    "saasKpiOnTimeFirstShort": "1ª resp. a tiempo",
+    "saasKpiOnTimeResolveShort": "Resolver a tiempo",
     "saasSpTabRules": "Reglas de atención",
     "saasRulesNoAccess": "No tienes permiso para ver las reglas de atención.",
     "saasRulesGroupPlazos": "Plazos de GEIPSA (Nivel 4)",
@@ -11747,7 +11755,7 @@
       "example": "Abres «KPI del Nivel 4» al empezar la semana y ves que 5 casos llevan más de un día sin tomar."
     },
     "saasKpiIndicadores": {
-      "what": "Los números del Nivel 4 del periodo, sacados del recorrido de cada caso: casos recibidos (los que subió la empresa y los directos de empresas sin TI), cuántos se resolvieron, cuántos se devolvieron, primera respuesta, tiempo de resolución, conformidad al cierre, calificaciones y cuántos siguen sin tomar. El periodo cuenta los casos que llegaron al Nivel 4 en él.",
+      "what": "Los números del Nivel 4 del periodo, sacados del recorrido de cada caso: casos recibidos (los que subió la empresa y los directos de empresas sin TI), cuántos se resolvieron, cuántos se devolvieron, primera respuesta, tiempo de resolución, conformidad al cierre, calificaciones y cuántos siguen sin tomar. El periodo cuenta los casos que llegaron al Nivel 4 en él. Con «Usar estos plazos» prendido en Reglas de atención, también muestra cuántos casos se respondieron y se resolvieron dentro del plazo de GEIPSA (solo cuentan los casos que llegaron al Nivel 4 con plazos propios; los que siguen en curso sin vencer no se cuentan, y los vencidos sin atender cuentan como no cumplidos).",
       "example": "Resueltos por el Nivel 4: 33 % (1 de 3 casos recibidos)."
     },
     "saasKpiSinTomar": {
@@ -11755,11 +11763,11 @@
       "example": "SP-0042 del Hospital Santa Clara, Urgente, llegó hace 3 h y su primera respuesta venció hace 2 h."
     },
     "saasKpiClientes": {
-      "what": "Cómo le va a cada empresa con el Nivel 4: cuántos casos le llegaron, cuántos fueron directos, cuántos siguen en el Nivel 4, cuántos se resolvieron o se devolvieron y los tiempos promedio.",
+      "what": "Cómo le va a cada empresa con el Nivel 4: cuántos casos le llegaron, cuántos fueron directos, cuántos siguen en el Nivel 4, cuántos se resolvieron o se devolvieron y los tiempos promedio. Con plazos propios de GEIPSA, también el porcentaje de casos respondidos y resueltos a tiempo.",
       "example": "Hospital Santa Clara: 12 casos recibidos, 9 resueltos, 2 devueltos; primera respuesta en 25 min."
     },
     "saasKpiPersonas": {
-      "what": "Qué hace cada persona del equipo SaaS en el Nivel 4: cuántos casos tomó, cuánto tarda en responder cuando escribe primero, cuántos marcó resueltos o cerró con el usuario y cómo la califican los usuarios.",
+      "what": "Qué hace cada persona del equipo SaaS en el Nivel 4: cuántos casos tomó, cuánto tarda en responder cuando escribe primero, cuántos marcó resueltos o cerró con el usuario y cómo la califican los usuarios. Con plazos propios de GEIPSA, también cuántas de sus primeras respuestas fueron a tiempo.",
       "example": "Ana Torres: tomó 8, respondió en 12 min en promedio, resolvió 6 y cerró 2."
     },
     "saasKpiPorQue": {

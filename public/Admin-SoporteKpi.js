@@ -24,6 +24,7 @@ function dur(min) {
     return `${Math.floor(n / 1440)} d${Math.floor((n % 1440) / 60) ? ` ${Math.floor((n % 1440) / 60)} h` : ''}`;
 }
 const pctText = (v) => (v === null || v === undefined ? '—' : `${v} %`);
+const okText = (x) => (x && x.of ? `${x.pct} % (${x.n}/${x.of})` : '—');
 const starsText = (v) => (v === null || v === undefined ? '—' : `${v} ★`);
 const priTag = (p) => `<span class="sp-tag sp-pri" data-k="${p}">${esc(t(`main.msPri_${p}`))}</span>`;
 const bar = (label, pct, n, cls) => `<div class="kp-bar-row"><div class="kp-bar-top"><span>${esc(label)}</span><b>${esc(n)}</b></div><div class="kp-bar"><i class="${cls || ''}" style="width:${Math.max(0, Math.min(100, pct || 0))}%"></i></div></div>`;
@@ -61,13 +62,18 @@ function tilesHtml(i) {
         tile(t('admin.saasKpiReturned'), i.returned.n, t('admin.saasKpiReturnedDetail', { pct: pctText(i.returned.pct) })),
         tile(t('admin.saasKpiFirstReply'), dur(i.firstReplyMin), t('admin.saasKpiFirstReplyDetail')),
         tile(t('admin.saasKpiResolution'), dur(i.resolutionMin), t('admin.saasKpiResolutionDetail')),
+        tile(t('admin.saasKpiOnTimeFirst'), pctText(i.deadlines.first.pct), i.deadlines.cases ? t('admin.saasKpiOnTimeDetail', { n: i.deadlines.first.n, of: i.deadlines.first.of, pending: i.deadlines.first.pending }) : t('admin.saasKpiOnTimeNone')),
+        tile(t('admin.saasKpiOnTimeResolve'), pctText(i.deadlines.resolve.pct), i.deadlines.cases ? t('admin.saasKpiOnTimeDetail', { n: i.deadlines.resolve.n, of: i.deadlines.resolve.of, pending: i.deadlines.resolve.pending }) : t('admin.saasKpiOnTimeNone')),
         tile(t('main.kpConform'), pctText(i.conform.pct), t('main.kpConformDetail', { n: i.conform.n, of: i.conform.of, bad: i.conform.notConform, none: i.conform.noReply })),
         tile(t('main.kpUserRating'), starsText(i.userRating.avg), t('admin.saasKpiUserRatingDetail', { n: i.userRating.n })),
         tile(t('admin.saasKpiReceiveRating'), starsText(i.receiveRating.avg), `${t('admin.saasKpiReceiveRatingDetail', { n: i.receiveRating.n })}${tags}`),
         tile(t('admin.saasKpiReopened'), i.reopened.n, t('admin.saasKpiReopenedDetail', { pct: pctText(i.reopened.pct) })),
         tile(t('main.kpUntaken'), i.untaken.n, t('main.kpUntakenDetail', { late: i.untaken.late })),
     ];
-    return `<section class="sc-card" data-help-key="saasKpiIndicadores"><div class="sc-card-head"><h3>${esc(t('admin.saasKpiIndicators'))}</h3></div><div class="kp-tiles">${tiles.join('')}</div></section>`;
+    // los plazos de GEIPSA por prioridad (solo si hay casos con plazos propios)
+    const dlRows = i.deadlines.byPriority.filter((r) => r.cases).map((r) => `<tr><td>${priTag(r.priority)}</td><td class="num">${r.cases}</td><td class="num">${okText(r.first)}</td><td class="num">${okText(r.resolve)}</td></tr>`).join('');
+    const dl = dlRows ? `<h4>${esc(t('admin.saasKpiDeadlinesTitle'))}</h4><div class="sc-sg-table"><table class="ms-table"><thead><tr><th>${esc(t('main.colScPrioridad'))}</th><th>${esc(t('admin.saasKpiDeadlineCases'))}</th><th>${esc(t('admin.saasKpiOnTimeFirstShort'))}</th><th>${esc(t('admin.saasKpiOnTimeResolveShort'))}</th></tr></thead><tbody>${dlRows}</tbody></table></div>` : '';
+    return `<section class="sc-card" data-help-key="saasKpiIndicadores"><div class="sc-card-head"><h3>${esc(t('admin.saasKpiIndicators'))}</h3></div><div class="kp-tiles">${tiles.join('')}</div>${dl}</section>`;
 }
 function untakenHtml(u) {
     const total = u.bySector.reduce((a, b) => a + b.n, 0);
@@ -81,14 +87,14 @@ function untakenHtml(u) {
         ${funnel ? `<h4>${esc(t('admin.saasKpiBySector'))}</h4><div class="kp-bars">${funnel}</div>` : ''}<p class="sp-muted">${esc(t('admin.saasKpiUntakenHint', { avg: dur(u.avgWaitMin) }))}</p></section>`;
 }
 function clientsHtml(rows) {
-    const body = rows.map((r) => `<tr><td><b>${esc(r.name)}</b></td><td>${esc(sectorName(r.sector))}</td><td class="num">${r.received}</td><td class="num">${r.direct}</td><td class="num">${r.openNow}</td><td class="num">${r.resolved}</td><td class="num">${r.returned}</td><td class="num">${dur(r.firstReplyMin)}</td><td class="num">${dur(r.resolutionMin)}</td></tr>`).join('');
+    const body = rows.map((r) => `<tr><td><b>${esc(r.name)}</b></td><td>${esc(sectorName(r.sector))}</td><td class="num">${r.received}</td><td class="num">${r.direct}</td><td class="num">${r.openNow}</td><td class="num">${r.resolved}</td><td class="num">${r.returned}</td><td class="num">${dur(r.firstReplyMin)}</td><td class="num">${dur(r.resolutionMin)}</td><td class="num">${okText(r.deadlines.first)}</td><td class="num">${okText(r.deadlines.resolve)}</td></tr>`).join('');
     return `<section class="sc-card" data-help-key="saasKpiClientes"><div class="sc-card-head"><h3>${esc(t('admin.saasKpiClients'))}</h3></div>
-        ${rows.length ? `<div class="sc-sg-table"><table class="ms-table"><thead><tr><th>${esc(t('admin.saasSpColClient'))}</th><th>${esc(t('admin.saasSpColSector'))}</th><th>${esc(t('admin.saasKpiReceived'))}</th><th>${esc(t('admin.saasKpiDirectCol'))}</th><th>${esc(t('admin.saasKpiInN4'))}</th><th>${esc(t('admin.saasKpiResolvedCol'))}</th><th>${esc(t('admin.saasKpiReturnedCol'))}</th><th>${esc(t('admin.saasKpiFirstReply'))}</th><th>${esc(t('admin.saasKpiResolution'))}</th></tr></thead><tbody>${body}</tbody></table></div>` : `<p class="sp-muted">${esc(t('admin.saasKpiEmpty'))}</p>`}</section>`;
+        ${rows.length ? `<div class="sc-sg-table"><table class="ms-table"><thead><tr><th>${esc(t('admin.saasSpColClient'))}</th><th>${esc(t('admin.saasSpColSector'))}</th><th>${esc(t('admin.saasKpiReceived'))}</th><th>${esc(t('admin.saasKpiDirectCol'))}</th><th>${esc(t('admin.saasKpiInN4'))}</th><th>${esc(t('admin.saasKpiResolvedCol'))}</th><th>${esc(t('admin.saasKpiReturnedCol'))}</th><th>${esc(t('admin.saasKpiFirstReply'))}</th><th>${esc(t('admin.saasKpiResolution'))}</th><th>${esc(t('admin.saasKpiOnTimeFirstShort'))}</th><th>${esc(t('admin.saasKpiOnTimeResolveShort'))}</th></tr></thead><tbody>${body}</tbody></table></div>` : `<p class="sp-muted">${esc(t('admin.saasKpiEmpty'))}</p>`}</section>`;
 }
 function peopleHtml(rows) {
-    const body = rows.map((r) => `<tr><td><b>${esc(r.name)}</b></td><td class="num">${r.taken}</td><td class="num">${dur(r.firstReplyMin)}</td><td class="num">${r.resolved}</td><td class="num">${r.closed}</td><td class="num">${starsText(r.userRating)}</td></tr>`).join('');
+    const body = rows.map((r) => `<tr><td><b>${esc(r.name)}</b></td><td class="num">${r.taken}</td><td class="num">${dur(r.firstReplyMin)}</td><td class="num">${okText(r.onTime)}</td><td class="num">${r.resolved}</td><td class="num">${r.closed}</td><td class="num">${starsText(r.userRating)}</td></tr>`).join('');
     return `<section class="sc-card" data-help-key="saasKpiPersonas"><div class="sc-card-head"><h3>${esc(t('admin.saasKpiPeople'))}</h3></div>
-        ${rows.length ? `<div class="sc-sg-table"><table class="ms-table"><thead><tr><th>${esc(t('admin.saasKpiPerson'))}</th><th>${esc(t('admin.saasKpiTakenCol'))}</th><th>${esc(t('admin.saasKpiFirstReply'))}</th><th>${esc(t('admin.saasKpiResolvedCol'))}</th><th>${esc(t('admin.saasKpiClosedCol'))}</th><th>${esc(t('main.kpUserRating'))}</th></tr></thead><tbody>${body}</tbody></table></div>` : `<p class="sp-muted">${esc(t('admin.saasKpiEmpty'))}</p>`}
+        ${rows.length ? `<div class="sc-sg-table"><table class="ms-table"><thead><tr><th>${esc(t('admin.saasKpiPerson'))}</th><th>${esc(t('admin.saasKpiTakenCol'))}</th><th>${esc(t('admin.saasKpiFirstReply'))}</th><th>${esc(t('admin.saasKpiOnTimeFirstShort'))}</th><th>${esc(t('admin.saasKpiResolvedCol'))}</th><th>${esc(t('admin.saasKpiClosedCol'))}</th><th>${esc(t('main.kpUserRating'))}</th></tr></thead><tbody>${body}</tbody></table></div>` : `<p class="sp-muted">${esc(t('admin.saasKpiEmpty'))}</p>`}
         <p class="sp-muted">${esc(t('admin.saasKpiPeopleHint'))}</p></section>`;
 }
 function reasonsHtml(r) {

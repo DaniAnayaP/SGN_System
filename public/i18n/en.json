@@ -1402,6 +1402,14 @@
     "saasSpTabFree": "Unassigned",
     "saasSpTabAll": "All",
     "saasSpTabKpi": "Level 4 KPIs",
+    "saasKpiOnTimeFirst": "First response on time",
+    "saasKpiOnTimeResolve": "Resolved on time",
+    "saasKpiOnTimeDetail": "{n} of {of} within the GEIPSA deadline · {pending} in progress",
+    "saasKpiOnTimeNone": "There are no cases with GEIPSA deadlines yet",
+    "saasKpiDeadlinesTitle": "GEIPSA deadlines by priority",
+    "saasKpiDeadlineCases": "Cases with a deadline",
+    "saasKpiOnTimeFirstShort": "1st resp. on time",
+    "saasKpiOnTimeResolveShort": "Resolve on time",
     "saasSpTabRules": "Care rules",
     "saasRulesNoAccess": "You do not have permission to see the care rules.",
     "saasRulesGroupPlazos": "GEIPSA deadlines (Level 4)",
@@ -11748,7 +11756,7 @@
       "example": "You open «Level 4 KPIs» at the start of the week and see that 5 cases have gone more than a day untaken."
     },
     "saasKpiIndicadores": {
-      "what": "The Level 4 numbers for the period, taken from each case's path: cases received (the ones the company raised and the direct ones from companies without IT), how many were resolved, how many were returned, first reply, resolution time, conformity at closing, ratings and how many are still untaken. The period counts the cases that reached Level 4 in it.",
+      "what": "The Level 4 numbers for the period, taken from each case's path: cases received (the ones the company raised and the direct ones from companies without IT), how many were resolved, how many were returned, first reply, resolution time, conformity at closing, ratings and how many are still untaken. The period counts the cases that reached Level 4 in it. With «Use these deadlines» on in Care rules, it also shows how many cases were answered and resolved within the GEIPSA deadline (only cases that reached Level 4 with their own deadlines count; cases still in progress that have not expired are left out, and expired ones nobody handled count as missed).",
       "example": "Resolved by Level 4: 33 % (1 of 3 cases received)."
     },
     "saasKpiSinTomar": {
@@ -11756,11 +11764,11 @@
       "example": "SP-0042 from Hospital Santa Clara, Urgent, arrived 3 h ago and its first reply was due 2 h ago."
     },
     "saasKpiClientes": {
-      "what": "How each company is doing with Level 4: how many cases reached it, how many were direct, how many are still at Level 4, how many were resolved or returned, and the average times.",
+      "what": "How each company is doing with Level 4: how many cases reached it, how many were direct, how many are still at Level 4, how many were resolved or returned, and the average times. With GEIPSA deadlines, also the share of cases answered and resolved on time.",
       "example": "Hospital Santa Clara: 12 cases received, 9 resolved, 2 returned; first reply in 25 min."
     },
     "saasKpiPersonas": {
-      "what": "What each SaaS team member does at Level 4: how many cases they took, how long they take to reply when they write first, how many they marked resolved or closed with the user, and how users rate them.",
+      "what": "What each SaaS team member does at Level 4: how many cases they took, how long they take to reply when they write first, how many they marked resolved or closed with the user, and how users rate them. With GEIPSA deadlines, also how many of their first responses were on time.",
       "example": "Ana Torres: took 8, replied in 12 min on average, resolved 6 and closed 2."
     },
     "saasKpiPorQue": {
