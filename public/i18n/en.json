@@ -8603,6 +8603,9 @@
     "spqCached": "No signal: this is your queue from the last time you opened the screen. You need signal to take, pause or resume a case.",
     "spqNeedSignal": "This needs signal: it depends on what is happening with the case right now.",
     "spqFree": "Nobody is handling this case yet.",
+    "spqCloseWeb": "Closing the case with the user is done from the Web for now.",
+    "spqDiscard": "Leave without marking it solved? What you wrote and the photos you picked will be lost.",
+    "spqEvidenceHint": "At least one: a photo of what you did or a file from your phone (up to 12 MB each). Needs signal.",
     "spappEmpty": "You have not asked for support yet.",
     "spappNoForm": "No signal and the form is not saved on your phone yet. Open it once with signal.",
     "spappSavedOffline": "No signal: it was saved on your phone and will be sent automatically.",
@@ -8749,6 +8752,22 @@
     "appSpCaseActions": {
       "what": "What you can do with this case according to your permissions: “Take” (if nobody handles it), “Pause” (the user will see you are handling something urgent) or “Resume” (if it is on hold). Needs signal.",
       "example": "You open an unhandled case and tap “Take”: it goes in your name and under review."
+    },
+    "appSpAttend": {
+      "what": "Handle the case. With “Change status” you say where it stands: in review, in progress or in testing (the user sees it in their chat). With “Mark as solved” you finish your part: you say what you did and attach evidence, and the case goes back to the Help desk to be confirmed with the user. Needs signal.",
+      "example": "You move the case from “In review” to “In progress” when you start fixing the data."
+    },
+    "appSpResolve": {
+      "what": "To mark the case as solved: write what you did (required, it stays in the record and is not edited) and attach at least one piece of evidence: a photo of what you did or a file. You can remove one before sending. If it fails halfway, what was already uploaded is not uploaded again.",
+      "example": "“Fixed the date of order 5521 and closed it again” + a photo of the screen with the order closed."
+    },
+    "appSpNotes": {
+      "what": "Turn on “Internal note” to write something only the support team sees (whoever reported does not see it). Notes appear marked “Internal note” in the chat. If you only have permission for notes, it is always written as a note.",
+      "example": "Internal note: “I asked Systems to check the permission; waiting for their answer”."
+    },
+    "appSpResolved": {
+      "what": "The case is already solved: here you see who solved it, when and what they did. Now the Help desk confirms it with the user and closes it.",
+      "example": "Solved by Ana · “Fixed the order date”; the Help desk closes it with the user."
     },
     "appSpHelp": {
       "what": "Search what happened with a word of the error or of what you wanted to do, open the article to read what happened and what is required, and tell us whether it helped. If it did not, a request opens with the title and the error already written.",

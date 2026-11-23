@@ -8602,6 +8602,9 @@
     "spqCached": "Sin señal: esta es tu cola de la última vez que abriste la pantalla. Para tomar, pausar o retomar un caso necesitas señal.",
     "spqNeedSignal": "Esto necesita señal: depende de lo que esté pasando con el caso en este momento.",
     "spqFree": "Nadie atiende este caso todavía.",
+    "spqCloseWeb": "El cierre con el usuario se hace por ahora desde la Web.",
+    "spqDiscard": "¿Salir sin marcar resuelto? Se pierde lo que escribiste y las fotos que elegiste.",
+    "spqEvidenceHint": "Al menos una: una foto de lo que hiciste o un archivo del celular (hasta 12 MB cada una). Necesita señal.",
     "spappEmpty": "Todavía no has pedido soporte.",
     "spappNoForm": "Sin señal y todavía no se guardó el formulario en tu celular. Ábrelo una vez con señal.",
     "spappSavedOffline": "Sin señal: quedó en tu celular y se enviará solo.",
@@ -8748,6 +8751,22 @@
     "appSpCaseActions": {
       "what": "Lo que puedes hacer con este caso según tus permisos: «Tomar» (si nadie lo atiende), «Pausar» (el usuario verá que atiendes algo urgente) o «Retomar» (si está en pausa). Necesita señal.",
       "example": "Abres un caso sin atender y tocas «Tomar»: queda a tu nombre y en revisión."
+    },
+    "appSpAttend": {
+      "what": "Atender el caso. Con «Cambiar estatus» dices en qué va: en revisión, en trabajo o en pruebas (el usuario lo ve en su chat). Con «Marcar resuelto» terminas tu parte: cuentas qué hiciste y adjuntas una evidencia, y el caso regresa a la Mesa de ayuda para confirmarlo con el usuario. Necesita señal.",
+      "example": "Pasas el caso de «En revisión» a «En trabajo» cuando empiezas a corregir el dato."
+    },
+    "appSpResolve": {
+      "what": "Para marcar el caso como resuelto: escribe qué hiciste (obligatorio, queda en el registro y no se edita) y adjunta al menos una evidencia: una foto de lo que hiciste o un archivo. Puedes quitar una antes de enviar. Si falla a la mitad, lo ya subido no se vuelve a subir.",
+      "example": "«Se corrigió la fecha del pedido 5521 y se volvió a cerrar» + foto de la pantalla con el pedido cerrado."
+    },
+    "appSpNotes": {
+      "what": "Activa «Nota interna» para escribir algo que solo ve el equipo de soporte (quien reportó no la ve). Las notas salen marcadas con «Nota interna» en el chat. Si solo tienes permiso de notas, siempre se escribe como nota.",
+      "example": "Nota interna: «Ya le pedí a Sistemas que revise el permiso; pendiente su respuesta»."
+    },
+    "appSpResolved": {
+      "what": "El caso ya se resolvió: aquí ves quién lo resolvió, cuándo y qué hizo. Ahora la Mesa de ayuda lo confirma con el usuario y lo cierra.",
+      "example": "Lo resolvió Ana · «Se corrigió la fecha del pedido»; la Mesa de ayuda cierra con el usuario."
     },
     "appSpHelp": {
       "what": "Busca lo que te pasó con una palabra del error o de lo que querías hacer, abre el artículo para leer qué pasó y qué se requiere, y dinos si te sirvió. Si no te sirvió, se abre una solicitud ya con el título y el error escritos.",

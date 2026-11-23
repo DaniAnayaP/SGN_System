@@ -2548,3 +2548,11 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .spapp-qtimer.over{ color: #c0392b; }
 .dark-mode .spapp-qtimer.over, .futuristic-mode .spapp-qtimer.over, .institutional-mode .spapp-qtimer.over{ color: #ff9b91; }
 .spapp-take{ display: flex; flex-direction: column; gap: 0.45rem; margin: 0.6rem 0; }
+/* Mi cola, parte C: atender el caso (estatus y «Marcar resuelto»), la pantalla de resolver y las notas internas del chat */
+.spapp-attend{ display: flex; flex-direction: column; gap: 0.5rem; margin: 0.6rem 0; }
+.spapp-evlist{ display: flex; flex-direction: column; gap: 0.3rem; }
+.spapp-bub.note{ background: rgba(240, 160, 40, 0.14); border-color: rgba(240, 160, 40, 0.55); }
+.spapp-notetag{ margin-left: auto; padding: 0.1rem 0.45rem; border-radius: 1rem; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; background: rgba(240, 160, 40, 0.25); color: #8a4b00; }
+.dark-mode .spapp-notetag, .futuristic-mode .spapp-notetag, .institutional-mode .spapp-notetag{ color: #ffc169; }
+.spapp-notetoggle{ align-self: flex-start; }
+.spapp-notetoggle:disabled{ opacity: 0.85; cursor: default; }
