@@ -8731,6 +8731,14 @@
       "what": "Attach a photo or a file to your message with the paperclip. It is sent together with the text. It needs signal.",
       "example": "Photo of the screen with the error."
     },
+    "appSpTabs": {
+      "what": "Switches between Quick help (the explained errors your company writes, so you can solve it yourself) and My requests (what you already asked the Help desk).",
+      "example": "You open Support: you see the help first; if it does not solve it, you go on to ask for support."
+    },
+    "appSpHelp": {
+      "what": "Search what happened with a word of the error or of what you wanted to do, open the article to read what happened and what is required, and tell us whether it helped. If it did not, a request opens with the title and the error already written.",
+      "example": "You search «close order», open «An order cannot be closed» and read what is required."
+    },
     "appSpNew": {
       "what": "Opens the form to ask for support: what happened, on which screen, what it affects and when. The priority is calculated from what you mark.",
       "example": "You tap «New request» because you cannot close an order."

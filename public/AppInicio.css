@@ -2518,3 +2518,8 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .notif-item-link{ cursor: pointer; }
 .notif-support-ask{ margin-bottom: 0.6rem; }
 .notif-support-reason{ width: 100%; margin-top: 0.4rem; font-family: inherit; font-size: 0.74rem; padding: 0.45rem 0.6rem; border-radius: 0.6rem; border: 1px solid var(--home-border); background: var(--home-surface); color: var(--home-text-primary); box-sizing: border-box; }
+.spapp-article{ grid-template-columns: minmax(0, 1fr) auto; flex-wrap: wrap; }
+.spapp-article .wpapp-main{ width: 100%; }
+.spapp-article-body{ grid-column: 1 / -1; display: flex; flex-direction: column; gap: 0.5rem; padding-top: 0.3rem; border-top: 1px solid var(--home-border); }
+.spapp-article-body b{ font-size: 0.78rem; }
+.spapp-ask{ margin-top: 0.8rem; display: flex; flex-direction: column; gap: 0.4rem; }

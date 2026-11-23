@@ -8730,6 +8730,14 @@
       "what": "Adjunta una foto o un archivo a tu mensaje con el clip. Se manda junto con el texto. Necesita señal.",
       "example": "Foto de la pantalla con el error."
     },
+    "appSpTabs": {
+      "what": "Cambia entre la Ayuda rápida (los errores explicados que arma tu empresa, para resolver lo tuyo tú mismo) y Mis solicitudes (lo que ya pediste a la Mesa de ayuda).",
+      "example": "Entras a Soporte: primero ves la ayuda; si no resuelve lo tuyo, pasas a pedir soporte."
+    },
+    "appSpHelp": {
+      "what": "Busca lo que te pasó con una palabra del error o de lo que querías hacer, abre el artículo para leer qué pasó y qué se requiere, y dinos si te sirvió. Si no te sirvió, se abre una solicitud ya con el título y el error escritos.",
+      "example": "Buscas «cerrar pedido», abres «No se puede cerrar un pedido» y lees qué se requiere."
+    },
     "appSpNew": {
       "what": "Abre el formulario para pedir soporte: qué pasó, en qué pantalla, qué implica y cuándo te afecta. La prioridad se calcula sola con lo que marques.",
       "example": "Tocas «Nueva solicitud» porque no puedes cerrar un pedido."

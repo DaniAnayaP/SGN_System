@@ -4,8 +4,10 @@
 //   · «Nueva solicitud»: el mismo formulario de la Web (qué pasó, pantalla y acción, categoría, qué implica, cuándo afecta y si puede seguir trabajando; la prioridad y el nivel de entrada se calculan en vivo con las mismas
 //     reglas) con las evidencias que pide la categoría: se escriben o se adjuntan con la cámara o la galería. La grabación de pantalla no va en la App.
 //   · Pieza 2: calificar la atención (estrellas, etiquetas y comentario) cuando el caso se resuelve, reabrir un caso cerrado (dentro de los días que da GEIPSA) y mandar y ver fotos y archivos dentro del chat.
-//   La ayuda rápida, la campana de la App, Mi cola y Soportes cerrados se quedan en la Web por ahora (siguientes piezas).
-// Sin señal funciona: lo último que se bajó se guarda en el celular; una solicitud nueva o un mensaje escritos sin señal esperan en la cola (AppOfflineSync.js, recordKey «soporte:new:<hora>», «soporte:msg:<caso>», «soporte:rate:<caso>» y «soporte:reopen:<caso>») marcados
+//   · Pieza 3 (en AppInicio.js): la pestaña Soporte y los avisos de Soporte en la campana de la App.
+//   · Pieza 4: «Ayuda rápida» (Nivel 0): los errores explicados y manuales que arma la empresa (TI › Catálogos › Errores y ayuda); se busca, se lee qué pasó y qué se requiere, y se dice si «me sirvió» o «no me sirvió, pedir ayuda» (abre la solicitud ya con el título y el error escritos).
+//   Mi cola y Soportes cerrados se quedan en la Web por ahora (siguientes piezas).
+// Sin señal funciona: lo último que se bajó se guarda en el celular; una solicitud nueva o un mensaje escritos sin señal esperan en la cola (AppOfflineSync.js, recordKey «soporte:new:<hora>», «soporte:msg:<caso>», «soporte:rate:<caso>», «soporte:reopen:<caso>» y «soporte:help:<artículo>») marcados
 // «En tu celular»; las fotos y archivos (al pedir soporte y dentro del chat) solo se pueden mandar con señal (el caso todavía no existe para el servidor). Si al reconectar el servidor rechaza alguno se avisa en «No se aplicó». El servidor es el mismo de la Web
 // (/api/business/my-support*, /api/business/support-cases/:id y /messages). Quien no tiene la pestaña Soporte en el árbol (Notificaciones › Soporte) no ve la pantalla.
 // ---------------------------------------------------------------------------
@@ -140,6 +142,8 @@ const NEW_URL = /\/api\/business\/my-support$/;                       // una sol
 const MSG_URL = /\/api\/business\/support-cases\/(\d+)\/messages$/;   // un mensaje del chat que espera sin señal
 const RATE_URL = /\/api\/business\/support-cases\/(\d+)\/ratings$/;   // una calificación que espera sin señal
 const REOPEN_URL = /\/api\/business\/support-cases\/(\d+)\/reopen$/;   // un «reabrir» que espera sin señal
+const HELP_URL = /\/api\/business\/support-help\/(\d+)\/use$/;   // un «me sirvió» o «no me sirvió» que espera sin señal
+const TAB_KEY = 'sgn_app_support_tab';
 const WHEN_KEYS = ['now', 'today', 'week', 'none'];
 const SHOWN_EVENTS = ['created', 'first_response', 'file', 'taken', 'assigned', 'moved', 'status_changed', 'resolved', 'closed', 'reopened', 'rated', 'paused', 'resumed'];
 let currentUser = null;
@@ -160,6 +164,17 @@ let pendingRates = new Set();                  // casos con una calificación gu
 let pendingReopens = new Set();                // casos con un «reabrir» guardado sin señal
 let attach = null;                             // el archivo que se va a mandar en el chat: { blob, name }
 let reopenText = '';
+let help = [];                                 // la ayuda rápida de la empresa (GET /support-help)
+let pendingHelp = new Set();                   // artículos con un «me sirvió» guardado sin señal
+let helpAnswered = new Set();                  // artículos que ya contesté en esta sesión
+let helpQuery = '';
+let helpOpen = null;
+const store = {
+    get(key) { try { return localStorage.getItem(key); } catch { return null; } },
+    set(key, value) { try { localStorage.setItem(key, value); } catch { /* sin almacenamiento */ } },
+};
+// la pestaña de la lista: la primera vez, la ayuda (el Nivel 0 va antes que pedir soporte) si la empresa tiene; después, la última que se usó
+const listTab = () => { const saved = store.get(TAB_KEY); if (saved === 'help' || saved === 'mine') return saved; return help.length ? 'help' : 'mine'; };
 let rateForm = { stars: 0, tags: new Set(), comment: '' };
 
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined && text !== null) node.textContent = text; return node; };
@@ -180,7 +195,7 @@ const parseBody = (item) => { try { return JSON.parse(item.body || '{}'); } catc
 async function refreshQueued() {
     let queue = [];
     try { queue = await sync().listOfflineQueue(); } catch { queue = []; }
-    const nextNew = []; const nextMsgs = new Map(); const nextRates = new Set(); const nextReopens = new Set();
+    const nextNew = []; const nextMsgs = new Map(); const nextRates = new Set(); const nextReopens = new Set(); const nextHelp = new Set();
     queue.forEach((item) => {
         if (item.method !== 'POST' || !item.url) return;
         const body = parseBody(item);
@@ -190,10 +205,11 @@ async function refreshQueued() {
         if (m && (body.body || body.fileId)) { const list = nextMsgs.get(Number(m[1])) || []; list.push({ id: item.id, body: body.body || '📎' }); nextMsgs.set(Number(m[1]), list); }
         const r = RATE_URL.exec(item.url); if (r && body.stars) nextRates.add(Number(r[1]));
         const ro = REOPEN_URL.exec(item.url); if (ro) nextReopens.add(Number(ro[1]));
+        const hp = HELP_URL.exec(item.url); if (hp) nextHelp.add(Number(hp[1]));
     });
-    const sig = (n, m, ra, re) => JSON.stringify([n.map((x) => x.id), [...m].map(([k, v]) => [k, v.map((x) => x.id)]), [...ra].sort(), [...re].sort()]);
-    const changed = sig(nextNew, nextMsgs, nextRates, nextReopens) !== sig(pendingNew, pendingMsgs, pendingRates, pendingReopens);
-    pendingNew = nextNew; pendingMsgs = nextMsgs; pendingRates = nextRates; pendingReopens = nextReopens;
+    const sig = (n, m, ra, re, he) => JSON.stringify([n.map((x) => x.id), [...m].map(([k, v]) => [k, v.map((x) => x.id)]), [...ra].sort(), [...re].sort(), [...he].sort()]);
+    const changed = sig(nextNew, nextMsgs, nextRates, nextReopens, nextHelp) !== sig(pendingNew, pendingMsgs, pendingRates, pendingReopens, pendingHelp);
+    pendingNew = nextNew; pendingMsgs = nextMsgs; pendingRates = nextRates; pendingReopens = nextReopens; pendingHelp = nextHelp;
     return changed;
 }
 
@@ -209,7 +225,7 @@ function cacheDb() {
 async function cacheSave() {
     try {
         const db = await cacheDb();
-        const value = { clientId: currentUser ? (currentUser.clientId ?? null) : null, userId: currentUser ? (currentUser.sub ?? currentUser.id ?? null) : null, mine: mineData, form: formOptions, at: Date.now() };
+        const value = { clientId: currentUser ? (currentUser.clientId ?? null) : null, userId: currentUser ? (currentUser.sub ?? currentUser.id ?? null) : null, mine: mineData, form: formOptions, help, at: Date.now() };
         await new Promise((resolve, reject) => {
             const tx = db.transaction('kv', 'readwrite');
             tx.objectStore('kv').put(value, 'data');
@@ -252,6 +268,7 @@ async function loadData() {
         mineData = await getJson(API);
         dataState = 'online';
         try { await loadFormOptions(); } catch { /* el formulario se pide otra vez al abrirlo */ }
+        try { help = (await getJson('/api/business/support-help')).articles || []; } catch { /* sin ayuda: queda lo último que se bajó */ }
         cacheSave();
         return;
     } catch (err) {
@@ -264,6 +281,7 @@ async function loadData() {
         if (saved && (saved.clientId ?? null) === clientId && (saved.userId ?? null) === userId) {
             mineData = saved.mine || mineData;
             formOptions = saved.form || formOptions;
+            help = saved.help || help;
             dataState = 'cached';
             return;
         }
@@ -307,7 +325,7 @@ function renderRejectedBanner() {
 }
 const chip = (text, cls) => el('span', `wpapp-chip${cls ? ` ${cls}` : ''}`, text);
 
-// ---- La lista: mis solicitudes ------------------------------------------------------------------------------------------------------------
+// ---- La lista: «Ayuda rápida» y «Mis solicitudes» -----------------------------------------------------------------------------------------
 function renderList() {
     titleEl.textContent = t('menu.support');
     renderRejectedBanner();
@@ -315,6 +333,22 @@ function renderList() {
     if (dataState === 'forbidden') { bodyEl.appendChild(el('p', 'home-empty', t('home.spappForbidden'))); return; }
     if (dataState === 'none') { bodyEl.appendChild(el('p', 'home-empty', t('home.spappNoData'))); return; }
     if (dataState === 'cached') bodyEl.appendChild(el('p', 'spapp-note', t('home.spappCached')));
+    const tab = listTab();
+    const tabs = el('div', 'wpapp-tabs');
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('data-help-key', 'appSpTabs');
+    [['help', t('main.soHelpTitle'), help.length], ['mine', t('main.soMineTitle'), (mineData.cases || []).length + pendingNew.length]].forEach(([key, label, n]) => {
+        const b = el('button', `wpapp-tab${tab === key ? ' active' : ''}`);
+        b.type = 'button'; b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', String(tab === key));
+        b.append(document.createTextNode(label), el('i', '', String(n)));
+        b.addEventListener('click', () => { store.set(TAB_KEY, key); listScroll = 0; render(); });
+        tabs.appendChild(b);
+    });
+    bodyEl.appendChild(tabs);
+    if (tab === 'help') { renderHelp(); return; }
+    renderMine();
+}
+function renderMine() {
     const top = el('div', 'spapp-top');
     const newBtn = el('button', 'home-carga-new-btn spapp-new');
     newBtn.type = 'button';
@@ -360,6 +394,90 @@ function renderList() {
     });
     bodyEl.appendChild(host);
     bodyEl.scrollTop = listScroll;
+}
+
+// ---- Ayuda rápida (Nivel 0) ------------------------------------------------------------------------------------------------------------------
+// el buscador de siempre (SearchSyntax: «$» antes, «@» después, la coma separa búsquedas) sobre el título, el error, qué pasó, qué se requiere y el manual
+const helpMatches = (a, qy) => !String(qy || '').trim() || window.SearchSyntax.matches('contains', qy, [a.title, a.errorText, a.what, a.need, a.manualTitle].filter(Boolean).join(' '));
+// el manual: una liga de internet se abre afuera; una de la propia plataforma, con el servidor de la App
+function openManual(a) {
+    const external = /^https?:/i.test(a.manualUrl);
+    window.open(external ? a.manualUrl : apiUrl(a.manualUrl.startsWith('/') ? a.manualUrl : `/${a.manualUrl}`), '_blank');
+}
+// «me sirvió» o «no me sirvió»: se cuenta en el servidor (sin señal espera en la cola)
+async function useArticle(a, helped) {
+    try {
+        const result = await sync().offlineAwareFetch(
+            `/api/business/support-help/${a.id}/use`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ helped, source: 'support' }) },
+            `${t('menu.support')} · ${a.title}`, `${RECORD_PREFIX}:help:${a.id}`, undefined, { rejectable: true },
+        );
+        if (result.queued) { await refreshQueued(); return true; }
+        return !!result.ok;
+    } catch { return false; }
+}
+function renderHelp() {
+    const host = el('div', 'spapp-help');
+    host.setAttribute('data-help-key', 'appSpHelp');
+    const search = el('input', 'pm-app-input wpapp-search');
+    search.type = 'search';
+    search.value = helpQuery;
+    search.placeholder = t('main.soSearchPlaceholder');
+    search.setAttribute('aria-label', t('main.soSearchLabel'));
+    host.appendChild(search);
+    const listEl = el('div', 'spapp-articles');
+    const draw = () => {
+        listEl.innerHTML = '';
+        const qy = helpQuery;
+        const found = help.filter((a) => helpMatches(a, qy));
+        if (!found.length) { listEl.appendChild(el('p', 'home-empty', t(help.length ? 'main.soNoMatch' : 'main.soNoHelp'))); return; }
+        found.forEach((a) => {
+            const open = helpOpen === a.id;
+            const card = el('div', `wpapp-row spapp-article${open ? ' open' : ''}`);
+            const head = el('button', 'wpapp-main');
+            head.type = 'button'; head.setAttribute('aria-expanded', String(open));
+            head.appendChild(el('div', 'wpapp-title', a.title));
+            if (a.errorText) head.appendChild(el('span', 'wpapp-crumbs', a.errorText));
+            head.addEventListener('click', () => { helpOpen = open ? null : a.id; draw(); });
+            card.appendChild(head);
+            card.appendChild(el('i', `bx ${open ? 'bx-chevron-up' : 'bx-chevron-down'} spapp-go`));
+            if (open) {
+                const body = el('div', 'spapp-article-body');
+                if (a.what) { const d = el('div'); d.append(el('b', '', t('main.soWhat')), el('p', 'wpapp-note', a.what)); body.appendChild(d); }
+                if (a.need) { const d = el('div'); d.append(el('b', '', t('main.soNeed')), el('p', 'wpapp-note', a.need)); body.appendChild(d); }
+                const acts = el('div', 'spapp-slot-row');
+                if (a.manualUrl) { const m = el('button', 'home-carga-secondary-btn'); m.type = 'button'; m.innerHTML = `<i class="bx bx-book-open" aria-hidden="true"></i> ${esc(a.manualTitle || t('main.soManual'))}`; m.addEventListener('click', () => openManual(a)); acts.appendChild(m); }
+                if (helpAnswered.has(a.id) || pendingHelp.has(a.id)) acts.appendChild(el('span', 'spapp-hint', t('main.soThanks')));
+                else {
+                    const yes = el('button', 'home-carga-new-btn', t('main.soHelped')); yes.type = 'button';
+                    yes.addEventListener('click', async () => { yes.disabled = true; if (await useArticle(a, true)) { helpAnswered.add(a.id); showToast(t('main.soThanks')); draw(); } else { showToast(t('admin.saveError')); yes.disabled = false; } });
+                    const no = el('button', 'home-carga-secondary-btn', t('main.soNotHelped')); no.type = 'button';
+                    // no me sirvió: se cuenta y se abre la solicitud ya con el título y el error escritos
+                    no.addEventListener('click', async () => { no.disabled = true; await useArticle(a, false); if (!formOptions) { showToast(t('home.spappNoForm')); no.disabled = false; return; } openForm({ summary: a.title, errorText: a.errorText || '' }); });
+                    acts.append(yes, no);
+                }
+                body.appendChild(acts);
+                card.appendChild(body);
+            }
+            listEl.appendChild(card);
+        });
+    };
+    search.addEventListener('input', () => { helpQuery = search.value; draw(); });
+    draw();
+    host.appendChild(listEl);
+    // pedir soporte, abajo de la ayuda (como en la Web)
+    const ask = el('div', 'pm-app-card spapp-ask');
+    ask.setAttribute('data-help-key', 'appSpNew');
+    ask.append(el('b', 'pm-app-title', t('main.soAskTitle')), el('p', 'spapp-hint', t('main.soAskText')));
+    const desk = mineData.helpDesk && mineData.helpDesk.length ? el('p', 'spapp-desk', t('main.soHelpDesk', { names: mineData.helpDesk.join(', ') })) : (mineData.provider ? el('p', 'spapp-desk', t('main.soProvider')) : null);
+    if (desk) ask.appendChild(desk);
+    const newBtn = el('button', 'home-carga-new-btn spapp-new');
+    newBtn.type = 'button';
+    newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.spNew'))}`;
+    newBtn.addEventListener('click', () => { if (!formOptions) { showToast(t('home.spappNoForm')); return; } openForm(); });
+    ask.appendChild(newBtn);
+    host.appendChild(ask);
+    bodyEl.appendChild(host);
 }
 
 // ---- Un caso: lo que se ve y el chat ------------------------------------------------------------------------------------------------------
@@ -697,8 +815,9 @@ const categoryOf = () => (formOptions.categories.find((c) => c.id === form.categ
 function newForm() {
     return { screenId: '', actionId: '', summary: '', screen: '', action: '', errorText: '', errImage: null, categoryId: null, impacts: new Map(), when: '', keep: null, answers: new Map(), slots: new Map(), extras: [], sending: false };
 }
-function openForm() {
+function openForm(prefill) {
     form = newForm();
+    if (prefill) { form.summary = prefill.summary || ''; form.errorText = prefill.errorText || ''; form.screen = prefill.screen || ''; }
     screen = 'form';
     render();
 }
@@ -950,7 +1069,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
         // llegar desde un aviso: AppSoporte.html?id=<caso> abre ese caso
         const wanted = Number(new URLSearchParams(location.search).get('id'));
         if (wanted && dataState !== 'forbidden') openCase(wanted);
-        else if (new URLSearchParams(location.search).get('new') === '1' && formOptions && dataState !== 'forbidden') openForm();
+        else if (new URLSearchParams(location.search).get('new') === '1' && formOptions && dataState !== 'forbidden') { const qs = new URLSearchParams(location.search); openForm({ summary: qs.get('title') || '', errorText: qs.get('error') || '', screen: qs.get('screen') || '' }); }
     } catch (err) {
         console.error('Soporte (App) failed to load:', err);
         showToast(t('admin.loadError'));
