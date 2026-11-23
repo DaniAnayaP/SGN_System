@@ -8616,6 +8616,12 @@
     "scappCount": "{shown} de {n} soportes",
     "scappTruncated": "se muestran los {max} más recientes",
     "scappMore": "Ver más",
+    "casappForbidden": "Tu cuenta no tiene la pantalla Casos de soporte. Pídela a quien administra tus accesos.",
+    "casappNoData": "Sin señal y todavía no hay casos de soporte guardados en tu celular.",
+    "casappCached": "Sin señal: estos son los casos de soporte de la última vez que abriste la pantalla.",
+    "casappEmpty": "Todavía no hay casos de soporte en curso.",
+    "casappNoMatch": "Ningún caso de soporte coincide con tu búsqueda.",
+    "casappSearch": "Buscar por folio, quién reportó, pantalla…",
     "spqDiscard": "¿Salir sin marcar resuelto? Se pierde lo que escribiste y las fotos que elegiste.",
     "spqEvidenceHint": "Al menos una: una foto de lo que hiciste o un archivo del celular (hasta 12 MB cada una). Necesita señal.",
     "spqDiscardMove": "¿Salir sin pasar el caso? Se pierde lo que escribiste y las fotos que elegiste.",
@@ -8813,6 +8819,14 @@
     "appScList": {
       "what": "Los casos de soporte ya terminados (Terminado o Cerrado sin respuesta), el más reciente primero. Cada uno dice quién reportó, cuándo se cerró y cuánto tardó, la causa, qué se hizo, quién lo cerró, cuántas veces se reabrió, la calificación del usuario y cuántas evidencias trae. Toca uno para abrirlo con su chat, su recorrido y sus evidencias; el atrás regresa aquí. Solo se ve: no se cambia nada.",
       "example": "SP-0012 · No puedo cerrar el pedido · Terminado · Causa: Permiso faltante · Lo cerró Ana · 2 h 10 min · ★★★★★."
+    },
+    "appCasSearch": {
+      "what": "Busca entre los casos de soporte por folio, quién reportó, pantalla, resumen, categoría, tipo, prioridad, nivel o estatus. Con «$» antes de la palabra busca que empiece así, con «@» después que termine así, y la coma separa varias búsquedas.",
+      "example": "«urgente, nivel 2» muestra los casos urgentes y los del Nivel 2; «SP-0012» busca ese folio."
+    },
+    "appCasList": {
+      "what": "Los casos de soporte de la empresa que siguen en curso (los ya terminados están en Soportes cerrados), con su estatus, su nivel, su prioridad, quién lo atiende y hasta cuándo hay que dar la primera respuesta (con «Vencido» si ya pasó). Toca uno para abrirlo con su chat, su recorrido y sus evidencias; el atrás regresa aquí. Si tu cuenta no tiene esta pantalla, solo ves los casos que abriste o a los que te invitaron. Solo se ve: para pedir soporte o atender tu cola usa la pantalla Soporte.",
+      "example": "SP-0012 · No puedo cerrar el pedido · En trabajo · Nivel 2 · Urgente · Lo atiende Ana · Responder antes de 23 nov 10:40."
     },
     "appSpHelp": {
       "what": "Busca lo que te pasó con una palabra del error o de lo que querías hacer, abre el artículo para leer qué pasó y qué se requiere, y dinos si te sirvió. Si no te sirvió, se abre una solicitud ya con el título y el error escritos.",

@@ -8617,6 +8617,12 @@
     "scappCount": "{shown} of {n} cases",
     "scappTruncated": "showing the {max} most recent",
     "scappMore": "Show more",
+    "casappForbidden": "Your account does not have the Support cases screen. Ask whoever manages your access.",
+    "casappNoData": "No signal and no support cases saved on your phone yet.",
+    "casappCached": "No signal: these are the support cases from the last time you opened the screen.",
+    "casappEmpty": "There are no support cases in progress yet.",
+    "casappNoMatch": "No support case matches your search.",
+    "casappSearch": "Search by folio, who reported, screen…",
     "spqDiscard": "Leave without marking it solved? What you wrote and the photos you picked will be lost.",
     "spqEvidenceHint": "At least one: a photo of what you did or a file from your phone (up to 12 MB each). Needs signal.",
     "spqDiscardMove": "Leave without moving the case? What you wrote and the photos you picked will be lost.",
@@ -8814,6 +8820,14 @@
     "appScList": {
       "what": "The support cases that are already finished (Done or Closed without reply), most recent first. Each one says who reported, when it was closed and how long it took, the cause, what was done, who closed it, how many times it was reopened, the user's rating and how many evidences it has. Tap one to open it with its chat, its path and its evidences; back returns here. View only: nothing is changed.",
       "example": "SP-0012 · I cannot close the order · Done · Cause: Missing permission · Closed by Ana · 2 h 10 min · ★★★★★."
+    },
+    "appCasSearch": {
+      "what": "Search the support cases by folio, who reported, screen, summary, category, type, priority, level or status. With “$” before the word it must start like that, with “@” after it must end like that, and a comma separates several searches.",
+      "example": "“urgent, level 2” shows the urgent cases and the Level 2 ones; “SP-0012” looks for that folio."
+    },
+    "appCasList": {
+      "what": "The company's support cases that are still in progress (the finished ones are in Closed support cases), with their status, level, priority, who handles them and until when the first response is due (with “Overdue” if it passed). Tap one to open it with its chat, its path and its evidences; back returns here. If your account does not have this screen, you only see the cases you opened or were invited to. View only: to ask for support or handle your queue use the Support screen.",
+      "example": "SP-0012 · I cannot close the order · In progress · Level 2 · Urgent · Handled by Ana · Respond before 23 Nov 10:40."
     },
     "appSpHelp": {
       "what": "Search what happened with a word of the error or of what you wanted to do, open the article to read what happened and what is required, and tell us whether it helped. If it did not, a request opens with the title and the error already written.",

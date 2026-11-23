@@ -2576,3 +2576,4 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .scapp-line{ display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .scapp-line b{ color: var(--home-text-primary); font-weight: 600; }
 .scapp-more{ align-self: center; }
+.scapp-due{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }

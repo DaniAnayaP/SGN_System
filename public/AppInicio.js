@@ -173,6 +173,7 @@ const WEB_SCREEN_PAGES = {
     'calibraciones': { href: 'AppCalibraciones.html', icon: 'bx-badge-check' },
     'capacidad-almacenamiento': { href: 'AppCapacidadAlmacenamiento.html', icon: 'bx-package' },
     'soportes-cerrados': { href: 'AppSoportesCerrados.html', icon: 'bx-check-shield' },
+    'casos-soporte': { href: 'AppCasosSoporte.html', icon: 'bx-support' },
     'layout': { href: 'AppLayout.html', icon: 'bx-building-house' },
 };
 
@@ -207,6 +208,7 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-operaciones-centro-dist-calibraciones': 'calibraciones',
     'cat-operaciones-centro-dist-capacidad-almacenamiento': 'capacidad-almacenamiento',
     'cat-gestion-ti-soportes-cerrados': 'soportes-cerrados',
+    'cat-operaciones-ti-casos-soporte': 'casos-soporte',
     'cat-operaciones-centro-dist-layout': 'layout',
 };
 

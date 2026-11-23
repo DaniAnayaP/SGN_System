@@ -10448,6 +10448,7 @@ const WEB_SCREEN_CATALOG = [
     { key: 'calibraciones', labelKey: 'menu.opCentroDistCalibraciones' },
     { key: 'capacidad-almacenamiento', labelKey: 'menu.opCentroDistCapacidadAlmacenamiento' },
     { key: 'soportes-cerrados', labelKey: 'menu.gesTiSoportesCerrados' },
+    { key: 'casos-soporte', labelKey: 'menu.opTiCasosSoporte' },
     { key: 'centros-costo', labelKey: 'menu.ourCostCenters' },
     { key: 'registro-combustible', labelKey: 'menu.opTransVolCombustible' },
     { key: 'carga-combustible', labelKey: 'menu.opTransVolCargaCombustible' },

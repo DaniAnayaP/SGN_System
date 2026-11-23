@@ -17,7 +17,7 @@
 //     Todo pide señal.
 //   · Mi cola, parte E (cierre con el usuario): un caso «Por confirmar» lo cierra la Mesa de ayuda (hoja «Cerrar caso»): «Cerrar con el usuario» (conforme: causa, qué se hizo y evidencia de las que llegaron después o nueva → Terminado; no
 //     conforme: qué sigue fallando → se reabre en el nivel que lo trabajó) y los intentos de contacto (canal y nota) para «Cerrar sin respuesta» cuando hay los que pide la empresa. Todo pide señal.
-//     Soportes cerrados y Casos de soporte se quedan en la Web por ahora.
+//   · Soportes cerrados (AppSoportesCerrados.js) y Casos de soporte (AppCasosSoporte.js) son pantallas aparte de la App (las agrega la empresa a la App de un sector): abren sus casos aquí (?id=<caso>&back=<pantalla>) y el atrás regresa a ellas.
 // Sin señal funciona: lo último que se bajó se guarda en el celular; una solicitud nueva o un mensaje escritos sin señal esperan en la cola (AppOfflineSync.js, recordKey «soporte:new:<hora>», «soporte:msg:<caso>», «soporte:rate:<caso>», «soporte:reopen:<caso>» y «soporte:help:<artículo>») marcados
 // «En tu celular»; las fotos y archivos (al pedir soporte y dentro del chat) solo se pueden mandar con señal (el caso todavía no existe para el servidor). Si al reconectar el servidor rechaza alguno se avisa en «No se aplicó». El servidor es el mismo de la Web
 // (/api/business/my-support*, /api/business/support-cases/:id y /messages). Quien no tiene la pestaña Soporte en el árbol (Notificaciones › Soporte) no ve la pantalla.
@@ -157,7 +157,7 @@ const REOPEN_URL = /\/api\/business\/support-cases\/(\d+)\/reopen$/;   // un «r
 const HELP_URL = /\/api\/business\/support-help\/(\d+)\/use$/;   // un «me sirvió» o «no me sirvió» que espera sin señal
 const TAB_KEY = 'sgn_app_support_tab';
 // AppSoporte.html?id=<caso>&back=<pantalla>: otra pantalla de la App (Soportes cerrados) abre el caso aquí y el atrás regresa a ella
-const BACK_PAGES = ['AppSoportesCerrados.html'];
+const BACK_PAGES = ['AppSoportesCerrados.html', 'AppCasosSoporte.html'];
 const backTo = (() => { const b = new URLSearchParams(location.search).get('back'); return BACK_PAGES.includes(b) ? b : null; })();
 const WHEN_KEYS = ['now', 'today', 'week', 'none'];
 const SHOWN_EVENTS = ['created', 'first_response', 'file', 'taken', 'assigned', 'moved', 'status_changed', 'resolved', 'closed', 'reopened', 'rated', 'paused', 'resumed', 'int_urgent_alert', 'int_overdue_alert', 'int_attempt'];   // los tres últimos solo los manda el servidor al equipo
