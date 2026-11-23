@@ -2565,3 +2565,7 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .spapp-why b{ color: var(--home-text-primary); }
 .spapp-warn{ display: flex; flex-direction: column; gap: 0.4rem; padding: 0.6rem 0.7rem; border: 1px solid #d98a1f; border-radius: 0.8rem; background: rgba(240, 160, 40, 0.12); font-size: 0.76rem; }
 .spapp-check{ display: flex; align-items: flex-start; gap: 0.4rem; font-size: 0.76rem; }
+/* Mi cola, parte E: el cierre con el usuario y los intentos de contacto */
+.spapp-attempts{ display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px solid var(--home-border); }
+.spapp-attempt{ padding: 0.4rem 0.6rem; border: 1px solid var(--home-border); border-radius: 0.7rem; background: var(--home-surface-2); font-size: 0.74rem; }
+.spapp-attempt.miss{ border-color: #d98a1f; background: rgba(240, 160, 40, 0.12); }

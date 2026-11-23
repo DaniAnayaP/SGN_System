@@ -8603,7 +8603,11 @@
     "spqCached": "No signal: this is your queue from the last time you opened the screen. You need signal to take, pause or resume a case.",
     "spqNeedSignal": "This needs signal: it depends on what is happening with the case right now.",
     "spqFree": "Nobody is handling this case yet.",
-    "spqCloseWeb": "Closing the case with the user is done from the Web for now.",
+    "spqCloseWithUser": "Close with the user",
+    "spqNoRespConfirm": "Close the case without a reply from the user? Whoever reported it will be able to reopen it later.",
+    "spqDiscardClose": "Leave without closing the case? What you wrote and the photos you picked will be lost.",
+    "spqCloseEvidenceHint": "At least one piece of evidence that it works now: tick the ones that arrived after it became pending confirmation or attach a new photo or file (up to 12 MB). Needs signal.",
+    "spqAttemptChannel": "How did you contact them?",
     "spqDiscard": "Leave without marking it solved? What you wrote and the photos you picked will be lost.",
     "spqEvidenceHint": "At least one: a photo of what you did or a file from your phone (up to 12 MB each). Needs signal.",
     "spqDiscardMove": "Leave without moving the case? What you wrote and the photos you picked will be lost.",
@@ -8781,6 +8785,18 @@
     "appSpTeamRate": {
       "what": "Ratings between levels. When a case reaches you, rate how it arrived (1 tap: stars and, if you want, tags); if your company asks for it, you must do it before starting. If you passed the case up, you can rate (optional) whoever received it. Below you see the history if your permission allows. Needs signal.",
       "example": "“It arrived with clear notes and the evidence”: 5 stars."
+    },
+    "appSpClose": {
+      "what": "Closing with the user (Help desk only). First confirm with the user that it works now. With “Close with the user” you mark whether they are satisfied (the case ends) or not (it reopens and goes back to the level that worked on it). Below you log the contact attempts if they do not reply. All of it needs signal.",
+      "example": "You write to the user, they say it works now and you tap “Close with the user” → Satisfied."
+    },
+    "appSpCloseForm": {
+      "what": "Close the case with the user. Satisfied: pick the cause of the problem, say what was done and tick or attach the evidence that it works now. Not satisfied: write what is still failing; the case reopens and goes back to the level that worked on it. What you write stays in the record and is not edited.",
+      "example": "Satisfied · Cause “Missing permission” · “The sales permission was given” · photo of the open report."
+    },
+    "appSpAttempts": {
+      "what": "If the user does not reply, log each contact attempt (how you contacted them and a note). With the attempts your company asks for you can close the case “without reply”; whoever reported it will be able to reopen it later.",
+      "example": "Attempt 1 · Chat · “I wrote and they did not answer”."
     },
     "appSpHelp": {
       "what": "Search what happened with a word of the error or of what you wanted to do, open the article to read what happened and what is required, and tell us whether it helped. If it did not, a request opens with the title and the error already written.",

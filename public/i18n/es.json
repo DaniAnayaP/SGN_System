@@ -8602,7 +8602,11 @@
     "spqCached": "Sin señal: esta es tu cola de la última vez que abriste la pantalla. Para tomar, pausar o retomar un caso necesitas señal.",
     "spqNeedSignal": "Esto necesita señal: depende de lo que esté pasando con el caso en este momento.",
     "spqFree": "Nadie atiende este caso todavía.",
-    "spqCloseWeb": "El cierre con el usuario se hace por ahora desde la Web.",
+    "spqCloseWithUser": "Cerrar con el usuario",
+    "spqNoRespConfirm": "¿Cerrar el caso sin respuesta del usuario? Quien reportó podrá reabrirlo después.",
+    "spqDiscardClose": "¿Salir sin cerrar el caso? Se pierde lo que escribiste y las fotos que elegiste.",
+    "spqCloseEvidenceHint": "Al menos una evidencia de que ya funciona: marca las que llegaron después de quedar por confirmar o adjunta una foto o un archivo nuevo (hasta 12 MB). Necesita señal.",
+    "spqAttemptChannel": "¿Cómo lo contactaste?",
     "spqDiscard": "¿Salir sin marcar resuelto? Se pierde lo que escribiste y las fotos que elegiste.",
     "spqEvidenceHint": "Al menos una: una foto de lo que hiciste o un archivo del celular (hasta 12 MB cada una). Necesita señal.",
     "spqDiscardMove": "¿Salir sin pasar el caso? Se pierde lo que escribiste y las fotos que elegiste.",
@@ -8780,6 +8784,18 @@
     "appSpTeamRate": {
       "what": "Calificaciones entre niveles. Cuando te llega un caso, califica cómo te llegó (1 clic: estrellas y, si quieres, etiquetas); si tu empresa lo pide, hay que hacerlo antes de empezar. Si tú pasaste el caso hacia arriba, puedes calificar (es opcional) a quien lo recibió. Abajo ves el historial si tu permiso lo deja. Necesita señal.",
       "example": "«Me llegó con las notas claras y la evidencia»: 5 estrellas."
+    },
+    "appSpClose": {
+      "what": "El cierre con el usuario (solo la Mesa de ayuda). Primero confirma con el usuario que ya funciona. Con «Cerrar con el usuario» marcas si quedó conforme (el caso termina) o no (se reabre y regresa al nivel que lo trabajó). Abajo registras los intentos de contacto si no responde. Todo necesita señal.",
+      "example": "Le escribes al usuario, te dice que ya le funciona y tocas «Cerrar con el usuario» → Conforme."
+    },
+    "appSpCloseForm": {
+      "what": "Cierra el caso con el usuario. Conforme: elige la causa del problema, cuenta qué se hizo y marca o adjunta la evidencia de que ya funciona. No conforme: escribe qué sigue fallando; el caso se reabre y vuelve al nivel que lo trabajó. Lo escrito queda en el registro y no se edita.",
+      "example": "Conforme · Causa «Permiso faltante» · «Se dio el permiso de ventas» · foto del reporte abierto."
+    },
+    "appSpAttempts": {
+      "what": "Si el usuario no responde, registra cada intento de contacto (cómo lo contactaste y una nota). Con los intentos que pide tu empresa puedes cerrar el caso «sin respuesta»; quien reportó podrá reabrirlo después.",
+      "example": "Intento 1 · Chat · «Le escribí y no contestó»."
     },
     "appSpHelp": {
       "what": "Busca lo que te pasó con una palabra del error o de lo que querías hacer, abre el artículo para leer qué pasó y qué se requiere, y dinos si te sirvió. Si no te sirvió, se abre una solicitud ya con el título y el error escritos.",
