@@ -20401,6 +20401,13 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_support_access_requests_case ON support_access_requests (case_id);
 `);
+// Dar el acceso desde la campana (pestaña Autorizar; Daniel, 2026-11-20): cada pedido de acceso tiene un estatus. pending = espera a que el administrador de la empresa lo dé o no; granted = se dio todo lo que se pidió; partial = se dio lo que se
+// pudo (lo demás hay que contratarlo o asignarlo en otro lado); declined = no se dio (con motivo). Los pedidos anteriores a esto quedan como «legacy» (solo avisos: no aparecen en Autorizar). resolved_* = quién lo decidió y cuándo;
+// granted / skipped = qué se dio y qué no (con la razón: contrato, plan, centros de costos, límite o exclusión).
+for (const [col, ddl] of [['status', "TEXT NOT NULL DEFAULT 'legacy'"], ['resolved_by_user_id', 'INTEGER'], ['resolved_by_name', "TEXT NOT NULL DEFAULT ''"], ['resolved_at', 'TEXT'], ['reason', "TEXT NOT NULL DEFAULT ''"],
+    ['granted', "TEXT NOT NULL DEFAULT '[]'"], ['skipped', "TEXT NOT NULL DEFAULT '[]'"]]) {
+    if (!db.prepare('PRAGMA table_info(support_access_requests)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE support_access_requests ADD COLUMN ${col} ${ddl}`);
+}
 // Las pantallas de las áreas (las que tienen su propio apartado en menu.json) con lo que se puede hacer en cada una: un botón (pide «Ver y operar»), modificar una columna (pide «Modificar») o un ícono. Es lo que la Mesa de ayuda
 // compara contra los accesos de quien reportó. id = «departamento/área/apartado/pantalla».
 let supportScreensCache = null;
@@ -20504,11 +20511,42 @@ function setSupportUnderstood(id, text, by, atSql) {
     db.prepare('UPDATE support_cases SET understood = ?, understood_at = ?, understood_by = ? WHERE id = ?').run(text, atSql, by || '', id);
 }
 function createSupportAccessRequest(r) {
-    return db.prepare('INSERT INTO support_access_requests (case_id, client_id, target_user_id, requested_by_user_id, requested_by_name, items, note) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    return db.prepare("INSERT INTO support_access_requests (case_id, client_id, target_user_id, requested_by_user_id, requested_by_name, items, note, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')")
         .run(r.caseId, r.clientId, r.targetUserId || null, r.requestedByUserId || null, r.requestedByName || '', JSON.stringify(r.items || []), r.note || '').lastInsertRowid;
 }
 function listSupportAccessRequests(caseId) {
-    return db.prepare('SELECT id, target_user_id, requested_by_name, items, note, created_at FROM support_access_requests WHERE case_id = ? ORDER BY id DESC').all(caseId);
+    return db.prepare('SELECT id, target_user_id, requested_by_name, items, note, created_at, status, resolved_by_name, resolved_at, reason, granted, skipped FROM support_access_requests WHERE case_id = ? ORDER BY id DESC').all(caseId);
+}
+// Los pedidos de acceso que esperan decisión (con los datos del caso para mostrarlos en Autorizar). Los casos de cuentas de prueba solo los ve una cuenta de prueba.
+function listPendingSupportAccessRequests(clientId, isTestAccount) {
+    return db.prepare("SELECT r.*, c.record_number, c.reporter_name, c.screen_node, c.action_leaf, c.screen_label FROM support_access_requests r JOIN support_cases c ON c.id = r.case_id WHERE r.client_id = ? AND r.status = 'pending' AND c.is_test_data = ? ORDER BY r.id ASC").all(clientId, isTestAccount ? 1 : 0);
+}
+function getSupportAccessRequest(id) {
+    return db.prepare('SELECT r.*, c.record_number, c.reporter_name, c.screen_node, c.action_leaf, c.screen_label FROM support_access_requests r JOIN support_cases c ON c.id = r.case_id WHERE r.id = ?').get(id) || null;
+}
+function resolveSupportAccessRequest(id, { status, byUserId = null, byName = '', reason = '', granted = [], skipped = [] }) {
+    return db.prepare("UPDATE support_access_requests SET status = ?, resolved_by_user_id = ?, resolved_by_name = ?, resolved_at = datetime('now'), reason = ?, granted = ?, skipped = ? WHERE id = ? AND status = 'pending'")
+        .run(status, byUserId, byName, reason, JSON.stringify(granted), JSON.stringify(skipped), id).changes > 0;
+}
+// Lo que hay que dar para cubrir lo pedido (códigos de reviewSupportAccess: screen y action; module, plan y centers no se dan desde aquí): la pantalla es su propio permiso; un botón o una columna llevan «Solo ver» y su nivel
+// («Ver y operar» o «Modificar»: el árbol por usuario SUMA los niveles); un ícono es su propia hoja. Regresa las tuplas { sectionId, itemId, submenuId }.
+function supportAccessGrantTuples(screenId, actionId, codes) {
+    const screen = findSupportScreen(screenId);
+    if (!screen) return [];
+    const action = actionId ? screen.actions.find((a) => a.id === actionId) : null;
+    const path = { sectionId: screen.sectionId, itemId: screen.itemId, submenuPrefix: screen.submenuPrefix };
+    const tuple = (sub) => ({ sectionId: screen.sectionId, itemId: screen.itemId, submenuId: sub });
+    const out = [];
+    if (codes.includes('screen')) out.push(tuple(screen.submenuPrefix));
+    if (codes.includes('action') && action) {
+        if (action.kind === 'icon') out.push(tuple(`${screen.submenuPrefix}/${action.col}`));
+        else {
+            const base = columnSubmenuBase(path, action.col);
+            out.push(tuple(`${base}/solo-ver`));
+            out.push(tuple(`${base}/${action.needs === 'editar' ? 'editar' : 'ver-y-operar'}`));
+        }
+    }
+    return out;
 }
 // ---- Subir y devolver un caso entre niveles --------------------------------------------------------------------------------------------------------------------------------------------------
 // Cada traspaso queda guardado, sin poder editarse ni borrarse: de qué nivel a cuál, si subió o se devolvió, el motivo (de una lista), lo que hizo quien lo pasa («qué hice»), sus notas para el siguiente nivel y las
@@ -21425,7 +21463,7 @@ module.exports = {
     getSupportCaseById, getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
     listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
-    listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
+    listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, listPendingSupportAccessRequests, getSupportAccessRequest, resolveSupportAccessRequest, supportAccessGrantTuples, publishSupportNotice, listSupportAccessRecipients,
     listTemperatureActivity, hasTemperatureActivityBefore,
     getUserExclusions, setUserExclusions, applyUserExclusions,
     isAlertNotice, publishAssetNotice, latestTemperatureRowsAll, listTemperatureRowsOfPlace, latestCleaningRowsAll, listCleaningRowsOfSpace, latestAssetDataChanges, listAssetDataChanges,

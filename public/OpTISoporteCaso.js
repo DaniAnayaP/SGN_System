@@ -40,6 +40,8 @@ function eventText(m) {
     const author = m.author || '—';
     if (m.eventKey === 'access_review') return d.ok ? t('main.spEv_access_ok', { author }) : t('main.spEv_access_bad', { author, n: d.missing || 0 });
     if (m.eventKey === 'access_request') return t('main.spEv_access_request', { author, items: (d.items || []).map(itemLabel).join(', ') });
+    if (m.eventKey === 'access_granted') return (d.skipped && d.skipped.length) ? t('main.spEv_access_granted_partial', { author, items: (d.items || []).map(itemLabel).join(', '), skipped: d.skipped.map(itemLabel).join(', ') }) : t('main.spEv_access_granted', { author, items: (d.items || []).map(itemLabel).join(', ') });
+    if (m.eventKey === 'access_declined') return t('main.spEv_access_declined', { author }) + (d.reason ? ` — ${d.reason}` : '');
     if (m.eventKey === 'understood') return t('main.spEv_understood', { author });
     if (m.eventKey === 'context') return t('main.spEv_context', { author, screen: d.screenKey ? t(d.screenKey) : '', action: d.actionKey ? t('main.spEv_context_action', { action: t(d.actionKey) }) : '' });
     if (m.eventKey === 'int_notify') return t('main.spEv_int_notify', { author, to: d.to || '' });
@@ -292,7 +294,7 @@ function renderContact() {
             <div class="sc-result ${c.review.result === 'ok' ? 'ok' : 'bad'}">${esc(t(c.review.result === 'ok' ? 'main.supResultOk' : 'main.supResultMissing', { n: missing }))}</div>${confirmBtns}${req}`;
     } else if (c.screenNode === '' && !c.canOperate) table = '';
     const reviewed = accessDone ? `<div class="sp-muted">${esc(t(c.accessOk ? 'main.supReviewedOk' : 'main.supReviewedBad', { who: c.accessCheckedBy || '—', when: fmtTime(c.accessCheckedAt) }))}</div>` : '';
-    const requests = c.requests.length ? `<div class="sc-reqs"><h5>${esc(t('main.supRequests'))}</h5>${c.requests.map((r) => `<div class="sp-muted">${esc(fmtTime(r.createdAt))} · ${esc(r.by)}: ${esc(r.items.map(itemLabel).join(', '))}${r.note ? ` — ${esc(r.note)}` : ''}</div>`).join('')}</div>` : '';
+    const requests = c.requests.length ? `<div class="sc-reqs"><h5>${esc(t('main.supRequests'))}</h5>${c.requests.map((r) => `<div class="sp-muted">${esc(fmtTime(r.createdAt))} · ${esc(r.by)}: ${esc(r.items.map(itemLabel).join(', '))}${r.note ? ` — ${esc(r.note)}` : ''}${r.status === 'pending' || r.status === 'legacy' ? '' : ` · ${esc(t(`main.supReqStatus_${r.status}`, { by: r.resolvedBy || '—' }))}${r.status === 'declined' && r.reason ? `: ${esc(r.reason)}` : ''}`}</div>`).join('')}</div>` : '';
     const understood = c.understood ? `<div class="sc-und"><div class="sc-txt">${esc(c.understood)}</div><div class="sp-muted">${esc(c.understoodBy || '')} · ${esc(fmtTime(c.understoodAt))}</div></div>` : '';
     const write = c.canOperate ? `<textarea id="sc-und-text" rows="3" maxlength="${c.maxUnderstood}" placeholder="${esc(t('main.supUndPlaceholder'))}">${esc(contactState.draft)}</textarea><div class="sc-actions"><button type="button" class="btn" id="sc-und-save">${esc(t('main.supUndSave'))}</button></div>` : '';
     box.innerHTML = `<div class="sc-card-head"><h3>${esc(t('main.scContactTitle'))}</h3><div class="sc-prog">${[['main.supStep1', done[0]], ['main.supStep2', done[1]], ['main.supStep3', done[2]]].map(([k, ok]) => `<span class="sp-tag${ok ? ' sc-have' : ''}">${ok ? '✓ ' : ''}${esc(t(k))}</span>`).join('')}</div></div>

@@ -11020,6 +11020,99 @@ function renderAssetAuthRow(item, tab) {
     return row;
 }
 
+// --- Pedidos de acceso de Soporte (kind 'support-access'; Daniel, 2026-11-20) -------------------------------------------------------------------------------------------------------------------
+// La Mesa de ayuda pide un acceso que le falta a quien reportó un caso (Casos de soporte › Primer contacto › «Pedir el acceso»). Al administrador de la empresa le sale aquí, en Autorizar: «Dar el acceso» lo agrega a los permisos
+// adicionales de esa persona (con los límites de siempre) y «No dar» lo rechaza con un motivo opcional. Quien lo pidió recibe la respuesta en Avisos. Solo se dan la pantalla y la acción; lo que falta por contrato o por la asignación de
+// centros de costos se dice aquí y se resuelve en otro lado.
+const supportAccessItemLabel = (item, i) => (i.labelKey ? t(i.labelKey) : (i.code === 'screen' ? t('main.supAcc_screen', { screen: item.screenLabel || '' }) : t(`main.supAcc_${i.code}`)));
+async function resolveSupportAccess(item, action, row, reason) {
+    try {
+        const res = await fetch(`/api/business/support-access-requests/${item.id}/${action}`, {
+            method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action === 'decline' ? { reason } : {}),
+        });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            if (out.code === 'NOTHING') { showToast(t('main.supAccNothing'), 'warning'); return; }
+            showToast(out.message || t('admin.saveError'), res.status === 403 ? 'warning' : 'error');
+            if (res.status === 409) loadNotifications(); // ya lo resolvió otra persona
+            return;
+        }
+        row.remove();
+        showToast(t(action === 'grant' ? (out.status === 'partial' ? 'main.supAccGrantedPartial' : 'main.supAccGranted') : 'main.supAccDeclined'), 'success');
+        loadNotifications();
+    } catch {
+        showToast(t('admin.saveError'), 'error');
+    }
+}
+function renderSupportAccessRow(item) {
+    const row = document.createElement('div');
+    row.className = 'notifications-item';
+    const meta = document.createElement('div');
+    meta.className = 'notifications-item-meta';
+    meta.style.fontWeight = '700';
+    meta.textContent = t('main.noticeSupportAccess');
+    const when = document.createElement('div');
+    when.className = 'notifications-item-meta';
+    when.textContent = `${t('menu.opTiCasosSoporte')} · ${formatNotificationDate(item.createdAt)}`;
+    when.title = timeStampTitle(item.createdAt);
+    const desc = document.createElement('div');
+    desc.className = 'notifications-item-desc';
+    desc.textContent = `${t('main.noticeSupportAccessLine', { by: item.requestedBy || '—', target: item.targetName || '—', folio: item.folio || '', screen: item.screenLabel || '', items: item.items.map((i) => supportAccessItemLabel(item, i)).join(', ') })}${item.note ? ` — ${item.note}` : ''}`;
+    row.append(meta, when, desc);
+    // lo que no se da desde aquí (contrato o asignación) y lo que la persona ya tiene
+    item.items.filter((i) => i.done || !i.grantable).forEach((i) => {
+        const line = document.createElement('div');
+        line.className = 'notifications-item-meta';
+        const why = i.done ? t('main.supAccAlready') : t(i.code === 'centers' ? 'main.supAccWhy_assignment' : 'main.supAccWhy_contract');
+        line.textContent = `${supportAccessItemLabel(item, i)}: ${why}`;
+        row.appendChild(line);
+    });
+    const canGrant = item.items.some((i) => i.grantable && !i.done);
+    const reasonBox = document.createElement('div');
+    reasonBox.className = 'notifications-asset-reason';
+    reasonBox.hidden = true;
+    const reasonId = `support-access-reason-${item.id}`;
+    const reasonLabel = document.createElement('label');
+    reasonLabel.className = 'notifications-item-meta';
+    reasonLabel.htmlFor = reasonId;
+    reasonLabel.textContent = t('main.supAccReasonLabel');
+    const reasonInput = document.createElement('textarea');
+    reasonInput.id = reasonId;
+    reasonInput.maxLength = 300;
+    reasonBox.append(reasonLabel, reasonInput);
+    const actions = document.createElement('div');
+    actions.className = 'notifications-item-actions';
+    const openLink = document.createElement('a');
+    openLink.className = 'btn btn-secondary';
+    openLink.href = `OpTISoporteCaso.html?id=${encodeURIComponent(item.caseId)}`;
+    openLink.textContent = t('main.noticeSupportView');
+    const declineBtn = document.createElement('button');
+    declineBtn.type = 'button';
+    declineBtn.className = 'btn btn-secondary';
+    declineBtn.textContent = t('main.supAccDecline');
+    const grantBtn = document.createElement('button');
+    grantBtn.type = 'button';
+    grantBtn.className = 'btn';
+    grantBtn.textContent = t('main.supAccGrant');
+    grantBtn.disabled = !canGrant;
+    let confirming = false;
+    declineBtn.addEventListener('click', () => {
+        if (!confirming) {
+            confirming = true;
+            reasonBox.hidden = false;
+            declineBtn.textContent = t('main.supAccDeclineConfirm');
+            grantBtn.hidden = true;
+            reasonInput.focus();
+            return;
+        }
+        resolveSupportAccess(item, 'decline', row, reasonInput.value.trim());
+    });
+    grantBtn.addEventListener('click', () => { grantBtn.disabled = true; resolveSupportAccess(item, 'grant', row).finally(() => { grantBtn.disabled = !canGrant; }); });
+    actions.append(openLink, declineBtn, grantBtn);
+    row.append(reasonBox, actions);
+    return row;
+}
+
 // --- Solicitudes de color (campana de las cuentas SaaS) -----------------------------------------------------------------
 // Quien puede personalizar colores pero no autorizarlos pide el cambio en el árbol (Árbol Maestro SaaS o Árbol de Permisos Maestro); la solicitud le llega
 // a quien debe decidirla (su jefe directo y, si ese no puede autorizar, el siguiente) aquí, en Notificaciones (kind: 'color-request', ver
@@ -11437,7 +11530,7 @@ function renderSupportNoticeRow(item) {
     row.className = item.seen_at ? 'notifications-item' : 'notifications-item notifications-item-unseen';
     const v = item.variant || '';
     const isPerson = v.startsWith('person-');
-    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated', 'general-linked': 'main.noticeSupportGeneralLinked', 'general-notify': 'main.noticeSupportGeneralNotify', 'case-resolved': 'main.noticeSupportResolved', 'case-closed': 'main.noticeSupportClosed', 'case-closed-boss': 'main.noticeSupportClosedBoss', 'case-overdue-boss': 'main.noticeSupportOverdueBoss', 'case-reopened': 'main.noticeSupportReopened', 'general-resolved': 'main.noticeSupportGeneralResolved', 'rate-reminder': 'main.noticeSupportRateReminder', 'urgent-arrived': 'main.noticeSupportUrgentArrived', 'urgent-untaken': 'main.noticeSupportUrgentUntaken', 'interrupt-overridden': 'main.noticeSupportInterruptOverridden', 'case-paused': 'main.noticeSupportPaused', 'saas-arrived': 'main.noticeSupportSaasArrived', 'saas-assigned': 'main.noticeSupportSaasAssigned' }[v] || (v === 'case-arrived' ? 'main.noticeSupportArrived' : (item.auto ? (item.reason === 'auto_escalated' ? 'main.noticeSupportEscalatedAuto' : 'main.noticeSupportUrgent') : 'main.noticeSupportNotify'));
+    const tagKey = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated', 'general-linked': 'main.noticeSupportGeneralLinked', 'general-notify': 'main.noticeSupportGeneralNotify', 'case-resolved': 'main.noticeSupportResolved', 'case-closed': 'main.noticeSupportClosed', 'access-decided': 'main.noticeSupportAccessDecided', 'case-closed-boss': 'main.noticeSupportClosedBoss', 'case-overdue-boss': 'main.noticeSupportOverdueBoss', 'case-reopened': 'main.noticeSupportReopened', 'general-resolved': 'main.noticeSupportGeneralResolved', 'rate-reminder': 'main.noticeSupportRateReminder', 'urgent-arrived': 'main.noticeSupportUrgentArrived', 'urgent-untaken': 'main.noticeSupportUrgentUntaken', 'interrupt-overridden': 'main.noticeSupportInterruptOverridden', 'case-paused': 'main.noticeSupportPaused', 'saas-arrived': 'main.noticeSupportSaasArrived', 'saas-assigned': 'main.noticeSupportSaasAssigned' }[v] || (v === 'case-arrived' ? 'main.noticeSupportArrived' : (item.auto ? (item.reason === 'auto_escalated' ? 'main.noticeSupportEscalatedAuto' : 'main.noticeSupportUrgent') : 'main.noticeSupportNotify'));
     const tag = document.createElement('div');
     tag.className = 'notifications-item-meta';
     tag.style.fontWeight = '700';
@@ -11471,6 +11564,11 @@ function renderSupportNoticeRow(item) {
         desc.textContent = t('main.noticeSupportRateReminderLine', base);
     } else if (v === 'case-closed') {
         desc.textContent = t(item.noresp ? 'main.noticeSupportClosedNoReplyLine' : (item.askRating ? 'main.noticeSupportClosedRateLine' : 'main.noticeSupportClosedLine'), { ...base, until: item.until ? formatNotificationDate(item.until) : '' });
+    } else if (v === 'access-decided') {
+        // la respuesta del administrador al acceso que se pidió (pestaña Autorizar): se dio, se dio en parte o no se dio
+        const labelOf = (i) => (i.labelKey ? t(i.labelKey) : (i.code === 'screen' ? t('main.supAcc_screen', { screen: item.screenKey ? t(item.screenKey) : '' }) : t(`main.supAcc_${i.code}`)));
+        const skippedText = (item.skipped || []).map((s) => `${labelOf(s)} (${t(`main.supAccWhy_short_${s.why}`)})`).join(', ');
+        desc.textContent = t(item.status === 'declined' ? 'main.noticeSupportAccessDeclinedLine' : (item.status === 'partial' ? 'main.noticeSupportAccessPartialLine' : 'main.noticeSupportAccessGrantedLine'), { ...base, items: (item.items || []).map(labelOf).join(', '), skipped: skippedText, reason: item.reason ? ` — ${item.reason}` : '' });
     } else if (v === 'case-closed-boss') {
         // al jefe directo de quien reportó (Mapa de soporte › «Avisar al jefe directo cuando se cierra»): solo informa, sin enlace al caso
         desc.textContent = t(item.noresp ? 'main.noticeSupportClosedBossNoReplyLine' : 'main.noticeSupportClosedBossLine', base);
@@ -11537,7 +11635,7 @@ function renderSupportNoticeRow(item) {
             actions.append(hint);
         } else if (item.pStatus) showDone(item.pStatus);
         row.append(actions);
-    } else if (['access-request', 'case-arrived', 'general-linked', 'case-resolved', 'case-closed', 'case-reopened', 'rate-reminder', 'urgent-arrived', 'urgent-untaken', 'interrupt-overridden', 'case-paused', 'saas-arrived', 'saas-assigned'].includes(v) && item.caseId) {
+    } else if (['access-request', 'access-decided', 'case-arrived', 'general-linked', 'case-resolved', 'case-closed', 'case-reopened', 'rate-reminder', 'urgent-arrived', 'urgent-untaken', 'interrupt-overridden', 'case-paused', 'saas-arrived', 'saas-assigned'].includes(v) && item.caseId) {
         const link = document.createElement('a');
         // los avisos del Nivel 4 que le llegan al equipo SaaS abren el caso en la pantalla de SaaS
         link.href = `${item.saas ? 'Admin-SoporteCaso.html' : 'OpTISoporteCaso.html'}?id=${encodeURIComponent(item.caseId)}`;
@@ -11990,6 +12088,7 @@ function renderActiveNotificationTab() {
             else if (item.kind === 'color-request') row = renderColorRequestRow(item, activeNotificationTab);
             else if (item.kind === 'catalog-request') row = renderCatalogRequestRow(item, { showOutcome: activeNotificationTab === 'avisos' });
             else if (item.kind === 'asset-auth') row = renderAssetAuthRow(item, activeNotificationTab);
+            else if (item.kind === 'support-access') row = renderSupportAccessRow(item);
             else if (activeNotificationTab === 'alertas') row = renderAlertRow(item);
             else if (activeNotificationTab === 'avisos') row = renderRequestRow(item, { showOutcome: true });
             else if (activeNotificationTab === 'solicitudes') row = renderRequestRow(item);

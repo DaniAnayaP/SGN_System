@@ -618,7 +618,7 @@ const {
     addSupportClosure, listSupportClosures, addSupportAttempt, listSupportAttempts, setSupportCaseConfirm, closeSupportCase, reopenSupportCase, resolveSupportGeneral, listSupportGeneralWorkingCases, closeSupportGeneralIfDone,
     setSupportCaseStatus, getSupportGeneral, getSupportGeneralById, listOpenSupportGenerals, listSupportGeneralCases, createSupportGeneral, linkSupportCasesToGeneral, markSupportCaseClassified, setSupportGeneralNotified, listSimilarSupportCases, getSupportUserRole, listSupportSameRolePeople,
     getSupportCaseById, listSupportPeople, getSupportPersonById, getSupportPerson, upsertSupportPerson, respondSupportPerson, markSupportPersonEscalated, listDueSupportPeople, listSupportAcceptedCaseIds, isSupportParticipant, listSupportUsersByIds, getSupportOrgChart,
-    listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, publishSupportNotice, listSupportAccessRecipients,
+    listSupportScreens, listSupportScreensForUser, findSupportScreen, reviewSupportAccess, updateSupportCaseContext, setSupportAccessCheck, setSupportUnderstood, createSupportAccessRequest, listSupportAccessRequests, listPendingSupportAccessRequests, getSupportAccessRequest, resolveSupportAccessRequest, supportAccessGrantTuples, publishSupportNotice, listSupportAccessRecipients,
     WORK_PLAN_TABLE, WORK_PLAN_LIMITS, isMainScreenStatusVisible, listWorkPlanPeople, listAccessibleWorkPlanIds, listWorkPlans, listMyWorkPlanActivities, listTeamWorkPlanActivities, listWorkPlanTemplates, createWorkPlanTemplate, renameWorkPlanTemplate, deleteWorkPlanTemplate, createWorkPlan, getWorkPlanDetail, getWorkPlanReportData, importWorkPlanItems, listTeamActivities, teamRunRecurrences, isTeamScreenGranted, getTeamActivity, teamTimeline, teamLog, teamLinkableItems, teamPlanItemInfo, setTeamWorkday, setTeamNow, setUserPhoto, getUserPhoto, getUserPhotoVer, deleteUserPhoto, TEAM_PHOTO_MAX_BYTES, createTeamActivity, teamActivityAct, updateWorkPlan, deleteWorkPlan, addWorkPlanItem, updateWorkPlanItem, moveWorkPlanItem, removeWorkPlanItem, addWorkPlanMember, updateWorkPlanMember, removeWorkPlanMember, leaveWorkPlan, MESSAGE_LIMITS, messagesAccessChecker, listMessagePeople, openChat, resolveChatThread, listChats, messagesSummary, listMessageNotices, THREAD_LIMITS, listThreadComments, addThreadComment, markThreadRead, resolveWorkPlanThread, touchWorkPlan,
 } = require('./db');
 const { getUploadUrl, getDownloadUrl, putObject, deleteObject, isConfigured: isR2Configured, listKeys: listR2Keys, deleteKeys: deleteR2Keys } = require('./r2');
@@ -12544,7 +12544,7 @@ app.get('/api/business/support-cases/:id/contact', requireAuth, (req, res) => {
     const rec = supportContactGate(req, res);
     if (!rec) return;
     const screen = rec.screen_node ? findSupportScreen(rec.screen_node) : null;
-    const requests = listSupportAccessRequests(rec.id).map((r) => ({ id: r.id, by: r.requested_by_name, items: parseJsonOr(r.items, []), note: r.note, createdAt: sqlUtcIso(r.created_at) }));
+    const requests = listSupportAccessRequests(rec.id).map((r) => ({ id: r.id, by: r.requested_by_name, items: parseJsonOr(r.items, []), note: r.note, createdAt: sqlUtcIso(r.created_at), status: r.status, resolvedBy: r.resolved_by_name || '', resolvedAt: sqlUtcIso(r.resolved_at), reason: r.reason || '', skipped: parseJsonOr(r.skipped, []) }));
     res.set('Cache-Control', 'no-store');
     res.json({
         canOperate: supportCanOperateContact(req), canRequest: supportCan(req, 'colSpPedirAcceso') && !supportIsReporter(req, rec), reporter: rec.reporter_name, reporterUserId: rec.reporter_user_id,
@@ -12605,6 +12605,113 @@ app.post('/api/business/support-cases/:id/access-request', requireAuth, (req, re
     const sentAdmins = publishSupportNotice({ recipients: admins.filter((id) => id !== req.user.sub), payload: { ...base, variant: 'access-request' }, actorUserId: req.user.sub, actorLabel: by });
     const sentBoss = publishSupportNotice({ recipients: [boss].filter((id) => id && id !== req.user.sub && !admins.includes(id)), payload: { ...base, variant: 'access-boss' }, actorUserId: req.user.sub, actorLabel: by });
     res.status(201).json({ requestId, notified: { admins: sentAdmins.length, boss: sentBoss.length } });
+});
+// ---- Dar el acceso desde la campana (pestaña Autorizar; Daniel, 2026-11-20) -------------------------------------------------------------------------------------------------------------------------------
+// Un acceso que la Mesa de ayuda pide (arriba) queda como pedido pendiente y le sale al administrador de la empresa en la pestaña Autorizar de la campana: «Dar el acceso» lo agrega a los permisos adicionales de la persona (con los
+// mismos límites de siempre: contrato, Estatus de quien da el permiso y su asignación; el mínimo que ese acceso necesita entra solo, ver Relación de Accesos) y «No dar» lo rechaza con un motivo (opcional). Solo se pueden dar la pantalla y la acción
+// (botón, columna o ícono); lo que falta por contrato (departamento o pantalla fuera del plan) o por la asignación de centros de costos se dice y se resuelve donde se hace (Expansiones, Mi Recurso Humano). Quien lo pidió recibe el resultado en
+// Avisos y queda en el chat del caso. Solo el administrador de la empresa decide: dar un acceso es cambiar los permisos de una persona.
+const SUPPORT_ACCESS_GRANTABLE = ['screen', 'action'];
+// Por qué no se pudo dar un código: contract (el departamento no está contratado o la pantalla no está en el plan), assignment (centros de costos), limit (guardado pero fuera de los límites) o excluded/none (no se pudo dar).
+function supportAccessWhyNot(code, review) {
+    const row = review.rows.find((r) => r.code === code);
+    if (code === 'module' || code === 'plan') return 'contract';
+    if (code === 'centers') return 'assignment';
+    if (review.rows.some((r) => (r.code === 'module' || r.code === 'plan') && !r.ok)) return 'contract';
+    return row && row.source === 'limit' ? 'limit' : 'blocked';
+}
+// ¿Ya está cubierto este código? Un renglón del plan o de los centros de costos que ya no existe (la empresa dejó el plan, la persona ya no tiene asignación) es que nada lo limita: está cubierto.
+function supportAccessCodeOk(review, code) {
+    const row = review.rows.find((x) => x.code === code);
+    return row ? !!row.ok : (code === 'plan' || code === 'centers');
+}
+function supportAccessRequestRow(r, review) {
+    const items = parseJsonOr(r.items, []).map((i) => {
+        return { code: i.code, labelKey: i.labelKey || '', done: supportAccessCodeOk(review, i.code), grantable: SUPPORT_ACCESS_GRANTABLE.includes(i.code) && !review.rows.some((x) => (x.code === 'module' || x.code === 'plan') && !x.ok) };
+    });
+    return { id: r.id, caseId: r.case_id, folio: supportFolio(r.record_number), targetName: r.reporter_name, targetUserId: r.target_user_id, screenLabel: r.screen_label || '', requestedBy: r.requested_by_name, note: r.note || '', items, createdAt: sqlUtcIso(r.created_at) };
+}
+// Los pedidos que esperan decisión de este administrador; el que ya está completo (otra persona dio el acceso, o la persona ya lo tiene) se cierra solo y no sale.
+function supportAccessToAct(req) {
+    if (!req.user.isClientAdmin) return [];
+    const out = [];
+    for (const r of listPendingSupportAccessRequests(req.user.clientId, req.user.isTestAccount)) {
+        if (!r.target_user_id || !r.screen_node) continue;
+        const review = reviewSupportAccess({ clientId: req.user.clientId, userId: r.target_user_id, screenId: r.screen_node, actionId: r.action_leaf || '' });
+        if (!review) continue;
+        const codes = parseJsonOr(r.items, []).map((i) => i.code);
+        if (codes.every((c) => supportAccessCodeOk(review, c))) { resolveSupportAccessRequest(r.id, { status: 'granted', byName: 'Sistema', granted: codes }); continue; }
+        out.push(supportAccessRequestRow(r, review));
+    }
+    return out;
+}
+function supportAccessGate(req, res) {
+    if (!req.user.clientId || !req.user.isClientAdmin) { res.status(403).json({ message: 'Solo el administrador de la empresa da o niega un acceso.', code: 'FORBIDDEN' }); return null; }
+    const id = Number(req.params.id);
+    const r = Number.isInteger(id) ? getSupportAccessRequest(id) : null;
+    if (!r || r.client_id !== req.user.clientId) { res.status(404).json({ message: 'Ese pedido de acceso no existe.' }); return null; }
+    if (r.status !== 'pending') { res.status(409).json({ message: 'Ese pedido ya se resolvió.', code: 'DONE', status: r.status }); return null; }
+    return r;
+}
+// El resultado le llega a quien lo pidió (Avisos) y queda en el chat del caso.
+function supportAccessAnnounce(req, r, { status, items, skipped, reason }) {
+    const rec = getSupportCaseById(r.case_id);
+    const by = changedByLabel(req);
+    const screen = r.screen_node ? findSupportScreen(r.screen_node) : null;
+    if (rec) { ensureSupportThread(rec); addSupportEvent(rec, status === 'declined' ? 'access_declined' : 'access_granted', { items, skipped, reason, by }, { level: 'n0', authorName: by, authorUserId: req.user.sub }); }
+    if (r.requested_by_user_id && r.requested_by_user_id !== req.user.sub) {
+        publishSupportNotice({ recipients: [r.requested_by_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'access-decided', status, caseId: r.case_id, folio: supportFolio(r.record_number), targetName: r.reporter_name, screenKey: screen ? screen.labelKey : '', items, skipped, reason, by } });
+    }
+}
+app.post('/api/business/support-access-requests/:id/grant', requireAuth, (req, res) => {
+    const r = supportAccessGate(req, res);
+    if (!r) return;
+    const user = r.target_user_id ? getUserById(r.target_user_id, req.user.clientId) : null;
+    if (!user || user.is_client_admin) return res.status(400).json({ message: 'Esa persona ya no existe o su acceso lo maneja GEIPSA.', code: 'USER' });
+    if (!r.screen_node) return res.status(400).json({ message: 'El caso ya no tiene una pantalla elegida.', code: 'NOSCREEN' });
+    const items = parseJsonOr(r.items, []);
+    const codes = items.map((i) => i.code);
+    const ctx = { clientId: req.user.clientId, userId: user.id, screenId: r.screen_node, actionId: r.action_leaf || '' };
+    const before0 = reviewSupportAccess(ctx);
+    if (!before0) return res.status(400).json({ message: 'La pantalla del caso ya no existe.', code: 'NOSCREEN' });
+    const pending = codes.filter((c) => before0.rows.some((x) => x.code === c && !x.ok));
+    const contractBlocked = before0.rows.some((x) => (x.code === 'module' || x.code === 'plan') && !x.ok);
+    const tuples = contractBlocked ? [] : supportAccessGrantTuples(r.screen_node, r.action_leaf || '', pending.filter((c) => SUPPORT_ACCESS_GRANTABLE.includes(c)));
+    const labelKeyOf = (c) => (items.find((i) => i.code === c) || {}).labelKey || '';
+    const refuse = (review) => res.status(409).json({ message: 'No se pudo dar ese acceso desde aquí.', code: 'NOTHING', skipped: pending.map((c) => ({ code: c, labelKey: labelKeyOf(c), why: supportAccessWhyNot(c, review) })) });
+    if (!tuples.length) return refuse(before0);
+    const keyOf = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
+    const existing = getUserGrants(user.id);
+    const merged = [...existing]; const have = new Set(existing.map(keyOf));
+    tuples.forEach((g) => { if (!have.has(keyOf(g))) { have.add(keyOf(g)); merged.push(g); } });
+    // si a esta persona se le había quitado justo eso (exclusión de su puesto), darlo se lo devuelve
+    const ex = getUserExclusions(user.id);
+    const tupleKeys = new Set(tuples.map(keyOf));
+    const exAfter = ex.exclude.some((e) => tupleKeys.has(keyOf(e))) ? { exclude: ex.exclude.filter((e) => !tupleKeys.has(keyOf(e))), keep: ex.keep } : ex;
+    const auto = autoEnablePersonMinimums(merged, req, { baseGrants: userPositionBaseGrants(user.id, exAfter), exclusions: exAfter, cumulativeLevels: true });
+    const limited = clampNewGrantsToLimits({ clientId: req.user.clientId, visibleStatuses: getUserVisibleStatuses(req.user.sub), before: existing, after: auto.grants, allowedCenterIds: getHrAssignedCenterIds(user.id), limitMain: true });
+    const savedGrants = setUserGrants(user.id, limited.allowed, changedByLabel(req));
+    if (exAfter !== ex) setUserExclusions(user.id, exAfter, changedByLabel(req));
+    const after = reviewSupportAccess(ctx);
+    const granted = codes.filter((c) => supportAccessCodeOk(after, c));
+    if (!pending.some((c) => granted.includes(c))) return refuse(after); // nada de lo pedido quedó dado: se queda pendiente
+    const skipped = codes.filter((c) => !granted.includes(c)).map((c) => ({ code: c, labelKey: labelKeyOf(c), why: supportAccessWhyNot(c, after) }));
+    if (grantsSignature(existing) !== grantsSignature(savedGrants)) {
+        logBusinessChange(req, 'usuarios', user.id, user.name || user.username, 'business.historyExtraGrants', existing.length, savedGrants.length);
+        notifyAccessChange({ req, affectedUsers: [{ id: user.id, name: user.name || user.username }], scopeKind: 'usuario', before: existing, after: savedGrants });
+    }
+    const status = skipped.length ? 'partial' : 'granted';
+    resolveSupportAccessRequest(r.id, { status, byUserId: req.user.sub, byName: changedByLabel(req), granted, skipped });
+    supportAccessAnnounce(req, r, { status, items: items.filter((i) => granted.includes(i.code)), skipped, reason: '' });
+    res.json({ status, granted, skipped, dropped: summarizeDroppedGrants(limited.dropped), autoEnabled: auto.autoEnabled });
+});
+app.post('/api/business/support-access-requests/:id/decline', requireAuth, (req, res) => {
+    const r = supportAccessGate(req, res);
+    if (!r) return;
+    const reason = String((req.body && req.body.reason) || '').replace(/[ \t]+/g, ' ').trim().slice(0, 300);
+    resolveSupportAccessRequest(r.id, { status: 'declined', byUserId: req.user.sub, byName: changedByLabel(req), reason });
+    supportAccessAnnounce(req, r, { status: 'declined', items: parseJsonOr(r.items, []), skipped: [], reason });
+    res.json({ status: 'declined' });
 });
 // Lo que entendió la Mesa de ayuda: viaja con el caso. Cada vez que se escribe queda un renglón en el chat (lo anterior no se borra).
 app.post('/api/business/support-cases/:id/understood', requireAuth, (req, res) => {
@@ -20899,7 +21006,8 @@ app.get('/api/business/notifications', requireAuth, (req, res) => {
         // Los avisos de "Color actualizado" / "Orden actualizado" del Árbol de Permisos Maestro (a quien se le modificó) van aquí también.
         avisos: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['approved', 'rejected']), ...catalogMineResolved, ...assetMineResolved, ...layoutRequests.avisos.map(asLayoutNotification), ...treeNotices.filter((n) => !isAlertNotice(n))],
         solicitudes: [...listPendingChangesRequestedBy(req.user.clientId, req.user.sub, ['pending']), ...catalogMinePending, ...assetMinePending, ...layoutRequests.solicitudes.map(asLayoutNotification)],
-        autorizar: [...autorizar, ...catalogToAct, ...assetToAct, ...layoutRequests.autorizar.map(asLayoutNotification)],
+        // Pedidos de acceso de la Mesa de ayuda de Soporte (kind 'support-access'): le tocan al administrador de la empresa, que da el acceso o lo niega aquí.
+        autorizar: [...autorizar, ...catalogToAct, ...assetToAct, ...layoutRequests.autorizar.map(asLayoutNotification), ...supportAccessToAct(req).map((r) => ({ ...r, kind: 'support-access' }))],
     });
 });
 
