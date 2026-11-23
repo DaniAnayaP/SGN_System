@@ -172,6 +172,7 @@ const WEB_SCREEN_PAGES = {
     'actividades-activos': { href: 'AppActividadesActivos.html', icon: 'bx-calendar-check' },
     'calibraciones': { href: 'AppCalibraciones.html', icon: 'bx-badge-check' },
     'capacidad-almacenamiento': { href: 'AppCapacidadAlmacenamiento.html', icon: 'bx-package' },
+    'soportes-cerrados': { href: 'AppSoportesCerrados.html', icon: 'bx-check-shield' },
     'layout': { href: 'AppLayout.html', icon: 'bx-building-house' },
 };
 
@@ -205,6 +206,7 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-gestion-centro-dist-actividades-activos': 'actividades-activos',
     'cat-operaciones-centro-dist-calibraciones': 'calibraciones',
     'cat-operaciones-centro-dist-capacidad-almacenamiento': 'capacidad-almacenamiento',
+    'cat-gestion-ti-soportes-cerrados': 'soportes-cerrados',
     'cat-operaciones-centro-dist-layout': 'layout',
 };
 

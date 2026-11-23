@@ -8607,6 +8607,15 @@
     "spqDiscardClose": "¿Salir sin cerrar el caso? Se pierde lo que escribiste y las fotos que elegiste.",
     "spqCloseEvidenceHint": "Al menos una evidencia de que ya funciona: marca las que llegaron después de quedar por confirmar o adjunta una foto o un archivo nuevo (hasta 12 MB). Necesita señal.",
     "spqAttemptChannel": "¿Cómo lo contactaste?",
+    "scappForbidden": "Tu cuenta no tiene la pantalla Soportes cerrados. Pídela a quien administra tus accesos.",
+    "scappNoData": "Sin señal y todavía no hay soportes cerrados guardados en tu celular.",
+    "scappCached": "Sin señal: estos son los soportes cerrados de la última vez que abriste la pantalla.",
+    "scappEmpty": "Todavía no hay soportes cerrados.",
+    "scappNoMatch": "Ningún soporte cerrado coincide con tu búsqueda.",
+    "scappSearch": "Buscar por folio, quién reportó, causa…",
+    "scappCount": "{shown} de {n} soportes",
+    "scappTruncated": "se muestran los {max} más recientes",
+    "scappMore": "Ver más",
     "spqDiscard": "¿Salir sin marcar resuelto? Se pierde lo que escribiste y las fotos que elegiste.",
     "spqEvidenceHint": "Al menos una: una foto de lo que hiciste o un archivo del celular (hasta 12 MB cada una). Necesita señal.",
     "spqDiscardMove": "¿Salir sin pasar el caso? Se pierde lo que escribiste y las fotos que elegiste.",
@@ -8796,6 +8805,14 @@
     "appSpAttempts": {
       "what": "Si el usuario no responde, registra cada intento de contacto (cómo lo contactaste y una nota). Con los intentos que pide tu empresa puedes cerrar el caso «sin respuesta»; quien reportó podrá reabrirlo después.",
       "example": "Intento 1 · Chat · «Le escribí y no contestó»."
+    },
+    "appScSearch": {
+      "what": "Busca entre los soportes cerrados por folio, quién reportó, pantalla, resumen, categoría, tipo, prioridad, estatus, causa, qué se hizo o quién lo cerró. Con «$» antes de la palabra busca que empiece así, con «@» después que termine así, y la coma separa varias búsquedas.",
+      "example": "«permiso» muestra los casos cerrados donde se habló de un permiso; «SP-0012» busca ese folio."
+    },
+    "appScList": {
+      "what": "Los casos de soporte ya terminados (Terminado o Cerrado sin respuesta), el más reciente primero. Cada uno dice quién reportó, cuándo se cerró y cuánto tardó, la causa, qué se hizo, quién lo cerró, cuántas veces se reabrió, la calificación del usuario y cuántas evidencias trae. Toca uno para abrirlo con su chat, su recorrido y sus evidencias; el atrás regresa aquí. Solo se ve: no se cambia nada.",
+      "example": "SP-0012 · No puedo cerrar el pedido · Terminado · Causa: Permiso faltante · Lo cerró Ana · 2 h 10 min · ★★★★★."
     },
     "appSpHelp": {
       "what": "Busca lo que te pasó con una palabra del error o de lo que querías hacer, abre el artículo para leer qué pasó y qué se requiere, y dinos si te sirvió. Si no te sirvió, se abre una solicitud ya con el título y el error escritos.",

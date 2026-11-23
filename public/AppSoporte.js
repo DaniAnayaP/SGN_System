@@ -156,6 +156,9 @@ const RATE_URL = /\/api\/business\/support-cases\/(\d+)\/ratings$/;   // una cal
 const REOPEN_URL = /\/api\/business\/support-cases\/(\d+)\/reopen$/;   // un «reabrir» que espera sin señal
 const HELP_URL = /\/api\/business\/support-help\/(\d+)\/use$/;   // un «me sirvió» o «no me sirvió» que espera sin señal
 const TAB_KEY = 'sgn_app_support_tab';
+// AppSoporte.html?id=<caso>&back=<pantalla>: otra pantalla de la App (Soportes cerrados) abre el caso aquí y el atrás regresa a ella
+const BACK_PAGES = ['AppSoportesCerrados.html'];
+const backTo = (() => { const b = new URLSearchParams(location.search).get('back'); return BACK_PAGES.includes(b) ? b : null; })();
 const WHEN_KEYS = ['now', 'today', 'week', 'none'];
 const SHOWN_EVENTS = ['created', 'first_response', 'file', 'taken', 'assigned', 'moved', 'status_changed', 'resolved', 'closed', 'reopened', 'rated', 'paused', 'resumed', 'int_urgent_alert', 'int_overdue_alert', 'int_attempt'];   // los tres últimos solo los manda el servidor al equipo
 const STATUS_TARGETS = ['review', 'working', 'testing'];   // los estatus que el equipo puede poner (los mismos del servidor)
@@ -746,7 +749,7 @@ async function openCase(id) {
 }
 async function loadCase(id, { quiet }) {
     try {
-        const [d, m, rt] = await Promise.all([getJson(`${CASES}/${id}`), getJson(`${CASES}/${id}/messages`), getJson(`${CASES}/${id}/ratings`).catch(() => null)]);
+        const [d, m, rt] = await Promise.all([getJson(`${CASES}/${id}`), getJson(`${CASES}/${id}/messages`).catch((err) => (err && err.forbidden ? { messages: [] } : Promise.reject(err))), getJson(`${CASES}/${id}/ratings`).catch(() => null)]);   // sin permiso del chat (p. ej. solo la pantalla Soportes cerrados) el caso se ve sin chat
         if (openId !== id) return;
         // el equipo también trae el cierre (si puede marcarlo resuelto, quién lo resolvió y qué hizo) y por dónde ha pasado el caso (y si puede subirlo o devolverlo)
         const team = !!(d.chat && d.chat.canSee && !d.chat.isReporter);
@@ -870,6 +873,7 @@ function renderCase() {
     if (closeCard) bodyEl.appendChild(closeCard);
     const rating = ratingCard();
     if (rating) bodyEl.appendChild(rating);
+    if (detail.chat && detail.chat.canSee === false) return;   // sin permiso del chat (p. ej. quien solo tiene la pantalla Soportes cerrados): se ve el caso sin chat
     const chatBox = el('div', 'spapp-chat');
     chatBox.setAttribute('data-help-key', 'appSpChat');
     const list = el('div', 'spapp-msgs');
@@ -1645,6 +1649,7 @@ function startPolling(list) {
 }
 function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 function goList() {
+    if (backTo) { window.location.href = backTo; return; }   // abierto desde otra pantalla de la App: regresa a ella
     screen = 'list'; openId = null; detail = null; messages = []; form = null; render();
     if (queueAllowed && listTab() === 'queue') fetchQueue({ redraw: true });   // lo que pasó con el caso que se abrió
 }
@@ -1909,10 +1914,10 @@ document.getElementById('carga-back').addEventListener('click', () => {
         await refreshQueued();
         await loadData();
         if (new URLSearchParams(location.search).get('tab') === 'queue') store.set(TAB_KEY, 'queue');   // AppSoporte.html?tab=queue abre Mi cola
-        render();
-        // llegar desde un aviso: AppSoporte.html?id=<caso> abre ese caso
+        // llegar desde un aviso o desde Soportes cerrados: AppSoporte.html?id=<caso> abre ese caso (aunque la persona no tenga la pestaña Soporte: el servidor decide si puede verlo)
         const wanted = Number(new URLSearchParams(location.search).get('id'));
-        if (wanted && dataState !== 'forbidden') openCase(wanted);
+        if (!wanted) render();   // con un caso por abrir, openCase dibuja la pantalla (no se muestra primero la lista ni su aviso de permiso)
+        if (wanted) openCase(wanted);
         else if (new URLSearchParams(location.search).get('new') === '1' && formOptions && dataState !== 'forbidden') { const qs = new URLSearchParams(location.search); openForm({ summary: qs.get('title') || '', errorText: qs.get('error') || '', screen: qs.get('screen') || '' }); }
     } catch (err) {
         console.error('Soporte (App) failed to load:', err);

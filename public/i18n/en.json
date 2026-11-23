@@ -8608,6 +8608,15 @@
     "spqDiscardClose": "Leave without closing the case? What you wrote and the photos you picked will be lost.",
     "spqCloseEvidenceHint": "At least one piece of evidence that it works now: tick the ones that arrived after it became pending confirmation or attach a new photo or file (up to 12 MB). Needs signal.",
     "spqAttemptChannel": "How did you contact them?",
+    "scappForbidden": "Your account does not have the Closed support cases screen. Ask whoever manages your access.",
+    "scappNoData": "No signal and no closed support cases saved on your phone yet.",
+    "scappCached": "No signal: these are the closed support cases from the last time you opened the screen.",
+    "scappEmpty": "There are no closed support cases yet.",
+    "scappNoMatch": "No closed support case matches your search.",
+    "scappSearch": "Search by folio, who reported, cause…",
+    "scappCount": "{shown} of {n} cases",
+    "scappTruncated": "showing the {max} most recent",
+    "scappMore": "Show more",
     "spqDiscard": "Leave without marking it solved? What you wrote and the photos you picked will be lost.",
     "spqEvidenceHint": "At least one: a photo of what you did or a file from your phone (up to 12 MB each). Needs signal.",
     "spqDiscardMove": "Leave without moving the case? What you wrote and the photos you picked will be lost.",
@@ -8797,6 +8806,14 @@
     "appSpAttempts": {
       "what": "If the user does not reply, log each contact attempt (how you contacted them and a note). With the attempts your company asks for you can close the case “without reply”; whoever reported it will be able to reopen it later.",
       "example": "Attempt 1 · Chat · “I wrote and they did not answer”."
+    },
+    "appScSearch": {
+      "what": "Search the closed support cases by folio, who reported, screen, summary, category, type, priority, status, cause, what was done or who closed it. With “$” before the word it must start like that, with “@” after it must end like that, and a comma separates several searches.",
+      "example": "“permission” shows the closed cases where a permission was mentioned; “SP-0012” looks for that folio."
+    },
+    "appScList": {
+      "what": "The support cases that are already finished (Done or Closed without reply), most recent first. Each one says who reported, when it was closed and how long it took, the cause, what was done, who closed it, how many times it was reopened, the user's rating and how many evidences it has. Tap one to open it with its chat, its path and its evidences; back returns here. View only: nothing is changed.",
+      "example": "SP-0012 · I cannot close the order · Done · Cause: Missing permission · Closed by Ana · 2 h 10 min · ★★★★★."
     },
     "appSpHelp": {
       "what": "Search what happened with a word of the error or of what you wanted to do, open the article to read what happened and what is required, and tell us whether it helped. If it did not, a request opens with the title and the error already written.",
