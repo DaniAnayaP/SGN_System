@@ -1132,12 +1132,15 @@ document.getElementById('home-menu-business-profile').addEventListener('click', 
 // own offline queue (see AppOfflineSync.js). Fase 1: no conflict detection
 // yet, so this tab is purely informational -- "esto no ha llegado al
 // servidor todavía", nothing to approve/reject here.
-const NOTIFICATION_TABS = ['alertas', 'avisos', 'solicitudes', 'autorizar', 'pendientes'];
+const NOTIFICATION_TABS = ['alertas', 'avisos', 'solicitudes', 'autorizar', 'soporte', 'pendientes'];
+// «Soporte» solo la ve quien tiene esa pestaña de la campana en el árbol (la misma regla del servidor)
+const visibleNotificationTabs = () => NOTIFICATION_TABS.filter((k) => k !== 'soporte' || hasSupportTabPermission());
 const NOTIFICATION_TAB_ICONS = {
     alertas: 'bx-error-circle',
     avisos: 'bx-info-circle',
     solicitudes: 'bx-send',
     autorizar: 'bx-check-shield',
+    soporte: 'bx-support',
     pendientes: 'bx-cloud-upload',
 };
 const PENDING_CHANGE_TABLE_LABELS = {
@@ -1146,7 +1149,8 @@ const PENDING_CHANGE_TABLE_LABELS = {
     'mi-recurso-humano': 'menu.opRrhhMiRecursoHumano',
 };
 const notificationsBadgeEl = document.getElementById('home-menu-notifications-badge');
-let notificationsData = { alertas: [], avisos: [], solicitudes: [], autorizar: [], pendientes: [] };
+let notificationsData = { alertas: [], avisos: [], solicitudes: [], autorizar: [], soporte: [], pendientes: [] };
+let supportTabPending = 0;                      // mis solicitudes de Soporte que esperan que califique (cuenta en la pastilla de la pestaña y en el globo del menú)
 
 // dd-mm-aa del día LOCAL del dispositivo: SQLite guarda la fecha en UTC ("YYYY-MM-DD HH:MM:SS"), y el aviso de las 11:33 p. m. de México es del
 // día 06 aunque en UTC ya sea 07. Misma regla de horas que Dashboard.js (todo se guarda en UTC, se muestra en la zona de quien lo ve).
@@ -1465,11 +1469,245 @@ function renderNotifGenericItem(item) {
     return el;
 }
 
+// ---- Soporte en la campana: la pestaña «Soporte» (mis solicitudes) y los avisos y autorizaciones de Soporte -----------------------------------------------------
+// Lo mismo que la campana de la Web (Dashboard.js › renderSupportNoticeRow, renderSupportAccessRow y la pestaña Soporte), con los mismos textos; cada caso se abre en la App (AppSoporte.html?id=). Las respuestas de aquí (aceptar,
+// confirmar, dar o no dar un acceso) piden señal: dependen de lo que el servidor tiene en ese momento, igual que autorizar una solicitud de catálogo.
+const supportCaseHref = (id) => `AppSoporte.html?id=${encodeURIComponent(id)}`;
+function noticeButton(text, primary, onClick) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `notif-item-btn${primary ? ' primary' : ''}`;
+    b.textContent = text;
+    b.addEventListener('click', onClick);
+    return b;
+}
+async function loadSupportTab() {
+    supportTabPending = 0;
+    notificationsData.soporte = [];
+    notificationsData.soporteMeta = {};
+    if (!hasSupportTabPermission()) return;
+    try {
+        const res = await fetch(apiUrl('/api/business/my-support'), { credentials: 'include' });
+        if (!res.ok) return;
+        const out = await res.json();
+        const cases = out.cases || [];
+        supportTabPending = cases.filter((c) => c.rateCan).length;
+        // primero lo que me pide algo, luego lo que sigue en curso, luego lo cerrado (más nuevo primero)
+        const rank = (c) => (c.rateCan ? 0 : (['done', 'noresp'].includes(c.status) ? 2 : 1));
+        notificationsData.soporte = cases.slice().sort((a, b) => rank(a) - rank(b) || String(b.createdAt).localeCompare(String(a.createdAt)));
+        notificationsData.soporteMeta = { provider: !!out.provider, total: cases.length };
+    } catch { /* la pestaña queda como estaba */ }
+}
+function renderNotifSupportTab(list) {
+    const ask = noticeButton(t('main.notificationsSupportAsk'), true, () => { window.location.href = 'AppSoporte.html?new=1'; });
+    ask.classList.add('notif-support-ask');
+    list.appendChild(ask);
+    const cases = notificationsData.soporte || [];
+    if (!cases.length) {
+        const empty = document.createElement('p');
+        empty.className = 'notif-empty';
+        empty.textContent = t('home.spappEmpty');
+        list.appendChild(empty);
+        return;
+    }
+    cases.forEach((c) => {
+        const el = document.createElement('div');
+        el.className = 'notif-item notif-item-link';
+        const meta = document.createElement('div');
+        meta.className = 'notif-item-meta';
+        meta.textContent = `${c.folio} · ${formatNotificationDate(c.createdAt)}${c.assigneeName ? ` · ${t('main.soAssignee', { name: c.assigneeName })}` : ''}`;
+        const desc = document.createElement('div');
+        desc.className = 'notif-item-desc';
+        desc.textContent = c.summary;
+        const tags = document.createElement('div');
+        tags.className = 'notif-item-meta';
+        tags.textContent = [t(`main.spStatus_${c.status}`), t(`main.sopLevel_${c.level}`), c.rateCan ? t('main.soRateNow') : ''].filter(Boolean).join(' · ');
+        if (c.rateCan) tags.style.fontWeight = '700';
+        el.append(meta, desc, tags);
+        el.addEventListener('click', () => { window.location.href = supportCaseHref(c.id); });
+        list.appendChild(el);
+    });
+}
+const SUPPORT_NOTICE_TAGS = { 'access-request': 'main.noticeSupportAccess', 'access-boss': 'main.noticeSupportAccessBoss', 'person-invite': 'main.noticeSupportInvite', 'person-escalated': 'main.noticeSupportEscalated', 'general-linked': 'main.noticeSupportGeneralLinked', 'general-notify': 'main.noticeSupportGeneralNotify', 'case-resolved': 'main.noticeSupportResolved', 'case-closed': 'main.noticeSupportClosed', 'access-decided': 'main.noticeSupportAccessDecided', 'case-closed-boss': 'main.noticeSupportClosedBoss', 'case-overdue-boss': 'main.noticeSupportOverdueBoss', 'case-reopened': 'main.noticeSupportReopened', 'general-resolved': 'main.noticeSupportGeneralResolved', 'rate-reminder': 'main.noticeSupportRateReminder', 'urgent-arrived': 'main.noticeSupportUrgentArrived', 'urgent-untaken': 'main.noticeSupportUrgentUntaken', 'interrupt-overridden': 'main.noticeSupportInterruptOverridden', 'case-paused': 'main.noticeSupportPaused', 'saas-arrived': 'main.noticeSupportSaasArrived', 'saas-assigned': 'main.noticeSupportSaasAssigned', 'case-arrived': 'main.noticeSupportArrived' };
+const SUPPORT_NOTICE_LINKED = ['access-request', 'access-decided', 'case-arrived', 'general-linked', 'case-resolved', 'case-closed', 'case-reopened', 'rate-reminder', 'urgent-arrived', 'urgent-untaken', 'interrupt-overridden', 'case-paused', 'saas-arrived', 'saas-assigned'];
+// El texto de cada aviso de Soporte (los mismos textos de la Web)
+function supportNoticeText(item) {
+    const v = item.variant || '';
+    const base = { folio: item.folio || '', summary: item.summary || '', target: item.targetName || '—', by: item.by || item.actorLabel || '—' };
+    const lv = (k) => t(`main.sopLevel_${k}`);
+    if (v.startsWith('person-')) {
+        let text;
+        if (v === 'person-escalated') {
+            const what = item.fromKind === 'invite' ? (item.reason === 'declined' ? 'main.noticeSupportWhatDeclined' : 'main.noticeSupportWhatNoAccept') : 'main.noticeSupportWhatNoConfirm';
+            text = t('main.noticeSupportEscalatedLine', { ...base, who: item.fromName || '—', what: t(what), reason: t(`main.perReason_${item.reason || 'no_response'}`) });
+        } else if (v === 'person-invite') text = t('main.noticeSupportInviteLine', base);
+        else text = item.auto ? (item.reason === 'auto_escalated' ? t('main.noticeSupportEscalatedAutoLine', { ...base, to: lv(item.toLevel) }) : t('main.noticeSupportUrgentLine', base)) : t('main.noticeSupportNotifyLine', base);
+        return `${text}${item.message ? ` — ${item.message}` : ''}`;
+    }
+    if (v === 'case-resolved') return t(item.generalFolio ? 'main.noticeSupportResolvedGeneralLine' : 'main.noticeSupportResolvedLine', { ...base, generalFolio: item.generalFolio || '' });
+    if (v === 'urgent-arrived') return t('main.noticeSupportUrgentArrivedLine', { ...base, level: lv(item.level), priority: t(`main.msPri_${item.priority || 1}`) });
+    if (v === 'urgent-untaken') return t('main.noticeSupportUrgentUntakenLine', { ...base, level: lv(item.level) });
+    if (v === 'interrupt-overridden') return t('main.noticeSupportInterruptOverriddenLine', { ...base, working: item.workingFolio || '', minutes: item.minutes || 0, wait: item.wait || 0 });
+    if (v === 'case-paused') return t('main.noticeSupportPausedLine', base);
+    if (v === 'rate-reminder') return t('main.noticeSupportRateReminderLine', base);
+    if (v === 'case-closed') return t(item.noresp ? 'main.noticeSupportClosedNoReplyLine' : (item.askRating ? 'main.noticeSupportClosedRateLine' : 'main.noticeSupportClosedLine'), { ...base, until: item.until ? formatNotificationDate(item.until) : '' });
+    if (v === 'access-decided') {
+        const labelOf = (i) => (i.labelKey ? t(i.labelKey) : (i.code === 'screen' ? t('main.supAcc_screen', { screen: item.screenKey ? t(item.screenKey) : '' }) : t(`main.supAcc_${i.code}`)));
+        const skippedText = (item.skipped || []).map((x) => `${labelOf(x)} (${t(`main.supAccWhy_short_${x.why}`)})`).join(', ');
+        return t(item.status === 'declined' ? 'main.noticeSupportAccessDeclinedLine' : (item.status === 'partial' ? 'main.noticeSupportAccessPartialLine' : 'main.noticeSupportAccessGrantedLine'), { ...base, items: (item.items || []).map(labelOf).join(', '), skipped: skippedText, reason: item.reason ? ` — ${item.reason}` : '' });
+    }
+    if (v === 'case-closed-boss') return t(item.noresp ? 'main.noticeSupportClosedBossNoReplyLine' : 'main.noticeSupportClosedBossLine', base);
+    if (v === 'case-overdue-boss') return t('main.noticeSupportOverdueBossLine', { ...base, level: lv(item.level), priority: t(`main.msPri_${item.priority || 4}`) });
+    if (v === 'case-reopened') return t('main.noticeSupportReopenedLine', { ...base, to: lv(item.to), said: item.said || '' });
+    if (v === 'general-resolved') return t('main.noticeSupportGeneralResolvedLine', { ...base, generalFolio: item.generalFolio || '', generalTitle: item.generalTitle || '', count: item.count || 0 });
+    if (v === 'general-linked' || v === 'general-notify') return t(v === 'general-linked' ? 'main.noticeSupportGeneralLinkedLine' : 'main.noticeSupportGeneralNotifyLine', { ...base, generalFolio: item.generalFolio || '', generalTitle: item.generalTitle || '', role: item.roleName || '—' });
+    if (v === 'saas-arrived') {
+        const base4 = { ...base, client: item.client || '—', priority: t(`main.msPri_${item.priority || 4}`) };
+        if (item.reopened) return t('main.noticeSupportSaasReopenedLine', { ...base4, said: item.said || '' });
+        return item.from ? t('main.noticeSupportSaasArrivedLine', { ...base4, from: lv(item.from), reason: t(`main.mvReason_${item.reason}`) }) : t('main.noticeSupportSaasArrivedDirectLine', base4);
+    }
+    if (v === 'saas-assigned') return t('main.noticeSupportSaasAssignedLine', { ...base, client: item.client || '—' });
+    if (v === 'case-arrived') return t(item.direction === 'up' ? 'main.noticeSupportArrivedUp' : 'main.noticeSupportArrivedDown', { ...base, from: lv(item.from), to: lv(item.to), reason: t(`main.mvReason_${item.reason}`) });
+    const items = (item.items || []).map((i) => (i.labelKey ? t(i.labelKey) : (i.code === 'screen' ? t('main.supAcc_screen', { screen: item.screenKey ? t(item.screenKey) : '' }) : t(`main.supAcc_${i.code}`)))).join(', ');
+    return `${t('main.noticeSupportAccessLine', { by: item.actorLabel || '—', target: item.targetName || '—', folio: item.folio || '', screen: item.screenKey ? t(item.screenKey) : '', items })}${item.note ? ` — ${item.note}` : ''}`;
+}
+function renderNotifSupportNotice(item) {
+    const v = item.variant || '';
+    const el = document.createElement('div');
+    el.className = 'notif-item';
+    const tag = document.createElement('div');
+    tag.className = 'notif-item-desc';
+    tag.style.fontWeight = '700';
+    tag.textContent = t(SUPPORT_NOTICE_TAGS[v] || (item.auto ? (item.reason === 'auto_escalated' ? 'main.noticeSupportEscalatedAuto' : 'main.noticeSupportUrgent') : 'main.noticeSupportNotify'));
+    const meta = document.createElement('div');
+    meta.className = 'notif-item-meta';
+    meta.textContent = `${t('menu.opTiCasosSoporte')} · ${formatNotificationDate(item.createdAt)}`;
+    const desc = document.createElement('div');
+    desc.className = 'notif-item-desc';
+    desc.textContent = supportNoticeText(item);
+    el.append(tag, meta, desc);
+    const actions = document.createElement('div');
+    actions.className = 'notif-item-actions';
+    if (v.startsWith('person-')) {
+        // invitación (aceptar o no) o aviso (confirmar que se enteró): se responde desde aquí
+        const showDone = (status) => {
+            actions.textContent = '';
+            const done = document.createElement('span');
+            done.className = 'notif-item-meta';
+            done.textContent = t(`main.noticePersonStatus_${status}`);
+            actions.appendChild(done);
+            if (status === 'accepted' && item.caseId) actions.appendChild(noticeButton(t('main.noticeSupportOpen'), false, () => { window.location.href = supportCaseHref(item.caseId); }));
+        };
+        const respond = async (action, reason) => {
+            actions.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+            try {
+                const res = await fetch(apiUrl(`/api/business/support-cases/${encodeURIComponent(item.caseId)}/people/respond`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ action, reason: reason || '' }) });
+                const out = await res.json().catch(() => ({}));
+                if (!res.ok && out.code !== 'DONE') { showToast(out.message || t('admin.saveError')); actions.querySelectorAll('button').forEach((b) => { b.disabled = false; }); return; }
+                showDone(out.status || (action === 'confirm' ? 'confirmed' : (action === 'accept' ? 'accepted' : 'declined')));
+                loadNotificationsBadge();
+            } catch {
+                showToast(t('admin.saveError'));
+                actions.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+            }
+        };
+        if (item.pStatus === 'pending') {
+            if (v === 'person-invite') {
+                const reasonBox = document.createElement('textarea');
+                reasonBox.className = 'notif-support-reason';
+                reasonBox.rows = 2; reasonBox.maxLength = 300; reasonBox.hidden = true;
+                reasonBox.placeholder = t('main.noticeSupportDeclineWhy');
+                let declining = false;
+                const accept = noticeButton(t('main.noticeSupportAccept'), true, () => respond('accept'));
+                const decline = noticeButton(t('main.noticeSupportDecline'), false, () => {
+                    if (!declining) { declining = true; reasonBox.hidden = false; accept.hidden = true; decline.textContent = t('main.supAccDeclineConfirm'); reasonBox.focus(); return; }
+                    respond('decline', reasonBox.value.trim());
+                });
+                el.appendChild(reasonBox);
+                actions.append(decline, accept);
+            } else actions.appendChild(noticeButton(t('main.noticeSupportConfirm'), true, () => respond('confirm')));
+            const hint = document.createElement('p');
+            hint.className = 'notif-item-meta';
+            hint.textContent = t('main.noticeSupportWaitHours', { hours: item.hours || 2 });
+            el.append(actions, hint);
+        } else if (item.pStatus) { showDone(item.pStatus); el.appendChild(actions); }
+        return el;
+    }
+    // los avisos del Nivel 4 que le llegan al equipo SaaS no tienen caso en la App (su Soporte está en la Web)
+    if (SUPPORT_NOTICE_LINKED.includes(v) && item.caseId && !item.saas) {
+        actions.appendChild(noticeButton(t('main.noticeSupportView'), false, () => { window.location.href = supportCaseHref(item.caseId); }));
+        el.appendChild(actions);
+    }
+    return el;
+}
+// La autorización de un acceso que pidió la Mesa de ayuda (kind 'support-access'; solo el administrador de la empresa): dar el acceso o no darlo (con un motivo si se quiere)
+const supportAccessItemLabel = (item, i) => (i.labelKey ? t(i.labelKey) : (i.code === 'screen' ? t('main.supAcc_screen', { screen: item.screenLabel || '' }) : t(`main.supAcc_${i.code}`)));
+function renderNotifSupportAccess(item) {
+    const el = document.createElement('div');
+    el.className = 'notif-item';
+    const tag = document.createElement('div');
+    tag.className = 'notif-item-desc';
+    tag.style.fontWeight = '700';
+    tag.textContent = t('main.noticeSupportAccess');
+    const meta = document.createElement('div');
+    meta.className = 'notif-item-meta';
+    meta.textContent = `${t('menu.opTiCasosSoporte')} · ${formatNotificationDate(item.createdAt)}`;
+    const desc = document.createElement('div');
+    desc.className = 'notif-item-desc';
+    desc.textContent = `${t('main.noticeSupportAccessLine', { by: item.requestedBy || '—', target: item.targetName || '—', folio: item.folio || '', screen: item.screenLabel || '', items: item.items.map((i) => supportAccessItemLabel(item, i)).join(', ') })}${item.note ? ` — ${item.note}` : ''}`;
+    el.append(tag, meta, desc);
+    // lo que no se da desde aquí (contrato o asignación) y lo que la persona ya tiene
+    item.items.filter((i) => i.done || !i.grantable).forEach((i) => {
+        const line = document.createElement('div');
+        line.className = 'notif-item-meta';
+        line.textContent = `${supportAccessItemLabel(item, i)}: ${i.done ? t('main.supAccAlready') : t(i.code === 'centers' ? 'main.supAccWhy_assignment' : 'main.supAccWhy_contract')}`;
+        el.appendChild(line);
+    });
+    const canGrant = item.items.some((i) => i.grantable && !i.done);
+    const reasonBox = document.createElement('textarea');
+    reasonBox.className = 'notif-support-reason';
+    reasonBox.rows = 2; reasonBox.maxLength = 300; reasonBox.hidden = true;
+    reasonBox.placeholder = t('main.supAccReasonLabel');
+    const resolve = async (action, buttons) => {
+        buttons.forEach((b) => { b.disabled = true; });
+        try {
+            const res = await fetch(apiUrl(`/api/business/support-access-requests/${item.id}/${action}`), { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(action === 'decline' ? { reason: reasonBox.value.trim() } : {}) });
+            const out = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                showToast(out.code === 'NOTHING' ? t('main.supAccNothing') : (out.message || t('admin.saveError')));
+                if (res.status === 409 && out.code !== 'NOTHING') loadNotificationsBadge(); // ya lo resolvió otra persona
+                buttons.forEach((b, n) => { b.disabled = n === 1 && !canGrant; });
+                return;
+            }
+            el.remove();
+            showToast(t(action === 'grant' ? (out.status === 'partial' ? 'main.supAccGrantedPartial' : 'main.supAccGranted') : 'main.supAccDeclined'));
+            loadNotificationsBadge();
+        } catch {
+            showToast(t('admin.saveError'));
+            buttons.forEach((b, n) => { b.disabled = n === 1 && !canGrant; });
+        }
+    };
+    const actions = document.createElement('div');
+    actions.className = 'notif-item-actions';
+    const openBtn = noticeButton(t('main.noticeSupportView'), false, () => { window.location.href = supportCaseHref(item.caseId); });
+    let declining = false;
+    const grantBtn = noticeButton(t('main.supAccGrant'), true, () => resolve('grant', [declineBtn, grantBtn]));
+    grantBtn.disabled = !canGrant;
+    const declineBtn = noticeButton(t('main.supAccDecline'), false, () => {
+        if (!declining) { declining = true; reasonBox.hidden = false; grantBtn.hidden = true; declineBtn.textContent = t('main.supAccDeclineConfirm'); reasonBox.focus(); return; }
+        resolve('decline', [declineBtn, grantBtn]);
+    });
+    actions.append(openBtn, declineBtn, grantBtn);
+    el.append(reasonBox, actions);
+    return el;
+}
+
 function renderNotifTab(sheet, tabKey) {
     sheet.querySelectorAll('.notif-tab').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tabKey));
     sheet.querySelector('.notif-active-label').textContent = t(`main.notificationsTab_${tabKey}`);
     const list = sheet.querySelector('.notif-list');
     list.innerHTML = '';
+    if (tabKey === 'soporte') { renderNotifSupportTab(list); return; }
     const items = notificationsData[tabKey] || [];
     if (!items.length) {
         const empty = document.createElement('p');
@@ -1480,7 +1718,9 @@ function renderNotifTab(sheet, tabKey) {
         items.forEach((item) => {
             if (item.kind === 'catalog-request') list.appendChild(renderNotifCatalogRequestItem(item, tabKey === 'avisos'));
             else if (item.kind === 'team-activity') list.appendChild(renderNotifTeamItem(item));
-            else if (item.kind && !item.table_key && tabKey === 'avisos') list.appendChild(renderNotifGenericItem(item));
+            else if (item.kind === 'support') list.appendChild(renderNotifSupportNotice(item));
+            else if (item.kind === 'support-access') list.appendChild(renderNotifSupportAccess(item));
+            else if (item.kind && !item.table_key) list.appendChild(renderNotifGenericItem(item)); // un aviso o una autorización que la App todavía no sabe dibujar: una fila sencilla en vez de «undefined»
             else if (tabKey === 'alertas') list.appendChild(renderNotifAlertItem(item));
             else if (tabKey === 'avisos') list.appendChild(renderNotifRequestItem(item, true));
             else if (tabKey === 'pendientes') list.appendChild(renderNotifPendienteItem(item));
@@ -1504,9 +1744,10 @@ async function loadNotificationsBadge() {
         // Server-side categories just stay at whatever they already showed.
     }
     notificationsData.pendientes = pendientes;
+    await loadSupportTab();
     const unseenAlertas = (notificationsData.alertas || []).filter((a) => !a.seen_at).length;
     const unseenAvisos = (notificationsData.avisos || []).filter((a) => !a.seen_at).length;
-    const total = unseenAlertas + unseenAvisos + (notificationsData.autorizar || []).length + pendientes.length;
+    const total = unseenAlertas + unseenAvisos + (notificationsData.autorizar || []).length + pendientes.length + supportTabPending;
     notificationsBadgeEl.hidden = total <= 0;
     notificationsBadgeEl.textContent = total > 99 ? '99+' : String(total);
 }
@@ -1521,10 +1762,10 @@ function openNotificationsSheet() {
         <div class="home-select-sheet-handle"></div>
         <div class="notif-title">${t('main.notificationsTitle')}</div>
         <div class="notif-tabs">
-            ${NOTIFICATION_TABS.map((tabKey) => `
+            ${visibleNotificationTabs().map((tabKey) => `
                 <button type="button" class="notif-tab" data-tab="${tabKey}">
                     <i class="bx ${NOTIFICATION_TAB_ICONS[tabKey]}" aria-hidden="true"></i>
-                    <span class="notif-tab-count">${(notificationsData[tabKey] || []).length}</span>
+                    <span class="notif-tab-count">${tabKey === 'soporte' ? supportTabPending : (notificationsData[tabKey] || []).length}</span>
                 </button>
             `).join('')}
         </div>

@@ -11590,7 +11590,7 @@ function renderSupportNoticeRow(item) {
     } else if (v === 'case-arrived') {
         desc.textContent = t(item.direction === 'up' ? 'main.noticeSupportArrivedUp' : 'main.noticeSupportArrivedDown', { ...base, from: t(`main.sopLevel_${item.from}`), to: t(`main.sopLevel_${item.to}`), reason: t(`main.mvReason_${item.reason}`) });
     } else {
-        const items = (item.items || []).map((i) => (i.labelKey ? t(i.labelKey) : t(`main.supAcc_${i.code}`))).join(', ');
+        const items = (item.items || []).map((i) => (i.labelKey ? t(i.labelKey) : (i.code === 'screen' ? t('main.supAcc_screen', { screen: item.screenKey ? t(item.screenKey) : '' }) : t(`main.supAcc_${i.code}`)))).join(', ');
         desc.textContent = `${t('main.noticeSupportAccessLine', { by: item.actorLabel || '—', target: item.targetName || '—', folio: item.folio || '', screen: item.screenKey ? t(item.screenKey) : '', items })}${item.note ? ` — ${item.note}` : ''}`;
     }
     row.append(tag, meta, desc);

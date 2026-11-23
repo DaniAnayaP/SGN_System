@@ -950,6 +950,7 @@ document.getElementById('carga-back').addEventListener('click', () => {
         // llegar desde un aviso: AppSoporte.html?id=<caso> abre ese caso
         const wanted = Number(new URLSearchParams(location.search).get('id'));
         if (wanted && dataState !== 'forbidden') openCase(wanted);
+        else if (new URLSearchParams(location.search).get('new') === '1' && formOptions && dataState !== 'forbidden') openForm();
     } catch (err) {
         console.error('Soporte (App) failed to load:', err);
         showToast(t('admin.loadError'));

@@ -2515,3 +2515,6 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .spapp-star.on{ color: #e0a21f; }
 .spapp-stars-text{ font-size: 1.2rem; color: #e0a21f; letter-spacing: 0.1em; }
 .spapp-tags{ flex-wrap: wrap; overflow: visible; }
+.notif-item-link{ cursor: pointer; }
+.notif-support-ask{ margin-bottom: 0.6rem; }
+.notif-support-reason{ width: 100%; margin-top: 0.4rem; font-family: inherit; font-size: 0.74rem; padding: 0.45rem 0.6rem; border-radius: 0.6rem; border: 1px solid var(--home-border); background: var(--home-surface); color: var(--home-text-primary); box-sizing: border-box; }
