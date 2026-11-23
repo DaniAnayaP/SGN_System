@@ -23,7 +23,7 @@ const t = (key, params) => {
 const lang = () => (Dashboard.getLanguage ? Dashboard.getLanguage() : (localStorage.getItem('lang') || 'es'));
 const locale = () => (lang() === 'en' ? 'en-US' : 'es-MX');
 const fmtTime = (iso) => new Date(iso).toLocaleString(locale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-const state = { cases: [], counts: { mine: 0, free: 0, all: 0 }, me: null, tab: 'mine', canTake: false, canEvidence: false, canChat: false, canKpi: false, scope: null };
+const state = { cases: [], counts: { mine: 0, free: 0, all: 0 }, me: null, tab: 'mine', canTake: false, canEvidence: false, canChat: false, canKpi: false, canRules: false, scope: null };
 
 (async function init() {
     try {
@@ -52,10 +52,13 @@ async function load() {
     const errEl = document.getElementById('ss-error');
     if (!res.ok) { errEl.textContent = body.message || Dashboard.t('admin.saveError'); errEl.hidden = false; return; }
     errEl.hidden = true;
-    state.cases = body.cases; state.counts = body.counts; state.me = body.me; state.canEvidence = !!body.canEvidence; state.canChat = !!body.canChat; state.canTake = !!body.canTake; state.canKpi = !!body.canKpi;
+    state.cases = body.cases; state.counts = body.counts; state.me = body.me; state.canEvidence = !!body.canEvidence; state.canChat = !!body.canChat; state.canTake = !!body.canTake; state.canKpi = !!body.canKpi; state.canRules = !!body.canRules;
     // la pestaña «KPI del Nivel 4» solo la ve quien tiene alguna de sus secciones en el árbol de accesos
     document.getElementById('ss-tab-kpi').hidden = !state.canKpi;
     if (!state.canKpi && state.tab === 'kpi') { state.tab = 'mine'; syncKpiTab(); }
+    // la pestaña «Reglas de atención» la ve quien tiene alguno de sus grupos en el árbol de accesos
+    document.getElementById('ss-tab-rules').hidden = !state.canRules;
+    if (!state.canRules && state.tab === 'rules') { state.tab = 'mine'; syncKpiTab(); }
     // sin elegir giros y departamentos (Equipo SaaS) no llegan casos nuevos a «Sin asignar»
     state.scope = body.scope || null;
     document.getElementById('ss-scope-note').hidden = !state.scope || state.scope.configured;
@@ -70,14 +73,17 @@ function renderTabs() {
     });
     ['mine', 'free', 'all'].forEach((k) => { document.getElementById(`ss-count-${k}`).textContent = String(state.counts[k] || 0); });
 }
-// La pestaña «KPI del Nivel 4» no es la tabla: se esconde la tabla (y su buscador) y se muestran los indicadores (Admin-SoporteKpi.js).
+// Las pestañas «KPI del Nivel 4» y «Reglas de atención» no son la tabla: se esconde la tabla (y su buscador) y se muestran los indicadores (Admin-SoporteKpi.js) o las reglas (Admin-SoporteReglas.js).
 function syncKpiTab() {
     const kpi = state.tab === 'kpi';
+    const rules = state.tab === 'rules';
     document.getElementById('ss-kpi').hidden = !kpi;
-    document.querySelector('[data-table-id="soporte-saas"]').hidden = kpi;
+    document.getElementById('ss-rules').hidden = !rules;
+    document.querySelector('[data-table-id="soporte-saas"]').hidden = kpi || rules;
     const bar = document.getElementById('filter-bar');
-    if (bar) bar.hidden = kpi;
+    if (bar) bar.hidden = kpi || rules;
     if (kpi && window.SaasSupportKpi) window.SaasSupportKpi.show();
+    if (rules && window.SaasSupportRules) window.SaasSupportRules.show();
 }
 const visible = () => state.cases.filter((c) => (state.tab === 'mine' ? c.atN4 && c.mine : (state.tab === 'free' ? c.atN4 && !c.assigneeId && c.inScope : true)));
 
@@ -109,6 +115,18 @@ function fromCell(c) {
     small.className = 'sp-muted';
     small.textContent = `${c.from.by || '—'} · ${fmtTime(c.from.at)}`;
     td.append(b, small);
+    return td;
+}
+// La prioridad y, si el caso sigue en el Nivel 4 con plazos propios de GEIPSA (Reglas de atención) y nadie ha respondido, cuándo vence su primera respuesta.
+function priorityCell(c) {
+    const td = tagCell('priority', 'sp-tag sp-pri', String(c.priority), t(`main.msPri_${c.priority}`));
+    if (c.atN4 && c.n4 && c.n4.firstDueAt && !c.n4.firstResponseAt) {
+        const due = document.createElement('div');
+        due.className = 'sp-muted';
+        if (new Date(c.n4.firstDueAt).getTime() < Date.now()) due.style.color = 'var(--color-danger, #c0392b)';
+        due.textContent = t('admin.saasSpDueShort', { when: fmtTime(c.n4.firstDueAt) });
+        td.appendChild(due);
+    }
     return td;
 }
 function assigneeCell(c) {
@@ -162,7 +180,7 @@ function buildRow(c) {
         tagCell('type', 'sp-tag sp-type', c.type, t(`main.spType_${c.type}`)),
         fromCell(c),
         cell('reason', c.from && c.from.reason ? t(`main.mvReason_${c.from.reason}`) : ''),
-        tagCell('priority', 'sp-tag sp-pri', String(c.priority), t(`main.msPri_${c.priority}`)),
+        priorityCell(c),
         tagCell('status', 'sp-tag sp-status', c.status, t(`main.spStatus_${c.status}`)),
         assigneeCell(c),
         cell('evidence', state.canEvidence ? String(c.fileCount) : ''),

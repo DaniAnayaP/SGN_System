@@ -136,6 +136,9 @@ window.SAAS_ADMIN_CATALOG = [
                         ['Tomar casos', 'Escribir en el chat', 'Notas internas', 'Cambiar estatus', 'Marcar resuelto', 'Devolver al nivel anterior', 'Calificar traspasos', 'Subir evidencias', 'Cerrar casos de clientes sin TI']),
                     // La pestaña «KPI del Nivel 4» de la misma pantalla (GET /api/admin/support-kpi): cada sección se ve con su botón (posiciones kpi::a0 a a4 en SAAS_SUPPORT_KPI_LEAVES de server.js: no cambiar el orden). Lo nuevo va al final.
                     { id: 'kpi', label: 'KPI del Nivel 4 (pestaña)', acciones: ['Indicadores', 'Casos sin tomar', 'Por cliente', 'Por persona', 'Por qué llegan'] },
+                    // La pestaña «Reglas de atención» (GET/PATCH /api/admin/support-rules): las reglas con que GEIPSA atiende los casos de todas las empresas. Cada grupo se ve con su columna y se cambia con su botón (reglas::c0..c3 y reglas::a0..a3 en
+                    // SAAS_RULES_GROUPS de server.js: no cambiar el orden). Quien cambia un grupo necesita también verlo. Lo nuevo va al final.
+                    { id: 'reglas', label: 'Reglas de atención (pestaña)', columnas: ['Plazos de GEIPSA (Nivel 4)', 'Horario de atención', 'Aviso de Urgente sin tomar', 'Cierre y reapertura'], acciones: ['Cambiar plazos de GEIPSA', 'Cambiar horario de atención', 'Cambiar aviso de Urgente', 'Cambiar cierre y reapertura'] },
                 ],
             },
             {

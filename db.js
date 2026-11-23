@@ -20971,16 +20971,21 @@ function markSupportInterruptAlerted(id) {
     db.prepare('UPDATE support_interrupts SET alerted = 1 WHERE id = ?').run(id);
 }
 // Los Urgentes (prioridad 1 o 2) que nadie ha tomado y ya pasaron el plazo de su primera respuesta.
-function listUrgentUntakenSupportCases(nowSql) {
-    return db.prepare("SELECT * FROM support_cases WHERE priority <= 2 AND status = 'open' AND assignee_user_id IS NULL AND urgent_alerted_at IS NULL AND first_response_due_at IS NOT NULL AND first_response_due_at <= ? ORDER BY id ASC LIMIT 100").all(nowSql);
+// skipN4: con el aviso propio de GEIPSA prendido (Reglas de atención), los casos del Nivel 4 ya no se avisan por el plazo del cliente: los avisa listN4UrgentUntaken.
+function listUrgentUntakenSupportCases(nowSql, { skipN4 = false } = {}) {
+    return db.prepare(`SELECT * FROM support_cases WHERE priority <= 2 AND status = 'open' AND assignee_user_id IS NULL AND urgent_alerted_at IS NULL AND first_response_due_at IS NOT NULL AND first_response_due_at <= ? ${skipN4 ? "AND level != 'n4'" : ''} ORDER BY id ASC LIMIT 100`).all(nowSql);
 }
 function markSupportUrgentAlerted(caseId) {
     db.prepare("UPDATE support_cases SET urgent_alerted_at = datetime('now') WHERE id = ?").run(caseId);
 }
 // overdue_notified_at = ya se decidió (una sola vez por caso) si se avisaba al jefe directo de quien reportó que venció el plazo de la primera respuesta (Mapa de soporte › «Avisar al jefe directo cuando vence el plazo»).
 // Los casos con plazo de primera respuesta vencido y sin primera respuesta del equipo, que se siguen atendiendo (abiertos, en revisión, en trabajo o en pruebas; no en pausa ni ya resueltos o cerrados).
+// Un caso en el Nivel 4 con plazos propios de GEIPSA (n4_first_due_at) se juzga por ellos y por la primera respuesta del Nivel 4; los demás, por el plazo de la empresa.
 function listOverdueSupportCases(nowSql) {
-    return db.prepare("SELECT * FROM support_cases WHERE status IN ('open', 'review', 'working', 'testing') AND first_response_at IS NULL AND overdue_notified_at IS NULL AND first_response_due_at IS NOT NULL AND first_response_due_at <= ? ORDER BY id ASC LIMIT 200").all(nowSql);
+    return db.prepare(`SELECT * FROM support_cases WHERE status IN ('open', 'review', 'working', 'testing') AND overdue_notified_at IS NULL AND (
+        (level = 'n4' AND n4_first_due_at IS NOT NULL AND n4_first_response_at IS NULL AND n4_first_due_at <= @now)
+        OR (NOT (level = 'n4' AND n4_first_due_at IS NOT NULL) AND first_response_at IS NULL AND first_response_due_at IS NOT NULL AND first_response_due_at <= @now)
+    ) ORDER BY id ASC LIMIT 200`).all({ now: nowSql });
 }
 function markSupportOverdueNotified(caseId) {
     db.prepare("UPDATE support_cases SET overdue_notified_at = datetime('now') WHERE id = ?").run(caseId);
@@ -21221,6 +21226,100 @@ function updateSupportMap(clientId, patch) {
     if (sets.length) db.prepare(`UPDATE support_map SET ${sets.join(', ')} WHERE id = @id`).run(params);
     return db.prepare('SELECT * FROM support_map WHERE id = ?').get(row.id);
 }
+// ---- Reglas de atención de GEIPSA (Servicio a Cliente › Soporte › pestaña «Reglas de atención», lado SaaS) -----------------------------------------------------------------------------------------
+// Una sola fila para TODOS los clientes (Daniel, 2026-11-22: «iguales para todos»). Cuatro grupos, cada uno con su botón de ver y su botón de editar en el árbol de accesos de la cuenta (reglas::c0..c3 y reglas::a0..a3):
+// plazos (los del Nivel 4: 1ª respuesta y «Resolver en» por prioridad), horario (días y horas del equipo SaaS), urgente (aviso de un Urgente que nadie toma) y cierre (reapertura e intentos de contacto).
+// Al estrenarla todo queda como funcionaba: los plazos del Nivel 4 son los del cliente (interruptor apagado), sin horario (24 horas), el aviso de Urgente sigue el plazo del cliente y 7 días, 3 y 10 intentos.
+const SAAS_SUPPORT_RULES_DEFAULT_SCHEDULE = [1, 2, 3, 4, 5, 6, 7].map((day) => ({ day, on: day <= 5, from: '09:00', to: '18:00' }));
+// kind: int (con min y max) | bool | text | schedule (JSON: 7 días) | ids (JSON: cuentas de SaaS). label = cómo se llama el campo en el historial de cambios.
+const SAAS_SUPPORT_RULES_DEFS = (() => {
+    const defs = [];
+    const add = (key, column, kind, def, group, label, extra = {}) => defs.push({ key, column, kind, def, group, label, ...extra });
+    add('n4DeadlinesOn', 'n4_deadlines_on', 'bool', 0, 'plazos', 'Usar plazos propios de GEIPSA en el Nivel 4');
+    [['p1', 'Urgente', 5, 240], ['p2', 'Urgente, poco importante', 60, 1440], ['p3', 'No urgente pero importante', 1440, 4320], ['p4', 'No importante y no urgente', 4320, 10080]].forEach(([p, name, first, resolve]) => {
+        add(`${p}FirstMin`, `${p}_first_min`, 'int', first, 'plazos', `${name} · 1ª respuesta`, { min: 1, max: 525600, unit: 'min' });
+        add(`${p}ResolveMin`, `${p}_resolve_min`, 'int', resolve, 'plazos', `${name} · Resolver en`, { min: 0, max: 525600, unit: 'min' });
+    });
+    add('scheduleOn', 'schedule_on', 'bool', 0, 'horario', 'El plazo corre solo dentro del horario');
+    add('urgent24h', 'urgent_24h', 'bool', 1, 'horario', 'Los Urgentes corren las 24 horas');
+    add('timezone', 'timezone', 'text', 'America/Mexico_City', 'horario', 'Zona horaria del horario');
+    add('schedule', 'schedule', 'schedule', JSON.stringify(SAAS_SUPPORT_RULES_DEFAULT_SCHEDULE), 'horario', 'Horario de atención');
+    add('urgentAlertOn', 'urgent_alert_on', 'bool', 0, 'urgente', 'Usar este aviso de Urgente sin tomar en el Nivel 4');
+    add('urgentAlertMin', 'urgent_alert_min', 'int', 15, 'urgente', 'Avisar si nadie lo toma en', { min: 1, max: 10080, unit: 'min' });
+    add('urgentRepeatMin', 'urgent_repeat_min', 'int', 30, 'urgente', 'Repetir el aviso cada', { min: 0, max: 10080, unit: 'min' });
+    add('urgentToScope', 'urgent_to_scope', 'bool', 1, 'urgente', 'Avisar a quienes atienden ese giro y departamento');
+    add('urgentToUsers', 'urgent_to_users', 'ids', '[]', 'urgente', 'Avisar a la Coordinación SaaS');
+    add('reopenDays', 'reopen_days', 'int', 7, 'cierre', 'Días para reabrir un caso cerrado', { min: 1, max: 365, unit: 'd' });
+    add('needAttempts', 'need_attempts', 'int', 3, 'cierre', 'Intentos de contacto para cerrar «sin respuesta»', { min: 1, max: 20 });
+    add('maxAttempts', 'max_attempts', 'int', 10, 'cierre', 'Máximo de intentos que se pueden anotar', { min: 1, max: 50 });
+    return defs;
+})();
+db.exec('CREATE TABLE IF NOT EXISTS saas_support_rules (id INTEGER PRIMARY KEY CHECK (id = 1), updated_at TEXT, updated_by TEXT NOT NULL DEFAULT \'\')');
+{
+    const have = new Set(db.prepare('PRAGMA table_info(saas_support_rules)').all().map((c) => c.name));
+    SAAS_SUPPORT_RULES_DEFS.forEach((d) => {
+        if (have.has(d.column)) return;
+        const ddl = d.kind === 'int' || d.kind === 'bool' ? `INTEGER NOT NULL DEFAULT ${Number(d.def)}` : `TEXT NOT NULL DEFAULT '${String(d.def).replace(/'/g, "''")}'`;
+        db.exec(`ALTER TABLE saas_support_rules ADD COLUMN ${d.column} ${ddl}`);
+    });
+    db.prepare('INSERT OR IGNORE INTO saas_support_rules (id) VALUES (1)').run();
+}
+const SAAS_SUPPORT_RULES_DEFAULTS = Object.fromEntries(SAAS_SUPPORT_RULES_DEFS.map((d) => [d.key, d.kind === 'bool' ? !!d.def : (d.kind === 'int' ? Number(d.def) : (d.kind === 'schedule' || d.kind === 'ids' ? JSON.parse(d.def) : String(d.def)))]));
+function saasSupportRulesFromRow(row) {
+    const out = {};
+    SAAS_SUPPORT_RULES_DEFS.forEach((d) => {
+        const v = row[d.column];
+        if (d.kind === 'bool') out[d.key] = Number(v) === 1;
+        else if (d.kind === 'int') out[d.key] = Number(v);
+        else if (d.kind === 'schedule' || d.kind === 'ids') { try { const j = JSON.parse(v); out[d.key] = Array.isArray(j) ? j : SAAS_SUPPORT_RULES_DEFAULTS[d.key]; } catch { out[d.key] = SAAS_SUPPORT_RULES_DEFAULTS[d.key]; } }
+        else out[d.key] = String(v == null ? '' : v);
+    });
+    return out;
+}
+function getSaasSupportRules() {
+    return saasSupportRulesFromRow(db.prepare('SELECT * FROM saas_support_rules WHERE id = 1').get());
+}
+function getSaasSupportRulesMeta() {
+    const row = db.prepare('SELECT updated_at, updated_by FROM saas_support_rules WHERE id = 1').get();
+    return { updatedAt: row.updated_at ? `${String(row.updated_at).replace(' ', 'T')}Z` : null, updatedBy: row.updated_by || '' };
+}
+// Aplica un PATCH ya revisado (claves camelCase de SAAS_SUPPORT_RULES_DEFS) y regresa las reglas nuevas.
+function updateSaasSupportRules(patch, by) {
+    const sets = ["updated_at = datetime('now')", 'updated_by = @by']; const params = { by: by || '' };
+    SAAS_SUPPORT_RULES_DEFS.forEach((d) => {
+        if (!Object.prototype.hasOwnProperty.call(patch, d.key)) return;
+        let v = patch[d.key];
+        if (d.kind === 'int') v = Number(v);
+        else if (d.kind === 'bool') v = v ? 1 : 0;
+        else if (d.kind === 'schedule' || d.kind === 'ids') v = JSON.stringify(v);
+        else v = v == null ? '' : String(v);
+        sets.push(`${d.column} = @${d.key}`); params[d.key] = v;
+    });
+    db.prepare(`UPDATE saas_support_rules SET ${sets.join(', ')} WHERE id = 1`).run(params);
+    return getSaasSupportRules();
+}
+// ---- El Nivel 4 de cada caso: cuándo llegó y sus plazos propios (Reglas de atención) -------------------------------------------------------------------------------------------------------------------
+// n4_at: cuándo llegó el caso al Nivel 4 (entró directo, lo subió el Nivel 3 o lo reabrieron); n4_first_due_at y n4_resolve_due_at: sus plazos de GEIPSA (solo con «Usar plazos propios» prendido al llegar); n4_first_response_at: la primera
+// respuesta de alguien del Nivel 4 (un mensaje, no una nota); n4_alert_at y n4_alert_n: el último aviso de «Urgente sin tomar» y cuántos van (para repetirlo).
+for (const [col, ddl] of [['n4_at', 'TEXT'], ['n4_first_due_at', 'TEXT'], ['n4_resolve_due_at', 'TEXT'], ['n4_first_response_at', 'TEXT'], ['n4_alert_at', 'TEXT'], ['n4_alert_n', 'INTEGER NOT NULL DEFAULT 0']]) {
+    if (!db.prepare('PRAGMA table_info(support_cases)').all().some((c) => c.name === col)) db.exec(`ALTER TABLE support_cases ADD COLUMN ${col} ${ddl}`);
+}
+function markSupportN4Arrival(caseId, { firstDueSql = null, resolveDueSql = null } = {}) {
+    db.prepare("UPDATE support_cases SET n4_at = datetime('now'), n4_first_due_at = ?, n4_resolve_due_at = ?, n4_first_response_at = NULL, n4_alert_at = NULL, n4_alert_n = 0, overdue_notified_at = CASE WHEN ? IS NOT NULL THEN NULL ELSE overdue_notified_at END WHERE id = ?")
+        .run(firstDueSql, resolveDueSql, firstDueSql, caseId);
+}
+function setSupportN4FirstResponse(caseId, atSql) {
+    return db.prepare("UPDATE support_cases SET n4_first_response_at = ? WHERE id = ? AND level = 'n4' AND n4_first_response_at IS NULL").run(atSql, caseId).changes > 0;
+}
+function markSupportN4Alert(caseId, atSql) {
+    db.prepare('UPDATE support_cases SET n4_alert_at = ?, n4_alert_n = n4_alert_n + 1 WHERE id = ?').run(atSql, caseId);
+}
+// Urgentes que llegaron al Nivel 4 y nadie ha tomado: el primer aviso a los `minutes` de llegar y, si hay repetición, cada `repeatMin` después del último (0 = no repite).
+function listN4UrgentUntaken(nowSql, minutes, repeatMin) {
+    const first = db.prepare("SELECT * FROM support_cases WHERE level = 'n4' AND priority <= 2 AND status = 'open' AND assignee_user_id IS NULL AND n4_at IS NOT NULL AND n4_alert_n = 0 AND datetime(n4_at, '+' || ? || ' minutes') <= ? ORDER BY id ASC LIMIT 100").all(minutes, nowSql);
+    const again = repeatMin > 0 ? db.prepare("SELECT * FROM support_cases WHERE level = 'n4' AND priority <= 2 AND status = 'open' AND assignee_user_id IS NULL AND n4_alert_n > 0 AND n4_alert_at IS NOT NULL AND datetime(n4_alert_at, '+' || ? || ' minutes') <= ? ORDER BY id ASC LIMIT 100").all(repeatMin, nowSql) : [];
+    return [...first, ...again];
+}
 function seedActivosFijosValuesOnce() {
     if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ACTIVOS_FIJOS_SEED_KEY)) return;
     let seeded = 0;
@@ -21452,7 +21551,7 @@ seedSoporteCatalogsValuesOnce();
 seedSoporteEvidenceKindsOnce();
 
 module.exports = {
-    SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
+    SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers, SAAS_SUPPORT_RULES_DEFS, SAAS_SUPPORT_RULES_DEFAULTS, getSaasSupportRules, getSaasSupportRulesMeta, updateSaasSupportRules, markSupportN4Arrival, setSupportN4FirstResponse, markSupportN4Alert, listN4UrgentUntaken,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds, listSupportCasesForSaas, getSupportCaseForSaas, mapSupportLastMovesIntoN4, getSaasSupportScope, listSaasSupportScopes, listActiveBusinessSectorsBrief, setSaasSupportScope, listSaasSupportTakerIds, listSaasSuperAdminIds, listSaasSupportAccountNames, SUPPORT_SCOPE_DEPARTMENTS,
     listSupportHelpArticles, getSupportHelpArticle, createSupportHelpArticle, updateSupportHelpArticle, addSupportHelpUse, listSupportHelpUsesForClient,
     listSupportMovesForClient, listSupportClosuresForClient, listSupportRatingsForClient, listSupportInterruptsForClient, listSupportWorkerDepartments, listSupportUserNamesByIds,

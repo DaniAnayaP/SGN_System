@@ -607,7 +607,7 @@ const {
     getSupportMaterialById,
     deleteSupportMaterial,
     SUPPORT_MATERIAL_CATEGORIES,
-    SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers,
+    SUPPORT_MAP_TABLE_KEY, SUPPORT_MAP_FIELDS, SUPPORT_MAP_FIELD_DEFS, getSupportMapRow, updateSupportMap, listSupportMapUsers, SAAS_SUPPORT_RULES_DEFS, SAAS_SUPPORT_RULES_DEFAULTS, getSaasSupportRules, getSaasSupportRulesMeta, updateSaasSupportRules, markSupportN4Arrival, setSupportN4FirstResponse, markSupportN4Alert, listN4UrgentUntaken,
     getSupportCase, listSupportCases, createSupportCase, listSupportCaseFiles, countSupportCaseFiles, addSupportCaseFile, getSupportCaseFile,
     listSupportCaseMessages, addSupportCaseMessage, countSupportCaseEvents, setSupportFirstResponse,
     listSupportMoves, addSupportMove, usedSupportMoveFileIds, listSupportCasesForSaas, getSupportCaseForSaas, mapSupportLastMovesIntoN4, getSaasSupportScope, listSaasSupportScopes, listActiveBusinessSectorsBrief, setSaasSupportScope, listSaasSupportTakerIds, listSaasSuperAdminIds, listSaasSupportAccountNames, SUPPORT_SCOPE_DEPARTMENTS,
@@ -4440,7 +4440,7 @@ const SAAS_APP_STATUSES = ['active', 'inactive', 'development'];
 
 // Historial de cambios de las tablas de SaaS sin tabla propia (saas_table_changes):
 // Nuestras Apps, Nuestros Respaldos y Material de Apoyo. Con ?recordId=, solo esa fila.
-const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo', 'relacion-accesos', 'expansiones-saas', 'capacitacion-saas', 'implementaciones-saas', 'apps-clientes-saas'];
+const SAAS_TABLE_CHANGES_KEYS = ['nuestras-apps', 'admin-nuestros-respaldos', 'admin-material-apoyo', 'relacion-accesos', 'expansiones-saas', 'capacitacion-saas', 'implementaciones-saas', 'apps-clientes-saas', 'reglas-atencion'];
 function logSaasChange(req, tableKey, recordId, recordLabel, fieldKey, oldValue, newValue, action = 'update') {
     logSaasTableChange({ tableKey, recordId, recordLabel, action, fieldKey, oldValue, newValue, changedBy: changedByLabel(req) });
 }
@@ -13103,16 +13103,17 @@ app.post('/api/business/support-cases/:id/classify', requireAuth, (req, res) => 
 // 3) El usuario puede reabrir un caso cerrado durante 7 días (o escribir en uno «sin respuesta»: se reabre solo). Cada paso queda en support_case_closures y en el recorrido; lo escrito no se edita ni se borra.
 const SUPPORT_WORKING_STATUSES = ['open', 'review', 'working', 'testing'];
 const SUPPORT_CLOSED_STATUSES = ['done', 'noresp'];
-const SUPPORT_REOPEN_DAYS = 7;
-const SUPPORT_NEED_ATTEMPTS = 3;
-const SUPPORT_MAX_ATTEMPTS = 10;
+// Reglas de atención de GEIPSA (pestaña del SaaS): días para reabrir, intentos de contacto para cerrar sin respuesta y máximo de intentos; los valores de siempre (7, 3 y 10) son los de fábrica.
+const supportReopenDays = () => getSaasSupportRules().reopenDays;
+const supportNeedAttempts = () => getSaasSupportRules().needAttempts;
+const supportMaxAttempts = () => getSaasSupportRules().maxAttempts;
 const SUPPORT_ATTEMPT_CHANNELS = ['chat', 'call', 'email', 'other'];
 const SUPPORT_CLOSE_TEXT_MIN = 10;
 const SUPPORT_SAID_MIN = 5;
 const supportCleanText = (v, max = SUPPORT_MOVE_TEXT_MAX) => String(v === null || v === undefined ? '' : v).replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').replace(/ ?\n ?/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, max);
 const supportCanResolve = (req, rec) => !supportIsReporter(req, rec) && supportCan(req, 'colSpResolver') && supportCanActOnLevel(req, rec) && SUPPORT_WORKING_STATUSES.includes(rec.status);
 const supportCanClose = (req, rec) => !supportIsReporter(req, rec) && supportCan(req, 'colSpCerrar') && rec.level === 'n1' && supportCanActOnLevel(req, rec) && rec.status === 'confirm';
-const supportReopenUntilMs = (rec) => (rec.closed_at ? new Date(sqlUtcIso(rec.closed_at)).getTime() + SUPPORT_REOPEN_DAYS * 86400000 : null);
+const supportReopenUntilMs = (rec) => (rec.closed_at ? new Date(sqlUtcIso(rec.closed_at)).getTime() + supportReopenDays() * 86400000 : null);
 const supportCanReopen = (req, rec) => supportIsReporter(req, rec) && SUPPORT_CLOSED_STATUSES.includes(rec.status) && supportReopenUntilMs(rec) !== null && Date.now() <= supportReopenUntilMs(rec);
 // Las evidencias de un traspaso o de «marcar resuelto»: de este caso, hechas por el equipo (no por quien reportó) y que no se hayan usado en otro traspaso.
 function supportMoveFilesOk(rec, fileIds) {
@@ -13192,7 +13193,7 @@ app.get('/api/business/support-cases/:id/closing', requireAuth, (req, res) => {
     res.json({
         status: rec.status, level: rec.level, confirmAt: sqlUtcIso(rec.confirm_at), closedAt: sqlUtcIso(rec.closed_at), closedBy: rec.closed_by || '', closeDid: rec.close_did || '', cause: rec.cause_name || '', reopenedCount: rec.reopened_count || 0,
         canResolve: supportCanResolve(req, rec), canClose, minText: SUPPORT_CLOSE_TEXT_MIN, minSaid: SUPPORT_SAID_MIN, maxText: SUPPORT_MOVE_TEXT_MAX,
-        causes: canClose ? supportCauseOptions(req) : [], files: canClose ? eligible : [], channels: SUPPORT_ATTEMPT_CHANNELS, needAttempts: SUPPORT_NEED_ATTEMPTS, maxAttempts: SUPPORT_MAX_ATTEMPTS,
+        causes: canClose ? supportCauseOptions(req) : [], files: canClose ? eligible : [], channels: SUPPORT_ATTEMPT_CHANNELS, needAttempts: supportNeedAttempts(), maxAttempts: supportMaxAttempts(),
         attempts: attempts.map((a) => ({ id: a.id, channel: a.channel, note: a.note, by: a.by_name, createdAt: sqlUtcIso(a.created_at) })),
         resolved: lastResolved ? { by: lastResolved.by_name, level: lastResolved.from_level, did: lastResolved.did, fileCount: parseJsonOr(lastResolved.file_ids, []).length, general: lastResolved.said || '', createdAt: sqlUtcIso(lastResolved.created_at) } : null,
         closures: closures.map((c) => ({ id: c.id, kind: c.kind, by: c.by_name, from: c.from_level, to: c.to_level, cause: c.cause_name, createdAt: sqlUtcIso(c.created_at) })),
@@ -13237,7 +13238,7 @@ app.post('/api/business/support-cases/:id/attempts', requireAuth, (req, res) => 
     const note = supportCleanText(body.note, 500);
     if (note.length < SUPPORT_SAID_MIN) return bad('Escribe una nota del intento (qué hiciste y qué pasó).', 'NOTE');
     const so = listSupportAttempts(rec.id, rec.confirm_at);
-    if (so.length >= SUPPORT_MAX_ATTEMPTS) return bad('Ya hay demasiados intentos registrados: ciérralo sin respuesta.', 'MAX');
+    if (so.length >= supportMaxAttempts()) return bad('Ya hay demasiados intentos registrados: ciérralo sin respuesta.', 'MAX');
     ensureSupportThread(rec);
     const by = changedByLabel(req);
     const a = addSupportAttempt({ caseId: rec.id, clientId: req.user.clientId, channel, note, byUserId: req.user.sub, byName: by });
@@ -13280,7 +13281,7 @@ app.post('/api/business/support-cases/:id/close', requireAuth, (req, res) => {
         if (!fileIds.every((fileId) => { const f = getSupportCaseFile(rec.id, fileId); return !!f && !!rec.confirm_at && f.created_at >= rec.confirm_at; })) return bad('Las evidencias del cierre deben ser de este caso y de después de que quedó por confirmar.', 'FILES');
     } else {
         const attempts = listSupportAttempts(rec.id, rec.confirm_at);
-        if (attempts.length < SUPPORT_NEED_ATTEMPTS) return bad(`Para cerrarlo sin respuesta faltan intentos de contacto: llevas ${attempts.length} de ${SUPPORT_NEED_ATTEMPTS}.`, 'ATTEMPTS');
+        if (attempts.length < supportNeedAttempts()) return bad(`Para cerrarlo sin respuesta faltan intentos de contacto: llevas ${attempts.length} de ${supportNeedAttempts()}.`, 'ATTEMPTS');
         status = 'noresp';
         did = supportCleanText(`Sin respuesta del usuario tras ${attempts.length} intentos de contacto.`);
     }
@@ -13290,7 +13291,7 @@ app.post('/api/business/support-cases/:id/close', requireAuth, (req, res) => {
     supportLogCaseChange(req, rec, 'main.colSpEstatus', supportStatusLabel('confirm'), supportStatusLabel(status));
     if (rec.general_id) closeSupportGeneralIfDone(rec.general_id);
     supportNoticeClosedToBoss(rec, { status, by, actorUserId: req.user.sub });
-    if (rec.reporter_user_id && rec.reporter_user_id !== req.user.sub) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-closed', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, noresp: status === 'noresp', until: new Date(Date.now() + SUPPORT_REOPEN_DAYS * 86400000).toISOString(), askRating: status === 'done' && getSupportMapRow(req.user.clientId).ask_user_rating === 1, by } });
+    if (rec.reporter_user_id && rec.reporter_user_id !== req.user.sub) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-closed', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, noresp: status === 'noresp', until: new Date(Date.now() + supportReopenDays() * 86400000).toISOString(), askRating: status === 'done' && getSupportMapRow(req.user.clientId).ask_user_rating === 1, by } });
     res.json({ status });
 });
 // El usuario reabre su caso cerrado (hasta 7 días después): dice qué sigue fallando y el caso vuelve a la Mesa de ayuda.
@@ -13300,7 +13301,7 @@ app.post('/api/business/support-cases/:id/reopen', requireAuth, (req, res) => {
     const bad = (message, code) => res.status(400).json({ message, code });
     if (!supportIsReporter(req, rec)) return res.status(403).json({ message: 'Solo quien reportó el caso lo reabre.', code: 'FORBIDDEN' });
     if (!SUPPORT_CLOSED_STATUSES.includes(rec.status)) return bad('Este caso no está cerrado.', 'STATE');
-    if (!supportCanReopen(req, rec)) return bad(`Ya pasaron más de ${SUPPORT_REOPEN_DAYS} días desde que se cerró: abre una solicitud nueva.`, 'EXPIRED');
+    if (!supportCanReopen(req, rec)) return bad(`Ya pasaron más de ${supportReopenDays()} días desde que se cerró: abre una solicitud nueva.`, 'EXPIRED');
     const said = supportCleanText(req.body && req.body.said);
     if (said.length < SUPPORT_SAID_MIN) return bad('Cuéntanos qué sigue fallando.', 'SAID');
     const reopenLevel = supportClientNoTi(rec.client_id) ? 'n4' : 'n1';
@@ -13491,20 +13492,74 @@ const supportQueueRowOf = (r, me, levels, q, canTake, canPause) => ({
     impacts: parseJsonOr(r.impacts, []).filter((i) => i.level > 0), mine: r.assignee_user_id === me, canTake: canTake && !r.assignee_user_id && ['open', 'review', 'working', 'testing'].includes(r.status) && levels.includes(r.level),
     canPause: canPause && q.allowPause && r.assignee_user_id === me && SUPPORT_PAUSABLE_STATUSES.includes(r.status), canResume: canPause && r.status === 'paused' && (r.assignee_user_id === me || !r.assignee_user_id || levels.includes(r.level)),
 });
-// A Coordinación (administradores de la empresa y el jefe directo de quien lo posponía) y a las personas del nivel: un Urgente que nadie toma.
-function supportAlertUrgentUntaken(c, { reason, byUserId = null }) {
-    const rec = listSupportAccessRecipients(c.client_id, byUserId, !!c.is_test_data);
-    const levelUsers = ['n1', 'n2', 'n3'].includes(c.level) ? parseClassificationIds(getSupportMapRow(c.client_id)[`${c.level}_users`]) : [];
-    const recipients = [...rec.admins, rec.boss, ...levelUsers].filter((id) => id && id !== byUserId);
-    publishSupportNotice({ recipients, actorUserId: null, actorLabel: 'Sistema', payload: { variant: 'urgent-untaken', caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary, targetName: c.reporter_name, level: c.level, priority: c.priority, since: sqlUtcIso(c.created_at), reason } });
-    addSupportEvent(c, 'int_urgent_alert', { reason }, { level: c.level, authorName: 'Sistema' });
+// ---- Reglas de atención de GEIPSA: el reloj del Nivel 4 (pestaña «Reglas de atención» de Soporte en el SaaS) -----------------------------------------------------------------------------------
+// Con «Usar plazos propios» prendido, un caso que llega al Nivel 4 (entró directo, lo subió el Nivel 3 o lo reabrieron) recibe los plazos de GEIPSA de su prioridad, contados desde que llegó: la primera respuesta y «Resolver en» (0 = sin plazo).
+// Con «El plazo corre solo dentro del horario», el reloj solo avanza en los días y horas del equipo SaaS (en su zona horaria); los Urgentes (prioridad 1 y 2) corren las 24 horas si el interruptor lo dice.
+const hhmmToMin = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s)); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+const saasRulesTimeZone = (rules) => { try { new Intl.DateTimeFormat('en-US', { timeZone: rules.timezone }); return rules.timezone; } catch { return 'America/Mexico_City'; } };
+function saasLocalParts(ms, tz) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
+    return { dow: { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 }[parts.weekday], min: Number(parts.hour) * 60 + Number(parts.minute) };
+}
+// El momento en que se cumplen `minutes` minutos de atención a partir de startMs (ms). minutes <= 0 = sin plazo (null).
+function saasAddAttentionMinutes(startMs, minutes, rules) {
+    if (!(minutes > 0)) return null;
+    if (!rules.scheduleOn) return startMs + minutes * 60000;
+    const tz = saasRulesTimeZone(rules);
+    const week = new Map();
+    (rules.schedule || []).forEach((d) => { if (d && d.on) { const from = hhmmToMin(d.from); const to = hhmmToMin(d.to); if (from !== null && to !== null && to > from) week.set(Number(d.day), { from, to }); } });
+    if (!week.size) return startMs + minutes * 60000; // ningún día con horario válido: el reloj no se detiene
+    let cursor = startMs; let left = minutes;
+    for (let i = 0; i < 1200 && left > 0; i += 1) {
+        const { dow, min } = saasLocalParts(cursor, tz);
+        const w = week.get(dow);
+        if (!w || min >= w.to) { cursor += (1440 - min) * 60000; continue; } // día sin atención o ya terminó: al siguiente día
+        if (min < w.from) { cursor += (w.from - min) * 60000; continue; } // todavía no abren
+        const room = w.to - min;
+        if (left <= room) return cursor + left * 60000;
+        left -= room; cursor += room * 60000;
+    }
+    return cursor;
+}
+function supportN4Dues(rec, rules, nowMs) {
+    if (!rules.n4DeadlinesOn) return { first: null, resolve: null };
+    const p = Math.min(4, Math.max(1, Number(rec.priority) || 4));
+    const clock = p <= 2 && rules.urgent24h ? { ...rules, scheduleOn: false } : rules;
+    const first = saasAddAttentionMinutes(nowMs, rules[`p${p}FirstMin`], clock);
+    const resolve = saasAddAttentionMinutes(nowMs, rules[`p${p}ResolveMin`], clock);
+    return { first: first ? sqlUtcFromMs(first) : null, resolve: resolve ? sqlUtcFromMs(resolve) : null };
+}
+function supportMarkArrivedN4(caseId) {
+    const rec = getSupportCaseById(caseId);
+    if (!rec) return;
+    const d = supportN4Dues(rec, getSaasSupportRules(), Date.now());
+    markSupportN4Arrival(caseId, { firstDueSql: d.first, resolveDueSql: d.resolve });
+}
+// A quién avisa el «Urgente sin tomar» del Nivel 4 con las reglas de GEIPSA: quienes atienden ese giro y departamento (si está prendido) y las cuentas de la Coordinación SaaS que se eligieron.
+function saasUrgentRecipients(rec, rules) {
+    const ids = new Set(rules.urgentToScope ? saasSupportRecipients(rec) : []);
+    const valid = new Set([...listSaasSupportTakerIds(), ...listSaasSuperAdminIds()]);
+    (rules.urgentToUsers || []).forEach((id) => { if (valid.has(id)) ids.add(id); });
+    return [...ids];
+}
+// A Coordinación (administradores de la empresa y el jefe directo de quien lo posponía) y a las personas del nivel: un Urgente que nadie toma. Con las reglas de GEIPSA (rules) en el Nivel 4 el aviso sale a los minutos que se pusieron
+// desde que el caso llegó y se repite (repeat: los avisos siguientes solo van a quien atiende en SaaS, no otra vez a la empresa).
+function supportAlertUrgentUntaken(c, { reason, byUserId = null, rules = null, repeat = false }) {
+    if (!repeat) {
+        const rec = listSupportAccessRecipients(c.client_id, byUserId, !!c.is_test_data);
+        const levelUsers = ['n1', 'n2', 'n3'].includes(c.level) ? parseClassificationIds(getSupportMapRow(c.client_id)[`${c.level}_users`]) : [];
+        const recipients = [...rec.admins, rec.boss, ...levelUsers].filter((id) => id && id !== byUserId);
+        publishSupportNotice({ recipients, actorUserId: null, actorLabel: 'Sistema', payload: { variant: 'urgent-untaken', caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary, targetName: c.reporter_name, level: c.level, priority: c.priority, since: sqlUtcIso(c.created_at), reason } });
+        addSupportEvent(c, 'int_urgent_alert', { reason }, { level: c.level, authorName: 'Sistema' });
+    }
     if (c.level === 'n4') {
         const full = getSupportCaseForSaas(c.id);
-        if (full) publishSupportNotice({ recipients: saasSupportRecipients(full, { coordination: true }), actorUserId: null, actorLabel: 'Sistema', payload: { variant: 'urgent-untaken', saas: true, caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary, client: full.client_name, targetName: c.reporter_name, level: 'n4', priority: c.priority, since: sqlUtcIso(c.created_at), reason } });
+        if (full) publishSupportNotice({ recipients: rules ? saasUrgentRecipients(full, rules) : saasSupportRecipients(full, { coordination: true }), actorUserId: null, actorLabel: 'Sistema', payload: { variant: 'urgent-untaken', saas: true, caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary, client: full.client_name, targetName: c.reporter_name, level: 'n4', priority: c.priority, since: sqlUtcIso(c.n4_at || c.created_at), reason } });
     }
 }
 function processSupportUrgent() {
     const nowSql = sqlUtcFromMs(Date.now());
+    const rules = getSaasSupportRules();
     for (const it of listDueSupportInterrupts(nowSql)) {
         markSupportInterruptAlerted(it.id);
         const urgent = getSupportCaseById(it.urgent_case_id);
@@ -13514,9 +13569,18 @@ function processSupportUrgent() {
             try { supportAlertUrgentUntaken(urgent, { reason: 'deferred', byUserId: it.user_id }); } catch (err) { console.error('support urgent alert failed', err); }
         }
     }
-    for (const c of listUrgentUntakenSupportCases(nowSql)) {
+    for (const c of listUrgentUntakenSupportCases(nowSql, { skipN4: rules.urgentAlertOn })) {
         markSupportUrgentAlerted(c.id);
         try { supportAlertUrgentUntaken(c, { reason: 'overdue' }); } catch (err) { console.error('support urgent alert failed', err); }
+    }
+    // Reglas de atención › «Aviso de Urgente sin tomar»: en el Nivel 4 el aviso sale a los minutos que puso GEIPSA desde que llegó el caso y se repite hasta que alguien lo tome.
+    if (rules.urgentAlertOn) {
+        for (const c of listN4UrgentUntaken(nowSql, rules.urgentAlertMin, rules.urgentRepeatMin)) {
+            const repeat = c.n4_alert_n > 0;
+            markSupportN4Alert(c.id, nowSql);
+            if (!repeat) markSupportUrgentAlerted(c.id);
+            try { supportAlertUrgentUntaken(c, { reason: 'n4_wait', rules, repeat }); } catch (err) { console.error('support n4 urgent alert failed', err); }
+        }
     }
     try { processSupportOverdue(nowSql); } catch (err) { console.error('support overdue failed', err); }
 }
@@ -13531,7 +13595,7 @@ function processSupportOverdue(nowSql) {
         if (!mapOn.get(c.client_id) || !c.reporter_user_id) continue;
         const boss = resolveDirectSupervisorUserId(c.reporter_user_id);
         if (!boss || boss === c.reporter_user_id) continue;
-        publishSupportNotice({ recipients: [boss], actorUserId: null, actorLabel: 'Sistema', payload: { variant: 'case-overdue-boss', caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary, targetName: c.reporter_name, level: c.level, priority: c.priority, dueAt: sqlUtcIso(c.first_response_due_at) } });
+        publishSupportNotice({ recipients: [boss], actorUserId: null, actorLabel: 'Sistema', payload: { variant: 'case-overdue-boss', caseId: c.id, folio: supportFolio(c.record_number), summary: c.summary, targetName: c.reporter_name, level: c.level, priority: c.priority, dueAt: sqlUtcIso(c.level === 'n4' && c.n4_first_due_at ? c.n4_first_due_at : c.first_response_due_at) } });
         ensureSupportThread(c);
         addSupportEvent(c, 'int_overdue_alert', {}, { level: c.level, authorName: 'Sistema' });
     }
@@ -13799,7 +13863,7 @@ app.get('/api/business/my-support', requireAuth, (req, res) => {
     const rows = listSupportCases(clientId, isTestAccount, { limit: 2000 }).filter((r) => r.reporter_user_id === req.user.sub);
     res.set('Cache-Control', 'no-store');
     res.json({
-        canCreate: true, helpDesk, provider: supportClientNoTi(clientId), askRating: row.ask_user_rating === 1, reopenDays: SUPPORT_REOPEN_DAYS,
+        canCreate: true, helpDesk, provider: supportClientNoTi(clientId), askRating: row.ask_user_rating === 1, reopenDays: supportReopenDays(),
         cases: rows.map((r) => ({ ...supportCaseRowOf(r, client, false), rateCan: supportUserRatingState(req, r).canRate, reopenCan: supportCanReopen(req, r), reopenUntil: supportCanReopen(req, r) ? new Date(supportReopenUntilMs(r)).toISOString() : null })),
     });
 });
@@ -13969,6 +14033,7 @@ function saasSupportAssignable(rec) {
 }
 // Aviso de campana a quien atiende ese giro y departamento: llegó un caso al Nivel 4 (lo subió el Nivel 3 de la empresa o entró directo). Un caso de una cuenta de prueba no cuenta.
 function publishSaasCaseArrived(caseId, { by = '', fromLevel = '', reason = '', direction = 'up', actorUserId = null, reopened = false, said = '' } = {}) {
+    try { supportMarkArrivedN4(caseId); } catch (err) { console.error('support n4 arrival failed', err); } // el reloj del Nivel 4 (Reglas de atención) arranca al llegar
     const rec = getSupportCaseForSaas(caseId);
     if (!rec) return [];
     return publishSupportNotice({ recipients: saasSupportRecipients(rec, { exclude: actorUserId }), actorUserId, actorLabel: by || 'Sistema', payload: { variant: 'saas-arrived', saas: true, caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, client: rec.client_name, sector: rec.sector_name, targetName: rec.reporter_name, from: fromLevel, reason, direction, by, priority: rec.priority, reopened: !!reopened, said: said || '' } });
@@ -14025,6 +14090,8 @@ const saasSupportRowOf = (r, from, me) => ({
     priority: r.priority, status: r.status, level: r.level, atN4: saasSupportAtN4(r), assigneeId: r.assignee_user_id || null, assigneeName: r.assignee_name || '', mine: r.assignee_user_id === me,
     from: from ? { level: from.from_level, by: from.by_name, at: sqlUtcIso(from.created_at), reason: from.reason } : null, direct: !from, fileCount: r.file_count || 0, moves: r.move_count || 0,
     createdAt: sqlUtcIso(r.created_at), dueAt: sqlUtcIso(r.first_response_due_at), firstResponseAt: sqlUtcIso(r.first_response_at), reporter: r.reporter_name,
+    // los plazos propios de GEIPSA en el Nivel 4 (Reglas de atención): null si no se usan
+    n4: r.n4_first_due_at || r.n4_resolve_due_at ? { firstDueAt: sqlUtcIso(r.n4_first_due_at), firstResponseAt: sqlUtcIso(r.n4_first_response_at), resolveDueAt: sqlUtcIso(r.n4_resolve_due_at) } : null,
 });
 app.get('/api/admin/support-cases', requireAuth, requireAdmin, (req, res) => {
     if (!saasSupportHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver el Soporte.' });
@@ -14037,7 +14104,7 @@ app.get('/api/admin/support-cases', requireAuth, requireAdmin, (req, res) => {
     const free = (c) => c.atN4 && !c.assigneeId && c.inScope;
     const mine = (c) => c.atN4 && c.mine;
     res.set('Cache-Control', 'no-store');
-    res.json({ cases: rows, counts: { mine: rows.filter(mine).length, free: rows.filter(free).length, all: rows.length }, truncated: rows.length >= LIMIT, me, canEvidence: saasSupportCan(req, 'evidence'), canChat: saasSupportCan(req, 'chat'), canTake: saasSupportCan(req, 'take'), canKpi: Object.values(saasSupportKpiSections(req)).some(Boolean), scope: { configured: superAdmin || (scope.sectors !== null && scope.departments !== null), superAdmin } });
+    res.json({ cases: rows, counts: { mine: rows.filter(mine).length, free: rows.filter(free).length, all: rows.length }, truncated: rows.length >= LIMIT, me, canEvidence: saasSupportCan(req, 'evidence'), canChat: saasSupportCan(req, 'chat'), canTake: saasSupportCan(req, 'take'), canKpi: Object.values(saasSupportKpiSections(req)).some(Boolean), canRules: Object.values(saasRulesAccess(req)).some((a) => a.view), scope: { configured: superAdmin || (scope.sectors !== null && scope.departments !== null), superAdmin } });
 });
 // ---- KPI del Nivel 4 (Servicio a Cliente › Soporte › pestaña «KPI del Nivel 4») -----------------------------------------------------------------------------------------------------------------------
 // Lo mismo que el KPI de la empresa pero visto desde GEIPSA (el proveedor): de los casos de TODAS las empresas que llegaron al Nivel 4, cuántos llegaron y de dónde, cuántos se resolvieron o se devolvieron, cuánto tardó la primera respuesta y
@@ -14206,6 +14273,8 @@ app.post('/api/admin/support-cases/:id/messages', requireAuth, requireAdmin, (re
     const by = req.user.name;
     const created = addSupportCaseMessage({ caseId: rec.id, clientId: rec.client_id, kind: note ? 'note' : 'message', level: 'n4', authorUserId: req.user.sub, authorName: by, body: text, fileId });
     // la primera respuesta del equipo (un mensaje al usuario; una nota no cuenta)
+    // la primera respuesta del Nivel 4 (la que cuenta para el plazo de GEIPSA) se anota aparte de la primera respuesta del caso
+    if (!note) setSupportN4FirstResponse(rec.id, sqlUtcFromMs(Date.now()));
     if (!note && setSupportFirstResponse(rec.id, sqlUtcFromMs(Date.now()))) {
         const minutes = Math.max(0, Math.round((Date.now() - new Date(sqlUtcIso(rec.created_at)).getTime()) / 60000));
         const due = rec.first_response_due_at ? new Date(sqlUtcIso(rec.first_response_due_at)).getTime() : null;
@@ -14375,7 +14444,7 @@ function saasSupportClosingOf(req, rec, canClose) {
     const lastResolved = [...closures].reverse().find((c) => c.kind === 'resolved') || null;
     const attempts = listSupportAttempts(rec.id, rec.confirm_at);
     return {
-        canClose: !!canClose, confirmAt: sqlUtcIso(rec.confirm_at), minText: SUPPORT_CLOSE_TEXT_MIN, minSaid: SUPPORT_SAID_MIN, maxText: SUPPORT_MOVE_TEXT_MAX, needAttempts: SUPPORT_NEED_ATTEMPTS, maxAttempts: SUPPORT_MAX_ATTEMPTS, channels: SUPPORT_ATTEMPT_CHANNELS,
+        canClose: !!canClose, confirmAt: sqlUtcIso(rec.confirm_at), minText: SUPPORT_CLOSE_TEXT_MIN, minSaid: SUPPORT_SAID_MIN, maxText: SUPPORT_MOVE_TEXT_MAX, needAttempts: supportNeedAttempts(), maxAttempts: supportMaxAttempts(), channels: SUPPORT_ATTEMPT_CHANNELS,
         causes: canClose ? saasSupportCauseOptions(rec) : [],
         files: canClose && rec.confirm_at ? listSupportCaseFiles(rec.id).filter((f) => f.created_at >= rec.confirm_at).map(supportFileOf) : [],
         attempts: attempts.map((a) => ({ id: a.id, channel: a.channel, note: a.note, by: a.by_name, createdAt: sqlUtcIso(a.created_at) })),
@@ -14394,7 +14463,7 @@ app.post('/api/admin/support-cases/:id/attempts', requireAuth, requireAdmin, (re
     const note = supportCleanText(body.note, 500);
     if (note.length < SUPPORT_SAID_MIN) return bad('Escribe una nota del intento (qué hiciste y qué pasó).', 'NOTE');
     const so = listSupportAttempts(rec.id, rec.confirm_at);
-    if (so.length >= SUPPORT_MAX_ATTEMPTS) return bad('Ya hay demasiados intentos registrados: ciérralo sin respuesta.', 'MAX');
+    if (so.length >= supportMaxAttempts()) return bad('Ya hay demasiados intentos registrados: ciérralo sin respuesta.', 'MAX');
     ensureSupportThread(rec);
     const by = req.user.name;
     const a = addSupportAttempt({ caseId: rec.id, clientId: rec.client_id, channel, note, byUserId: req.user.sub, byName: by });
@@ -14431,7 +14500,7 @@ app.post('/api/admin/support-cases/:id/close', requireAuth, requireAdmin, (req, 
         if (!fileIds.every((fileId) => { const f = getSupportCaseFile(rec.id, fileId); return !!f && !!rec.confirm_at && f.created_at >= rec.confirm_at; })) return bad('Las evidencias del cierre deben ser de este caso y de después de que quedó por confirmar.', 'FILES');
     } else {
         const attempts = listSupportAttempts(rec.id, rec.confirm_at);
-        if (attempts.length < SUPPORT_NEED_ATTEMPTS) return bad(`Para cerrarlo sin respuesta faltan intentos de contacto: llevas ${attempts.length} de ${SUPPORT_NEED_ATTEMPTS}.`, 'ATTEMPTS');
+        if (attempts.length < supportNeedAttempts()) return bad(`Para cerrarlo sin respuesta faltan intentos de contacto: llevas ${attempts.length} de ${supportNeedAttempts()}.`, 'ATTEMPTS');
         status = 'noresp';
         did = supportCleanText(`Sin respuesta del usuario tras ${attempts.length} intentos de contacto.`);
     }
@@ -14440,7 +14509,7 @@ app.post('/api/admin/support-cases/:id/close', requireAuth, requireAdmin, (req, 
     addSupportEvent(rec, 'closed', { by, noresp: status === 'noresp', cause: causeName, attempts: status === 'noresp' ? listSupportAttempts(rec.id, rec.confirm_at).length : 0 }, { level: 'n4', authorName: by, authorUserId: req.user.sub });
     supportLogCaseChange(sreq, rec, 'main.colSpEstatus', supportStatusLabel('confirm'), supportStatusLabel(status));
     supportNoticeClosedToBoss(rec, { status, by, actorUserId: req.user.sub });
-    if (rec.reporter_user_id) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-closed', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, noresp: status === 'noresp', until: new Date(Date.now() + SUPPORT_REOPEN_DAYS * 86400000).toISOString(), askRating: status === 'done' && getSupportMapRow(rec.client_id).ask_user_rating === 1, by } });
+    if (rec.reporter_user_id) publishSupportNotice({ recipients: [rec.reporter_user_id], actorUserId: req.user.sub, actorLabel: by, payload: { variant: 'case-closed', caseId: rec.id, folio: supportFolio(rec.record_number), summary: rec.summary, noresp: status === 'noresp', until: new Date(Date.now() + supportReopenDays() * 86400000).toISOString(), askRating: status === 'done' && getSupportMapRow(rec.client_id).ask_user_rating === 1, by } });
     res.json({ status });
 });
 // Coordinación (el administrador principal) le asigna el caso a una persona que lo atiende: el caso queda a su nombre y le llega el aviso. Quien reasigna no cambia el estatus.
@@ -14493,6 +14562,91 @@ app.put('/api/admin/saas-users/:id/support-scope', requireAuth, requireAdmin, (r
     if (out.sectors === undefined && out.departments === undefined) return bad('No hay nada que guardar.');
     const scope = setSaasSupportScope(targetId, out, changedByLabel(req));
     res.json({ scope });
+});
+// ---- Servicio a Cliente › Soporte › pestaña «Reglas de atención» (Daniel, 2026-11-22) ------------------------------------------------------------------------------------------------------------------
+// Las reglas con que GEIPSA (Nivel 4) atiende los casos de TODAS las empresas: una sola fila (db.js SAAS_SUPPORT_RULES_DEFS). Cuatro grupos; cada uno con su botón de ver (reglas::c0..c3) y de editar (reglas::a0..a3) en el árbol de
+// accesos de la cuenta (posiciones en SaasAdminCatalog.js: no cambiar el orden). Quien edita necesita también ver. Cada cambio queda en el historial (saas_table_changes, tabla 'reglas-atencion').
+const SAAS_RULES_GROUPS = ['plazos', 'horario', 'urgente', 'cierre'];
+const saasRulesCan = (req, group, mode) => !!req.user.isSaasSuperAdmin || hasSaasGrant(getSaasUserGrants(req.user.sub), SAAS_SUPPORT_ITEM, `reglas::${mode === 'edit' ? 'a' : 'c'}${SAAS_RULES_GROUPS.indexOf(group)}`);
+const saasRulesAccess = (req) => Object.fromEntries(SAAS_RULES_GROUPS.map((g) => [g, { view: saasRulesCan(req, g, 'view'), edit: saasRulesCan(req, g, 'view') && saasRulesCan(req, g, 'edit') }]));
+const SAAS_RULES_DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+// Las cuentas de SaaS a las que se puede avisar (las que pueden tomar casos y el administrador principal).
+function saasRulesPeople() {
+    return listSaasSupportAccountNames([...new Set([...listSaasSupportTakerIds(), ...listSaasSuperAdminIds()])]).map((u) => ({ id: u.id, name: u.name }));
+}
+function saasRulesValueText(def, v) {
+    if (def.kind === 'bool') return v ? 'Sí' : 'No';
+    if (def.kind === 'schedule') return (v || []).map((d) => `${SAAS_RULES_DAYS[Number(d.day) - 1] || d.day} ${d.on ? `${d.from}-${d.to}` : 'sin atención'}`).join(', ');
+    if (def.kind === 'ids') { const names = new Map(saasRulesPeople().map((p) => [p.id, p.name])); return (v || []).map((id) => names.get(id) || `#${id}`).join(', ') || '—'; }
+    return `${v}${def.unit ? ` ${def.unit}` : ''}`;
+}
+function saasRulesPayload(req) {
+    const access = saasRulesAccess(req);
+    const rules = getSaasSupportRules();
+    const values = {};
+    SAAS_SUPPORT_RULES_DEFS.forEach((d) => { if (access[d.group].view) values[d.key] = rules[d.key]; });
+    let timezones = [];
+    try { timezones = Intl.supportedValuesOf('timeZone'); } catch { timezones = [rules.timezone]; }
+    const groups = {}; const units = {};
+    SAAS_SUPPORT_RULES_DEFS.forEach((d) => { (groups[d.group] = groups[d.group] || []).push(d.key); if (d.unit) units[d.key] = d.unit; });
+    return { access, values, groups, units, defaults: SAAS_SUPPORT_RULES_DEFAULTS, limits: Object.fromEntries(SAAS_SUPPORT_RULES_DEFS.filter((d) => d.kind === 'int').map((d) => [d.key, { min: d.min, max: d.max }])), meta: getSaasSupportRulesMeta(), people: access.urgente.view ? saasRulesPeople() : [], timezones };
+}
+app.get('/api/admin/support-rules', requireAuth, requireAdmin, (req, res) => {
+    if (!saasSupportHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver el Soporte.' });
+    if (!Object.values(saasRulesAccess(req)).some((a) => a.view)) return res.status(403).json({ message: 'No tienes permiso para ver las reglas de atención.' });
+    res.set('Cache-Control', 'no-store');
+    res.json(saasRulesPayload(req));
+});
+app.patch('/api/admin/support-rules', requireAuth, requireAdmin, (req, res) => {
+    if (!saasSupportHasScreen(req)) return res.status(403).json({ message: 'No tienes permiso para ver el Soporte.' });
+    const access = saasRulesAccess(req);
+    const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    const bad = (message, code) => res.status(400).json({ message, code });
+    const current = getSaasSupportRules();
+    const defByKey = new Map(SAAS_SUPPORT_RULES_DEFS.map((d) => [d.key, d]));
+    const people = new Set(saasRulesPeople().map((p) => p.id));
+    const patch = {};
+    for (const [key, raw] of Object.entries(body)) {
+        const d = defByKey.get(key);
+        if (!d) return bad(`Esa regla no existe: ${key}.`, 'UNKNOWN');
+        if (!access[d.group].edit) return res.status(403).json({ message: 'No tienes permiso para cambiar esta regla.', code: 'FORBIDDEN', group: d.group });
+        let v = raw;
+        if (d.kind === 'bool') { if (typeof v !== 'boolean') return bad(`«${d.label}» es sí o no.`, 'BOOL'); }
+        else if (d.kind === 'int') {
+            if (!Number.isInteger(v) || v < d.min || v > d.max) return bad(`«${d.label}» debe ser un número entero de ${d.min} a ${d.max}.`, 'RANGE');
+        } else if (d.kind === 'text') {
+            v = String(v || '').trim();
+            try { new Intl.DateTimeFormat('en-US', { timeZone: v }); } catch { return bad('Esa zona horaria no existe.', 'TIMEZONE'); }
+        } else if (d.kind === 'schedule') {
+            if (!Array.isArray(v) || v.length !== 7) return bad('El horario necesita los 7 días de la semana.', 'SCHEDULE');
+            const clean = [];
+            for (let day = 1; day <= 7; day += 1) {
+                const it = v.find((x) => x && Number(x.day) === day);
+                if (!it) return bad('El horario necesita los 7 días de la semana.', 'SCHEDULE');
+                const from = hhmmToMin(it.from); const to = hhmmToMin(it.to);
+                if (from === null || to === null || from > 1440 || to > 1440) return bad(`Revisa las horas del ${SAAS_RULES_DAYS[day - 1]}.`, 'SCHEDULE');
+                if (it.on === true && to <= from) return bad(`El ${SAAS_RULES_DAYS[day - 1]} cierra antes de abrir.`, 'SCHEDULE');
+                const pad = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+                clean.push({ day, on: it.on === true, from: pad(from), to: pad(to) });
+            }
+            v = clean;
+        } else if (d.kind === 'ids') {
+            if (!Array.isArray(v) || v.some((n) => !Number.isInteger(n) || !people.has(n))) return bad('Una de las personas no es del Equipo SaaS que puede recibir el aviso.', 'PEOPLE');
+            v = [...new Set(v)];
+        }
+        patch[key] = v;
+    }
+    const next = { ...current, ...patch };
+    for (const p of ['p1', 'p2', 'p3', 'p4']) {
+        if (next[`${p}ResolveMin`] > 0 && next[`${p}FirstMin`] > next[`${p}ResolveMin`]) return bad('La primera respuesta no puede tardar más que resolver el caso.', 'ORDER');
+    }
+    if (next.needAttempts > next.maxAttempts) return bad('Los intentos para cerrar «sin respuesta» no pueden ser más que el máximo que se puede anotar.', 'ATTEMPTS');
+    const changed = Object.keys(patch).filter((k) => JSON.stringify(patch[k]) !== JSON.stringify(current[k]));
+    if (changed.length) {
+        updateSaasSupportRules(Object.fromEntries(changed.map((k) => [k, patch[k]])), changedByLabel(req));
+        changed.forEach((k) => { const d = defByKey.get(k); logSaasChange(req, 'reglas-atencion', 1, 'Reglas de atención', d.label, saasRulesValueText(d, current[k]), saasRulesValueText(d, patch[k])); });
+    }
+    res.json({ ...saasRulesPayload(req), changed });
 });
 
 // --- Mapa de calor (Admin) --------------------------------------------------------------------------------------------------------------------------

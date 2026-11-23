@@ -22,6 +22,8 @@ const lang = () => (Dashboard.getLanguage ? Dashboard.getLanguage() : (localStor
 const locale = () => (lang() === 'en' ? 'en-US' : 'es-MX');
 const fmtDate = (iso) => new Date(iso).toLocaleString(locale(), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const fmtTime = (iso) => new Date(iso).toLocaleString(locale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+// Un plazo de GEIPSA: cuándo vence y, si ya se respondió, si fue a tiempo o tarde; si no, si ya venció.
+const dueLine = (due, doneAt) => (!due ? '—' : `${fmtTime(due)}${doneAt ? ` · ${t(new Date(doneAt) <= new Date(due) ? 'admin.saasSpDueOnTime' : 'admin.saasSpDueLate')}` : (new Date(due) < new Date() ? ` · ${t('admin.saasSpDueOverdue')}` : '')}`);
 const fmtSize = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 const fmtClock = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 const starsText = (n) => '★'.repeat(Math.max(0, Math.min(5, Number(n) || 0))) + '☆'.repeat(5 - Math.max(0, Math.min(5, Number(n) || 0)));
@@ -120,6 +122,7 @@ function renderHeader() {
     $('sc-meta').innerHTML = `<dl class="sp-meta"><div><dt>${esc(t('admin.saasSpColClient'))}</dt><dd>${esc(c.client)}</dd></div><div><dt>${esc(t('admin.saasSpColSector'))}</dt><dd>${esc(c.sector || '—')}</dd></div>
         <div><dt>${esc(t('admin.saasSpColFrom'))}</dt><dd>${esc(from)}</dd></div><div><dt>${esc(t('main.colSpFechaHora'))}</dt><dd>${esc(fmtDate(c.createdAt))}</dd></div>
         <div><dt>${esc(t('main.colSpCategoria'))}</dt><dd>${esc(c.category || '—')}</dd></div><div><dt>${esc(t('main.cpAssignee'))}</dt><dd>${esc(c.assigneeName || '—')}</dd></div>
+        ${c.n4 ? `<div><dt>${esc(t('admin.saasSpDueFirst'))}</dt><dd>${esc(dueLine(c.n4.firstDueAt, c.n4.firstResponseAt))}</dd></div><div><dt>${esc(t('admin.saasSpDueResolve'))}</dt><dd>${esc(c.n4.resolveDueAt ? fmtTime(c.n4.resolveDueAt) : '—')}</dd></div>` : ''}
         <div><dt>${esc(t('main.spFWhen'))}</dt><dd>${esc(t(`main.spWhen_${c.whenAffects}`))}</dd></div><div class="sp-wide"><dt>${esc(t('main.spFImpact'))}</dt><dd>${impacts}</dd></div>
         ${c.errorText ? `<div class="sp-wide"><dt>${esc(t('main.spFError'))}</dt><dd class="sp-pre">${esc(c.errorText)}</dd></div>` : ''}
         ${!d.inScope && c.atN4 && !c.assigneeId ? `<div class="sp-wide"><dd class="sp-muted">${esc(t('admin.saasSpOutOfScope'))}</dd></div>` : ''}

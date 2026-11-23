@@ -10206,3 +10206,44 @@ a.wp-team-tag:hover{ background: rgba(40, 170, 90, 0.28); }
 .plan-cmp tfoot td{ font-weight: 700; border-top: 2px solid var(--color-border); }
 .plan-cmp .plan-cmp-down{ color: #1d7a46; }
 .plan-cmp .plan-cmp-up{ color: #c0392b; }
+
+/* Soporte (SaaS) › pestaña «Reglas de atención»: grupos de reglas con plazos, horario, aviso de Urgente y cierre. */
+.rg{ display: flex; flex-direction: column; gap: 0.8rem; }
+.rg-cols{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; align-items: start; }
+.rg-stack{ display: flex; flex-direction: column; gap: 0.8rem; min-width: 0; }
+.rg-group{ border: 1px solid var(--color-border); border-radius: 8px; padding: 0.75rem 0.9rem 0.9rem; display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; background: var(--color-surface); }
+.rg-head{ margin: 0; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+.rg-head-r{ display: inline-flex; align-items: center; gap: 0.6rem; }
+.rg-tag{ font-size: 0.68rem; font-weight: 600; padding: 0.05rem 0.55rem; border-radius: 999px; background: rgba(127, 127, 127, 0.2); }
+.rg-scroll{ overflow-x: auto; }
+.rg-table{ width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 26rem; }
+.rg-table th, .rg-table td{ text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+.rg-table thead th{ font-size: 0.7rem; opacity: 0.75; }
+.rg-cell{ display: inline-flex; align-items: baseline; gap: 0.35rem; }
+.rg-num{ width: 5.2rem; font: inherit; font-size: 0.8rem; padding: 0.2rem 0.4rem; text-align: right; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text-primary); font-variant-numeric: tabular-nums; }
+.rg-unit, .rg-human{ font-size: 0.7rem; opacity: 0.7; }
+.rg-line{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; font-size: 0.78rem; flex-wrap: wrap; }
+.rg-line-col{ align-items: flex-start; flex-direction: column; }
+.rg-line select{ font: inherit; font-size: 0.78rem; max-width: 100%; padding: 0.2rem 0.4rem; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text-primary); }
+.rg-days{ display: flex; flex-direction: column; gap: 0.3rem; }
+.rg-day{ display: grid; grid-template-columns: 6.5rem 2.4rem minmax(0, 1fr); align-items: center; gap: 0.4rem; font-size: 0.78rem; }
+.rg-day-range{ display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+.rg-day-range input[type="time"]{ font: inherit; font-size: 0.78rem; padding: 0.15rem 0.35rem; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text-primary); }
+.rg-day-off{ display: none; }
+.rg-day.off .rg-day-range{ display: none; }
+.rg-day.off .rg-day-off{ display: inline; }
+.rg-day.off .rg-day-name{ opacity: 0.6; }
+.rg-sw{ display: inline-flex; align-items: center; gap: 0.45rem; cursor: pointer; font-size: 0.75rem; font-weight: 500; }
+.rg-sw input{ position: absolute; opacity: 0; width: 1px; height: 1px; }
+.rg-sw i{ position: relative; width: 30px; height: 17px; border-radius: 999px; background: rgba(127, 127, 127, 0.35); flex: none; transition: background 0.15s; }
+.rg-sw i::after{ content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: left 0.15s; }
+.rg-sw input:checked + i{ background: var(--color-text-primary); }
+.rg-sw input:checked + i::after{ left: 15px; }
+.rg-sw input:focus-visible + i{ outline: 2px solid var(--color-text-primary); outline-offset: 2px; }
+.rg-sw input:disabled + i{ opacity: 0.55; }
+.rg-save{ display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; border-top: 1px solid var(--color-border); padding-top: 0.7rem; font-size: 0.75rem; }
+.rg-btns{ display: inline-flex; gap: 0.5rem; }
+.rg-msg{ flex: 1 1 12rem; }
+.rg-msg.err{ color: var(--color-danger, #c0392b); font-weight: 600; }
+.rg-history summary{ cursor: pointer; font-size: 0.8rem; font-weight: 600; }
+@media (max-width: 860px){ .rg-cols{ grid-template-columns: minmax(0, 1fr); } }
