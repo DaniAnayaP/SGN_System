@@ -8605,6 +8605,7 @@
     "spappSavedOffline": "No signal: it was saved on your phone and will be sent automatically.",
     "spappMsgPlaceholder": "Write a message…",
     "spappCaseForbidden": "You do not have permission to see that case.",
+    "spappFileFail": "The file could not be opened.",
     "spappCaseOffline": "No signal: the case could not be opened.",
     "spappNoFilesOffline": "Photos and files are added with signal. You can send the request without them and add them later from the Web.",
     "wpappCached": "No signal: these are your activities from the last time you opened the screen.",
@@ -8717,6 +8718,18 @@
     "appCalCertificados": {
       "what": "An asset can have several certificates: the most recent one is the valid one and the others stay as history. This link shows only the certificates of that asset.",
       "example": "H001 · «2 certificates»."
+    },
+    "appSpRate": {
+      "what": "When your case is resolved, you rate the support here: from 1 to 5 stars, with tags about what you thought and a comment if you want. It is rated only once per closing.",
+      "example": "5 stars · «Fast and clear»."
+    },
+    "appSpReopen": {
+      "what": "When the case was closed and it still does not work for you, you can reopen it within the days GEIPSA allows: tell what still fails and it goes back to the Help desk. After that time you need to open a new request.",
+      "example": "Reopen: «The same error still shows up when closing the order»."
+    },
+    "appSpAttach": {
+      "what": "Attach a photo or a file to your message with the paperclip. It is sent together with the text. It needs signal.",
+      "example": "Photo of the screen with the error."
     },
     "appSpNew": {
       "what": "Opens the form to ask for support: what happened, on which screen, what it affects and when. The priority is calculated from what you mark.",

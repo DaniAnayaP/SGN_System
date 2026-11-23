@@ -8604,6 +8604,7 @@
     "spappSavedOffline": "Sin señal: quedó en tu celular y se enviará solo.",
     "spappMsgPlaceholder": "Escribe un mensaje…",
     "spappCaseForbidden": "No tienes permiso para ver ese caso.",
+    "spappFileFail": "No se pudo abrir el archivo.",
     "spappCaseOffline": "Sin señal: no se pudo abrir el caso.",
     "spappNoFilesOffline": "Las fotos y archivos se agregan con señal. Puedes enviar la solicitud sin ellos y agregarlos después desde la Web.",
     "wpappCached": "Sin señal: estas son tus actividades de la última vez que abriste la pantalla.",
@@ -8716,6 +8717,18 @@
     "appCalCertificados": {
       "what": "Un activo puede tener varios certificados: el más reciente es el vigente y los demás quedan de historial. Este vínculo deja ver solo los de ese activo.",
       "example": "H001 · «2 certificados»."
+    },
+    "appSpRate": {
+      "what": "Cuando tu caso se resuelve, aquí calificas la atención: de 1 a 5 estrellas, con etiquetas de qué te pareció y un comentario si quieres. Solo se califica una vez por cierre.",
+      "example": "5 estrellas · «Rápida y clara»."
+    },
+    "appSpReopen": {
+      "what": "Cuando el caso se cerró y todavía no te funciona, lo puedes reabrir dentro de los días que da GEIPSA: cuenta qué sigue fallando y regresa a la Mesa de ayuda. Pasado ese plazo hay que abrir una solicitud nueva.",
+      "example": "Reabrir: «Sigue saliendo el mismo error al cerrar el pedido»."
+    },
+    "appSpAttach": {
+      "what": "Adjunta una foto o un archivo a tu mensaje con el clip. Se manda junto con el texto. Necesita señal.",
+      "example": "Foto de la pantalla con el error."
     },
     "appSpNew": {
       "what": "Abre el formulario para pedir soporte: qué pasó, en qué pantalla, qué implica y cuándo te afecta. La prioridad se calcula sola con lo que marques.",

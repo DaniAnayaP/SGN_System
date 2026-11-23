@@ -3,9 +3,10 @@
 //   · «Mis solicitudes»: las que abrió esta persona, con su estatus, nivel y quién las atiende; tocar una abre su caso: lo que se pidió, el chat con la Mesa de ayuda (se lee y se escribe) y lo que ha pasado con el caso.
 //   · «Nueva solicitud»: el mismo formulario de la Web (qué pasó, pantalla y acción, categoría, qué implica, cuándo afecta y si puede seguir trabajando; la prioridad y el nivel de entrada se calculan en vivo con las mismas
 //     reglas) con las evidencias que pide la categoría: se escriben o se adjuntan con la cámara o la galería. La grabación de pantalla no va en la App.
-//   Calificar la atención, reabrir, mandar fotos dentro del chat y la ayuda rápida se quedan en la Web por ahora (siguientes piezas).
-// Sin señal funciona: lo último que se bajó se guarda en el celular; una solicitud nueva o un mensaje escritos sin señal esperan en la cola (AppOfflineSync.js, recordKey «soporte:new:<hora>» y «soporte:msg:<caso>») marcados
-// «En tu celular»; las fotos solo se pueden agregar con señal (el caso todavía no existe para el servidor). Si al reconectar el servidor rechaza alguno se avisa en «No se aplicó». El servidor es el mismo de la Web
+//   · Pieza 2: calificar la atención (estrellas, etiquetas y comentario) cuando el caso se resuelve, reabrir un caso cerrado (dentro de los días que da GEIPSA) y mandar y ver fotos y archivos dentro del chat.
+//   La ayuda rápida, la campana de la App, Mi cola y Soportes cerrados se quedan en la Web por ahora (siguientes piezas).
+// Sin señal funciona: lo último que se bajó se guarda en el celular; una solicitud nueva o un mensaje escritos sin señal esperan en la cola (AppOfflineSync.js, recordKey «soporte:new:<hora>», «soporte:msg:<caso>», «soporte:rate:<caso>» y «soporte:reopen:<caso>») marcados
+// «En tu celular»; las fotos y archivos (al pedir soporte y dentro del chat) solo se pueden mandar con señal (el caso todavía no existe para el servidor). Si al reconectar el servidor rechaza alguno se avisa en «No se aplicó». El servidor es el mismo de la Web
 // (/api/business/my-support*, /api/business/support-cases/:id y /messages). Quien no tiene la pestaña Soporte en el árbol (Notificaciones › Soporte) no ve la pantalla.
 // ---------------------------------------------------------------------------
 
@@ -137,6 +138,8 @@ const CASES = '/api/business/support-cases';
 const RECORD_PREFIX = 'soporte';
 const NEW_URL = /\/api\/business\/my-support$/;                       // una solicitud nueva que espera sin señal
 const MSG_URL = /\/api\/business\/support-cases\/(\d+)\/messages$/;   // un mensaje del chat que espera sin señal
+const RATE_URL = /\/api\/business\/support-cases\/(\d+)\/ratings$/;   // una calificación que espera sin señal
+const REOPEN_URL = /\/api\/business\/support-cases\/(\d+)\/reopen$/;   // un «reabrir» que espera sin señal
 const WHEN_KEYS = ['now', 'today', 'week', 'none'];
 const SHOWN_EVENTS = ['created', 'first_response', 'file', 'taken', 'assigned', 'moved', 'status_changed', 'resolved', 'closed', 'reopened', 'rated', 'paused', 'resumed'];
 let currentUser = null;
@@ -152,6 +155,12 @@ let pendingNew = [];                           // solicitudes nuevas guardadas s
 let pendingMsgs = new Map();                   // caseId -> mensajes guardados sin señal que siguen en la cola
 let pollTimer = null;
 let listScroll = 0;
+let ratings = null;                            // lo de calificar del caso abierto (GET /support-cases/:id/ratings)
+let pendingRates = new Set();                  // casos con una calificación guardada sin señal
+let pendingReopens = new Set();                // casos con un «reabrir» guardado sin señal
+let attach = null;                             // el archivo que se va a mandar en el chat: { blob, name }
+let reopenText = '';
+let rateForm = { stars: 0, tags: new Set(), comment: '' };
 
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined && text !== null) node.textContent = text; return node; };
 const sync = () => window.SgnOfflineSync;
@@ -171,18 +180,20 @@ const parseBody = (item) => { try { return JSON.parse(item.body || '{}'); } catc
 async function refreshQueued() {
     let queue = [];
     try { queue = await sync().listOfflineQueue(); } catch { queue = []; }
-    const nextNew = []; const nextMsgs = new Map();
+    const nextNew = []; const nextMsgs = new Map(); const nextRates = new Set(); const nextReopens = new Set();
     queue.forEach((item) => {
         if (item.method !== 'POST' || !item.url) return;
         const body = parseBody(item);
         if (!body) return;
         if (NEW_URL.test(item.url) && body.summary) nextNew.push({ id: item.id, summary: body.summary, at: item.createdAt || item.queuedAt || null });
         const m = MSG_URL.exec(item.url);
-        if (m && body.body) { const list = nextMsgs.get(Number(m[1])) || []; list.push({ id: item.id, body: body.body }); nextMsgs.set(Number(m[1]), list); }
+        if (m && (body.body || body.fileId)) { const list = nextMsgs.get(Number(m[1])) || []; list.push({ id: item.id, body: body.body || '📎' }); nextMsgs.set(Number(m[1]), list); }
+        const r = RATE_URL.exec(item.url); if (r && body.stars) nextRates.add(Number(r[1]));
+        const ro = REOPEN_URL.exec(item.url); if (ro) nextReopens.add(Number(ro[1]));
     });
-    const sig = (n, m) => JSON.stringify([n.map((x) => x.id), [...m].map(([k, v]) => [k, v.map((x) => x.id)])]);
-    const changed = sig(nextNew, nextMsgs) !== sig(pendingNew, pendingMsgs);
-    pendingNew = nextNew; pendingMsgs = nextMsgs;
+    const sig = (n, m, ra, re) => JSON.stringify([n.map((x) => x.id), [...m].map(([k, v]) => [k, v.map((x) => x.id)]), [...ra].sort(), [...re].sort()]);
+    const changed = sig(nextNew, nextMsgs, nextRates, nextReopens) !== sig(pendingNew, pendingMsgs, pendingRates, pendingReopens);
+    pendingNew = nextNew; pendingMsgs = nextMsgs; pendingRates = nextRates; pendingReopens = nextReopens;
     return changed;
 }
 
@@ -260,11 +271,11 @@ async function loadData() {
     dataState = 'none';
 }
 document.addEventListener('sgn:offline-queue-changed', async () => {
-    const hadNew = pendingNew.length; const hadMsgs = pendingMsgs.size;
+    const hadNew = pendingNew.length; const hadMsgs = pendingMsgs.size; const hadOther = pendingRates.size + pendingReopens.size;
     const changed = await refreshQueued();
     if (!changed) return;
     // al reconectar la cola se vacía: se vuelve a pedir lo que se mandó para verlo ya aplicado
-    if ((pendingNew.length < hadNew || pendingMsgs.size < hadMsgs) && navigator.onLine) {
+    if ((pendingNew.length < hadNew || pendingMsgs.size < hadMsgs || pendingRates.size + pendingReopens.size < hadOther) && navigator.onLine) {
         await loadData();
         if (screen === 'case' && openId) await loadCase(openId, { quiet: true });
     }
@@ -339,7 +350,9 @@ function renderList() {
         main.appendChild(el('span', 'wpapp-crumbs', `${fmtTime(c.createdAt)}${c.assigneeName ? ` · ${t('main.soAssignee', { name: c.assigneeName })}` : ''}`));
         const chips = el('div', 'wpapp-chips');
         chips.append(chip(t(`main.spStatus_${c.status}`), c.status === 'done' ? 'wpapp-chip-done' : (c.status === 'open' ? '' : 'wpapp-chip-in_progress')), chip(t(`main.sopLevel_${c.level}`)));
+        if (c.rateCan) chips.appendChild(chip(t('main.soRateNow'), 'wpapp-chip-warn'));
         main.appendChild(chips);
+        if (!c.rateCan && c.reopenCan && c.reopenUntil) main.appendChild(el('span', 'wpapp-crumbs', t('main.soReopenUntil', { when: fmtTime(c.reopenUntil) })));
         card.appendChild(main);
         card.appendChild(el('i', 'bx bx-chevron-right spapp-go'));
         card.addEventListener('click', () => { listScroll = bodyEl.scrollTop; openCase(c.id); });
@@ -351,15 +364,15 @@ function renderList() {
 
 // ---- Un caso: lo que se ve y el chat ------------------------------------------------------------------------------------------------------
 async function openCase(id) {
-    screen = 'case'; openId = id; detail = null; messages = [];
+    screen = 'case'; openId = id; detail = null; messages = []; ratings = null; attach = null; reopenText = ''; rateForm = { stars: 0, tags: new Set(), comment: '' };
     render();
     await loadCase(id, {});
 }
 async function loadCase(id, { quiet }) {
     try {
-        const [d, m] = await Promise.all([getJson(`${CASES}/${id}`), getJson(`${CASES}/${id}/messages`)]);
+        const [d, m, rt] = await Promise.all([getJson(`${CASES}/${id}`), getJson(`${CASES}/${id}/messages`), getJson(`${CASES}/${id}/ratings`).catch(() => null)]);
         if (openId !== id) return;
-        detail = d; messages = m.messages || [];
+        detail = d; messages = m.messages || []; ratings = rt;
         if (!quiet || screen === 'case') render();
     } catch (err) {
         if (openId !== id) return;
@@ -404,7 +417,7 @@ function messageNode(m) {
     who.append(el('b', '', m.author || '—'), el('time', '', fmtTime(m.createdAt)));
     bub.appendChild(who);
     if (m.body) bub.appendChild(el('div', 'spapp-txt', m.body));
-    if (m.file) bub.appendChild(el('div', 'spapp-file', `📎 ${m.file.name || ''}`));
+    if (m.file) bub.appendChild(attachmentNode(m.file));
     return bub;
 }
 function drawMessages(host) {
@@ -447,16 +460,22 @@ function renderCase() {
     const meta = el('div', 'pm-app-meta');
     meta.innerHTML = rows.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
     bodyEl.appendChild(meta);
+    const closing = closingCard(c);
+    if (closing) bodyEl.appendChild(closing);
+    const rating = ratingCard();
+    if (rating) bodyEl.appendChild(rating);
     const chatBox = el('div', 'spapp-chat');
     chatBox.setAttribute('data-help-key', 'appSpChat');
     const list = el('div', 'spapp-msgs');
     drawMessages(list);
     chatBox.appendChild(list);
-    if (detail.chat && detail.chat.canSend && !['done', 'noresp'].includes(c.status)) chatBox.appendChild(composerNode(list));
+    // un caso cerrado no recibe mensajes (salvo uno «cerrado sin respuesta» que quien reportó puede reabrir escribiendo)
+    if (detail.chat && detail.chat.canSend && (!['done', 'noresp'].includes(c.status) || (c.status === 'noresp' && detail.reopenCan))) chatBox.appendChild(composerNode(list));
     bodyEl.appendChild(chatBox);
     startPolling(list);
 }
 function composerNode(list) {
+    const wrap = el('div', 'spapp-composer-wrap');
     const box = el('div', 'spapp-composer');
     const ta = el('textarea', 'spapp-input');
     ta.rows = 2; ta.maxLength = detail.chat.max || 2000;
@@ -464,34 +483,198 @@ function composerNode(list) {
     ta.setAttribute('aria-label', t('home.spappMsgPlaceholder'));
     const btn = el('button', 'home-carga-new-btn spapp-send', t('main.scSend'));
     btn.type = 'button';
+    // adjuntar una foto o un archivo (con señal: se sube antes de mandar el mensaje que lo lleva)
+    const attachRow = el('div', 'spapp-slot-row');
+    const drawAttach = () => {
+        attachRow.innerHTML = '';
+        attachRow.appendChild(filePicker('main.scAttach', 'bx-paperclip', '', async (f) => { attach = /^image\//.test(f.type) ? await pickImage(f) : { blob: f, name: f.name }; drawAttach(); }));
+        if (attach) {
+            const rm = el('button', 'spapp-rm'); rm.type = 'button'; rm.setAttribute('aria-label', t('main.scRemove')); rm.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+            rm.addEventListener('click', () => { attach = null; drawAttach(); });
+            attachRow.append(el('span', 'spapp-ok', `✓ ${attach.name} · ${fmtSize(attach.blob.size)}`), rm);
+        }
+    };
+    drawAttach();
     btn.addEventListener('click', async () => {
         const text = ta.value.trim();
-        if (!text) return;
+        if (!text && !attach) { showToast(t('main.scErrEmpty')); return; }
         btn.disabled = true;
         const id = openId;
         try {
+            let fileId;
+            if (attach) {
+                if (!navigator.onLine) { showToast(t('home.spappNoFilesOffline')); btn.disabled = false; return; }
+                const up = await fetch(apiUrl(`${CASES}/${id}/files?chat=1`), { method: 'POST', headers: { 'Content-Type': attach.blob.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(attach.name) }, credentials: 'include', body: attach.blob });
+                const upBody = await up.json().catch(() => ({}));
+                if (!up.ok) { showToast(t('main.spFileFailed', { name: attach.name, why: upBody.message || t('admin.saveError') })); btn.disabled = false; return; }
+                fileId = upBody.file.id;
+            }
             const result = await sync().offlineAwareFetch(
                 `${CASES}/${id}/messages`,
-                { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ body: text }) },
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ body: text, fileId }) },
                 `${t('menu.support')} · ${detail.case.folio}`, `${RECORD_PREFIX}:msg:${id}`, undefined, { rejectable: true },
             );
             if (result.queued) {
                 // sin señal: el mensaje queda en el celular (se ve marcado «En tu celular») y se envía solo al volver la conexión
                 await refreshQueued();
-                ta.value = '';
+                ta.value = ''; attach = null; drawAttach();
                 showToast(t('home.spappSavedOffline'));
                 drawMessages(list);
             } else if (!result.ok) {
                 showToast((result.body && result.body.message) || t('admin.saveError'));
             } else {
-                ta.value = '';
+                ta.value = ''; attach = null; drawAttach();
                 await loadCase(id, { quiet: true });
             }
         } catch { showToast(t('admin.saveError')); }
         btn.disabled = false;
     });
     box.append(ta, btn);
+    wrap.append(box, attachRow);
+    return wrap;
+}
+// ---- Los archivos del chat: la imagen se baja con la sesión y se pone como dato (la política de seguridad del servidor solo deja imágenes propias o «data:», no «blob:»); el video y los demás archivos se abren con su liga al tocar ----
+const imageUrls = new Map();
+const fileLink = (caseId, f) => apiUrl(`${CASES}/${caseId}/files/${f.id}`);
+async function fileImageUrl(caseId, f) {
+    const key = `${caseId}:${f.id}`;
+    if (imageUrls.has(key)) return imageUrls.get(key);
+    const res = await fetch(fileLink(caseId, f), { credentials: 'include' });
+    if (!res.ok) throw new Error('file failed');
+    const blob = await res.blob();
+    const url = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = () => reject(r.error); r.readAsDataURL(blob); });
+    imageUrls.set(key, url);
+    return url;
+}
+function attachmentNode(f) {
+    const box = el('div', 'spapp-att');
+    const caseId = openId;
+    const failed = () => { box.innerHTML = ''; box.appendChild(el('span', 'spapp-hint', t('home.spappFileFail'))); };
+    if (f.kind === 'capture') {
+        const img = el('img', 'spapp-img'); img.alt = f.name || '';
+        fileImageUrl(caseId, f).then((u) => { img.src = u; }).catch(failed);
+        box.appendChild(img);
+        return box;
+    }
+    const b = el('button', 'home-carga-secondary-btn spapp-attach'); b.type = 'button';
+    b.innerHTML = `<i class="bx ${f.kind === 'recording' ? 'bx-play-circle' : 'bx-file'}" aria-hidden="true"></i> ${esc(f.name || '')} <small>${esc(fmtSize(f.size || 0))}</small>`;
+    b.addEventListener('click', async () => {
+        b.disabled = true;
+        try {
+            const u = fileLink(caseId, f);
+            if (f.kind === 'recording') { const v = el('video', 'spapp-video'); v.controls = true; v.src = u; v.addEventListener('error', () => { showToast(t('home.spappFileFail')); }); box.replaceChildren(v); v.play().catch(() => {}); } else { window.open(u, '_blank'); b.disabled = false; }
+        } catch { showToast(t('home.spappFileFail')); b.disabled = false; }
+    });
+    box.appendChild(b);
     return box;
+}
+
+// ---- Cierre y reapertura ------------------------------------------------------------------------------------------------------------------
+function closingCard(c) {
+    const closed = ['done', 'noresp'].includes(c.status);
+    if (!closed && c.status !== 'confirm') return null;
+    const card = el('div', 'pm-app-card spapp-close');
+    card.setAttribute('data-help-key', 'appSpReopen');
+    card.appendChild(el('b', 'pm-app-title', t('main.clCloseTitle')));
+    if (c.status === 'confirm') { card.appendChild(el('p', 'spapp-hint', t('main.clUserConfirmWait'))); return card; }
+    const rows = [[t('main.clClosedBy'), c.closedBy || '—'], [t('main.clClosedAt'), c.closedAt ? fmtTime(c.closedAt) : '—']];
+    if (c.reopenedCount) rows.push([t('main.clReopened'), String(c.reopenedCount)]);
+    rows.push([t(c.status === 'noresp' ? 'main.clNoReplyTitle' : 'main.clDid'), c.closeDid || '—']);
+    const meta = el('div', 'pm-app-meta');
+    meta.innerHTML = rows.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
+    card.appendChild(meta);
+    if (pendingReopens.has(c.id)) { const chips = el('div', 'wpapp-chips'); chips.appendChild(chip(t('home.incOnPhone'), 'wpapp-chip-warn')); card.appendChild(chips); return card; }
+    if (detail.reopenCan) {
+        card.appendChild(el('h4', 'spapp-sub', t('main.clReopenTitle')));
+        card.appendChild(el('p', 'spapp-hint', t('main.clReopenUntil', { when: fmtTime(detail.reopenUntil) })));
+        const ta = el('textarea', 'spapp-input'); ta.rows = 2; ta.maxLength = 500; ta.value = reopenText; ta.placeholder = t('main.clReopenSaid'); ta.setAttribute('aria-label', t('main.clReopenSaid'));
+        ta.addEventListener('input', () => { reopenText = ta.value; });
+        const btn = el('button', 'home-carga-new-btn spapp-submit-inline', t('main.clReopenAction')); btn.type = 'button';
+        btn.addEventListener('click', () => submitReopen(btn));
+        card.append(ta, btn);
+    } else if (detail.chat && detail.chat.isReporter) card.appendChild(el('p', 'spapp-hint', t('main.clReopenExpired')));
+    return card;
+}
+async function submitReopen(btn) {
+    if (reopenText.trim().length < 5) { showToast(t('main.clErrReopen')); return; }
+    btn.disabled = true;
+    const id = openId;
+    try {
+        const result = await sync().offlineAwareFetch(
+            `${CASES}/${id}/reopen`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ said: reopenText.trim() }) },
+            `${t('menu.support')} · ${detail.case.folio}`, `${RECORD_PREFIX}:reopen:${id}`, undefined, { rejectable: true },
+        );
+        if (result.queued) { await refreshQueued(); showToast(t('home.spappSavedOffline')); render(); return; }
+        if (!result.ok) { showToast((result.body && result.body.message) || t('admin.saveError')); btn.disabled = false; return; }
+        reopenText = '';
+        showToast(t('main.clDoneReopenUser'));
+        await loadCase(id, { quiet: true });
+        loadData().catch(() => {});
+    } catch { showToast(t('admin.saveError')); btn.disabled = false; }
+}
+
+// ---- Calificar la atención ----------------------------------------------------------------------------------------------------------------
+const starsText = (n) => '★'.repeat(Math.max(0, Math.min(5, Number(n) || 0))) + '☆'.repeat(5 - Math.max(0, Math.min(5, Number(n) || 0)));
+function ratingCard() {
+    const d = ratings;
+    if (!d) return null;
+    const card = el('div', 'pm-app-card spapp-rate');
+    card.setAttribute('data-help-key', 'appSpRate');
+    if (pendingRates.has(openId)) {
+        card.appendChild(el('b', 'pm-app-title', t('main.rtUserTitle')));
+        const chips = el('div', 'wpapp-chips'); chips.appendChild(chip(t('home.incOnPhone'), 'wpapp-chip-warn')); card.appendChild(chips);
+        return card;
+    }
+    if (d.userCanRate) {
+        card.appendChild(el('b', 'pm-app-title', t('main.rtUserTitle')));
+        card.appendChild(el('p', 'spapp-hint', t('main.rtUserHint')));
+        const stars = el('div', 'spapp-stars');
+        stars.setAttribute('role', 'group'); stars.setAttribute('aria-label', t('main.rtStarsLabel'));
+        const drawStars = () => { stars.innerHTML = ''; [1, 2, 3, 4, 5].forEach((n) => { const b = el('button', `spapp-star${rateForm.stars >= n ? ' on' : ''}`, '★'); b.type = 'button'; b.setAttribute('aria-label', String(n)); b.setAttribute('aria-pressed', String(rateForm.stars === n)); b.addEventListener('click', () => { rateForm.stars = n; drawStars(); }); stars.appendChild(b); }); };
+        drawStars();
+        card.appendChild(stars);
+        const tg = (d.tags && d.tags.user) || { good: [], bad: [] };
+        const tags = el('div', 'wpapp-filters spapp-tags');
+        [...tg.good, ...tg.bad].forEach((k) => {
+            const b = el('button', `wpapp-pill${rateForm.tags.has(k) ? ' active' : ''}`, t(`main.rtTag_user_${k}`)); b.type = 'button'; b.setAttribute('aria-pressed', String(rateForm.tags.has(k)));
+            b.addEventListener('click', () => { if (rateForm.tags.has(k)) rateForm.tags.delete(k); else rateForm.tags.add(k); b.classList.toggle('active'); b.setAttribute('aria-pressed', String(rateForm.tags.has(k))); });
+            tags.appendChild(b);
+        });
+        card.appendChild(tags);
+        const ta = el('textarea', 'spapp-input'); ta.rows = 2; ta.maxLength = d.maxComment || 500; ta.value = rateForm.comment; ta.placeholder = t('main.rtComment'); ta.setAttribute('aria-label', t('main.rtComment'));
+        ta.addEventListener('input', () => { rateForm.comment = ta.value; });
+        const btn = el('button', 'home-carga-new-btn spapp-submit-inline', t('main.rtSend')); btn.type = 'button';
+        btn.addEventListener('click', () => submitRating(btn));
+        card.append(ta, btn);
+        return card;
+    }
+    if (d.user) {
+        card.appendChild(el('b', 'pm-app-title', t('main.rtUserDone')));
+        card.appendChild(el('div', 'spapp-stars-text', starsText(d.user.stars)));
+        if ((d.user.tags || []).length) { const chips = el('div', 'wpapp-chips'); d.user.tags.forEach((k) => chips.appendChild(chip(t(`main.rtTag_user_${k}`)))); card.appendChild(chips); }
+        if (d.user.comment) card.appendChild(el('p', 'wpapp-note', d.user.comment));
+        return card;
+    }
+    return null;
+}
+async function submitRating(btn) {
+    if (!rateForm.stars) { showToast(t('main.rtStarsErr')); return; }
+    btn.disabled = true;
+    const id = openId;
+    try {
+        const result = await sync().offlineAwareFetch(
+            `${CASES}/${id}/ratings`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ kind: 'user', stars: rateForm.stars, tags: [...rateForm.tags], comment: rateForm.comment }) },
+            `${t('menu.support')} · ${detail.case.folio}`, `${RECORD_PREFIX}:rate:${id}`, undefined, { rejectable: true },
+        );
+        if (result.queued) { await refreshQueued(); showToast(t('home.spappSavedOffline')); render(); return; }
+        if (!result.ok) { showToast((result.body && result.body.message) || t('admin.saveError')); btn.disabled = false; return; }
+        rateForm = { stars: 0, tags: new Set(), comment: '' };
+        showToast(t('main.rtThanks'));
+        await loadCase(id, { quiet: true });
+        loadData().catch(() => {});
+    } catch { showToast(t('admin.saveError')); btn.disabled = false; }
 }
 // el chat se actualiza solo mientras está abierto y hay señal
 function startPolling(list) {

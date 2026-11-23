@@ -2503,3 +2503,15 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .spapp-rm{ width: 2rem; height: 2rem; display: inline-grid; place-items: center; border-radius: 50%; border: 1px solid var(--home-border); background: var(--home-surface-2); color: var(--home-text-primary); }
 .spapp-submit{ width: 100%; margin-bottom: 1rem; }
 .dark-mode .spapp-ok, .futuristic-mode .spapp-ok, .institutional-mode .spapp-ok{ color: #6fd49b; }
+.spapp-composer-wrap{ display: flex; flex-direction: column; gap: 0.4rem; }
+.spapp-att{ margin-top: 0.3rem; }
+.spapp-img{ max-width: 100%; max-height: 14rem; border-radius: 0.6rem; display: block; }
+.spapp-video{ max-width: 100%; border-radius: 0.6rem; }
+.spapp-close, .spapp-rate{ display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.7rem; }
+.spapp-sub{ margin: 0.2rem 0 0; font-size: 0.8rem; }
+.spapp-submit-inline{ align-self: flex-start; }
+.spapp-stars{ display: flex; gap: 0.2rem; }
+.spapp-star{ font-size: 1.9rem; line-height: 1; padding: 0.1rem 0.2rem; border: 0; background: none; color: var(--home-border); cursor: pointer; }
+.spapp-star.on{ color: #e0a21f; }
+.spapp-stars-text{ font-size: 1.2rem; color: #e0a21f; letter-spacing: 0.1em; }
+.spapp-tags{ flex-wrap: wrap; overflow: visible; }
