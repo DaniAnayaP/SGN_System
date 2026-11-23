@@ -7,8 +7,10 @@
 //   · Pieza 3 (en AppInicio.js): la pestaña Soporte y los avisos de Soporte en la campana de la App.
 //   · Pieza 4: «Ayuda rápida» (Nivel 0): los errores explicados y manuales que arma la empresa (TI › Catálogos › Errores y ayuda); se busca, se lee qué pasó y qué se requiere, y se dice si «me sirvió» o «no me sirvió, pedir ayuda» (abre la solicitud ya con el título y el error escritos).
 //   · Mi cola, parte A (ver y tomar): para quien atiende en la Mesa de ayuda (hoja «Mi cola» del árbol) sale una tercera pestaña «Mi cola» con lo mismo que el panel de la Web: «Mi cola» (lo que atiendo) y «Mi nivel» (lo que espera en mi
-//     nivel), la cuenta regresiva de la primera respuesta, el aviso de un caso Urgente sin tomar, el botón «Tomar» (hoja «Tomar casos») y abrir el caso. Pausar, retomar y decidir ante un Urgente, atender el caso (estatus, resolver, notas),
-//     subir o devolver de nivel y el cierre con el usuario son las siguientes partes; Soportes cerrados y Casos de soporte se quedan en la Web por ahora.
+//     nivel), la cuenta regresiva de la primera respuesta, el aviso de un caso Urgente sin tomar, el botón «Tomar» (hoja «Tomar casos») y abrir el caso.
+//   · Mi cola, parte B (pausar y Urgentes): «Pausar» y «Retomar» (hoja «Pausar casos») en la cola y en el caso, y cuando llega un Urgente y yo atiendo algo menos urgente, la decisión de la Web: digo cuánto me falta (5, 10, 15, 30, 60 o más),
+//     la App recomienda terminar primero (si es menos de lo que el Urgente puede esperar) o pausar, y yo elijo («Pausar X y atender Y» o «Terminar primero», que queda anotado con la hora límite). Todo esto pide señal.
+//     Atender el caso (estatus, resolver, notas), subir o devolver de nivel y el cierre con el usuario son las siguientes partes; Soportes cerrados y Casos de soporte se quedan en la Web por ahora.
 // Sin señal funciona: lo último que se bajó se guarda en el celular; una solicitud nueva o un mensaje escritos sin señal esperan en la cola (AppOfflineSync.js, recordKey «soporte:new:<hora>», «soporte:msg:<caso>», «soporte:rate:<caso>», «soporte:reopen:<caso>» y «soporte:help:<artículo>») marcados
 // «En tu celular»; las fotos y archivos (al pedir soporte y dentro del chat) solo se pueden mandar con señal (el caso todavía no existe para el servidor). Si al reconectar el servidor rechaza alguno se avisa en «No se aplicó». El servidor es el mismo de la Web
 // (/api/business/my-support*, /api/business/support-cases/:id y /messages). Quien no tiene la pestaña Soporte en el árbol (Notificaciones › Soporte) no ve la pantalla.
@@ -556,29 +558,83 @@ async function fetchQueue({ redraw } = {}) {
     if (ok && redraw && screen === 'list') { const keep = bodyEl.scrollTop; render(); bodyEl.scrollTop = keep; }
     return ok;
 }
-// Tomar: el caso queda a mi nombre (y sale de «Abierto»). Depende del servidor, así que pide señal.
-async function takeCase(id, btn) {
-    if (!navigator.onLine) { showToast(t('home.spqNeedSignal')); return false; }
-    if (queueBusy) return false;
+// Una acción de la cola sobre un caso: tomar, pausar, retomar o «terminar primero». Van directo al servidor y piden señal: dependen de lo que esté libre o pasando en ese momento (alguien más pudo tomar el caso, o el Urgente ya
+// lo tomaron). Devuelve lo que contestó el servidor (o null si no se pudo, con su aviso).
+async function queueAction(id, action, body, okText, btn) {
+    if (!navigator.onLine) { showToast(t('home.spqNeedSignal')); return null; }
+    if (queueBusy) return null;
     queueBusy = true;
     if (btn) btn.disabled = true;
-    let ok = false;
+    let out = null;
     try {
-        const res = await fetch(apiUrl(`${CASES}/${id}/take`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: '{}' });
-        if (res.status === 401) { window.location.replace('Login.html'); return false; }
-        const out = await res.json().catch(() => ({}));
-        if (res.ok) { ok = true; showToast(t('main.qDoneTake')); } else showToast(out.message || t('admin.saveError'));
+        const res = await fetch(apiUrl(`${CASES}/${id}/${action}`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(body || {}) });
+        if (res.status === 401) { window.location.replace('Login.html'); return null; }
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) { out = data; showToast(okText(data)); } else showToast(data.message || t('admin.saveError'));
     } catch { showToast(t('admin.saveError')); }
     queueBusy = false;
-    if (btn && !ok) btn.disabled = false;
-    return ok;
+    if (btn && !out) btn.disabled = false;
+    return out;
 }
-function takeButton(r) {
-    const btn = el('button', 'home-carga-new-btn spapp-qtake', t('main.qTake'));
+// Tomar: el caso queda a mi nombre (y sale de «Abierto»).
+const takeCase = (id, btn) => queueAction(id, 'take', {}, () => t('main.qDoneTake'), btn);
+// un botón de la cola: haga lo que haga (o no se pueda), la lista se actualiza para mostrar cómo quedó
+function rowButton(label, primary, run) {
+    const btn = el('button', `${primary ? 'home-carga-new-btn' : 'home-carga-secondary-btn'} spapp-qtake`, label);
     btn.type = 'button';
-    // tome o no (alguien más pudo tomarlo antes), la lista se actualiza para mostrar cómo quedó
-    btn.addEventListener('click', async () => { await takeCase(r.id, btn); if (navigator.onLine) await fetchQueue({ redraw: true }); });
+    btn.addEventListener('click', async () => { await run(btn); if (navigator.onLine) await fetchQueue({ redraw: true }); });
     return btn;
+}
+const takeButton = (r) => rowButton(t('main.qTake'), true, (btn) => takeCase(r.id, btn));
+const pauseButton = (r) => rowButton(t('main.qPause'), false, async (btn) => { if (!window.confirm(t('main.qPauseConfirm'))) return; await queueAction(r.id, 'pause', {}, () => t('main.qDonePauseOnly'), btn); });
+const resumeButton = (r) => rowButton(t('main.qResume'), false, (btn) => queueAction(r.id, 'resume', {}, () => t('main.qDoneResume'), btn));
+// Un Urgente interrumpe: la prioridad 1 puede pausar cualquier caso de menor prioridad; la 2, solo los dos que no son urgentes (la misma regla del servidor)
+const interrupts = (u, p) => (u.priority === 1 ? p > 1 : (u.priority === 2 ? p >= 3 : false));
+const interruptible = (u) => (queueData ? queueData.mine : []).filter((c) => ['review', 'working', 'testing'].includes(c.status) && interrupts(u, c.priority)).sort((a, b) => b.priority - a.priority || a.id - b.id)[0] || null;
+// «Terminar primero»: hasta qué hora dije que terminaba (se guarda en el celular, y se olvida pasada esa hora)
+const DEFERRED_KEY = 'sgn_app_support_deferred';
+const Q_MINUTES = [5, 10, 15, 30, 60];
+const queueMinutes = {};                       // urgente -> los minutos que dije que me faltan
+const deferredMap = () => { try { const now = Date.now(); return Object.fromEntries(Object.entries(JSON.parse(store.get(DEFERRED_KEY) || '{}')).filter(([, iso]) => new Date(iso).getTime() > now)); } catch { return {}; } };
+const rememberDeferred = (id, iso) => { const map = deferredMap(); map[id] = iso; store.set(DEFERRED_KEY, JSON.stringify(map)); };
+// Cuando llega un Urgente y yo atiendo algo menos urgente: digo cuánto me falta; si es menos de lo que el Urgente puede esperar (Mapa de soporte) se recomienda terminar primero; si no, pausar (yo decido y queda registrado)
+function decisionBox(u, w, redraw) {
+    const d = queueData; const wait = (d.map.wait && d.map.wait[u.priority]) || 0; const picked = queueMinutes[u.id];
+    const box = el('div', 'spapp-qdecide');
+    box.setAttribute('data-help-key', 'appSpQueueDecide');
+    const who = el('div', 'spapp-qwho');
+    who.append(el('b', '', t('main.qWorkingOn', { folio: w.folio, summary: w.summary })), chip(t(`main.msPri_${w.priority}`)));
+    box.appendChild(who);
+    box.appendChild(el('span', 'spapp-hint', t('main.qHowLong')));
+    const mins = el('div', 'wpapp-filters spapp-chips');
+    mins.setAttribute('role', 'radiogroup');
+    Q_MINUTES.forEach((m) => {
+        const b = el('button', `wpapp-pill${picked === m ? ' active' : ''}`, m === 60 ? t('main.qMin60') : String(m));
+        b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(picked === m));
+        b.addEventListener('click', () => { queueMinutes[u.id] = m; redraw(); });
+        mins.appendChild(b);
+    });
+    box.appendChild(mins);
+    box.appendChild(el('p', 'spapp-hint', t('main.qWaitHint', { priority: t(`main.msPri_${u.priority}`), min: wait })));
+    if (picked) {
+        const finish = picked <= wait;
+        const opt = el('div', `spapp-qopt${finish ? '' : ' rec'}`);
+        opt.append(el('b', '', t(finish ? 'main.qRecFinish' : 'main.qRecPause', { m: picked })), el('span', 'spapp-hint', finish ? t('main.qRecFinishText', { min: wait }) : t('main.qRecPauseText')));
+        const finishBtn = rowButton(finish ? t('main.qBtnFinish', { a: w.folio, b: u.folio }) : t('main.qBtnFinishAnyway'), finish, async (btn) => {
+            const out = await queueAction(w.id, 'defer', { urgentCaseId: u.id, minutes: picked }, (o) => t('main.qDoneFinish', { time: fmtClock(o.dueAt) }), btn);
+            if (out) rememberDeferred(u.id, out.dueAt);
+        });
+        // pausar el que traigo y atender el Urgente (necesita poder tomarlo, la hoja «Tomar casos»)
+        const pauseBtn = d.map.allowPause && w.canPause && u.canTake ? rowButton(t('main.qBtnPause', { a: w.folio, b: u.folio }), !finish, (btn) => queueAction(w.id, 'pause', { minutes: picked, forCaseId: u.id, takeUrgent: true }, () => t('main.qDonePause', { a: w.folio, b: u.folio }), btn)) : null;
+        const acts = el('div', 'spapp-qact');
+        (finish ? [finishBtn, pauseBtn] : [pauseBtn, finishBtn]).filter(Boolean).forEach((b) => acts.appendChild(b));
+        opt.appendChild(acts);
+        if (!finish) opt.appendChild(el('span', 'spapp-hint', t('main.qFinishOverride')));
+        box.appendChild(opt);
+    }
+    const until = deferredMap()[u.id];
+    if (until) box.appendChild(el('p', 'spapp-hint spapp-qdeferred', t('main.qDeferredNote', { time: fmtClock(until) })));
+    return box;
 }
 function queueRow(r) {
     const card = el('div', `wpapp-row spapp-card spapp-qrow${r.priority <= 2 ? ' hot' : ''}${r.status === 'paused' ? ' paused' : ''}`);
@@ -599,33 +655,41 @@ function queueRow(r) {
     }
     open.addEventListener('click', () => { listScroll = bodyEl.scrollTop; openCase(r.id); });
     card.append(open, el('i', 'bx bx-chevron-right spapp-go'));
-    if (r.canTake && !queueCached) { const act = el('div', 'spapp-qact'); act.appendChild(takeButton(r)); card.appendChild(act); }
+    // Tomar, Pausar y Retomar (cada uno con su hoja del árbol, que el servidor ya revisó); sin señal no se ofrecen
+    const buttons = queueCached ? [] : [r.canTake ? takeButton(r) : null, r.canPause ? pauseButton(r) : null, r.canResume ? resumeButton(r) : null].filter(Boolean);
+    if (buttons.length) { const act = el('div', 'spapp-qact'); buttons.forEach((b) => act.appendChild(b)); card.appendChild(act); }
     return card;
 }
-// un caso Urgente que nadie ha tomado en mi nivel (la decisión de pausar lo que traigo o terminarlo primero llega en la siguiente parte)
+// un caso Urgente que nadie ha tomado en mi nivel; si yo atiendo algo menos urgente, abajo se decide qué hacer (pausar o terminar primero). Se dibuja dentro de la misma tarjeta para no perder dónde iba la lista
 function urgentCard(u) {
     const box = el('div', 'pm-app-card spapp-qalert');
-    const head = el('b', 'pm-app-title');
-    head.innerHTML = `<i class="bx bx-error" aria-hidden="true"></i> ${esc(t('main.qUrgentTitle', { priority: t(`main.msPri_${u.priority}`), level: t(`main.sopLevel_${u.level}`) }))}`;
-    box.appendChild(head);
-    const open = el('button', 'wpapp-main spapp-qopen');
-    open.type = 'button';
-    const title = el('div', 'wpapp-title');
-    title.innerHTML = `<b>${esc(u.folio)}</b> · ${esc(u.summary)}`;
-    open.append(title, el('span', 'wpapp-crumbs', u.reporter || '—'));
-    open.addEventListener('click', () => { listScroll = bodyEl.scrollTop; openCase(u.id); });
-    box.appendChild(open);
-    if (u.dueAt && !u.firstResponseAt) {
-        const line = el('div', 'spapp-qdue');
-        line.append(document.createTextNode(`${t('main.qFirstResponse')} `), timerNode(u.dueAt));
-        box.appendChild(line);
-    }
-    if ((u.impacts || []).length) {
-        const chips = el('div', 'wpapp-chips');
-        u.impacts.forEach((i) => chips.appendChild(chip(`${i.name} · ${t(`main.spLevel_${i.level}`)}`)));
-        box.appendChild(chips);
-    }
-    if (u.canTake && !queueCached) { const act = el('div', 'spapp-qact'); act.appendChild(takeButton(u)); box.appendChild(act); }
+    const draw = () => {
+        box.innerHTML = '';
+        const head = el('b', 'pm-app-title');
+        head.innerHTML = `<i class="bx bx-error" aria-hidden="true"></i> ${esc(t('main.qUrgentTitle', { priority: t(`main.msPri_${u.priority}`), level: t(`main.sopLevel_${u.level}`) }))}`;
+        box.appendChild(head);
+        const open = el('button', 'wpapp-main spapp-qopen');
+        open.type = 'button';
+        const title = el('div', 'wpapp-title');
+        title.innerHTML = `<b>${esc(u.folio)}</b> · ${esc(u.summary)}`;
+        open.append(title, el('span', 'wpapp-crumbs', u.reporter || '—'));
+        open.addEventListener('click', () => { listScroll = bodyEl.scrollTop; openCase(u.id); });
+        box.appendChild(open);
+        if (u.dueAt && !u.firstResponseAt) {
+            const line = el('div', 'spapp-qdue');
+            line.append(document.createTextNode(`${t('main.qFirstResponse')} `), timerNode(u.dueAt));
+            box.appendChild(line);
+        }
+        if ((u.impacts || []).length) {
+            const chips = el('div', 'wpapp-chips');
+            u.impacts.forEach((i) => chips.appendChild(chip(`${i.name} · ${t(`main.spLevel_${i.level}`)}`)));
+            box.appendChild(chips);
+        }
+        if (u.canTake && !queueCached) { const act = el('div', 'spapp-qact'); act.appendChild(takeButton(u)); box.appendChild(act); }
+        const working = queueCached ? null : interruptible(u);
+        if (working) box.appendChild(decisionBox(u, working, draw));
+    };
+    draw();
     return box;
 }
 function renderQueue() {
@@ -752,7 +816,8 @@ function renderCase() {
     const meta = el('div', 'pm-app-meta');
     meta.innerHTML = rows.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
     bodyEl.appendChild(meta);
-    if (detail.takeCan) bodyEl.appendChild(takeCard());
+    const caseActions = caseActionsCard();
+    if (caseActions) bodyEl.appendChild(caseActions);
     const closing = closingCard(c);
     if (closing) bodyEl.appendChild(closing);
     const rating = ratingCard();
@@ -767,17 +832,26 @@ function renderCase() {
     bodyEl.appendChild(chatBox);
     startPolling(list);
 }
-// un caso que nadie atiende y que esta persona puede tomar (su hoja «Tomar casos» y el nivel donde está el caso)
-function takeCard() {
+// lo que quien atiende puede hacer con el caso abierto: tomarlo (nadie lo atiende, su hoja «Tomar casos» y el nivel donde está), pausarlo o retomarlo (su hoja «Pausar casos»); el servidor ya dijo cuáles puede
+function caseActionsCard() {
+    if (!(detail.takeCan || detail.pauseCan || detail.resumeCan)) return null;
     const card = el('div', 'pm-app-card spapp-take');
-    card.appendChild(el('b', 'pm-app-title', t('home.spqFree')));
-    const btn = el('button', 'home-carga-new-btn spapp-submit-inline', t('main.qTake'));
-    btn.type = 'button';
-    btn.addEventListener('click', async () => {
-        const id = openId;
-        if (await takeCase(id, btn)) { await loadCase(id, { quiet: true }); fetchQueue(); }
-    });
-    card.appendChild(btn);
+    card.setAttribute('data-help-key', 'appSpCaseActions');
+    if (detail.takeCan) card.appendChild(el('b', 'pm-app-title', t('home.spqFree')));
+    const acts = el('div', 'spapp-qact');
+    // lo que pasó con el caso se vuelve a leer y la cola se actualiza por detrás
+    const after = async () => { const id = openId; await loadCase(id, { quiet: true }); fetchQueue(); };
+    const button = (label, primary, run) => {
+        const btn = el('button', `${primary ? 'home-carga-new-btn' : 'home-carga-secondary-btn'} spapp-qtake`, label);
+        btn.type = 'button';
+        btn.addEventListener('click', async () => { if (await run(btn)) await after(); });
+        return btn;
+    };
+    const id = openId;
+    if (detail.takeCan) acts.appendChild(button(t('main.qTake'), true, (btn) => takeCase(id, btn)));
+    if (detail.pauseCan) acts.appendChild(button(t('main.qPause'), false, async (btn) => { if (!window.confirm(t('main.qPauseConfirm'))) return null; return queueAction(id, 'pause', {}, () => t('main.qDonePauseOnly'), btn); }));
+    if (detail.resumeCan) acts.appendChild(button(t('main.qResume'), true, (btn) => queueAction(id, 'resume', {}, () => t('main.qDoneResume'), btn)));
+    card.appendChild(acts);
     return card;
 }
 function composerNode(list) {

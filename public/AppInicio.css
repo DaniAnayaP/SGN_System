@@ -2531,7 +2531,14 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .spapp-qrow{ cursor: default; }
 .spapp-qrow.hot{ border-color: #e0584d; }
 .spapp-qrow.paused{ opacity: 0.85; }
-.spapp-qact{ grid-column: 1 / -1; display: flex; }
+.spapp-qact{ grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.spapp-qact > button{ flex: 1 1 8rem; }
+.spapp-qdecide{ display: flex; flex-direction: column; gap: 0.4rem; padding-top: 0.6rem; border-top: 1px solid var(--home-border); }
+.spapp-qwho{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: 0.82rem; }
+.spapp-qopt{ display: flex; flex-direction: column; gap: 0.35rem; padding: 0.6rem 0.7rem; border: 1px solid var(--home-border); border-radius: 0.8rem; background: var(--home-surface-2); }
+.spapp-qopt.rec{ border-color: var(--home-accent-strong-1); }
+.spapp-qopt > b{ font-size: 0.8rem; }
+.spapp-qdeferred{ color: var(--home-text-secondary); }
 .spapp-qtake{ display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; }
 .spapp-qalert{ display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 0.7rem; border-color: #e0584d; }
 .spapp-qalert .pm-app-title{ color: #c0392b; }

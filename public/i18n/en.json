@@ -8600,8 +8600,8 @@
     "spappForbidden": "Your account does not have the Support tab. Ask whoever manages your access.",
     "spappNoData": "No signal and no requests saved on your phone yet.",
     "spappCached": "No signal: these are your requests from the last time you opened the screen.",
-    "spqCached": "No signal: this is your queue from the last time you opened the screen. You need signal to take a case.",
-    "spqNeedSignal": "You need signal to take a case: it depends on what is free right now.",
+    "spqCached": "No signal: this is your queue from the last time you opened the screen. You need signal to take, pause or resume a case.",
+    "spqNeedSignal": "This needs signal: it depends on what is happening with the case right now.",
     "spqFree": "Nobody is handling this case yet.",
     "spappEmpty": "You have not asked for support yet.",
     "spappNoForm": "No signal and the form is not saved on your phone yet. Open it once with signal.",
@@ -8739,8 +8739,16 @@
       "example": "You open Support: you see the help first; if it does not solve it, you go on to ask for support."
     },
     "appSpQueue": {
-      "what": "Your work at the Help desk. “My queue” are the cases you already handle; “My level” are the ones waiting for someone at your level, which you can pick up with “Take”. Each case shows its priority, its level and how long is left for the first response (red if it already passed). At the top you see the alert when an Urgent case arrives that nobody has taken. Tap a case to open it. It refreshes by itself; you need signal to take a case.",
+      "what": "Your work at the Help desk. “My queue” are the cases you already handle; “My level” are the ones waiting for someone at your level, which you can pick up with “Take”. Each case shows its priority, its level and how long is left for the first response (red if it already passed). At the top you see the alert when an Urgent case arrives that nobody has taken. With “Take” you handle it; with “Pause” you put it on hold (the user will see why) and with “Resume” you carry on. Tap a case to open it. It refreshes by itself; taking, pausing and resuming need signal.",
       "example": "SP-0012 · I cannot close the order · Urgent · Level 1 · First response in 04:32 → “Take”."
+    },
+    "appSpQueueDecide": {
+      "what": "When an Urgent case arrives and you are handling a less urgent one, you decide here what to do. You say how long you have left: if it is less than the Urgent case can wait (your company sets that in the Support map) finishing first is recommended; otherwise, pause yours and handle the Urgent one. You decide and it is recorded; if you finish first you get a deadline.",
+      "example": "You handle SP-0008 and an Urgent case comes in: you pick “15” minutes; the Urgent case can wait 10, so “Pause SP-0008 and handle SP-0010” is recommended."
+    },
+    "appSpCaseActions": {
+      "what": "What you can do with this case according to your permissions: “Take” (if nobody handles it), “Pause” (the user will see you are handling something urgent) or “Resume” (if it is on hold). Needs signal.",
+      "example": "You open an unhandled case and tap “Take”: it goes in your name and under review."
     },
     "appSpHelp": {
       "what": "Search what happened with a word of the error or of what you wanted to do, open the article to read what happened and what is required, and tell us whether it helped. If it did not, a request opens with the title and the error already written.",

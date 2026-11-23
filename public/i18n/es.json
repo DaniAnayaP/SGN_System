@@ -8599,8 +8599,8 @@
     "spappForbidden": "Tu cuenta no tiene la pestaña Soporte. Pídela a quien administra tus accesos.",
     "spappNoData": "Sin señal y todavía no hay solicitudes guardadas en tu celular.",
     "spappCached": "Sin señal: estas son tus solicitudes de la última vez que abriste la pantalla.",
-    "spqCached": "Sin señal: esta es tu cola de la última vez que abriste la pantalla. Para tomar un caso necesitas señal.",
-    "spqNeedSignal": "Para tomar un caso necesitas señal: depende de lo que esté libre en este momento.",
+    "spqCached": "Sin señal: esta es tu cola de la última vez que abriste la pantalla. Para tomar, pausar o retomar un caso necesitas señal.",
+    "spqNeedSignal": "Esto necesita señal: depende de lo que esté pasando con el caso en este momento.",
     "spqFree": "Nadie atiende este caso todavía.",
     "spappEmpty": "Todavía no has pedido soporte.",
     "spappNoForm": "Sin señal y todavía no se guardó el formulario en tu celular. Ábrelo una vez con señal.",
@@ -8738,8 +8738,16 @@
       "example": "Entras a Soporte: primero ves la ayuda; si no resuelve lo tuyo, pasas a pedir soporte."
     },
     "appSpQueue": {
-      "what": "Tu trabajo en la Mesa de ayuda. «Mi cola» son los casos que ya atiendes; «Mi nivel» son los que esperan a alguien en tu nivel y puedes tomar con «Tomar». Cada caso dice su prioridad, su nivel y cuánto falta para la primera respuesta (en rojo si ya se pasó). Arriba sale el aviso cuando llega un caso Urgente que nadie ha tomado. Toca un caso para abrirlo. Se actualiza sola; para tomar un caso necesitas señal.",
+      "what": "Tu trabajo en la Mesa de ayuda. «Mi cola» son los casos que ya atiendes; «Mi nivel» son los que esperan a alguien en tu nivel y puedes tomar con «Tomar». Cada caso dice su prioridad, su nivel y cuánto falta para la primera respuesta (en rojo si ya se pasó). Arriba sale el aviso cuando llega un caso Urgente que nadie ha tomado. Con «Tomar» lo atiendes tú; con «Pausar» lo dejas en pausa (el usuario verá por qué) y con «Retomar» sigues. Toca un caso para abrirlo. Se actualiza sola; tomar, pausar y retomar necesitan señal.",
       "example": "SP-0012 · No puedo cerrar el pedido · Urgente · Nivel 1 · Primera respuesta en 04:32 → «Tomar»."
+    },
+    "appSpQueueDecide": {
+      "what": "Cuando llega un caso Urgente y tú atiendes uno menos urgente, aquí decides qué hacer. Dices cuánto te falta para terminar: si es menos de lo que el Urgente puede esperar (lo pone tu empresa en el Mapa de soporte) se recomienda terminar primero; si no, pausar el tuyo y atender el Urgente. Tú decides y queda registrado; si terminas primero te quedas con una hora límite.",
+      "example": "Atiendes SP-0008 y entra un Urgente: marcas «15» minutos; el Urgente espera 10, así que se recomienda «Pausar SP-0008 y atender SP-0010»."
+    },
+    "appSpCaseActions": {
+      "what": "Lo que puedes hacer con este caso según tus permisos: «Tomar» (si nadie lo atiende), «Pausar» (el usuario verá que atiendes algo urgente) o «Retomar» (si está en pausa). Necesita señal.",
+      "example": "Abres un caso sin atender y tocas «Tomar»: queda a tu nombre y en revisión."
     },
     "appSpHelp": {
       "what": "Busca lo que te pasó con una palabra del error o de lo que querías hacer, abre el artículo para leer qué pasó y qué se requiere, y dinos si te sirvió. Si no te sirvió, se abre una solicitud ya con el título y el error escritos.",
