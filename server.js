@@ -585,7 +585,7 @@ const {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
+    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, getClientLoginSlugForAlias, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, countImplementationUnreadComments, markImplementationTask,
     listImplementationEventsForClient, addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, addImplementationNote, updateImplementationNote, removeImplementationNote, findImplementationNote, logImplementationEvent, IMPLEMENTATION_LEVEL_THREAD, IMPLEMENTATION_NOTE_MAX, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,
@@ -3022,7 +3022,12 @@ function clBackgroundCss(type, color1, color2, imageLayer) {
 // channel: 'web' (la dirección …/c/<clave>) o 'app' (el celular): cada canal se publica por separado.
 function clPublicView(slug, channel = 'web') {
     if (!/^[a-z0-9-]{3,40}$/.test(String(slug || ''))) return null;
-    const config = getClientLoginBySlug(slug);
+    let config = getClientLoginBySlug(slug);
+    // Una clave ANTERIOR sigue abriendo el mismo inicio (un QR impreso o una app armada con la clave de antes no deben romperse cuando SGN cambia la clave): se sirve lo de la clave vigente.
+    if (!config) {
+        const current = getClientLoginSlugForAlias(slug);
+        if (current) config = getClientLoginBySlug(current);
+    }
     if (!config || !config.live || !config.live.channels[channel]) return null;
     const company = getClientLoginCompany(config.clientId);
     if (!company || company.status === 'inactivo') return null;
@@ -3034,11 +3039,11 @@ function clPublicView(slug, channel = 'web') {
     const logoData = live.brand.logo || company.logo || '';
     const imageData = live.background.image || '';
     const version = crypto.createHash('md5').update(logoData).update('|').update(imageData).digest('hex').slice(0, 10);
-    const imageUrl = imageData ? `/c/${slug}/img/background?v=${version}` : '';
+    const imageUrl = imageData ? `/c/${config.slug}/img/background?v=${version}` : '';
     const type = live.background.type;
     const background = clBackgroundCss(type, color1, color2, imageUrl ? `url("${imageUrl}")` : '');
     return {
-        slug, name: company.name, shortName: live.identity.shortName || company.suggestedShortName || '', iconColor: live.identity.iconColor || primary, iconVersion: config.iconVersion || '', logoData, imageData, logoUrl: logoData ? `/c/${slug}/img/logo?v=${version}` : '',
+        slug: config.slug, name: company.name, shortName: live.identity.shortName || company.suggestedShortName || '', iconColor: live.identity.iconColor || primary, iconVersion: config.iconVersion || '', logoData, imageData, logoUrl: logoData ? `/c/${config.slug}/img/logo?v=${version}` : '',
         colors: { primary, button, page: clLighten(primary, 0.9), color1, color2 }, background, backgroundType: type, diagonal: !!live.background.diagonal,
         texts: { greeting: !!live.texts.greeting, welcome: live.texts.welcome, formTitle: live.texts.formTitle, appButton: live.texts.appButton },
         show: { forgot: !!live.show.forgot, register: !!live.show.register, social: !!live.show.social, language: !!live.show.language, appLink: !!live.show.appLink, welcomeScreen: !!live.show.welcomeScreen, faceId: !!live.show.faceId },
@@ -3113,7 +3118,7 @@ app.get('/c/:slug/manifest.webmanifest', publicClientLoginLimiter, (req, res) =>
 app.get('/c/:slug/icon-:size(192|512).png', publicClientLoginLimiter, (req, res) => {
     const view = clPublicView(req.params.slug);
     if (!view) return res.status(404).end();
-    const config = getClientLoginBySlug(req.params.slug);
+    const config = getClientLoginBySlug(view.slug); // la clave vigente (si pidieron una anterior, view ya viene de la vigente)
     const png = config ? getClientLoginIconPng(config.clientId, Number(req.params.size)) : null;
     res.set({ 'Cache-Control': 'public, max-age=300', 'X-Robots-Tag': 'noindex, nofollow', 'X-Content-Type-Options': 'nosniff' });
     if (!png) return res.sendFile(path.join(PUBLIC_DIR, 'icons', 'icon-512.png'));

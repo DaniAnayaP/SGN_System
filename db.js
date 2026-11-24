@@ -19057,6 +19057,15 @@ db.exec(`
         ['store_requested_at', 'TEXT'], ['store_requested_by', "TEXT NOT NULL DEFAULT ''"], ['store_updated_at', 'TEXT'], ['store_updated_by', "TEXT NOT NULL DEFAULT ''"]]
         .forEach(([name, def]) => { if (!cols.includes(name)) db.exec(`ALTER TABLE client_login_configs ADD COLUMN ${name} ${def}`); });
 }
+// Claves ANTERIORES de un cliente (Daniel, 2026-11-24: «que el QR no cambie»): el QR de «Enlace y QR» lleva …/c/<clave>, así que si SGN cambia la clave el QR ya impreso dejaba de abrir. Ahora, al cambiar la clave, la anterior
+// queda aquí y sigue abriendo el mismo inicio (y la app del celular que la tenga guardada); nadie más puede tomar esa clave. Si el cliente vuelve a su clave anterior, deja de ser alias.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS client_login_slug_aliases (
+        slug       TEXT PRIMARY KEY,
+        client_id  INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+`);
 // Palabras que no pueden ser la clave de un cliente: rutas y carpetas de la aplicación.
 const LOGIN_RESERVED_SLUGS = ['admin', 'api', 'c', 'app', 'apps', 'login', 'downloads', 'icons', 'fonts', 'vendor', 'i18n', 'data', 'imagenes', 'sw', 'static', 'public', 'www', 'help', 'soporte', 'sgn', 'geipsa', 'null', 'undefined'];
 const LOGIN_SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -19092,6 +19101,9 @@ function loginSlugProblem(slug, exceptClientId) {
     if (LOGIN_RESERVED_SLUGS.includes(slug)) return 'RESERVED';
     const taken = db.prepare('SELECT client_id FROM client_login_configs WHERE slug = ?').get(slug);
     if (taken && taken.client_id !== exceptClientId) return 'TAKEN';
+    // una clave que fue de otro cliente sigue siendo suya (su QR impreso la usa)
+    const oldKey = db.prepare('SELECT client_id FROM client_login_slug_aliases WHERE slug = ?').get(slug);
+    if (oldKey && oldKey.client_id !== exceptClientId) return 'TAKEN';
     return '';
 }
 // La clave que se propone para un cliente nuevo: de su nombre, y con -2, -3… si ya está tomada.
@@ -19181,6 +19193,11 @@ function getClientLoginIconPng(clientId, size) {
 function getClientLogin(clientId) {
     return deserializeClientLogin(db.prepare('SELECT * FROM client_login_configs WHERE client_id = ?').get(clientId));
 }
+// Si `slug` es una clave anterior de algún cliente que todavía tiene inicio personalizado, la clave VIGENTE de ese cliente; si no, null.
+function getClientLoginSlugForAlias(slug) {
+    const row = db.prepare('SELECT c.slug FROM client_login_slug_aliases a JOIN client_login_configs c ON c.client_id = a.client_id WHERE a.slug = ?').get(String(slug || ''));
+    return row ? row.slug : null;
+}
 function getClientLoginBySlug(slug) {
     return deserializeClientLogin(db.prepare('SELECT * FROM client_login_configs WHERE slug = ?').get(String(slug || '')));
 }
@@ -19204,6 +19221,7 @@ function createClientLogin(clientId, updatedBy) {
     if (getClientLogin(clientId)) return { error: 'EXISTS' };
     const slug = loginSuggestSlug(clientId);
     db.prepare('INSERT INTO client_login_configs (client_id, slug, draft, updated_by) VALUES (?, ?, ?, ?)').run(clientId, slug, JSON.stringify(defaultLoginDraft()), updatedBy || '');
+    db.prepare('DELETE FROM client_login_slug_aliases WHERE slug = ?').run(slug); // si era una clave anterior suya, vuelve a ser la vigente
     ensureMiAppGrant(clientId);
     return { config: getClientLogin(clientId) };
 }
@@ -19329,7 +19347,12 @@ function setClientLoginSlug(clientId, slug, updatedBy) {
     const problem = loginSlugProblem(clean, clientId);
     if (problem) return { error: problem };
     if (clean === before.slug) return { before, config: before };
-    db.prepare("UPDATE client_login_configs SET slug = ?, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?").run(clean, updatedBy || '', clientId);
+    // la clave que se deja sigue abriendo el mismo inicio (el QR impreso no se rompe); la que se toma deja de ser alias si lo era
+    db.transaction(() => {
+        db.prepare("UPDATE client_login_configs SET slug = ?, updated_at = datetime('now'), updated_by = ? WHERE client_id = ?").run(clean, updatedBy || '', clientId);
+        db.prepare('INSERT OR REPLACE INTO client_login_slug_aliases (slug, client_id) VALUES (?, ?)').run(before.slug, clientId);
+        db.prepare('DELETE FROM client_login_slug_aliases WHERE slug = ?').run(clean);
+    })();
     return { before, config: getClientLogin(clientId) };
 }
 
@@ -22256,7 +22279,7 @@ module.exports = {
     getClientButtonDefaults, setClientButtonDefaults, getEffectiveUserDefaults, getEffectiveUiScale,
     EXPANSION_TYPES, EXPANSION_STATUSES, getClientContractSummary, estimateExpansionItems, listExpansionRequests, getExpansionRequest, createExpansionRequest,
     EXPANSION_TRANSITIONS, listAllExpansionRequests, getExpansionRequestAny, moveExpansionRequest, setExpansionFinalCost, listSaasUserIdsForScreen, publishExpansionNotice,
-    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
+    LOGIN_RESERVED_SLUGS, defaultLoginDraft, getClientLogin, getClientLoginBySlug, getClientLoginSlugForAlias, listClientLogins, getClientLoginCompany, createClientLogin, saveClientLoginDraft, publishClientLogin, publishClientLoginByClient, restoreClientLoginInitial, getClientLoginIconPng, STORE_STATUSES, loginBundleId, getClientStoreApp, getClientStoreAppBySlug, setClientStoreApp, requestClientStoreApp, removeClientLogin, setClientLoginSlug,
     IMPLEMENTATION_LEVELS, IMPLEMENTATION_TASKS, confirmImplementationFinish, rejectImplementationFinish, publishImplementationNotice, countImplementationUnreadComments, markImplementationTask,
     listImplementationEventsForClient, addImplementationActivity, updateImplementationActivity, setImplementationActivityStatus, removeImplementationActivity, findImplementationActivity, addImplementationNote, updateImplementationNote, removeImplementationNote, findImplementationNote, logImplementationEvent, IMPLEMENTATION_LEVEL_THREAD, IMPLEMENTATION_NOTE_MAX, listImplementationPeople, getImplementationContracted, getImplementationTrainingStats, getImplementation, listImplementationsSummary, listImplementerCandidates, startImplementation, setImplementationImplementer, setImplementationDates, markImplementationLevel,
     TRAINING_MODALITIES, TRAINING_STATUSES, listTrainingSessions, listAllTrainingSessions, getTrainingSessionAny, listClientUsersForTraining, listContractedDepartmentKeys, formatClientDateTime, createTrainingSession, updateTrainingSession, setTrainingAttendance, cancelTrainingSession, publishTrainingNotice,

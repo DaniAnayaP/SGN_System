@@ -81,6 +81,7 @@ const TABLES = {
     thread_reads: { action: WIPE, group: 'captures' }, // hasta qué comentario leyó cada persona en cada hilo
     chat_conversations: { action: WIPE, group: 'captures' }, // Mensajes: quiénes son las dos personas de cada chat 1 a 1 (los mensajes son thread_comments de tipo 'chat') (2c)
     client_login_configs: { action: WIPE, group: 'captures' }, // Apps Nuestros Clientes: el inicio de sesión personalizado de cada cliente
+    client_login_slug_aliases: { action: WIPE, group: 'captures' }, // las claves anteriores de cada cliente (su QR impreso sigue abriendo; 2026-11-24)
     sku_requests: { action: WIPE, group: 'captures' },
     sku_request_events: { action: WIPE, group: 'captures' },
     fixed_assets: { action: WIPE, group: 'captures' }, // Alta Activos (2026-11-12)
