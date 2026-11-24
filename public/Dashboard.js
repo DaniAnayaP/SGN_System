@@ -14660,6 +14660,7 @@ async function initDashboardInner({ activePage } = {}) {
 // by hand when a table's pantalla moves in the tree or a new table is added.
 const TABLE_GRANT_PATHS = {
     'sitios-contratados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-contracted-sites' },
+    'ventas': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-operaciones/cat-operaciones-pv-ventas' },
     // Equipo de Trabajo › Registro (la tabla estándar de esa vista); mismo prefijo que db.js
     'equipo-registro': { sectionId: 'main', itemId: 'equipo-trabajo', submenuPrefix: 'et-registro/et-registro-tabla' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },

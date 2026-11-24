@@ -77,6 +77,10 @@ const {
     setSiteStatus,
     countActiveCentersOfSite,
     abbreviationTakenInSite,
+    localPartsToUtc,
+    listPosSales,
+    findPosSale,
+    insertPosSales,
     getCostCenterById,
     getCostCenterAnyLane,
     createCostCenter,
@@ -650,7 +654,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { 'equipo-registro': 'menu.teamWork', 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'implementacion-historial': 'menu.gesTiImplHistorial', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual', work_plans: 'menu.workPlans' };
+const EXTRA_SCREEN_LABEL_KEYS = { 'equipo-registro': 'menu.teamWork', 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'implementacion-historial': 'menu.gesTiImplHistorial', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', ventas: 'menu.opPvVentas', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual', work_plans: 'menu.workPlans' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -7120,6 +7124,94 @@ app.patch('/api/business/cost-centers/:id/nickname', requireAuth, requireClientA
         recordLabel: costCenter.code, action: 'update', fieldKey: 'business.ccNickname', changedBy: changedByLabel(req),
     });
     res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
+});
+
+// ---- Punto Venta › Operaciones › Ventas: los tickets cargados por plantilla (Daniel, 2026-11-24, «Sí a las propuestas») ----
+// La plantilla (Excel o celdas pegadas) trae un renglón por artículo; el folio junta los renglones en un ticket y el centro de costos manda (de él salen el sitio, la sucursal y el domicilio). La lógica de leer, revisar y sumar vive en posSales.js
+// (se prueba sola). POST /import?mode=preview revisa sin escribir nada; mode=commit vuelve a revisar el mismo archivo y carga SOLO los tickets completos y correctos (un ticket entero o ninguno; un folio que ya existe en ese sitio se salta y nunca se modifica).
+// Cargar es del botón «Cargar ventas» (colVenImportAuth, clase Botones del árbol): sin él tampoco se baja la plantilla ni se revisa un archivo. Ver la lista de tickets: quien tenga la pantalla.
+const posSales = require('./posSales');
+const POS_SALES_SCREEN = { area: 'Punto Venta', modulo: 'Cadena de Suministro', pantalla: 'Ventas' };
+const POS_SALES_IMPORT_COL = 'colVenImportAuth';
+const posSalesRaw = express.raw({ type: () => true, limit: '5mb' });
+function mapPosSale(row, companyName, timeZone) {
+    return {
+        id: row.id, folio: row.folio, soldAt: row.sold_at, siteCode: row.site_code, siteName: row.site_name || '', centerCode: row.center_code || '', centerName: row.center_name || '',
+        servedBy: row.served_by, place: row.place, payment: row.payment_method, received: row.received, items: row.items, subtotal: row.subtotal, tax: row.tax, total: row.total,
+        linesCount: row.lines_count, loadedBy: row.loaded_by, createdAt: row.created_at,
+        ...getSystemColumnsForRecord({ companyName, ...POS_SALES_SCREEN, centroCostos: row.center_name || '', createdAt: row.created_at, timeZone }),
+    };
+}
+function posSalesImportGate(req, res) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return false; }
+    if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_SALES_IMPORT_COL)) {
+        res.status(403).json({ code: 'POS_FORBIDDEN', message: 'No tienes permiso para cargar ventas.' });
+        return false;
+    }
+    return true;
+}
+app.get('/api/business/pos-sales', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const client = getClientById(req.user.clientId);
+    const { rows, total } = listPosSales(req.user.clientId, req.user.isTestAccount);
+    res.set('Cache-Control', 'no-store');
+    res.json({ sales: rows.map((r) => mapPosSale(r, client.company_name, client.time_zone)), total, truncated: total > rows.length, canImport: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_SALES_IMPORT_COL) });
+});
+app.get('/api/business/pos-sales/template', requireAuth, async (req, res) => {
+    if (!posSalesImportGate(req, res)) return;
+    const lang = req.query.lang === 'en' ? 'en' : 'es';
+    const centers = listCostCenters(req.user.clientId, req.user.isTestAccount).filter((cc) => cc.status === 'active' && cc.site_code);
+    const workbook = await posSales.buildTemplate(lang, centers);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', buildContentDisposition(`${lang === 'en' ? 'Sales-template' : 'Plantilla-ventas'}.xlsx`));
+    res.set('Cache-Control', 'no-store');
+    await workbook.xlsx.write(res);
+    res.end();
+});
+const POS_IMPORT_MESSAGES = {
+    IMPORT_FILE: 'No se pudo leer el archivo: sube un .xlsx.', IMPORT_HEADERS: 'Faltan columnas obligatorias en la fila de títulos.', IMPORT_EMPTY: 'El archivo no trae ventas.',
+    IMPORT_TOO_BIG: `El archivo trae demasiados renglones (máximo ${posSales.MAX_ROWS}).`,
+};
+app.post('/api/business/pos-sales/import', requireAuth, posSalesRaw, async (req, res) => {
+    if (!posSalesImportGate(req, res)) return;
+    const { clientId, isTestAccount } = req.user;
+    const commit = req.query.mode === 'commit';
+    if (commit && !hasCompleteCostCenter(clientId, isTestAccount)) {
+        return res.status(409).json({ code: 'COST_CENTER_REQUIRED', message: 'Primero crea un centro de costos completo en Nuestros Centros Costos: toda operación va ligada a uno.' });
+    }
+    // el .xlsx tal cual (cuerpo binario) o las celdas pegadas ({ rows: [[...], ...] })
+    let parsed;
+    if (Buffer.isBuffer(req.body)) parsed = await posSales.readWorkbookRows(req.body);
+    else if (req.body && Array.isArray(req.body.rows)) parsed = posSales.parseMatrix(req.body.rows.slice(0, posSales.MAX_ROWS + 30).map((values, i) => ({ line: i + 1, values: Array.isArray(values) ? values : [] })));
+    else parsed = { error: 'IMPORT_FILE' };
+    if (parsed.error) return res.status(parsed.error === 'IMPORT_TOO_BIG' ? 413 : 400).json({ code: parsed.error, message: POS_IMPORT_MESSAGES[parsed.error] || 'No se pudo leer el archivo.', missing: parsed.missing });
+    const client = getClientById(clientId);
+    const centers = listCostCenters(clientId, isTestAccount);
+    const byCode = new Map(centers.map((cc) => [String(cc.code).toUpperCase(), cc]));
+    const plan = posSales.planImport(parsed.rows, {
+        centerByCode: (code) => byCode.get(code) || null,
+        centersOfSite: (prefix) => centers.filter((cc) => cc.status === 'active' && String(cc.code).toUpperCase().startsWith(`${prefix}-`)).map((cc) => cc.code),
+        existingTicket: (siteCode, folio) => findPosSale(clientId, isTestAccount, siteCode, folio),
+        toUtc: (parts) => localPartsToUtc(parts, client.time_zone),
+        now: Date.now(),
+    });
+    res.set('Cache-Control', 'no-store');
+    if (!commit) return res.json({ mode: 'preview', summary: plan.summary, tickets: plan.tickets.map(posSales.publicTicket) });
+    const ready = plan.tickets.filter((tk) => tk.status === 'ready');
+    let created = 0;
+    if (ready.length) {
+        const sourceFile = String(req.query.file || '').replace(/[\u0000-\u001f]/g, '').slice(0, 120);
+        const ids = insertPosSales({
+            clientId, isTestData: isTestAccount, loadedBy: changedByLabel(req), loadedByUserId: req.user.sub, sourceFile,
+            tickets: ready.map((tk) => ({
+                siteCode: tk.siteCode, folio: tk.folio, centerId: tk.centerId, soldAt: posSales.utcStamp(tk.soldAtUtc), servedBy: tk.servedBy, place: tk.place, payment: tk.payment, received: tk.received,
+                subtotal: tk.subtotal, tax: tk.tax, total: tk.total, items: tk.items, lines: tk.lines,
+            })),
+        });
+        created = ids.length;
+        notifyButtonAction(req, 'ventas', 'import', `${created} tickets`);
+    }
+    res.json({ mode: 'commit', summary: plan.summary, created });
 });
 
 // --- Geo catalog (País/Estado/Localidad/Calle behind a Centro de Costos'

@@ -1046,6 +1046,45 @@ db.exec(`
         UNIQUE (client_id, is_test_data, code)
     )
 `);
+// Punto Venta › Operaciones › Ventas: los tickets que se cargan por plantilla (un renglón por folio) y sus renglones de artículos. El folio no se repite DENTRO de un sitio (dos cajas de sitios distintos pueden tener el mismo número).
+// sold_at es la hora de la venta en UTC (la plantilla trae la hora del lugar y se convierte con la zona del cliente); subtotal, IVA y total los calcula el sistema (precios con IVA incluido).
+db.exec(`
+    CREATE TABLE IF NOT EXISTS pos_sales (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id         INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data      INTEGER NOT NULL DEFAULT 0,
+        site_code         TEXT NOT NULL,
+        folio             TEXT NOT NULL,
+        cost_center_id    INTEGER NOT NULL,
+        sold_at           TEXT NOT NULL,
+        served_by         TEXT NOT NULL DEFAULT '',
+        place             TEXT NOT NULL DEFAULT '',
+        payment_method    TEXT NOT NULL DEFAULT '',
+        received          REAL,
+        subtotal          REAL NOT NULL DEFAULT 0,
+        tax               REAL NOT NULL DEFAULT 0,
+        total             REAL NOT NULL DEFAULT 0,
+        items             REAL NOT NULL DEFAULT 0,
+        lines_count       INTEGER NOT NULL DEFAULT 0,
+        source_file       TEXT NOT NULL DEFAULT '',
+        loaded_by         TEXT NOT NULL DEFAULT '',
+        loaded_by_user_id INTEGER,
+        created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (client_id, is_test_data, site_code, folio)
+    );
+    CREATE INDEX IF NOT EXISTS idx_pos_sales_sold ON pos_sales(client_id, is_test_data, sold_at);
+    CREATE TABLE IF NOT EXISTS pos_sale_lines (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_id     INTEGER NOT NULL REFERENCES pos_sales(id) ON DELETE CASCADE,
+        line_no     INTEGER NOT NULL,
+        concept     TEXT NOT NULL,
+        quantity    REAL NOT NULL,
+        unit_price  REAL NOT NULL,
+        tax_rate    REAL NOT NULL DEFAULT 16,
+        line_total  REAL NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_pos_sale_lines_sale ON pos_sale_lines(sale_id);
+`);
 
 // Seed data for the geo catalog — a real, well-known list of países (not a
 // live internet fetch: no outbound access from this server has been set up,
@@ -3456,6 +3495,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'soportes-cerrados': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Soportes cerrados' },
     'ayuda-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Errores y ayuda' },
     'sitios-contratados': { area: '', modulo: 'Administración del Negocio', pantalla: 'Sitios Contratados' },
+    'ventas': { area: 'Punto Venta', modulo: 'Cadena de Suministro', pantalla: 'Ventas' },
     'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
@@ -3804,6 +3844,7 @@ function getLastChangedBy(clientId, tableKey, recordId, fieldKey) {
 // that pantalla's column entries in menu.json exactly.
 const TABLE_GRANT_PATHS = {
     'sitios-contratados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-contracted-sites' },
+    'ventas': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-operaciones/cat-operaciones-pv-ventas' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
     'carga-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-carga-combustible' },
@@ -4107,6 +4148,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'lecturas': { create: 'colLecCreateAuth' },
     'mtto-preventivo': { create: 'colMpCreateAuth', delete: 'colMpDeleteAuth' },
     'mtto-correctivo': { create: 'colMcCreateAuth' },
+    'ventas': { import: 'colVenImportAuth' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
 const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];
@@ -4441,6 +4483,67 @@ function seedSitesFromCostCentersOnce() {
         db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(SITES_FROM_CENTERS_KEY);
     })();
     console.log(`[db] Sitios como registro propio (una vez): ${created} sitios creados a partir de los códigos de sitio de los centros de costos.`);
+}
+
+// --- Punto Venta › Ventas -------------------------------------------------------------------------------------------------------------------------
+// La hora de reloj de un lugar (la de la plantilla) → el instante UTC, con la zona del cliente (incluye su horario de verano). Lo contrario de wallClockInZone.
+function localPartsToUtc({ y, m, d, h = 0, mi = 0, s = 0 }, timeZone) {
+    const zone = timeZone && isValidTimeZone(timeZone) ? timeZone : DEFAULT_CLIENT_TIME_ZONE;
+    const wanted = Date.UTC(y, m - 1, d, h, mi, s);
+    let guess = wanted;
+    for (let i = 0; i < 3; i += 1) {
+        const diff = wanted - wallClockInZone(new Date(guess), zone).getTime();
+        if (!diff) break;
+        guess += diff;
+    }
+    return new Date(guess);
+}
+// Los tickets más recientes primero (sin paginación, como las demás tablas: se trae un tope y se dice cuántos hay en total).
+function listPosSales(clientId, forTestAccount = false, limit = 3000) {
+    const lane = forTestAccount ? 1 : 0;
+    const total = db.prepare('SELECT COUNT(*) AS n FROM pos_sales WHERE client_id = ? AND is_test_data = ?').get(clientId, lane).n;
+    const rows = db.prepare(`
+        SELECT s.*, cc.code AS center_code, cc.name AS center_name, cs.sucursal AS site_name
+        FROM pos_sales s
+        LEFT JOIN cost_centers cc ON cc.id = s.cost_center_id
+        LEFT JOIN client_sites cs ON cs.client_id = s.client_id AND cs.is_test_data = s.is_test_data AND cs.code = s.site_code
+        WHERE s.client_id = ? AND s.is_test_data = ?
+        ORDER BY s.sold_at DESC, s.id DESC LIMIT ?
+    `).all(clientId, lane, limit);
+    return { rows, total };
+}
+function findPosSale(clientId, forTestAccount, siteCode, folio) {
+    return db.prepare('SELECT id, created_at FROM pos_sales WHERE client_id = ? AND is_test_data = ? AND site_code = ? AND folio = ?').get(clientId, forTestAccount ? 1 : 0, siteCode, folio) || null;
+}
+// Carga los tickets ya revisados (un ticket entero o ninguno; todos en una sola transacción). Cada ticket deja su renglón «alta» en el historial, con el archivo de donde salió.
+function insertPosSales({ clientId, isTestData = false, tickets, loadedBy, loadedByUserId, sourceFile }) {
+    const insertSale = db.prepare(`
+        INSERT INTO pos_sales (client_id, is_test_data, site_code, folio, cost_center_id, sold_at, served_by, place, payment_method, received, subtotal, tax, total, items, lines_count, source_file, loaded_by, loaded_by_user_id)
+        VALUES (@clientId, @isTestData, @siteCode, @folio, @centerId, @soldAt, @servedBy, @place, @payment, @received, @subtotal, @tax, @total, @items, @linesCount, @sourceFile, @loadedBy, @loadedByUserId)
+    `);
+    const insertLine = db.prepare('INSERT INTO pos_sale_lines (sale_id, line_no, concept, quantity, unit_price, tax_rate, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)');
+    const ids = [];
+    db.transaction(() => {
+        tickets.forEach((tk) => {
+            const result = insertSale.run({
+                clientId, isTestData: isTestData ? 1 : 0, siteCode: tk.siteCode, folio: tk.folio, centerId: tk.centerId, soldAt: tk.soldAt, servedBy: tk.servedBy || '', place: tk.place || '', payment: tk.payment || '',
+                received: tk.received === null || tk.received === undefined ? null : tk.received, subtotal: tk.subtotal, tax: tk.tax, total: tk.total, items: tk.items, linesCount: tk.lines.length,
+                sourceFile: sourceFile || '', loadedBy: loadedBy || '', loadedByUserId: loadedByUserId || null,
+            });
+            tk.lines.forEach((line) => insertLine.run(result.lastInsertRowid, line.lineNo, line.concept, line.quantity, line.price, line.taxRate, line.total));
+            logTableChange({ clientId, tableKey: 'ventas', recordId: result.lastInsertRowid, recordLabel: tk.folio, action: 'create', fieldKey: 'main.colVenArchivo', newValue: sourceFile || '', changedBy: loadedBy });
+            ids.push(result.lastInsertRowid);
+        });
+    })();
+    return ids;
+}
+
+// El botón «Cargar ventas» es nuevo: quien ya tiene la pantalla Ventas lo recibe en lo contratado (planes, adicionales y giros), con «Solo ver» + «Ver y operar»; quien lo use en su puesto o usuario lo decide el administrador desde el árbol.
+const POS_SALES_BUTTON_SEED_KEY = 'seed-pv-ventas-cargar-v1';
+function seedPosSalesImportButton() {
+    const path = TABLE_GRANT_PATHS.ventas;
+    if (!path) return;
+    seedLeavesForScreenHolders(POS_SALES_BUTTON_SEED_KEY, path, ['solo-ver', 'ver-y-operar'].map((level) => `${path.submenuPrefix}/class-botones/colVenImportAuth/${level}`), 'the Ventas load button', { contractOnly: true });
 }
 
 function getCostCenterById(id, clientId, forTestAccount = false) {
@@ -21602,6 +21705,7 @@ backfillFixedAssetHistoryOnce();
 moveScreensToGestionOnce();
 // todo o nada (una sola transacción): si algo falla se avisa, el servidor sigue arriba y se reintenta en el siguiente arranque
 try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos desde TI: no se pudieron mover los permisos de las pantallas (se reintentará al arrancar):', err.message); }
+try { seedPosSalesImportButton(); } catch (err) { console.error('[db] Ventas: no se pudo sembrar el botón Cargar ventas (se reintentará al arrancar):', err.message); }
 try { seedSitesFromCostCentersOnce(); } catch (err) { console.error('[db] Sitios propios: no se pudo crear desde los centros (se reintentará al arrancar):', err.message); }
 try { seedTiMinimumOnce(); } catch (err) { console.error('[db] TI por defecto: no se pudo abrir el mínimo (se reintentará al arrancar):', err.message); }
 try { moveTiAdminGroupToConfigAreaOnce(); } catch (err) { console.error('[db] TI › Configuración Compañía: no se pudo pasar el grupo anterior (se reintentará al arrancar):', err.message); }
@@ -22008,6 +22112,10 @@ module.exports = {
     setSiteStatus,
     countActiveCentersOfSite,
     abbreviationTakenInSite,
+    localPartsToUtc,
+    listPosSales,
+    findPosSale,
+    insertPosSales,
     getCostCenterById,
     getCostCenterAnyLane,
     createCostCenter,

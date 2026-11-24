@@ -40,6 +40,9 @@ const TABLES = {
     // Organización de cada cliente
     cost_centers: { action: WIPE, group: 'organization' },
     client_sites: { action: WIPE, group: 'organization' },
+    // Punto Venta: los tickets cargados y sus renglones son datos de captura del cliente
+    pos_sales: { action: WIPE, group: 'captures' },
+    pos_sale_lines: { action: WIPE, group: 'captures' },
     job_positions: { action: WIPE, group: 'organization' },
     job_position_grants: { action: WIPE, group: 'organization' },
     job_position_alt_supervisors: { action: WIPE, group: 'organization' },
