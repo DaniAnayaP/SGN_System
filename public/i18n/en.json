@@ -62,6 +62,7 @@
   "sidebar": {
     "brand": "SGN",
     "toggleMenu": "Show or hide the menu",
+    "closeMenu": "Close the menu",
     "moreActions": "More options",
     "mainNav": "Main navigation",
     "collapseMenu": "Collapse sidebar",

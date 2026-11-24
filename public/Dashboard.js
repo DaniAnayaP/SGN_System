@@ -2230,6 +2230,30 @@ function wireMenuInteractions() {
         });
     }
 
+    // Celular: el menú se cierra con la X de adentro, tocando afuera (el velo oscuro es body::before: un toque ahí llega con body como objetivo) o con Escape.
+    // Antes el botón de la barra de arriba quedaba tapado por el propio panel y no había cómo cerrarlo desde adentro.
+    const closeSidebarOnPhone = () => {
+        if (!document.body.classList.contains('sidebars-hidden')) return;
+        document.body.classList.remove('sidebars-hidden');
+        sidebarsBtn?.setAttribute('aria-expanded', 'false');
+    };
+    const sidebarHeader = Sidebar && Sidebar.querySelector('.header');
+    if (sidebarHeader && !document.getElementById('sidebar-close-btn')) {
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.id = 'sidebar-close-btn';
+        closeBtn.className = 'sidebar-close-btn';
+        closeBtn.setAttribute('aria-label', t('sidebar.closeMenu'));
+        closeBtn.innerHTML = '<i class="bx bx-x" aria-hidden="true"></i>';
+        closeBtn.addEventListener('click', closeSidebarOnPhone);
+        sidebarHeader.appendChild(closeBtn);
+    }
+    if (!document.body.dataset.sidebarCloseWired) {
+        document.body.dataset.sidebarCloseWired = '1';
+        document.addEventListener('click', (event) => { if (event.target === document.body) closeSidebarOnPhone(); });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeSidebarOnPhone(); });
+    }
+
     if (menuBtn && !menuBtn.dataset.wired) {
         menuBtn.dataset.wired = '1';
         menuBtn.addEventListener('click', () => {
@@ -10287,6 +10311,7 @@ const HELP_CONTENT_KEYS = {
     'Sidebar': 'sidebarMenu',
     // Los dos botones que solo se ven en pantalla de celular.
     'sidebars-btn': 'sidebarsToggle',
+    'sidebar-close-btn': 'sidebarsToggle',
     'top-bar-actions-toggle': 'topBarActionsToggle',
 };
 // <th data-col="..."> -- the 13 Control Interno columns (see
