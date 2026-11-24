@@ -1,6 +1,7 @@
 // ---------------------------------------------------------------------------
 // Administración del Negocio › Servicio Contratado › Sitios Contratados: los sitios (lugares físicos) del cliente, cada uno con los centros de costos que tiene dentro (Sitio > Centro de costos), y arriba cuántos sitios y centros usa contra lo
-// contratado (el contrato lleva dos límites: sitios y centros de costos). Es de solo lectura: los sitios se crean al darle su código de sitio a un centro de costos (Nuestros Centros Costos). Los renglones salen de GET /api/business/sites.
+// contratado (el contrato lleva dos límites: sitios y centros de costos). La tabla es de solo lectura: los sitios se crean al darle su código de sitio a un centro de costos (Nuestros Centros Costos); el botón «+ Nuevo sitio» (administrador del cliente) lleva
+// directo a ese formulario. Los renglones salen de GET /api/business/sites.
 // ---------------------------------------------------------------------------
 
 // Envuelto en una función: Dashboard.js ya declara globales como t, y chocarían con los de esta pantalla.
@@ -105,6 +106,28 @@ function updateLimitsBar() {
     bar.innerHTML = `<span class="sit-limit${over(limits.sitesUsed, limits.sitesLimit)}">${t('main.sitLimitSites', { used: limits.sitesUsed, limit: limits.sitesLimit })}</span>`
         + `<span class="sit-limit${over(limits.costCentersUsed, limits.costCentersLimit)}">${t('main.sitLimitCenters', { used: limits.costCentersUsed, limit: limits.costCentersLimit })}</span>`;
 }
+// «+ Nuevo sitio» (el mismo botón que «+ Nuevo Centro Costos»): un sitio nace con su primer centro de costos (el código del sitio vive en el centro), así que el botón lleva a Nuestros Centros Costos con «Nuevo Centro Costos» ya abierto y el cursor en
+// «Código del sitio» (ver ?nuevo=sitio en Business-CentrosCosto.js). Solo lo ve el administrador del cliente (el servidor también lo exige) y se apaga si ya se usan todos los sitios o todos los centros de costos contratados.
+function renderNewSiteButton() {
+    const toolbar = document.querySelector(`[data-table-id="${TABLE_KEY}"]`)?.previousElementSibling;
+    if (!toolbar || !Dashboard.isClientAdmin) return;
+    toolbar.classList.add('sit-toolbar');
+    let btn = toolbar.querySelector('.data-table-new-record-btn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'data-table-new-record-btn';
+        btn.id = 'sit-new-btn';
+        btn.setAttribute('data-help-key', 'sitNew');
+        btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${t('main.sitNew')}</span>`;
+        btn.addEventListener('click', () => { if (!btn.disabled) window.location.href = 'Business-CentrosCosto.html?nuevo=sitio'; });
+        toolbar.prepend(btn);
+    }
+    const sitesFull = limits.sitesUsed >= limits.sitesLimit;
+    const centersFull = limits.costCentersUsed >= limits.costCentersLimit;
+    btn.disabled = sitesFull || centersFull;
+    btn.title = sitesFull ? t('main.sitNewSitesFull', { limit: limits.sitesLimit }) : (centersFull ? t('business.ccLimitReached', { limit: limits.costCentersLimit }) : t('main.sitNew'));
+}
 function redraw() {
     const tbody = getTbody();
     tbody.innerHTML = '';
@@ -121,6 +144,7 @@ async function refreshTable() {
         sites = body.sites || [];
         limits = { ...limits, ...(body.limits || {}) };
         updateLimitsBar();
+        renderNewSiteButton();
         redraw();
     } catch (err) {
         console.error('Sitios Contratados: failed to load records', err);

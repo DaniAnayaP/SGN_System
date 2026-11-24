@@ -708,6 +708,14 @@ document.addEventListener('dashboard:language-changed', () => {
             cascadeLevels[key].addToggle.title = Dashboard.t(cascadeLevels[key].titleKey);
         });
         await loadCostCenters();
+        // Llegó desde «+ Nuevo sitio» (Sitios Contratados): se abre «Nuevo Centro Costos» con el cursor en «Código del sitio». Si ya no caben más centros, el botón está apagado y no se abre nada.
+        if (new URLSearchParams(window.location.search).get('nuevo') === 'sitio') {
+            history.replaceState(null, '', window.location.pathname);
+            if (newBtn && !newBtn.disabled) {
+                await openNewModal();
+                siteCodeField.focus();
+            }
+        }
     } catch (err) {
         console.error('Business (Centros de Costo) failed to initialize:', err);
     }

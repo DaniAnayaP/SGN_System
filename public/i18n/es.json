@@ -5237,6 +5237,8 @@
     "sitLimitSites": "Sitios {used} de {limit}",
     "sitLimitCenters": "Centros de costos {used} de {limit}",
     "sitLoadError": "No se pudieron leer los sitios contratados.",
+    "sitNew": "Nuevo sitio",
+    "sitNewSitesFull": "Ya usas los {limit} sitios que contrataste. Para más, contacta a GEIPSA.",
     "noticeExp_new": "Nueva solicitud de expansión",
     "noticeExp_negotiating": "Tu solicitud de expansión está en negociación",
     "noticeExp_cost": "SaaS fijó el costo final de tu expansión",
@@ -9140,8 +9142,12 @@
       "example": "Alta de Códigos necesita Descripción Única, que necesita el botón Guardar."
     },
     "sitLimits": {
-      "what": "Lo que ya usas de lo que contrataste: los sitios (lugares físicos) y los centros de costos. Un sitio puede tener varios centros; meter otro centro en un sitio que ya tienes no gasta un sitio. Para crear sitios o centros nuevos ve a Nuestros Centros Costos; para contratar más, a GEIPSA.",
+      "what": "Lo que ya usas de lo que contrataste: los sitios (lugares físicos) y los centros de costos. Un sitio puede tener varios centros; meter otro centro en un sitio que ya tienes no gasta un sitio. Para crear un sitio usa «+ Nuevo sitio»; para un centro nuevo en un sitio que ya tienes, ve a Nuestros Centros Costos; para contratar más, a GEIPSA.",
       "example": "«Sitios 2 de 3» y «Centros de costos 5 de 8»: te falta 1 sitio y 3 centros por usar."
+    },
+    "sitNew": {
+      "what": "Crea un sitio nuevo (un lugar físico, como una sucursal o un CEDIS). Te lleva a Nuestros Centros Costos con «Nuevo Centro Costos» abierto y el cursor en «Código del sitio» (5 letras): un sitio nace con su primer centro de costos, que lleva ese código y el Estado y la Localidad. Se apaga si ya usas todos tus sitios o todos tus centros de costos contratados.",
+      "example": "Código del sitio «CHIHU», Sucursal «CEDIS Chihuahua», Estado Chihuahua, Localidad Chihuahua y un primer centro de costos «Almacén general»: aparece como un sitio nuevo en esta pantalla."
     },
     "planSitesLimit": {
       "what": "Cuántos sitios (lugares físicos) puede tener un cliente con este plan. Es un límite aparte del de centros de costos: un sitio puede tener varios centros, y meter otro centro en un sitio que ya existe no gasta un sitio. Se congela al activar el plan.",

@@ -5238,6 +5238,8 @@
     "sitLimitSites": "Sites {used} of {limit}",
     "sitLimitCenters": "Cost centers {used} of {limit}",
     "sitLoadError": "The contracted sites could not be read.",
+    "sitNew": "New site",
+    "sitNewSitesFull": "You already use all {limit} sites you hired. To get more, contact GEIPSA.",
     "noticeExp_new": "New expansion request",
     "noticeExp_negotiating": "Your expansion request is in negotiation",
     "noticeExp_cost": "SaaS set the final cost of your expansion",
@@ -9141,8 +9143,12 @@
       "example": "Code Registration needs Unique Description, which needs the Save button."
     },
     "sitLimits": {
-      "what": "What you already use of what you hired: sites (physical places) and cost centers. A site can have several centers; adding another center to a site you already have does not use up a site. To create new sites or centers go to Our Cost Centers; to hire more, contact GEIPSA.",
+      "what": "What you already use of what you hired: sites (physical places) and cost centers. A site can have several centers; adding another center to a site you already have does not use up a site. To create a site use «+ New site»; for a new center in a site you already have, go to Our Cost Centers; to hire more, contact GEIPSA.",
       "example": "«Sites 2 of 3» and «Cost centers 5 of 8»: you have 1 site and 3 centers left to use."
+    },
+    "sitNew": {
+      "what": "Creates a new site (a physical place, such as a branch or a DC). It takes you to Our Cost Centers with «New Cost Center» open and the cursor on «Site code» (5 letters): a site is born with its first cost center, which carries that code and the State and Locality. It turns off if you already use all your hired sites or all your hired cost centers.",
+      "example": "Site code «CHIHU», Branch «CEDIS Chihuahua», State Chihuahua, Locality Chihuahua and a first cost center «General warehouse»: it shows up as a new site on this screen."
     },
     "planSitesLimit": {
       "what": "How many sites (physical places) a client on this plan can have. It is a separate limit from the cost center one: a site can have several centers, and adding another center to an existing site does not use up a site. It is frozen when the plan is activated.",

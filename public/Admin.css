@@ -9253,6 +9253,9 @@ td.hab-click{ cursor: pointer; }
 .sit-limits{ display: inline-flex; flex-wrap: wrap; gap: 0.5rem; margin-right: 0.8rem; vertical-align: middle; }
 .sit-limit{ padding: 0.2rem 0.65rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; background-color: color-mix(in srgb, var(--color-accent) 14%, transparent); color: var(--color-accent); white-space: nowrap; }
 .sit-limit-over{ background-color: color-mix(in srgb, #b3261e 14%, transparent); color: #b3261e; }
+/* «+ Nuevo sitio» y los chips de lo contratado comparten la barra de herramientas: el botón no parte su texto en dos renglones y, si todo no cabe (celular), la barra baja a otro renglón en lugar de salirse por la izquierda. */
+.sit-toolbar{ flex-wrap: wrap; row-gap: 0.4rem; }
+.sit-toolbar .data-table-new-record-btn{ flex: 0 0 auto; white-space: nowrap; }
 /* Solicitudes de alta de código (Pedir alta de código / bandeja de TI): estatus, formulario, detalle y línea del tiempo. */
 .sol-chip{ display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.74rem; font-weight: 700; white-space: nowrap; background-color: color-mix(in srgb, var(--color-text-secondary) 15%, transparent); color: var(--color-text-secondary); }
 .sol-chip-info_pending{ background-color: color-mix(in srgb, #c9860b 20%, transparent); color: #a4410a; }
