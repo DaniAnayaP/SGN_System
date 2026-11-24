@@ -67,8 +67,16 @@ const {
     listCostCenters,
     countCostCenters,
     countSites,
-    findSiteInOtherPlace,
-    wouldExceedSitesLimit,
+    listSites,
+    geoNamesOf,
+    getSiteById,
+    getSiteByCode,
+    isAtSitesLimit,
+    createSite,
+    updateSite,
+    setSiteStatus,
+    countActiveCentersOfSite,
+    abbreviationTakenInSite,
     getCostCenterById,
     getCostCenterAnyLane,
     createCostCenter,
@@ -6816,17 +6824,29 @@ function checkAndLogFieldChanges(req, existing, patch, fieldsMap, tableKey, reco
 // edit/delete) stays admin-only, same as the rest of "Administración del
 // Negocio" — but any authenticated user at the client can READ the list,
 // since every client user needs it for the sidebar's Centro de Costo picker.
-function validateCostCenterBody(body) {
-    const { countryId, stateId, municipalityId, localityId, streetId, sucursal, name } = body || {};
-    if (!countryId || !stateId || !municipalityId || !localityId || !streetId || !sucursal || !name) {
-        return 'countryId, stateId, municipalityId, localityId, streetId, sucursal and name are required.';
+// Un centro de costos elige UN sitio (que existe y está activo) y pone lo suyo: nombre, abreviatura de 3 letras (arma su código: código del sitio + abreviatura), responsable y descripción. Su ubicación es la de su sitio.
+// Los errores llevan un `code` que la pantalla traduce a su idioma (el `message` va en inglés, solo para quien lea la respuesta).
+function cleanCostCenterBody(body) {
+    const b = body || {};
+    return {
+        name: String(b.name || '').trim(),
+        description: String(b.description || '').trim(),
+        responsible: String(b.responsible || '').trim(),
+        siteCode: normalizeShortCode(b.siteCode, SHORT_CODE_LENGTH.site),
+        abbreviation: normalizeShortCode(b.abbreviation, SHORT_CODE_LENGTH.costCenter),
+    };
+}
+// Un sitio es UN lugar físico: código de 5 letras (no se cambia después), sucursal y toda su ubicación; el Estado y la Localidad elegidos ya deben tener su código corto (4 y 3 letras) para armar el localizador.
+function validateSiteBody(body, creating) {
+    const { countryId, stateId, municipalityId, localityId, streetId, sucursal } = body || {};
+    if (!countryId || !stateId || !municipalityId || !localityId || !streetId || !String(sucursal || '').trim()) {
+        return { code: 'SITE_FIELDS_REQUIRED', message: 'countryId, stateId, municipalityId, localityId, streetId and sucursal are required.' };
     }
-    // Localizador del grupo: el código del sitio son 5 letras y el Estado y la Localidad elegidos ya deben tener su código corto (4 y 3 letras).
-    if (!normalizeShortCode(body.siteCode, SHORT_CODE_LENGTH.site)) return 'siteCode must be 5 letters (A-Z).';
+    if (creating && !normalizeShortCode(body.siteCode, SHORT_CODE_LENGTH.site)) return { code: 'SITE_CODE_INVALID', message: 'siteCode must be 5 letters (A-Z).' };
     const state = getStateById(Number(stateId));
     const locality = getLocalityById(Number(localityId));
-    if (!state || !state.code) return 'The state needs its 4-letter code first.';
-    if (!locality || !locality.code) return 'The locality needs its 3-letter code first.';
+    if (!state || !state.code) return { code: 'GEO_STATE_CODE_MISSING', message: 'The state needs its 4-letter code first.' };
+    if (!locality || !locality.code) return { code: 'GEO_LOCALITY_CODE_MISSING', message: 'The locality needs its 3-letter code first.' };
     return null;
 }
 
@@ -6859,6 +6879,7 @@ function mapCostCenter(row, companyName) {
         sucursal: row.sucursal,
         nickname: row.nickname,
         siteCode: row.site_code || '',
+        abbreviation: row.abbreviation || '',
         ...getSystemColumnsForRecord({
             companyName,
             area: COST_CENTER_AREA_LABEL,
@@ -6882,9 +6903,32 @@ app.get('/api/business/cost-centers', requireAuth, (req, res) => {
     });
 });
 
-// Sitios Contratados (Administración del Negocio › Servicio Contratado): los sitios del cliente (el código de sitio de sus centros de costos), cada uno con sus centros adentro, y lo usado contra lo contratado (sitios y centros de costos).
-// Solo lectura, para cualquier persona de la cuenta (el menú decide quién llega, igual que Nuestros Centros Costos).
+// Sitios Contratados (Administración del Negocio › Servicio Contratado): los sitios del cliente (registros propios: código, sucursal y ubicación), cada uno con sus centros de costos adentro, y lo usado contra lo contratado (sitios y centros de costos).
+// Leer, para cualquier persona de la cuenta (el menú decide quién llega, igual que Nuestros Centros Costos); crear, editar y activar/desactivar, solo el administrador del cliente.
 const SITES_SCREEN = { area: '', modulo: 'Administración del Negocio', pantalla: 'Sitios Contratados' };
+// Para el historial de cambios del sitio: la ubicación se guarda con sus nombres, no con ids.
+const SITE_FIELDS = {
+    sucursal: { column: 'sucursal', fieldKey: 'main.colSitSucursal' },
+    country: { column: 'country_name', fieldKey: 'business.ccCountry' },
+    state: { column: 'state_name', fieldKey: 'main.colSitEstado' },
+    municipality: { column: 'municipality_name', fieldKey: 'main.colSitMunicipio' },
+    locality: { column: 'locality_name', fieldKey: 'main.colSitLocalidad' },
+    street: { column: 'street_name', fieldKey: 'main.colSitCalle' },
+};
+function siteGeoColumns(site) {
+    const names = geoNamesOf(site);
+    return { country_name: names.country, state_name: names.state, municipality_name: names.municipality, locality_name: names.locality, street_name: names.street };
+}
+function mapSite(site, companyName, centers) {
+    const names = geoNamesOf(site);
+    return {
+        id: site.id, code: site.code, sucursal: site.sucursal || '', status: site.status,
+        countryId: site.country_id, stateId: site.state_id, municipalityId: site.municipality_id, localityId: site.locality_id, streetId: site.street_id,
+        country: names.country, state: names.state, municipality: names.municipality, locality: names.locality, street: names.street,
+        centers: centers.map((cc) => ({ id: cc.id, code: cc.code, name: cc.name, abbreviation: cc.abbreviation || '', status: cc.status })),
+        ...getSystemColumnsForRecord({ companyName, ...SITES_SCREEN, centroCostos: '', createdAt: site.created_at }),
+    };
+}
 app.get('/api/business/sites', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
@@ -6892,18 +6936,7 @@ app.get('/api/business/sites', requireAuth, (req, res) => {
     const centers = listCostCenters(clientId, isTestAccount);
     const bySite = new Map();
     centers.filter((cc) => cc.site_code).forEach((cc) => { if (!bySite.has(cc.site_code)) bySite.set(cc.site_code, []); bySite.get(cc.site_code).push(cc); });
-    const sites = [...bySite.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([code, list]) => {
-        const first = list[0];
-        const state = first.state_id ? getStateById(Number(first.state_id)) : null;
-        const locality = first.locality_id ? getLocalityById(Number(first.locality_id)) : null;
-        const oldest = list.map((cc) => cc.created_at).filter(Boolean).sort()[0];
-        return {
-            code, sucursal: first.sucursal || '', state: state ? state.name : '', locality: locality ? locality.name : '',
-            status: list.some((cc) => cc.status === 'active') ? 'active' : 'inactive',
-            centers: list.map((cc) => ({ id: cc.id, code: cc.code, name: cc.name, status: cc.status })),
-            ...getSystemColumnsForRecord({ companyName: client.company_name, ...SITES_SCREEN, centroCostos: first.name || '', createdAt: oldest }),
-        };
-    });
+    const sites = listSites(clientId, isTestAccount).map((site) => mapSite(site, client.company_name, bySite.get(site.code) || []));
     res.set('Cache-Control', 'no-store');
     res.json({
         sites,
@@ -6915,29 +6948,85 @@ app.get('/api/business/sites', requireAuth, (req, res) => {
     });
 });
 
-app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, res) => {
-    const error = validateCostCenterBody(req.body);
-    if (error) return res.status(400).json({ message: error });
-    const client = getClientById(req.user.clientId);
-    if (countCostCenters(req.user.clientId, req.user.isTestAccount) >= client.cost_centers_limit) {
-        return res.status(409).json({ message: 'Cost center limit reached for this client.' });
-    }
-    const { countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible } = req.body;
+app.post('/api/business/sites', requireAuth, requireClientAdmin, (req, res) => {
+    const error = validateSiteBody(req.body, true);
+    if (error) return res.status(400).json(error);
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
     const siteCode = normalizeShortCode(req.body.siteCode, SHORT_CODE_LENGTH.site);
-    if (findSiteInOtherPlace(req.user.clientId, req.user.isTestAccount, siteCode, stateId, localityId)) {
-        return res.status(409).json({ message: 'That site is already in another state or locality.' });
+    if (getSiteByCode(clientId, isTestAccount, siteCode)) return res.status(409).json({ code: 'SITE_CODE_TAKEN', message: 'That site code is already used.' });
+    // un sitio nuevo gasta uno de los sitios contratados; sus centros de costos, los suyos (cada límite por separado)
+    if (isAtSitesLimit(clientId, isTestAccount, client.sites_limit)) return res.status(409).json({ code: 'SITE_LIMIT', message: 'Site limit reached for this client.' });
+    const { countryId, stateId, municipalityId, localityId, streetId } = req.body;
+    try {
+        const site = createSite({ clientId, isTestData: isTestAccount, code: siteCode, sucursal: String(req.body.sucursal).trim(), countryId, stateId, municipalityId, localityId, streetId });
+        logTableChange({ clientId, tableKey: 'sitios-contratados', recordId: site.id, recordLabel: site.code, action: 'create', changedBy: changedByLabel(req) });
+        notifyButtonAction(req, 'sitios-contratados', 'create', site.code);
+        res.status(201).json({ site: mapSite(site, client.company_name, []) });
+    } catch (err) {
+        if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') return res.status(409).json({ code: 'SITE_CODE_TAKEN', message: 'That site code is already used.' });
+        throw err;
     }
-    // el contrato lleva dos límites: centros de costos (arriba) y SITIOS; un centro nuevo en un sitio que ya existe no gasta un sitio
-    if (wouldExceedSitesLimit(req.user.clientId, req.user.isTestAccount, siteCode, client.sites_limit)) {
-        return res.status(409).json({ message: 'Site limit reached for this client.' });
+});
+
+// El código del sitio no se cambia (lo llevan sus centros, las habilitaciones y los layouts); sí la sucursal y la ubicación, y los centros del sitio la copian.
+app.patch('/api/business/sites/:id', requireAuth, requireClientAdmin, (req, res) => {
+    const { clientId, isTestAccount } = req.user;
+    const existing = getSiteById(req.params.id, clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ code: 'SITE_NOT_FOUND', message: 'Site not found.' });
+    const error = validateSiteBody(req.body, false);
+    if (error) return res.status(400).json(error);
+    const { countryId, stateId, municipalityId, localityId, streetId } = req.body;
+    const site = updateSite(existing.id, clientId, { sucursal: String(req.body.sucursal).trim(), countryId, stateId, municipalityId, localityId, streetId }, isTestAccount);
+    const names = geoNamesOf(site);
+    // La ruta es solo de administrador: todo cambio se aplica; esta llamada existe para dejar su renglón en el historial de cambios.
+    checkAndLogFieldChanges(req, { id: existing.id, client_id: existing.client_id, sucursal: existing.sucursal, ...siteGeoColumns(existing) }, {
+        sucursal: site.sucursal, country: names.country, state: names.state, municipality: names.municipality, locality: names.locality, street: names.street,
+    }, SITE_FIELDS, 'sitios-contratados', existing.code);
+    linkOrphansToFirstCostCenter(req);
+    const client = getClientById(clientId);
+    res.json({ site: mapSite(site, client.company_name, listCostCenters(clientId, isTestAccount).filter((cc) => cc.site_code === site.code)) });
+});
+
+// Un sitio con centros de costos activos no se desactiva (primero se desactivan sus centros); volver a activarlo gasta un sitio contratado.
+app.patch('/api/business/sites/:id/status', requireAuth, requireClientAdmin, (req, res) => {
+    const { clientId, isTestAccount } = req.user;
+    const existing = getSiteById(req.params.id, clientId, isTestAccount);
+    if (!existing) return res.status(404).json({ code: 'SITE_NOT_FOUND', message: 'Site not found.' });
+    const { status } = req.body || {};
+    if (status !== 'active' && status !== 'inactive') return res.status(400).json({ message: 'status must be active or inactive.' });
+    if (status === 'inactive' && existing.status === 'active' && countActiveCentersOfSite(clientId, isTestAccount, existing.code) > 0) {
+        return res.status(409).json({ code: 'SITE_HAS_ACTIVE_CENTERS', message: 'Deactivate the cost centers of this site first.' });
+    }
+    const client = getClientById(clientId);
+    if (status === 'active' && existing.status !== 'active' && isAtSitesLimit(clientId, isTestAccount, client.sites_limit)) {
+        return res.status(409).json({ code: 'SITE_LIMIT', message: 'Site limit reached for this client.' });
+    }
+    const site = setSiteStatus(existing.id, clientId, status, isTestAccount);
+    logTableChange({ clientId, tableKey: 'sitios-contratados', recordId: site.id, recordLabel: site.code, action: 'update', fieldKey: 'main.colSitEstatus', oldValue: existing.status, newValue: status, changedBy: changedByLabel(req) });
+    res.json({ site: mapSite(site, client.company_name, listCostCenters(clientId, isTestAccount).filter((cc) => cc.site_code === site.code)) });
+});
+
+app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, res) => {
+    const { name, description, responsible, siteCode, abbreviation } = cleanCostCenterBody(req.body);
+    if (!name) return res.status(400).json({ code: 'CC_NAME_REQUIRED', message: 'name is required.' });
+    if (!siteCode) return res.status(400).json({ code: 'SITE_REQUIRED', message: 'Choose the site of this cost center.' });
+    if (!abbreviation) return res.status(400).json({ code: 'ABBREVIATION_INVALID', message: 'The abbreviation is 3 letters (A-Z).' });
+    const { clientId, isTestAccount } = req.user;
+    const site = getSiteByCode(clientId, isTestAccount, siteCode);
+    if (!site) return res.status(400).json({ code: 'SITE_NOT_FOUND', message: 'That site does not exist.' });
+    if (site.status !== 'active') return res.status(409).json({ code: 'SITE_INACTIVE', message: 'That site is inactive.' });
+    const client = getClientById(clientId);
+    if (countCostCenters(clientId, isTestAccount) >= client.cost_centers_limit) {
+        return res.status(409).json({ code: 'CC_LIMIT', message: 'Cost center limit reached for this client.' });
+    }
+    if (abbreviationTakenInSite(clientId, isTestAccount, site.code, abbreviation)) {
+        return res.status(409).json({ code: 'ABBREVIATION_TAKEN', message: 'That abbreviation is already used in this site.' });
     }
     try {
-        const costCenter = createCostCenter({
-            clientId: req.user.clientId, countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible, siteCode,
-            isTestData: req.user.isTestAccount,
-        });
+        const costCenter = createCostCenter({ clientId, siteCode: site.code, abbreviation, name, description, responsible, isTestData: isTestAccount });
         logTableChange({
-            clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
+            clientId, tableKey: 'centros-costo', recordId: costCenter.id,
             recordLabel: costCenter.code, action: 'create', changedBy: changedByLabel(req),
         });
         notifyButtonAction(req, 'centros-costo', 'create', costCenter.code);
@@ -6945,45 +7034,52 @@ app.post('/api/business/cost-centers', requireAuth, requireClientAdmin, (req, re
         res.status(201).json({ costCenter: mapCostCenter(costCenter, client.company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-            return res.status(409).json({ message: 'A cost center with that code already exists.' });
+            return res.status(409).json({ code: 'CC_CODE_EXISTS', message: 'A cost center with that code already exists.' });
         }
         throw err;
     }
 });
 
+// Se edita lo del centro (nombre, responsable, descripción). Su sitio y su abreviatura (que arma su código) no cambian una vez guardados; un centro de antes de este cambio que todavía no los tiene los pone ahora, una vez, y sin sitio ya no se puede guardar.
 app.patch('/api/business/cost-centers/:id', requireAuth, requireClientAdmin, (req, res) => {
-    const existing = getCostCenterById(req.params.id, req.user.clientId, req.user.isTestAccount);
+    const { clientId, isTestAccount } = req.user;
+    const existing = getCostCenterById(req.params.id, clientId, isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Cost center not found.' });
-    const error = validateCostCenterBody(req.body);
-    if (error) return res.status(400).json({ message: error });
-    const { countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible } = req.body;
-    const siteCode = normalizeShortCode(req.body.siteCode, SHORT_CODE_LENGTH.site);
-    if (findSiteInOtherPlace(req.user.clientId, req.user.isTestAccount, siteCode, stateId, localityId, existing.id)) {
-        return res.status(409).json({ message: 'That site is already in another state or locality.' });
+    const { name, description, responsible, siteCode, abbreviation } = cleanCostCenterBody(req.body);
+    if (!name) return res.status(400).json({ code: 'CC_NAME_REQUIRED', message: 'name is required.' });
+    let placeSiteCode = existing.site_code || '';
+    if (!placeSiteCode) {
+        if (!siteCode) return res.status(400).json({ code: 'SITE_REQUIRED', message: 'Choose the site of this cost center.' });
+        const site = getSiteByCode(clientId, isTestAccount, siteCode);
+        if (!site) return res.status(400).json({ code: 'SITE_NOT_FOUND', message: 'That site does not exist.' });
+        if (site.status !== 'active') return res.status(409).json({ code: 'SITE_INACTIVE', message: 'That site is inactive.' });
+        placeSiteCode = site.code;
     }
-    // pasar el centro a un sitio nuevo no puede dejar al cliente con más sitios de los contratados (si el centro ya era el único de su sitio, ese sitio se libera)
-    if ((existing.site_code || '') !== siteCode && wouldExceedSitesLimit(req.user.clientId, req.user.isTestAccount, siteCode, getClientById(req.user.clientId).sites_limit, existing.id)) {
-        return res.status(409).json({ message: 'Site limit reached for this client.' });
+    let placeAbbreviation = existing.abbreviation || '';
+    if (!placeAbbreviation) {
+        if (!abbreviation) return res.status(400).json({ code: 'ABBREVIATION_INVALID', message: 'The abbreviation is 3 letters (A-Z).' });
+        if (abbreviationTakenInSite(clientId, isTestAccount, placeSiteCode, abbreviation, existing.id)) {
+            return res.status(409).json({ code: 'ABBREVIATION_TAKEN', message: 'That abbreviation is already used in this site.' });
+        }
+        placeAbbreviation = abbreviation;
     }
     try {
-        const costCenter = updateCostCenter(req.params.id, req.user.clientId, {
-            countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible, siteCode,
-        }, req.user.isTestAccount);
+        const costCenter = updateCostCenter(req.params.id, clientId, {
+            name, description, responsible, abbreviation: placeAbbreviation, siteCode: existing.site_code ? '' : placeSiteCode,
+        }, isTestAccount);
         // requireClientAdmin-gated route: req.user.isClientAdmin is always
         // true here, so every field always lands in appliedPatch and
         // pending/rejected are always empty — this call only exists for its
-        // logTableChange side effect. Logged AFTER updateCostCenter (using
-        // its own computed code/sucursal) since código is no longer part of
-        // the submitted body — it's derived from the geo ids.
+        // logTableChange side effect.
         checkAndLogFieldChanges(req, existing, {
-            code: costCenter.code, name: costCenter.name, description: costCenter.description,
-            responsible: costCenter.responsible, sucursal: costCenter.sucursal, siteCode: costCenter.site_code || '',
+            name: costCenter.name, description: costCenter.description, responsible: costCenter.responsible,
+            sucursal: costCenter.sucursal, siteCode: costCenter.site_code || '', abbreviation: costCenter.abbreviation || '',
         }, COST_CENTER_FIELDS, 'centros-costo', existing.code);
         linkOrphansToFirstCostCenter(req);
-        res.json({ costCenter: mapCostCenter(costCenter, getClientById(req.user.clientId).company_name) });
+        res.json({ costCenter: mapCostCenter(costCenter, getClientById(clientId).company_name) });
     } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-            return res.status(409).json({ message: 'A cost center with that code already exists.' });
+            return res.status(409).json({ code: 'CC_CODE_EXISTS', message: 'A cost center with that code already exists.' });
         }
         throw err;
     }
@@ -6997,6 +7093,10 @@ app.patch('/api/business/cost-centers/:id/status', requireAuth, requireClientAdm
     if (!existing) return res.status(404).json({ message: 'Cost center not found.' });
     const { status } = req.body || {};
     if (status !== 'active' && status !== 'inactive') return res.status(400).json({ message: 'status must be active or inactive.' });
+    if (status === 'active' && existing.status !== 'active' && existing.site_code) {
+        const site = getSiteByCode(req.user.clientId, req.user.isTestAccount, existing.site_code);
+        if (site && site.status !== 'active') return res.status(409).json({ code: 'SITE_INACTIVE', message: 'That site is inactive.' });
+    }
     const costCenter = setCostCenterStatus(req.params.id, req.user.clientId, status, req.user.isTestAccount);
     logTableChange({
         clientId: req.user.clientId, tableKey: 'centros-costo', recordId: costCenter.id,
@@ -7007,10 +7107,9 @@ app.patch('/api/business/cost-centers/:id/status', requireAuth, requireClientAdm
 });
 
 // Apodo -- a free-text label the client can rename anytime, independent of
-// código/record_code (both stay permanent/derived from the geo picks, see
-// buildCostCenterCodeBase). Its own tiny route, same "quien menos, más
-// rápido" reasoning as .../status just above, so renaming doesn't need the
-// whole geo cascade resubmitted.
+// código/record_code (both stay permanent once the center is created). Its own
+// tiny route, same "quien menos, más rápido" reasoning as .../status just
+// above, so renaming doesn't need the whole form resubmitted.
 app.patch('/api/business/cost-centers/:id/nickname', requireAuth, requireClientAdmin, (req, res) => {
     const existing = getCostCenterById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Cost center not found.' });

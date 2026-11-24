@@ -516,7 +516,8 @@ body.dark-mode .admin-error{
    the "+ Nuevo Centro Costos" modal (see Business-CentrosCosto.js). Each
    level is a <select> plus a "+" toggle that reveals a small inline
    add-new row underneath it. */
-#cc-modal .modal-panel{
+#cc-modal .modal-panel,
+#sit-modal .modal-panel{
     max-width: 36rem;
 }
 .cc-cascade-grid{
@@ -553,6 +554,10 @@ body.dark-mode .admin-error{
     display: flex;
     gap: 0.4rem;
     margin-top: 0.4rem;
+}
+/* sin esto la clase le gana al atributo hidden y las filas de «Nuevo país / estado…» salían siempre abiertas, aunque el «+» es el que las abre */
+.cc-add-new-row[hidden]{
+    display: none;
 }
 .cc-add-new-row input{
     flex: 1;

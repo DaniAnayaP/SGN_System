@@ -1885,6 +1885,15 @@
     "ccStreet": "Calle",
     "ccBranch": "Sucursal",
     "ccSiteCode": "Código del sitio",
+    "ccSite": "Sitio",
+    "ccSiteLocation": "Ubicación del sitio",
+    "ccAbbreviation": "Abreviatura",
+    "ccAbbreviationInvalid": "La abreviatura son 3 letras.",
+    "ccAbbreviationTaken": "Otro centro de ese sitio ya usa esa abreviatura.",
+    "ccSiteRequired": "Elige el sitio de este centro de costos.",
+    "ccSiteInactive": "Ese sitio está inactivo. Actívalo primero en Sitios Contratados.",
+    "ccNoSites": "Todavía no tienes sitios. Da de alta el primero en Sitios Contratados.",
+    "ccSiteNotFound": "Ese sitio ya no existe.",
     "ccShortCode3": "Código · 3 letras",
     "ccShortCode4": "Código · 4 letras",
     "ccShortCode5": "Código · 5 letras",
@@ -5230,7 +5239,10 @@
     "colSpCreateAuth": "Nueva solicitud",
     "colSitCodigo": "Código del sitio",
     "colSitSucursal": "Sucursal",
-    "colSitUbicacion": "Estado · Localidad",
+    "colSitEstado": "Estado",
+    "colSitMunicipio": "Municipio",
+    "colSitLocalidad": "Localidad",
+    "colSitCalle": "Calle",
     "colSitCentros": "Centros de costos",
     "colSitNumCentros": "# Centros de costos",
     "colSitEstatus": "Estatus",
@@ -5239,6 +5251,10 @@
     "sitLoadError": "No se pudieron leer los sitios contratados.",
     "sitNew": "Nuevo sitio",
     "sitNewSitesFull": "Ya usas los {limit} sitios que contrataste. Para más, contacta a GEIPSA.",
+    "sitModalTitleNew": "Nuevo sitio",
+    "sitModalTitleEdit": "Editar sitio",
+    "sitCodeTaken": "Ya tienes un sitio con ese código.",
+    "sitHasActiveCenters": "Este sitio tiene centros de costos activos. Desactívalos primero en Nuestros Centros Costos.",
     "noticeExp_new": "Nueva solicitud de expansión",
     "noticeExp_negotiating": "Tu solicitud de expansión está en negociación",
     "noticeExp_cost": "SaaS fijó el costo final de tu expansión",
@@ -9146,8 +9162,8 @@
       "example": "«Sitios 2 de 3» y «Centros de costos 5 de 8»: te falta 1 sitio y 3 centros por usar."
     },
     "sitNew": {
-      "what": "Crea un sitio nuevo (un lugar físico, como una sucursal o un CEDIS). Te lleva a Nuestros Centros Costos con «Nuevo Centro Costos» abierto y el cursor en «Código del sitio» (5 letras): un sitio nace con su primer centro de costos, que lleva ese código y el Estado y la Localidad. Se apaga si ya usas todos tus sitios o todos tus centros de costos contratados.",
-      "example": "Código del sitio «CHIHU», Sucursal «CEDIS Chihuahua», Estado Chihuahua, Localidad Chihuahua y un primer centro de costos «Almacén general»: aparece como un sitio nuevo en esta pantalla."
+      "what": "Da de alta un sitio nuevo (un lugar físico, como una sucursal o un CEDIS) con su código de 5 letras, su sucursal y toda su ubicación (País, Estado, Municipio, Localidad y Calle). Guardar el sitio no crea ningún centro de costos: los centros se dan de alta después en Nuestros Centros Costos, eligiendo este sitio. Se apaga si ya usas todos los sitios que contrataste.",
+      "example": "Código «CHIHU», Sucursal «CEDIS Chihuahua», Estado Chihuahua, Municipio Chihuahua, Localidad Centro y Calle Av. Ejemplo: aparece como un sitio nuevo, sin centros, listo para que le agregues los suyos."
     },
     "planSitesLimit": {
       "what": "Cuántos sitios (lugares físicos) puede tener un cliente con este plan. Es un límite aparte del de centros de costos: un sitio puede tener varios centros, y meter otro centro en un sitio que ya existe no gasta un sitio. Se congela al activar el plan.",
@@ -11200,11 +11216,19 @@
       "example": "con Categoría Inventario la lista dice Medicamentos, Material de curación y Soluciones."
     },
     "ccSiteCode": {
-      "what": "El código corto del sitio (el lugar físico), de 5 letras, que lo escribes tú. Es la última pieza de la locación del localizador de cada producto. Un sitio puede tener varios centros de costos: para meter otro centro en un sitio que ya tienes, elige su código de la lista; un código nuevo crea un sitio nuevo. Todos los centros de un mismo sitio van en el mismo Estado y la misma Localidad.",
-      "example": "para el CEDIS de Chihuahua escribes CDCHI, y el localizador del producto empieza con CHIST.CHIH.CEN.CDCHI. Si el CEDIS tiene Almacén y Compras como centros de costos, a los dos les pones CDCHI."
+      "what": "El código corto del sitio (el lugar físico), de 5 letras, que lo escribes tú al dar de alta el sitio. Es la última pieza de la locación del localizador de cada producto y la primera del código de sus centros de costos. Una vez guardado ya no se cambia, porque lo llevan los centros, las habilitaciones y los layouts.",
+      "example": "para el CEDIS de Chihuahua escribes CDCHI, y el localizador del producto empieza con CHIST.CHIH.CEN.CDCHI. Sus centros de costos se llamarán CDCHI-ALM, CDCHI-COM…"
+    },
+    "ccSite": {
+      "what": "El sitio al que pertenece este centro de costos. Es uno solo: un centro no puede estar en dos sitios, y un sitio sí puede tener muchos centros. De él toma su ubicación (País, Estado, Municipio, Localidad, Calle y Sucursal). Una vez guardado el centro ya no cambia de sitio; si te equivocaste, desactívalo y crea otro. Si todavía no hay sitios, primero da de alta uno en Sitios Contratados.",
+      "example": "eliges «CDCHI · CEDIS Chihuahua» y el centro «Almacén general» queda en ese CEDIS, con su ubicación."
+    },
+    "ccAbbreviation": {
+      "what": "Tres letras que identifican al centro dentro de su sitio. Arman su código: código del sitio + abreviatura. No se repite entre los centros de un mismo sitio y, una vez guardada, ya no se cambia.",
+      "example": "Almacén general = ALM; en el sitio CDCHI su código queda CDCHI-ALM."
     },
     "ccGeoCode": {
-      "what": "El código corto del Estado (4 letras) o de la Localidad (3 letras). Mientras ningún centro de costos use ese Estado o esa Localidad puedes corregir su nombre y su código (elígelo en la lista y cambia lo que haga falta); cuando ya lo usa uno queda fijo, porque el catálogo es de todos los clientes y los localizadores lo llevan escrito.",
+      "what": "El código corto del Estado (4 letras) o de la Localidad (3 letras). Mientras ningún sitio ni centro de costos use ese Estado o esa Localidad puedes corregir su nombre y su código (elígelo en la lista y cambia lo que haga falta); cuando ya lo usa uno queda fijo, porque el catálogo es de todos los clientes y los localizadores lo llevan escrito.",
       "example": "Chihuahua se guarda como CHIH y la localidad Centro como CEN."
     },
     "layoutView3d": {

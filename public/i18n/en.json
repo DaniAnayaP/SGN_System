@@ -1886,6 +1886,15 @@
     "ccStreet": "Street",
     "ccBranch": "Branch",
     "ccSiteCode": "Site code",
+    "ccSite": "Site",
+    "ccSiteLocation": "Site location",
+    "ccAbbreviation": "Abbreviation",
+    "ccAbbreviationInvalid": "The abbreviation is 3 letters.",
+    "ccAbbreviationTaken": "Another cost center of that site already uses that abbreviation.",
+    "ccSiteRequired": "Choose the site of this cost center.",
+    "ccSiteInactive": "That site is inactive. Activate it first in Contracted Sites.",
+    "ccNoSites": "You have no sites yet. Create the first one in Contracted Sites.",
+    "ccSiteNotFound": "That site no longer exists.",
     "ccShortCode3": "Code · 3 letters",
     "ccShortCode4": "Code · 4 letters",
     "ccShortCode5": "Code · 5 letters",
@@ -5231,7 +5240,10 @@
     "colSpCreateAuth": "New request",
     "colSitCodigo": "Site code",
     "colSitSucursal": "Branch",
-    "colSitUbicacion": "State · Locality",
+    "colSitEstado": "State",
+    "colSitMunicipio": "Municipality",
+    "colSitLocalidad": "Locality",
+    "colSitCalle": "Street",
     "colSitCentros": "Cost centers",
     "colSitNumCentros": "# Cost centers",
     "colSitEstatus": "Status",
@@ -5240,6 +5252,10 @@
     "sitLoadError": "The contracted sites could not be read.",
     "sitNew": "New site",
     "sitNewSitesFull": "You already use all {limit} sites you hired. To get more, contact GEIPSA.",
+    "sitModalTitleNew": "New site",
+    "sitModalTitleEdit": "Edit site",
+    "sitCodeTaken": "You already have a site with that code.",
+    "sitHasActiveCenters": "This site has active cost centers. Deactivate them first in Our Cost Centers.",
     "noticeExp_new": "New expansion request",
     "noticeExp_negotiating": "Your expansion request is in negotiation",
     "noticeExp_cost": "SaaS set the final cost of your expansion",
@@ -9147,8 +9163,8 @@
       "example": "«Sites 2 of 3» and «Cost centers 5 of 8»: you have 1 site and 3 centers left to use."
     },
     "sitNew": {
-      "what": "Creates a new site (a physical place, such as a branch or a DC). It takes you to Our Cost Centers with «New Cost Center» open and the cursor on «Site code» (5 letters): a site is born with its first cost center, which carries that code and the State and Locality. It turns off if you already use all your hired sites or all your hired cost centers.",
-      "example": "Site code «CHIHU», Branch «CEDIS Chihuahua», State Chihuahua, Locality Chihuahua and a first cost center «General warehouse»: it shows up as a new site on this screen."
+      "what": "Creates a new site (a physical place, such as a branch or a DC) with its 5-letter code, its branch and its whole location (Country, State, Municipality, Locality and Street). Saving the site does not create any cost center: centers are created afterwards in Our Cost Centers, by choosing this site. It turns off if you already use all the sites you hired.",
+      "example": "Code «CHIHU», Branch «CEDIS Chihuahua», State Chihuahua, Municipality Chihuahua, Locality Centro and Street Av. Example: it shows up as a new site, with no centers, ready for you to add its own."
     },
     "planSitesLimit": {
       "what": "How many sites (physical places) a client on this plan can have. It is a separate limit from the cost center one: a site can have several centers, and adding another center to an existing site does not use up a site. It is frozen when the plan is activated.",
@@ -11201,11 +11217,19 @@
       "example": "with Inventory Category the list says Medications, Wound care and Solutions."
     },
     "ccSiteCode": {
-      "what": "The short code of the site (the physical place), 5 letters, typed by you. It is the last piece of the location part of each product's locator. A site can have several cost centers: to add another center to a site you already have, pick its code from the list; a new code creates a new site. Every center of one site goes in the same State and the same Locality.",
-      "example": "for the Chihuahua DC you type CDCHI, and the product locator starts with CHIST.CHIH.CEN.CDCHI. If the DC has Warehouse and Purchasing as cost centers, you give both CDCHI."
+      "what": "The short code of the site (the physical place), 5 letters, typed by you when you create the site. It is the last piece of the location part of each product's locator and the first piece of the code of its cost centers. Once saved it is not changed, because centers, enablements and layouts carry it.",
+      "example": "for the Chihuahua DC you type CDCHI, and the product locator starts with CHIST.CHIH.CEN.CDCHI. Its cost centers will be named CDCHI-ALM, CDCHI-COM…"
+    },
+    "ccSite": {
+      "what": "The site this cost center belongs to. Only one: a center cannot be in two sites, while a site can have many centers. It takes its location from it (Country, State, Municipality, Locality, Street and Branch). Once the center is saved it does not change site; if you got it wrong, deactivate it and create another. If there are no sites yet, first create one in Contracted Sites.",
+      "example": "you pick «CDCHI · CEDIS Chihuahua» and the center «General warehouse» stays in that DC, with its location."
+    },
+    "ccAbbreviation": {
+      "what": "Three letters that identify the center within its site. They build its code: site code + abbreviation. It is not repeated between the centers of one site and, once saved, it is not changed.",
+      "example": "General warehouse = ALM; in site CDCHI its code becomes CDCHI-ALM."
     },
     "ccGeoCode": {
-      "what": "The short code of the State (4 letters) or the Locality (3 letters). While no cost center uses that State or Locality you can fix its name and code (pick it from the list and change what is needed); once one uses it, it is fixed, because the catalog is shared by every client and locators carry it.",
+      "what": "The short code of the State (4 letters) or the Locality (3 letters). While no site or cost center uses that State or Locality you can fix its name and code (pick it from the list and change what is needed); once one uses it, it is fixed, because the catalog is shared by every client and locators carry it.",
       "example": "Chihuahua is saved as CHIH and the locality Centro as CEN."
     },
     "layoutView3d": {

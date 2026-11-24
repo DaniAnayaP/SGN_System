@@ -39,6 +39,7 @@ const TABLES = {
     profile_grants: { action: WIPE, group: 'clientUsers' },
     // Organización de cada cliente
     cost_centers: { action: WIPE, group: 'organization' },
+    client_sites: { action: WIPE, group: 'organization' },
     job_positions: { action: WIPE, group: 'organization' },
     job_position_grants: { action: WIPE, group: 'organization' },
     job_position_alt_supervisors: { action: WIPE, group: 'organization' },

@@ -2,9 +2,10 @@
 // "Centros de Costo" — Administración del Negocio: the client's own admin
 // manages their cost center catalog, capped by clients.cost_centers_limit —
 // set by GEIPSA from Contrataciones (Admin-SaaS). Shell comes from
-// Dashboard.js. Código is no longer free-typed: it's built server-side from
-// a cascading País > Estado > Localidad > Calle pick (each first letter)
-// plus Empresa and Sucursal — see db.js's buildCostCenterCodeBase.
+// Dashboard.js. Un centro de costos cuelga de UN solo sitio (Sitios Contratados:
+// un sitio tiene varios centros): aquí solo se elige el sitio (su ubicación y su
+// sucursal vienen de él) y se pone lo del centro — nombre, abreviatura de 3 letras
+// (arma su código: código del sitio + abreviatura), responsable y descripción.
 // ---------------------------------------------------------------------------
 
 const tableBody = document.getElementById('cc-table-body');
@@ -12,7 +13,7 @@ const emptyMsg = document.getElementById('cc-empty');
 
 let costCenters = [];
 let limit = 0;
-let sitesLimit = 0; // el contrato lleva dos límites: centros de costos (limit) y sitios (sitesLimit)
+let sites = []; // los sitios del cliente (activos e inactivos), con su ubicación
 let newBtn = null;
 
 // Same spot/style as Registro Combustible's own "+ Nuevo Registro" (see
@@ -29,7 +30,7 @@ function renderNewCcButton() {
     newBtn.type = 'button';
     newBtn.className = 'data-table-new-record-btn';
     newBtn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span data-i18n="business.ccNew">${Dashboard.t('business.ccNew')}</span>`;
-    newBtn.addEventListener('click', openNewModal);
+    newBtn.addEventListener('click', () => { if (!newBtn.disabled) openNewModal(); });
     toolbar.prepend(newBtn);
 }
 
@@ -42,17 +43,21 @@ function padAccountNumber(n) {
 function isAtLimit() {
     return costCenters.length >= limit;
 }
+const activeSites = () => sites.filter((s) => s.status === 'active');
+const siteByCode = (code) => sites.find((s) => s.code === code) || null;
+const siteLocation = (site) => (site ? [site.state, site.municipality, site.locality, site.street].filter(Boolean).join(' · ') : '');
 
 // No standing on-screen line for this (matches Registro Combustible's own
 // fully compact panel) -- the count/limit lives as the "+ Nuevo Centro
 // Costos" button's tooltip instead, still there on hover but not taking
-// permanent vertical space.
+// permanent vertical space. Sin ningún sitio activo no se puede dar de alta un centro (primero se da de alta el sitio).
 function refreshLimitStatus() {
     if (!newBtn) return;
+    const noSites = activeSites().length === 0;
     newBtn.title = isAtLimit()
         ? Dashboard.t('business.ccLimitReached', { count: costCenters.length, limit })
-        : Dashboard.t('business.ccLimitStatus', { count: costCenters.length, limit });
-    newBtn.disabled = isAtLimit();
+        : (noSites ? Dashboard.t('business.ccNoSites') : Dashboard.t('business.ccLimitStatus', { count: costCenters.length, limit }));
+    newBtn.disabled = isAtLimit() || noSites;
 }
 
 const CONTROL_INTERNO_COLS = [
@@ -83,7 +88,7 @@ function renderCostCenters() {
         const tdCode = document.createElement('td');
         tdCode.dataset.col = 'ccCode';
         tdCode.textContent = cc.code;
-        // Código is generated and frozen (see buildCostCenterCodeBase) --
+        // Código is generated and frozen (código del sitio + abreviatura) --
         // Apodo is the client's own free-text, always-editable stand-in for
         // it, click-to-edit same as every other inline cell in this app (no
         // per-column grant here: this whole screen is already
@@ -98,6 +103,9 @@ function renderCostCenters() {
         const tdSiteCode = document.createElement('td');
         tdSiteCode.dataset.col = 'ccSiteCode';
         tdSiteCode.textContent = cc.siteCode || '—';
+        const tdAbbreviation = document.createElement('td');
+        tdAbbreviation.dataset.col = 'ccAbbreviation';
+        tdAbbreviation.textContent = cc.abbreviation || '—';
         const tdSucursal = document.createElement('td');
         tdSucursal.dataset.col = 'ccSucursal';
         tdSucursal.textContent = cc.sucursal || '—';
@@ -151,7 +159,7 @@ function renderCostCenters() {
         toggleBtn.addEventListener('click', () => toggleCostCenterStatus(cc));
         tdActions.append(historyBtn, editBtn, toggleBtn);
 
-        tr.append(tdCode, tdSiteCode, tdNickname, tdSucursal, tdName, tdResponsible, tdDescription, tdAccountNumber, tdRecordCode, tdStatus, tdActions);
+        tr.append(tdCode, tdSiteCode, tdAbbreviation, tdNickname, tdSucursal, tdName, tdResponsible, tdDescription, tdAccountNumber, tdRecordCode, tdStatus, tdActions);
         tableBody.appendChild(tr);
     });
     refreshLimitStatus();
@@ -166,7 +174,7 @@ function applyCcFilters() {
     const text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase();
     tableBody.querySelectorAll('tr').forEach((tr) => {
         if (!text) { tr.hidden = false; return; }
-        const haystack = ['ccCode', 'ccSiteCode', 'ccNickname', 'ccSucursal', 'ccName', 'ccResponsible', 'ccDescription']
+        const haystack = ['ccCode', 'ccSiteCode', 'ccAbbreviation', 'ccNickname', 'ccSucursal', 'ccName', 'ccResponsible', 'ccDescription']
             .map((col) => tr.querySelector(`[data-col="${col}"]`)?.textContent?.toLowerCase() || '')
             .join(' ');
         tr.hidden = !SearchSyntax.matches('contains', text, haystack);
@@ -174,6 +182,21 @@ function applyCcFilters() {
 }
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', applyCcFilters);
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', applyCcFilters);
+
+// Lo que dicen los errores del servidor (traen un `code`, no un texto en español).
+function errorText(body) {
+    const keys = {
+        SITE_REQUIRED: 'business.ccSiteRequired',
+        SITE_NOT_FOUND: 'business.ccSiteNotFound',
+        SITE_INACTIVE: 'business.ccSiteInactive',
+        ABBREVIATION_INVALID: 'business.ccAbbreviationInvalid',
+        ABBREVIATION_TAKEN: 'business.ccAbbreviationTaken',
+        CC_CODE_EXISTS: 'business.ccCodeExists',
+    };
+    if (body && body.code === 'CC_LIMIT') return Dashboard.t('business.ccLimitReached', { count: costCenters.length, limit });
+    if (body && body.code === 'CC_NAME_REQUIRED') return Dashboard.t('business.ccMissingFields', { fields: Dashboard.t('business.ccName') });
+    return Dashboard.t(keys[body && body.code] || 'admin.saveError');
+}
 
 // No delete -- account_number/record_code are a permanent accounting
 // sequence (see db.js's own migration comment), only Activar/Desactivar.
@@ -186,7 +209,11 @@ async function toggleCostCenterStatus(cc) {
             credentials: 'include',
             body: JSON.stringify({ status: nextStatus }),
         });
-        if (!res.ok) throw new Error('save failed');
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            Dashboard.showToast(errorText(body), 'error');
+            return;
+        }
         const { costCenter } = await res.json();
         costCenters = costCenters.map((c) => (c.id === costCenter.id ? costCenter : c));
         renderCostCenters();
@@ -197,7 +224,7 @@ async function toggleCostCenterStatus(cc) {
 }
 
 // Own tiny endpoint (not the full updateCostCenter/PUT-the-whole-modal
-// route) since Apodo never touches código/geo -- committing it shouldn't
+// route) since Apodo never touches código -- committing it shouldn't
 // need every other field resubmitted. Doesn't re-render the table (unlike
 // toggleCostCenterStatus): attachInlineEdit already updates its own cell,
 // and a full renderCostCenters() here would blow away the input mid-edit.
@@ -218,14 +245,23 @@ async function saveCostCenterNickname(cc, nickname) {
     }
 }
 
+async function loadSites() {
+    try {
+        const res = await fetch('/api/business/sites', { credentials: 'include' });
+        if (!res.ok) throw new Error('load failed');
+        sites = (await res.json()).sites || [];
+    } catch {
+        sites = [];
+    }
+}
 async function loadCostCenters() {
     try {
+        await loadSites();
         const res = await fetch('/api/business/cost-centers', { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         costCenters = data.costCenters || [];
         limit = data.limit || 0;
-        sitesLimit = data.sitesLimit || 0;
         renderCostCenters();
     } catch {
         Dashboard.showToast(Dashboard.t('admin.loadError'), 'error');
@@ -233,16 +269,14 @@ async function loadCostCenters() {
 }
 
 // --- "+ Nuevo Centro Costos" modal ------------------------------------------
-// País/Estado/Localidad/Calle cascade: each level depends on the one before
-// it, and each has its own "+" to grow the (SaaS-wide shared) catalog on the
-// spot. See db.js's geo_countries/geo_states/geo_localities/geo_streets.
 const ccModal = document.getElementById('cc-modal');
 const ccModalTitle = document.getElementById('cc-modal-title');
 const idField = document.getElementById('cc-id');
 const companyDisplay = document.getElementById('cc-company-display');
-const sucursalField = document.getElementById('cc-sucursal');
-const siteCodeField = document.getElementById('cc-site-code');
+const siteField = document.getElementById('cc-site');
+const siteLocationField = document.getElementById('cc-site-location');
 const nameField = document.getElementById('cc-name');
+const abbreviationField = document.getElementById('cc-abbreviation');
 const responsibleField = document.getElementById('cc-responsible');
 const descriptionField = document.getElementById('cc-description');
 const modalError = document.getElementById('cc-modal-error');
@@ -250,344 +284,82 @@ const modalSaveBtn = document.getElementById('cc-modal-save');
 const modalCancelBtn = document.getElementById('cc-modal-cancel');
 const codePreviewValue = document.getElementById('cc-code-preview-value');
 
-// Municipio sits alongside Localidad -- both are children of Estado (see
-// db.js's geo_municipalities comment) rather than Localidad nesting inside
-// it, so a cost center created before Municipio existed keeps reloading its
-// already-picked Localidad exactly as before (still keyed off state_id) the
-// first time someone opens it for edit.
-const LEVEL_ORDER = ['country', 'state', 'municipality', 'locality', 'street'];
-const cascadeLevels = {
-    country: {
-        select: document.getElementById('cc-country'), addToggle: document.getElementById('cc-country-add-toggle'),
-        addRow: document.getElementById('cc-country-add-row'), addInput: document.getElementById('cc-country-add-input'),
-        addConfirm: document.getElementById('cc-country-add-confirm'), items: [], parent: null,
-        listUrl: () => '/api/business/geo/countries',
-        createUrl: () => '/api/business/geo/countries',
-        createBody: (name) => ({ name }),
-        titleKey: 'business.ccAddNewCountry',
-    },
-    state: {
-        select: document.getElementById('cc-state'), addToggle: document.getElementById('cc-state-add-toggle'),
-        addRow: document.getElementById('cc-state-add-row'), addInput: document.getElementById('cc-state-add-input'),
-        addConfirm: document.getElementById('cc-state-add-confirm'), items: [], parent: 'country',
-        listUrl: (parentId) => `/api/business/geo/states?countryId=${parentId}`,
-        createUrl: () => '/api/business/geo/states',
-        createBody: (name, parentId, code) => ({ countryId: parentId, name, code }),
-        titleKey: 'business.ccAddNewState',
-        // código corto del localizador: 4 letras (se pone al agregar o, si falta, aquí abajo; ya puesto no se cambia)
-        codeLength: 4, addCode: document.getElementById('cc-state-add-code'), codeRow: document.getElementById('cc-state-code-row'),
-        codeInput: document.getElementById('cc-state-code'), codeSave: document.getElementById('cc-state-code-save'), codeUrl: (id) => `/api/business/geo/states/${id}/code`,
-        nameInput: document.getElementById('cc-state-name'), patchUrl: (id) => `/api/business/geo/states/${id}`,
-    },
-    municipality: {
-        select: document.getElementById('cc-municipality'), addToggle: document.getElementById('cc-municipality-add-toggle'),
-        addRow: document.getElementById('cc-municipality-add-row'), addInput: document.getElementById('cc-municipality-add-input'),
-        addConfirm: document.getElementById('cc-municipality-add-confirm'), items: [], parent: 'state',
-        listUrl: (parentId) => `/api/business/geo/municipalities?stateId=${parentId}`,
-        createUrl: () => '/api/business/geo/municipalities',
-        createBody: (name, parentId) => ({ stateId: parentId, name }),
-        titleKey: 'business.ccAddNewMunicipality',
-    },
-    locality: {
-        select: document.getElementById('cc-locality'), addToggle: document.getElementById('cc-locality-add-toggle'),
-        addRow: document.getElementById('cc-locality-add-row'), addInput: document.getElementById('cc-locality-add-input'),
-        addConfirm: document.getElementById('cc-locality-add-confirm'), items: [], parent: 'state',
-        listUrl: (parentId) => `/api/business/geo/localities?stateId=${parentId}`,
-        createUrl: () => '/api/business/geo/localities',
-        createBody: (name, parentId, code) => ({ stateId: parentId, name, code }),
-        titleKey: 'business.ccAddNewLocality',
-        codeLength: 3, addCode: document.getElementById('cc-locality-add-code'), codeRow: document.getElementById('cc-locality-code-row'),
-        codeInput: document.getElementById('cc-locality-code'), codeSave: document.getElementById('cc-locality-code-save'), codeUrl: (id) => `/api/business/geo/localities/${id}/code`,
-        nameInput: document.getElementById('cc-locality-name'), patchUrl: (id) => `/api/business/geo/localities/${id}`,
-    },
-    street: {
-        select: document.getElementById('cc-street'), addToggle: document.getElementById('cc-street-add-toggle'),
-        addRow: document.getElementById('cc-street-add-row'), addInput: document.getElementById('cc-street-add-input'),
-        addConfirm: document.getElementById('cc-street-add-confirm'), items: [], parent: 'locality',
-        listUrl: (parentId) => `/api/business/geo/streets?localityId=${parentId}`,
-        createUrl: () => '/api/business/geo/streets',
-        createBody: (name, parentId) => ({ localityId: parentId, name }),
-        titleKey: 'business.ccAddNewStreet',
-    },
-};
-
 // Los códigos cortos son solo letras A–Z sin acentos y en mayúsculas.
 function cleanShortCode(value, length) {
-    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, length);
+    return String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, length);
 }
-function bindShortCodeInput(input, length) {
-    if (!input) return;
-    input.addEventListener('input', () => {
-        const clean = cleanShortCode(input.value, length);
-        if (input.value !== clean) input.value = clean;
-    });
-}
-// Lo que dicen los errores del servidor (traen un código, no un texto en español).
-function geoErrorText(levelKey, err) {
-    const level = cascadeLevels[levelKey];
-    const keys = {
-        GEO_CODE_DUPLICATE: levelKey === 'state' ? 'business.ccGeoDupState' : 'business.ccGeoDupLocality',
-        GEO_CODE_INVALID: `business.ccGeoCodeInvalid${level.codeLength}`,
-        GEO_IN_USE: 'business.ccGeoInUse',
-        GEO_NAME_DUPLICATE: 'business.ccGeoNameDup',
-        GEO_NAME_REQUIRED: 'business.ccTypeNameFirst',
-    };
-    return Dashboard.t(keys[err && err.geoCode] || 'admin.saveError');
-}
-// La fila de corrección del nivel (Estado, Localidad) según lo elegido: mientras ningún centro de costos use ese Estado o Localidad se pueden corregir su nombre y su código; cuando ya lo usa uno queda fijo
-// (solo se puede poner el código si le faltaba); sin elegir nada se esconde.
-function refreshCodeRow(levelKey) {
-    const level = cascadeLevels[levelKey];
-    if (!level.codeRow) return;
-    const item = level.items.find((i) => String(i.id) === String(level.select.value));
-    level.codeRow.hidden = !item;
-    if (!item) return;
-    const editable = !item.in_use;
-    level.nameInput.value = item.name;
-    level.nameInput.hidden = !editable;
-    level.codeInput.value = item.code || '';
-    level.codeInput.disabled = !editable && !!item.code;
-    level.codeSave.hidden = !editable && !!item.code;
-}
-function levelOptionText(level, item) {
-    return level.codeLength && item.code ? `${item.name} · ${item.code}` : item.name;
-}
+abbreviationField.addEventListener('input', () => {
+    const clean = cleanShortCode(abbreviationField.value, 3);
+    if (abbreviationField.value !== clean) abbreviationField.value = clean;
+    updateCodePreview();
+});
 
-function firstLetter(s) {
-    return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().charAt(0).toUpperCase() || '_';
-}
-
+// El código nuevo es el código del sitio + la abreviatura; un centro ya guardado conserva el suyo (el de antes, o el que se armó al crearlo).
 function updateCodePreview() {
-    const companyLetter = firstLetter(clientBranding?.companyAbbreviation || clientBranding?.companyName);
-    const levelLetters = LEVEL_ORDER.map((key) => {
-        const level = cascadeLevels[key];
-        const item = level.items.find((i) => String(i.id) === String(level.select.value));
-        return firstLetter(item?.name);
-    });
-    const sucursalLetter = firstLetter(sucursalField.value);
-    codePreviewValue.textContent = `${companyLetter}${levelLetters.join('')}${sucursalLetter}`;
-}
-
-function populateSelect(selectEl, items, level) {
-    selectEl.innerHTML = '';
-    const placeholder = document.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = items.length ? Dashboard.t('business.ccSelectPlaceholder') : Dashboard.t('business.ccNoOptionsYet');
-    selectEl.appendChild(placeholder);
-    items.forEach((item) => {
-        const opt = document.createElement('option');
-        opt.value = item.id;
-        opt.textContent = level ? levelOptionText(level, item) : item.name;
-        selectEl.appendChild(opt);
-    });
-}
-
-// parentId === null means "this level's own prerequisite isn't chosen yet"
-// (only meaningful for state/locality/street) -- country has no parent, so
-// it always loads its full list regardless of what's passed here.
-async function loadLevel(levelKey, parentId) {
-    const level = cascadeLevels[levelKey];
-    if (level.parent && !parentId) {
-        level.items = [];
-        populateSelect(level.select, [], level);
-        level.select.querySelector('option').textContent = Dashboard.t('business.ccSelectParentFirst');
-        refreshCodeRow(levelKey);
-        level.select.disabled = true;
-        level.addToggle.disabled = true;
-        level.addRow.hidden = true;
+    const editing = idField.value ? costCenters.find((c) => String(c.id) === String(idField.value)) : null;
+    if (editing) { // el código de un centro ya guardado no cambia (aunque ahora se le ponga su abreviatura)
+        codePreviewValue.textContent = editing.code;
         return;
     }
-    try {
-        const res = await fetch(level.listUrl(parentId), { credentials: 'include' });
-        level.items = res.ok ? (await res.json()).items || [] : [];
-    } catch {
-        level.items = [];
-    }
-    populateSelect(level.select, level.items, level);
-    level.select.disabled = false;
-    level.addToggle.disabled = false;
-    refreshCodeRow(levelKey);
+    const abbreviation = cleanShortCode(abbreviationField.value, 3);
+    codePreviewValue.textContent = `${siteField.value || '_____'}-${abbreviation || '___'}`;
 }
+function updateSiteLocation() {
+    siteLocationField.textContent = siteLocation(siteByCode(siteField.value)) || '—';
+}
+siteField.addEventListener('change', () => { updateSiteLocation(); updateCodePreview(); });
 
-LEVEL_ORDER.forEach((levelKey, idx) => {
-    const level = cascadeLevels[levelKey];
-    level.select.addEventListener('change', async () => {
-        // Reloads only levels that actually DESCEND from this one (tracked
-        // via `affected`, keyed off each level's own declared .parent) --
-        // not just "everything after it in display order". Municipio and
-        // Localidad are siblings that both read Estado directly: changing
-        // Municipio must NOT wipe out an already-picked Localidad/Calle,
-        // since neither one depends on Municipio at all.
-        const affected = new Set([levelKey]);
-        for (let i = idx + 1; i < LEVEL_ORDER.length; i++) {
-            const childKey = LEVEL_ORDER[i];
-            const child = cascadeLevels[childKey];
-            if (!child.parent || !affected.has(child.parent)) continue;
-            await loadLevel(childKey, cascadeLevels[child.parent].select.value || null);
-            affected.add(childKey);
-        }
-        refreshCodeRow(levelKey);
-        updateCodePreview();
-    });
-    bindShortCodeInput(level.addCode, level.codeLength);
-    // Corregir (o poner) el nombre y el código de lo ya elegido. El catálogo es de todos los clientes: solo se puede mientras ningún centro de costos lo use; si ya lo usa uno, solo se puede poner el código que le faltaba.
-    bindShortCodeInput(level.codeInput, level.codeLength);
-    if (level.codeSave) {
-        level.codeSave.addEventListener('click', async () => {
-            const item = level.items.find((i) => String(i.id) === String(level.select.value));
-            const code = cleanShortCode(level.codeInput.value, level.codeLength);
-            if (!item) return;
-            if (code.length !== level.codeLength) {
-                Dashboard.showToast(Dashboard.t(`business.ccGeoCodeInvalid${level.codeLength}`), 'error');
-                return;
-            }
-            const editable = !item.in_use;
-            const name = editable ? level.nameInput.value.trim() : item.name;
-            if (!name) {
-                Dashboard.showToast(Dashboard.t('business.ccTypeNameFirst'), 'error');
-                level.nameInput.focus();
-                return;
-            }
-            level.codeSave.disabled = true;
-            try {
-                const res = await fetch(editable ? level.patchUrl(item.id) : level.codeUrl(item.id), {
-                    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(editable ? { name, code } : { code }),
-                });
-                const body = await res.json().catch(() => ({}));
-                if (!res.ok) { const failure = new Error(body.message || 'save failed'); failure.geoCode = body.code; throw failure; }
-                item.name = body.item.name;
-                item.code = body.item.code;
-                const keep = level.select.value;
-                populateSelect(level.select, level.items, level);
-                level.select.value = keep;
-                refreshCodeRow(levelKey);
-                updateCodePreview();
-                Dashboard.showToast(Dashboard.t('main.changeSaved'), 'success');
-            } catch (err) {
-                Dashboard.showToast(geoErrorText(levelKey, err), 'error');
-            } finally {
-                level.codeSave.disabled = false;
-            }
-        });
-    }
-    level.addToggle.addEventListener('click', () => {
-        level.addRow.hidden = !level.addRow.hidden;
-        if (!level.addRow.hidden) level.addInput.focus();
-    });
-    level.addConfirm.addEventListener('click', async () => {
-        const name = level.addInput.value.trim();
-        if (!name) {
-            Dashboard.showToast(Dashboard.t('business.ccTypeNameFirst'), 'error');
-            level.addInput.focus();
-            return;
-        }
-        const code = level.codeLength ? cleanShortCode(level.addCode.value, level.codeLength) : '';
-        if (level.codeLength && code.length !== level.codeLength) {
-            Dashboard.showToast(Dashboard.t(`business.ccGeoCodeInvalid${level.codeLength}`), 'error');
-            level.addCode.focus();
-            return;
-        }
-        const parentId = level.parent ? cascadeLevels[level.parent].select.value : null;
-        level.addConfirm.disabled = true;
-        try {
-            const res = await fetch(level.createUrl(), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify(level.createBody(name, parentId, code)),
-            });
-            const body = await res.json().catch(() => ({}));
-            if (!res.ok) { const failure = new Error(body.message || 'create failed'); failure.geoCode = body.code; throw failure; }
-            const { item } = body;
-            await loadLevel(levelKey, parentId);
-            level.select.value = item.id;
-            level.addInput.value = '';
-            if (level.addCode) level.addCode.value = '';
-            level.addRow.hidden = true;
-            level.select.dispatchEvent(new Event('change'));
-        } catch (err) {
-            Dashboard.showToast(err.geoCode ? geoErrorText(levelKey, err) : Dashboard.t('admin.saveError'), 'error');
-        } finally {
-            level.addConfirm.disabled = false;
-        }
-    });
-});
-sucursalField.addEventListener('input', updateCodePreview);
-bindShortCodeInput(siteCodeField, 5);
-
-// Un sitio puede tener varios centros de costos: la lista de sugerencias trae los sitios que el cliente ya tiene (código · sucursal) para elegir uno en vez de escribirlo; un código nuevo crea un sitio nuevo.
-function fillSiteList() {
-    const list = document.getElementById('cc-site-list');
-    if (!list) return;
-    const seen = new Map();
-    costCenters.forEach((c) => { if (c.siteCode && !seen.has(c.siteCode)) seen.set(c.siteCode, c.sucursal || ''); });
-    list.replaceChildren(...[...seen].sort(([a], [b]) => a.localeCompare(b)).map(([code, sucursal]) => {
+// La lista trae los sitios activos (código · sucursal); un centro que ya tiene sitio lo muestra aunque ese sitio esté inactivo.
+function fillSiteList(selectedCode) {
+    const options = activeSites().slice();
+    const current = selectedCode ? siteByCode(selectedCode) : null;
+    if (current && !options.some((s) => s.code === current.code)) options.push(current);
+    siteField.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = options.length ? Dashboard.t('business.ccSelectPlaceholder') : Dashboard.t('business.ccNoSites');
+    siteField.appendChild(placeholder);
+    options.sort((a, b) => a.code.localeCompare(b.code)).forEach((site) => {
         const option = document.createElement('option');
-        option.value = code;
-        option.label = sucursal ? `${code} · ${sucursal}` : code;
-        return option;
-    }));
-}
-
-function resetCascadeAddRows() {
-    LEVEL_ORDER.forEach((key) => {
-        const level = cascadeLevels[key];
-        level.addRow.hidden = true;
-        level.addInput.value = '';
-        if (level.addCode) level.addCode.value = '';
+        option.value = site.code;
+        option.textContent = site.sucursal ? `${site.code} · ${site.sucursal}` : site.code;
+        siteField.appendChild(option);
     });
+    siteField.value = selectedCode || '';
 }
 
-async function openNewModal() {
+function openNewModal() {
     idField.value = '';
     ccModalTitle.textContent = Dashboard.t('business.ccModalTitleNew');
     companyDisplay.textContent = clientBranding?.companyName || '—';
-    sucursalField.value = '';
-    siteCodeField.value = '';
-    fillSiteList();
+    fillSiteList('');
+    siteField.disabled = false;
     nameField.value = '';
+    abbreviationField.value = '';
+    abbreviationField.disabled = false;
     responsibleField.value = '';
     descriptionField.value = '';
     modalError.hidden = true;
-    resetCascadeAddRows();
-
-    await loadLevel('country', null);
-    await loadLevel('state', null);
-    await loadLevel('municipality', null);
-    await loadLevel('locality', null);
-    await loadLevel('street', null);
+    updateSiteLocation();
     updateCodePreview();
     ccModal.hidden = false;
+    siteField.focus();
 }
 
-async function openEditModal(cc) {
+// El sitio y la abreviatura (que arma el código) no cambian una vez guardados; un centro de antes que todavía no los tiene los pone ahora, una vez.
+function openEditModal(cc) {
     idField.value = cc.id;
     ccModalTitle.textContent = Dashboard.t('business.ccModalTitleEdit');
     companyDisplay.textContent = clientBranding?.companyName || '—';
-    sucursalField.value = cc.sucursal || '';
-    siteCodeField.value = cc.siteCode || '';
-    fillSiteList();
+    fillSiteList(cc.siteCode || '');
+    siteField.disabled = !!cc.siteCode;
     nameField.value = cc.name;
+    abbreviationField.value = cc.abbreviation || '';
+    abbreviationField.disabled = !!cc.abbreviation;
     responsibleField.value = cc.responsible || '';
     descriptionField.value = cc.description || '';
     modalError.hidden = true;
-    resetCascadeAddRows();
-
-    await loadLevel('country', null);
-    cascadeLevels.country.select.value = cc.countryId || '';
-    await loadLevel('state', cc.countryId || null);
-    cascadeLevels.state.select.value = cc.stateId || '';
-    // Municipio and Localidad are independent siblings under Estado (see
-    // the LEVEL_ORDER comment above) -- a cost center from before Municipio
-    // existed just has municipalityId blank here, which reloadLevel already
-    // renders as its own normal "nothing selected" state.
-    await loadLevel('municipality', cc.stateId || null);
-    cascadeLevels.municipality.select.value = cc.municipalityId || '';
-    await loadLevel('locality', cc.stateId || null);
-    cascadeLevels.locality.select.value = cc.localityId || '';
-    await loadLevel('street', cc.localityId || null);
-    cascadeLevels.street.select.value = cc.streetId || '';
-
+    updateSiteLocation();
     updateCodePreview();
     ccModal.hidden = false;
 }
@@ -598,44 +370,22 @@ function closeCcModal() {
 
 async function saveCcModal() {
     modalError.hidden = true;
-    const countryId = Number(cascadeLevels.country.select.value) || null;
-    const stateId = Number(cascadeLevels.state.select.value) || null;
-    const municipalityId = Number(cascadeLevels.municipality.select.value) || null;
-    const localityId = Number(cascadeLevels.locality.select.value) || null;
-    const streetId = Number(cascadeLevels.street.select.value) || null;
-    const sucursal = sucursalField.value.trim();
+    const siteCode = siteField.value;
     const name = nameField.value.trim();
-    const siteCode = cleanShortCode(siteCodeField.value, 5);
-    if (!countryId || !stateId || !municipalityId || !localityId || !streetId || !sucursal || !name) {
-        // Dice QUÉ falta (antes salía un texto de otra pantalla). Si lo que falta se escribió en su renglón de "Nuevo…" pero no se pulsó Agregar, se avisa eso.
-        const levelIds = { country: countryId, state: stateId, municipality: municipalityId, locality: localityId, street: streetId };
-        const levelLabel = { country: 'business.ccCountry', state: 'business.ccState', municipality: 'business.ccMunicipality', locality: 'business.ccLocality', street: 'business.ccStreet' };
-        const missingLevels = LEVEL_ORDER.filter((key) => !levelIds[key]);
-        const typedNotAdded = missingLevels.find((key) => cascadeLevels[key].addInput.value.trim());
-        if (typedNotAdded) {
-            modalError.textContent = Dashboard.t('business.ccPressAdd', { field: Dashboard.t(levelLabel[typedNotAdded]) });
-            cascadeLevels[typedNotAdded].addConfirm.focus();
-        } else {
-            const fields = missingLevels.map((key) => Dashboard.t(levelLabel[key]));
-            if (!sucursal) fields.push(Dashboard.t('business.ccBranch'));
-            if (!name) fields.push(Dashboard.t('business.ccName'));
-            modalError.textContent = Dashboard.t('business.ccMissingFields', { fields: fields.join(', ') });
-        }
+    const abbreviation = cleanShortCode(abbreviationField.value, 3);
+    // Dice QUÉ falta.
+    const missing = [];
+    if (!siteCode) missing.push(Dashboard.t('business.ccSite'));
+    if (!name) missing.push(Dashboard.t('business.ccName'));
+    if (missing.length) {
+        modalError.textContent = Dashboard.t('business.ccMissingFields', { fields: missing.join(', ') });
         modalError.hidden = false;
         return;
     }
-    // Para armar el localizador hacen falta los códigos cortos: del Estado y la Localidad elegidos y el del sitio.
-    const pickedState = cascadeLevels.state.items.find((i) => i.id === stateId);
-    const pickedLocality = cascadeLevels.locality.items.find((i) => i.id === localityId);
-    if (!pickedState?.code || !pickedLocality?.code) {
-        modalError.textContent = Dashboard.t('business.ccNeedGeoCodes');
+    if (abbreviation.length !== 3) {
+        modalError.textContent = Dashboard.t('business.ccAbbreviationInvalid');
         modalError.hidden = false;
-        return;
-    }
-    if (siteCode.length !== 5) {
-        modalError.textContent = Dashboard.t('business.ccSiteCodeInvalid');
-        modalError.hidden = false;
-        siteCodeField.focus();
+        abbreviationField.focus();
         return;
     }
     const responsible = responsibleField.value.trim();
@@ -650,14 +400,11 @@ async function saveCcModal() {
             method,
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ countryId, stateId, municipalityId, localityId, streetId, sucursal, siteCode, name, responsible, description }),
+            body: JSON.stringify({ siteCode, abbreviation, name, responsible, description }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => ({}));
-            modalError.textContent = body.message === 'Cost center limit reached for this client.'
-                ? Dashboard.t('business.ccLimitReached', { count: costCenters.length, limit })
-                : (body.message === 'Site limit reached for this client.' ? Dashboard.t('business.ccSiteLimitReached', { limit: sitesLimit })
-                    : (body.message === 'That site is already in another state or locality.' ? Dashboard.t('business.ccSiteOtherPlace') : (body.message || Dashboard.t('admin.saveError'))));
+            modalError.textContent = errorText(body);
             modalError.hidden = false;
             return;
         }
@@ -689,14 +436,6 @@ document.addEventListener('keydown', (event) => {
 
 document.addEventListener('dashboard:language-changed', () => {
     renderCostCenters();
-    LEVEL_ORDER.forEach((key) => {
-        const level = cascadeLevels[key];
-        level.addToggle.title = Dashboard.t(level.titleKey);
-        if (!level.select.disabled) {
-            const placeholder = level.select.querySelector('option[value=""]');
-            if (placeholder) placeholder.textContent = level.items.length ? Dashboard.t('business.ccSelectPlaceholder') : Dashboard.t('business.ccNoOptionsYet');
-        }
-    });
 });
 
 (async function init() {
@@ -704,18 +443,7 @@ document.addEventListener('dashboard:language-changed', () => {
         const role = await Dashboard.initDashboard({ activePage: 'business-centros-costo' });
         if (!role) return;
         renderNewCcButton();
-        LEVEL_ORDER.forEach((key) => {
-            cascadeLevels[key].addToggle.title = Dashboard.t(cascadeLevels[key].titleKey);
-        });
         await loadCostCenters();
-        // Llegó desde «+ Nuevo sitio» (Sitios Contratados): se abre «Nuevo Centro Costos» con el cursor en «Código del sitio». Si ya no caben más centros, el botón está apagado y no se abre nada.
-        if (new URLSearchParams(window.location.search).get('nuevo') === 'sitio') {
-            history.replaceState(null, '', window.location.pathname);
-            if (newBtn && !newBtn.disabled) {
-                await openNewModal();
-                siteCodeField.focus();
-            }
-        }
     } catch (err) {
         console.error('Business (Centros de Costo) failed to initialize:', err);
     }

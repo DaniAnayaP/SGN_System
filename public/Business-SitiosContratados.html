@@ -399,7 +399,10 @@
                             <th data-i18n="main.colSysHora" data-col="colSysHora" data-group="menu.classControlInterno" class="col-system">Time (hh:mm:ss)</th>
 <th data-i18n="main.colSitCodigo" data-col="colSitCodigo" data-group="menu.contractedSites">Site code</th>
                             <th data-i18n="main.colSitSucursal" data-col="colSitSucursal" data-group="menu.contractedSites">Branch</th>
-                            <th data-i18n="main.colSitUbicacion" data-col="colSitUbicacion" data-group="menu.contractedSites">State · Locality</th>
+                            <th data-i18n="main.colSitEstado" data-col="colSitEstado" data-group="menu.contractedSites">State</th>
+                            <th data-i18n="main.colSitMunicipio" data-col="colSitMunicipio" data-group="menu.contractedSites">Municipality</th>
+                            <th data-i18n="main.colSitLocalidad" data-col="colSitLocalidad" data-group="menu.contractedSites">Locality</th>
+                            <th data-i18n="main.colSitCalle" data-col="colSitCalle" data-group="menu.contractedSites">Street</th>
                             <th data-i18n="main.colSitCentros" data-col="colSitCentros" data-group="menu.contractedSites">Cost centers</th>
                             <th data-i18n="main.colSitNumCentros" data-col="colSitNumCentros" data-group="menu.contractedSites"># Cost centers</th>
                             <th data-i18n="main.colSitEstatus" data-col="colSitEstatus" data-group="menu.contractedSites">Status</th>
@@ -408,7 +411,7 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td class="data-table-empty-cell" colspan="20">
+                            <td class="data-table-empty-cell" colspan="23">
                                 <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
                             </td>
                         </tr>
@@ -417,6 +420,107 @@
             </div>
         </div>
     </main>
+
+    <div class="modal-overlay" id="sit-modal" hidden>
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="sit-modal-title">
+            <h3 id="sit-modal-title" data-i18n="main.sitModalTitleNew">New site</h3>
+            <input type="hidden" id="sit-id" value="">
+
+            <div class="admin-form-grid">
+                <div class="admin-field">
+                    <label data-i18n="business.ccCompany">Company</label>
+                    <p class="admin-computed-value" id="sit-company-display">—</p>
+                </div>
+            </div>
+
+            <div class="admin-form-grid cc-cascade-grid">
+                <div class="admin-field">
+                    <label for="sit-country" data-i18n="business.ccCountry">Country</label>
+                    <div class="cc-select-row">
+                        <select id="sit-country"></select>
+                        <button type="button" class="cc-add-new-btn" id="sit-country-add-toggle" title="Add new country">+</button>
+                    </div>
+                    <div class="cc-add-new-row" id="sit-country-add-row" hidden>
+                        <input type="text" id="sit-country-add-input" data-i18n-placeholder="business.ccAddNewCountry" placeholder="New country">
+                        <button type="button" class="btn btn-secondary" id="sit-country-add-confirm" data-i18n="admin.add">Add</button>
+                    </div>
+                </div>
+                <div class="admin-field">
+                    <label for="sit-state" data-i18n="business.ccState">State</label>
+                    <div class="cc-select-row">
+                        <select id="sit-state" disabled></select>
+                        <button type="button" class="cc-add-new-btn" id="sit-state-add-toggle" title="Add new state" disabled>+</button>
+                    </div>
+                    <div class="cc-code-row" id="sit-state-code-row" hidden>
+                        <input type="text" id="sit-state-name" class="cc-name-input" maxlength="80" autocomplete="off" data-help-key="ccGeoCode" data-i18n-placeholder="business.ccEntryName" placeholder="Name">
+                        <input type="text" id="sit-state-code" class="cc-code-input" maxlength="4" autocomplete="off" data-help-key="ccGeoCode" data-i18n-placeholder="business.ccShortCode4" placeholder="Code · 4 letters">
+                        <button type="button" class="btn btn-secondary" id="sit-state-code-save" data-i18n="business.ccSaveCode">Save code</button>
+                    </div>
+                    <div class="cc-add-new-row" id="sit-state-add-row" hidden>
+                        <input type="text" id="sit-state-add-input" data-i18n-placeholder="business.ccAddNewState" placeholder="New state">
+                        <input type="text" id="sit-state-add-code" class="cc-code-input" maxlength="4" autocomplete="off" data-help-key="ccGeoCode" data-i18n-placeholder="business.ccShortCode4" placeholder="Code · 4 letters">
+                        <button type="button" class="btn btn-secondary" id="sit-state-add-confirm" data-i18n="admin.add">Add</button>
+                    </div>
+                </div>
+                <div class="admin-field">
+                    <label for="sit-municipality" data-i18n="business.ccMunicipality">Municipality</label>
+                    <div class="cc-select-row">
+                        <select id="sit-municipality" disabled></select>
+                        <button type="button" class="cc-add-new-btn" id="sit-municipality-add-toggle" title="Add new municipality" disabled>+</button>
+                    </div>
+                    <div class="cc-add-new-row" id="sit-municipality-add-row" hidden>
+                        <input type="text" id="sit-municipality-add-input" data-i18n-placeholder="business.ccAddNewMunicipality" placeholder="New municipality">
+                        <button type="button" class="btn btn-secondary" id="sit-municipality-add-confirm" data-i18n="admin.add">Add</button>
+                    </div>
+                </div>
+                <div class="admin-field">
+                    <label for="sit-locality" data-i18n="business.ccLocality">Locality</label>
+                    <div class="cc-select-row">
+                        <select id="sit-locality" disabled></select>
+                        <button type="button" class="cc-add-new-btn" id="sit-locality-add-toggle" title="Add new locality" disabled>+</button>
+                    </div>
+                    <div class="cc-code-row" id="sit-locality-code-row" hidden>
+                        <input type="text" id="sit-locality-name" class="cc-name-input" maxlength="80" autocomplete="off" data-help-key="ccGeoCode" data-i18n-placeholder="business.ccEntryName" placeholder="Name">
+                        <input type="text" id="sit-locality-code" class="cc-code-input" maxlength="3" autocomplete="off" data-help-key="ccGeoCode" data-i18n-placeholder="business.ccShortCode3" placeholder="Code · 3 letters">
+                        <button type="button" class="btn btn-secondary" id="sit-locality-code-save" data-i18n="business.ccSaveCode">Save code</button>
+                    </div>
+                    <div class="cc-add-new-row" id="sit-locality-add-row" hidden>
+                        <input type="text" id="sit-locality-add-input" data-i18n-placeholder="business.ccAddNewLocality" placeholder="New locality">
+                        <input type="text" id="sit-locality-add-code" class="cc-code-input" maxlength="3" autocomplete="off" data-help-key="ccGeoCode" data-i18n-placeholder="business.ccShortCode3" placeholder="Code · 3 letters">
+                        <button type="button" class="btn btn-secondary" id="sit-locality-add-confirm" data-i18n="admin.add">Add</button>
+                    </div>
+                </div>
+                <div class="admin-field">
+                    <label for="sit-street" data-i18n="business.ccStreet">Street</label>
+                    <div class="cc-select-row">
+                        <select id="sit-street" disabled></select>
+                        <button type="button" class="cc-add-new-btn" id="sit-street-add-toggle" title="Add new street" disabled>+</button>
+                    </div>
+                    <div class="cc-add-new-row" id="sit-street-add-row" hidden>
+                        <input type="text" id="sit-street-add-input" data-i18n-placeholder="business.ccAddNewStreet" placeholder="New street">
+                        <button type="button" class="btn btn-secondary" id="sit-street-add-confirm" data-i18n="admin.add">Add</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="admin-form-grid">
+                <div class="admin-field">
+                    <label for="sit-sucursal" data-i18n="business.ccBranch">Branch</label>
+                    <input id="sit-sucursal" type="text" required>
+                </div>
+                <div class="admin-field">
+                    <label for="sit-site-code" data-i18n="business.ccSiteCode">Site code</label>
+                    <input id="sit-site-code" type="text" class="cc-code-input" maxlength="5" autocomplete="off" required data-help-key="ccSiteCode" data-i18n-placeholder="business.ccShortCode5" placeholder="Code · 5 letters">
+                </div>
+            </div>
+
+            <div id="sit-modal-error" class="admin-error" role="alert" hidden></div>
+            <div class="admin-form-actions" style="margin-top: 1.25rem;">
+                <button type="button" class="btn" id="sit-modal-save" data-i18n="admin.save">Save</button>
+                <button type="button" class="btn btn-secondary" id="sit-modal-cancel" data-i18n="admin.cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="business-summary-modal-title">
@@ -474,6 +578,7 @@
     <script src="SearchSyntax.js"></script>
     <script src="Dashboard.js"></script>
     <script src="ColorPalette.js"></script>
+    <script src="GeoCascade.js"></script>
     <script src="Business-SitiosContratados.js"></script>
 </body>
 </html>

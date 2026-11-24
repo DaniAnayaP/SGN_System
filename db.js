@@ -109,7 +109,7 @@ db.exec(`
     -- pick from the selected Estado, independently of each other) rather
     -- than nesting Localidad inside it -- Localidad's own cascade/FK stay
     -- exactly as they were so every cost center created before this table
-    -- existed keeps working unchanged; see buildCostCenterCodeBase.
+    -- existed keeps working unchanged (the location now lives on client_sites).
     CREATE TABLE IF NOT EXISTS geo_municipalities (
         id        INTEGER PRIMARY KEY AUTOINCREMENT,
         state_id  INTEGER NOT NULL REFERENCES geo_states(id) ON DELETE CASCADE,
@@ -1026,6 +1026,26 @@ db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_geo_localities_code ON geo_locali
 // El código del sitio YA NO es único por centro: la cadena es Sitio > Centro de costos y un sitio puede tener varios centros. Se quita el candado que hubo hasta aquí (índice único) y queda un índice normal solo para buscar.
 db.exec('DROP INDEX IF EXISTS idx_cost_centers_site_code');
 db.exec("CREATE INDEX IF NOT EXISTS idx_cost_centers_site_lookup ON cost_centers(client_id, is_test_data, site_code) WHERE site_code <> ''");
+// El SITIO es un registro propio (Daniel, 2026-11-24): trae su código de 5 letras, su sucursal y toda su ubicación (País, Estado, Municipio, Localidad, Calle); el centro de costos ya no pide ubicación, solo elige UN sitio (cost_centers.site_code, que sigue siendo
+// el vínculo de todo lo demás) y copia de él su ubicación. La abreviatura (3 letras) del centro arma su código nuevo: código del sitio + abreviatura. Los sitios que ya existían nacen de sus centros (seedSitesFromCostCentersOnce, al final de este archivo).
+if (!costCenterColumns.some((c) => c.name === 'abbreviation')) db.exec("ALTER TABLE cost_centers ADD COLUMN abbreviation TEXT NOT NULL DEFAULT ''");
+db.exec(`
+    CREATE TABLE IF NOT EXISTS client_sites (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id       INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data    INTEGER NOT NULL DEFAULT 0,
+        code            TEXT NOT NULL,
+        sucursal        TEXT NOT NULL DEFAULT '',
+        country_id      INTEGER,
+        state_id        INTEGER,
+        municipality_id INTEGER,
+        locality_id     INTEGER,
+        street_id       INTEGER,
+        status          TEXT NOT NULL DEFAULT 'active',
+        created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (client_id, is_test_data, code)
+    )
+`);
 
 // Seed data for the geo catalog — a real, well-known list of países (not a
 // live internet fetch: no outbound access from this server has been set up,
@@ -4343,24 +4363,84 @@ function countCostCenters(clientId, forTestAccount = false) {
     return db.prepare('SELECT COUNT(*) AS n FROM cost_centers WHERE client_id = ? AND is_test_data = ?').get(clientId, forTestAccount ? 1 : 0).n;
 }
 
-// Cuántos SITIOS tiene habilitados un cliente: códigos de sitio distintos entre sus centros de costos activos. La cadena es Sitio > Centro de costos (un sitio puede tener varios centros), así que se cuentan los sitios, no los centros. Es lo que se ve en «Sitios» de Nuestros Clientes.
+// --- Sitios (registro propio: ver client_sites arriba) ----------------------
+// Un sitio es UN lugar físico con su código de 5 letras, su sucursal y su ubicación; tiene varios centros de costos y cada centro es de un solo sitio (cost_centers.site_code).
+function listSites(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM client_sites WHERE client_id = ? AND is_test_data = ? ORDER BY code ASC').all(clientId, forTestAccount ? 1 : 0);
+}
+function getSiteById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM client_sites WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+}
+function getSiteByCode(clientId, forTestAccount, code) {
+    return db.prepare('SELECT * FROM client_sites WHERE client_id = ? AND is_test_data = ? AND code = ?').get(clientId, forTestAccount ? 1 : 0, code || '');
+}
+// Los nombres de la ubicación de un sitio (o de un centro, que la copia de su sitio) para mostrarlos y para el historial de cambios.
+function geoNamesOf(row) {
+    const name = (table, id) => (id ? (db.prepare(`SELECT name FROM ${table} WHERE id = ?`).get(id) || {}).name || '' : '');
+    return {
+        country: name('geo_countries', row.country_id), state: name('geo_states', row.state_id), municipality: name('geo_municipalities', row.municipality_id),
+        locality: name('geo_localities', row.locality_id), street: name('geo_streets', row.street_id),
+    };
+}
+// Cuántos SITIOS tiene habilitados un cliente: los sitios activos (con o sin centros de costos). Es lo que se ve en «Sitios» de Nuestros Clientes y contra lo que se compara el límite de sitios contratados.
 function countSites(clientId, forTestAccount = false) {
-    return db.prepare("SELECT COUNT(DISTINCT site_code) AS n FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND status = 'active' AND site_code <> ''").get(clientId, forTestAccount ? 1 : 0).n;
+    return db.prepare("SELECT COUNT(*) AS n FROM client_sites WHERE client_id = ? AND is_test_data = ? AND status = 'active'").get(clientId, forTestAccount ? 1 : 0).n;
 }
-
-// ¿Dejar este centro en este sitio pasaría del límite de SITIOS contratados? Cuenta los sitios que quedan sin este centro (excludeId) y suma el sitio nuevo solo si ningún otro centro activo ya lo usa: meter otro centro en un sitio que ya existe nunca gasta un sitio.
-function wouldExceedSitesLimit(clientId, forTestAccount, siteCode, limit, excludeId = 0) {
-    if (!siteCode) return false;
-    const lane = forTestAccount ? 1 : 0;
-    const others = db.prepare("SELECT COUNT(DISTINCT site_code) AS n FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND status = 'active' AND site_code <> '' AND id != ?").get(clientId, lane, excludeId || 0).n;
-    const joinsExisting = !!db.prepare("SELECT 1 FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND status = 'active' AND site_code = ? AND id != ? LIMIT 1").get(clientId, lane, siteCode, excludeId || 0);
-    return others + (joinsExisting ? 0 : 1) > (Number(limit) || 0);
+// ¿Ya se usan todos los sitios contratados? Dar de alta un sitio (o volver a activar uno) gasta un sitio; un centro de costos nuevo nunca lo gasta.
+function isAtSitesLimit(clientId, forTestAccount, limit) {
+    return countSites(clientId, forTestAccount) >= (Number(limit) || 0);
 }
-// Un sitio es UN lugar físico: si otro centro del cliente ya usa ese código de sitio, el centro nuevo (o el que se edita) debe estar en el mismo Estado y la misma Localidad, porque el localizador se arma con Estado + Localidad + sitio. Devuelve ese otro centro si choca, o null. excludeId deja fuera al propio centro al editar.
-function findSiteInOtherPlace(clientId, forTestAccount, siteCode, stateId, localityId, excludeId = 0) {
-    if (!siteCode) return null;
-    return db.prepare('SELECT id, code, state_id, locality_id FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND site_code = ? AND id != ? AND (state_id != ? OR locality_id != ?) LIMIT 1')
-        .get(clientId, forTestAccount ? 1 : 0, siteCode, excludeId || 0, Number(stateId), Number(localityId)) || null;
+function createSite({ clientId, isTestData = false, code, sucursal, countryId, stateId, municipalityId, localityId, streetId }) {
+    const result = db.prepare(`
+        INSERT INTO client_sites (client_id, is_test_data, code, sucursal, country_id, state_id, municipality_id, locality_id, street_id)
+        VALUES (@clientId, @isTestData, @code, @sucursal, @countryId, @stateId, @municipalityId, @localityId, @streetId)
+    `).run({ clientId, isTestData: isTestData ? 1 : 0, code, sucursal: sucursal || '', countryId, stateId, municipalityId: municipalityId || null, localityId, streetId });
+    return getSiteById(result.lastInsertRowid, clientId, isTestData);
+}
+// El código del sitio ya no se cambia (lo llevan los centros, las habilitaciones y los layouts); sí la sucursal y la ubicación, y los centros del sitio copian de nuevo la ubicación para que todo siga igual de completo.
+function updateSite(id, clientId, { sucursal, countryId, stateId, municipalityId, localityId, streetId }, forTestAccount = false) {
+    const site = getSiteById(id, clientId, forTestAccount);
+    if (!site) return null;
+    db.transaction(() => {
+        db.prepare('UPDATE client_sites SET sucursal = @sucursal, country_id = @countryId, state_id = @stateId, municipality_id = @municipalityId, locality_id = @localityId, street_id = @streetId WHERE id = @id')
+            .run({ id, sucursal: sucursal || '', countryId, stateId, municipalityId: municipalityId || null, localityId, streetId });
+        db.prepare('UPDATE cost_centers SET sucursal = @sucursal, country_id = @countryId, state_id = @stateId, municipality_id = @municipalityId, locality_id = @localityId, street_id = @streetId WHERE client_id = @clientId AND is_test_data = @lane AND site_code = @code')
+            .run({ clientId, lane: forTestAccount ? 1 : 0, code: site.code, sucursal: sucursal || '', countryId, stateId, municipalityId: municipalityId || null, localityId, streetId });
+    })();
+    return getSiteById(id, clientId, forTestAccount);
+}
+function setSiteStatus(id, clientId, status, forTestAccount = false) {
+    db.prepare('UPDATE client_sites SET status = @status WHERE id = @id AND client_id = @clientId AND is_test_data = @lane').run({ id, clientId, status, lane: forTestAccount ? 1 : 0 });
+    return getSiteById(id, clientId, forTestAccount);
+}
+function countActiveCentersOfSite(clientId, forTestAccount, siteCode) {
+    return db.prepare("SELECT COUNT(*) AS n FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND site_code = ? AND status = 'active'").get(clientId, forTestAccount ? 1 : 0, siteCode || '').n;
+}
+// ¿Esa abreviatura ya la usa otro centro del mismo sitio? (excludeId deja fuera al propio centro al editar)
+function abbreviationTakenInSite(clientId, forTestAccount, siteCode, abbreviation, excludeId = 0) {
+    return !!db.prepare('SELECT 1 FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND site_code = ? AND abbreviation = ? AND id != ? LIMIT 1').get(clientId, forTestAccount ? 1 : 0, siteCode || '', abbreviation || '', excludeId || 0);
+}
+// Los sitios que ya existían (solo un código escrito en sus centros de costos) pasan a ser registros propios, UNA vez: la ubicación y la sucursal las toma el sitio de su centro más antiguo (el candado de «mismo sitio, mismo lugar» ya impedía que dos centros del mismo sitio estuvieran en lugares distintos) y
+// queda activo si alguno de sus centros lo está. Los centros conservan su código, su registro y todo lo que ya se les asignó.
+const SITES_FROM_CENTERS_KEY = 'seed-sitios-propios-v1';
+function seedSitesFromCostCentersOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(SITES_FROM_CENTERS_KEY)) return;
+    let created = 0;
+    db.transaction(() => {
+        const seen = new Set();
+        db.prepare("SELECT * FROM cost_centers WHERE site_code <> '' ORDER BY id ASC").all().forEach((cc) => {
+            const key = `${cc.client_id}/${cc.is_test_data}/${cc.site_code}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            const active = db.prepare("SELECT 1 FROM cost_centers WHERE client_id = ? AND is_test_data = ? AND site_code = ? AND status = 'active' LIMIT 1").get(cc.client_id, cc.is_test_data, cc.site_code);
+            created += db.prepare(`
+                INSERT OR IGNORE INTO client_sites (client_id, is_test_data, code, sucursal, country_id, state_id, municipality_id, locality_id, street_id, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(cc.client_id, cc.is_test_data, cc.site_code, cc.sucursal || '', cc.country_id, cc.state_id, cc.municipality_id, cc.locality_id, cc.street_id, active ? 'active' : 'inactive', cc.created_at).changes;
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(SITES_FROM_CENTERS_KEY);
+    })();
+    console.log(`[db] Sitios como registro propio (una vez): ${created} sitios creados a partir de los códigos de sitio de los centros de costos.`);
 }
 
 function getCostCenterById(id, clientId, forTestAccount = false) {
@@ -4377,13 +4457,13 @@ function listCountries() {
 }
 // in_use = algún centro de costos (de cualquier cliente: el catálogo geográfico es de todos) ya usa ese Estado o esa Localidad; mientras no, su nombre y su código se pueden corregir.
 function listStates(countryId) {
-    return db.prepare('SELECT s.*, EXISTS(SELECT 1 FROM cost_centers cc WHERE cc.state_id = s.id) AS in_use FROM geo_states s WHERE s.country_id = ? ORDER BY s.name ASC').all(countryId);
+    return db.prepare('SELECT s.*, (EXISTS(SELECT 1 FROM client_sites cs WHERE cs.state_id = s.id) OR EXISTS(SELECT 1 FROM cost_centers cc WHERE cc.state_id = s.id)) AS in_use FROM geo_states s WHERE s.country_id = ? ORDER BY s.name ASC').all(countryId);
 }
 function listMunicipalities(stateId) {
     return db.prepare('SELECT * FROM geo_municipalities WHERE state_id = ? ORDER BY name ASC').all(stateId);
 }
 function listLocalities(stateId) {
-    return db.prepare('SELECT l.*, EXISTS(SELECT 1 FROM cost_centers cc WHERE cc.locality_id = l.id) AS in_use FROM geo_localities l WHERE l.state_id = ? ORDER BY l.name ASC').all(stateId);
+    return db.prepare('SELECT l.*, (EXISTS(SELECT 1 FROM client_sites cs WHERE cs.locality_id = l.id) OR EXISTS(SELECT 1 FROM cost_centers cc WHERE cc.locality_id = l.id)) AS in_use FROM geo_localities l WHERE l.state_id = ? ORDER BY l.name ASC').all(stateId);
 }
 function listStreets(localityId) {
     return db.prepare('SELECT * FROM geo_streets WHERE locality_id = ? ORDER BY name ASC').all(localityId);
@@ -4399,7 +4479,7 @@ function createCountry(name) {
     return db.prepare('SELECT * FROM geo_countries WHERE id = ?').get(lastInsertRowid);
 }
 // Códigos cortos del localizador: solo letras A–Z sin acentos, en mayúsculas, de largo exacto (Estado 4, Localidad 3, sitio 5). Devuelve '' si no cumple.
-const SHORT_CODE_LENGTH = { state: 4, locality: 3, site: 5 };
+const SHORT_CODE_LENGTH = { state: 4, locality: 3, site: 5, costCenter: 3 };
 function normalizeShortCode(value, length) {
     const code = String(value == null ? '' : value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
     return new RegExp(`^[A-Z]{${length}}$`).test(code) ? code : '';
@@ -4434,7 +4514,8 @@ function updateGeoEntry(kind, id, { name, code }) {
     const table = isState ? 'geo_states' : 'geo_localities';
     const row = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
     if (!row) return { error: 'notfound' };
-    if (db.prepare(`SELECT 1 FROM cost_centers WHERE ${isState ? 'state_id' : 'locality_id'} = ? LIMIT 1`).get(id)) return { error: 'inuse' };
+    if (db.prepare(`SELECT 1 FROM cost_centers WHERE ${isState ? 'state_id' : 'locality_id'} = ? LIMIT 1`).get(id)
+        || db.prepare(`SELECT 1 FROM client_sites WHERE ${isState ? 'state_id' : 'locality_id'} = ? LIMIT 1`).get(id)) return { error: 'inuse' };
     const nextName = name === undefined ? row.name : String(name || '').trim();
     if (!nextName) return { error: 'name' };
     let nextCode = row.code;
@@ -4548,11 +4629,12 @@ function deleteFieldFillRule(id, clientId) {
     db.prepare('DELETE FROM field_fill_rules WHERE id = ? AND client_id = ?').run(id, clientId);
 }
 
-function createCostCenter({ clientId, countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible, nickname, siteCode = '', isTestData = false }) {
-    const client = getClientById(clientId);
-    const baseCode = buildCostCenterCodeBase(client, countryId, stateId, municipalityId, localityId, streetId, sucursal);
+// El centro de costos elige UN sitio y copia de él su ubicación (país, estado, municipio, localidad, calle y sucursal): ya no se capturan en el centro. Su código nuevo es el código del sitio + su abreviatura de 3 letras (PARQU-COC), con -2, -3… si ya existiera.
+function createCostCenter({ clientId, siteCode, abbreviation, name, description, responsible, nickname, isTestData = false }) {
+    const site = getSiteByCode(clientId, isTestData, siteCode);
+    if (!site) throw new Error('Site not found.');
     const create = db.transaction(() => {
-        const code = generateUniqueCostCenterCode(clientId, baseCode);
+        const code = generateUniqueCostCenterCode(clientId, `${site.code}-${abbreviation}`);
         // Practice cost centers get their own account-number sequence,
         // starting from 1, so training never consumes/skips a number out of
         // the client's real accounting sequence.
@@ -4564,19 +4646,19 @@ function createCostCenter({ clientId, countryId, stateId, municipalityId, locali
                 INSERT INTO cost_centers (
                     client_id, code, name, description, responsible,
                     country_id, state_id, municipality_id, locality_id, street_id, sucursal,
-                    account_number, record_code, is_test_data, nickname, site_code
+                    account_number, record_code, is_test_data, nickname, site_code, abbreviation
                 )
                 VALUES (
                     @clientId, @code, @name, @description, @responsible,
                     @countryId, @stateId, @municipalityId, @localityId, @streetId, @sucursal,
-                    @accountNumber, @recordCode, @isTestData, @nickname, @siteCode
+                    @accountNumber, @recordCode, @isTestData, @nickname, @siteCode, @abbreviation
                 )
             `)
             .run({
                 clientId, code, name, description: description || '', responsible: responsible || '',
-                countryId, stateId, municipalityId: municipalityId || null, localityId, streetId, sucursal: sucursal || '',
+                countryId: site.country_id, stateId: site.state_id, municipalityId: site.municipality_id, localityId: site.locality_id, streetId: site.street_id, sucursal: site.sucursal || '',
                 accountNumber, recordCode: computeCostCenterRecordCode(clientId, code, accountNumber),
-                isTestData: isTestData ? 1 : 0, nickname: nickname || '', siteCode: siteCode || '',
+                isTestData: isTestData ? 1 : 0, nickname: nickname || '', siteCode: site.code, abbreviation,
             });
         return result.lastInsertRowid;
     });
@@ -4592,33 +4674,34 @@ const COST_CENTER_FIELDS = {
     description: { column: 'description', fieldKey: 'business.ccDescription' },
     sucursal: { column: 'sucursal', fieldKey: 'business.ccBranch' },
     siteCode: { column: 'site_code', fieldKey: 'business.ccSiteCode' },
+    abbreviation: { column: 'abbreviation', fieldKey: 'business.ccAbbreviation' },
 };
 
-// code is recomputed from the new geo selections (not resubmitted directly)
-// -- unlike record_code (frozen forever at creation, see
-// computeCostCenterRecordCode's own comment), código is allowed to change on
-// edit since it exists to reflect the currently-selected location.
-function updateCostCenter(id, clientId, { countryId, stateId, municipalityId, localityId, streetId, sucursal, name, description, responsible, siteCode }, forTestAccount = false) {
-    const client = getClientById(clientId);
-    const baseCode = buildCostCenterCodeBase(client, countryId, stateId, municipalityId, localityId, streetId, sucursal);
-    const code = generateUniqueCostCenterCode(clientId, baseCode, id);
+// Lo que se edita de un centro es lo suyo: nombre, responsable y descripción. Su sitio y su abreviatura (que arma su código) se quedan como se guardaron; solo un centro que todavía no los tiene (los de antes de este cambio) los puede poner, una vez. El código nunca se vuelve a armar:
+// antes se recalculaba con la ubicación, ahora la ubicación es del sitio.
+function updateCostCenter(id, clientId, { name, description, responsible, abbreviation, siteCode }, forTestAccount = false) {
+    const existing = getCostCenterById(id, clientId, forTestAccount);
+    if (!existing) return null;
+    const next = {
+        abbreviation: existing.abbreviation || abbreviation || '',
+        siteCode: existing.site_code, countryId: existing.country_id, stateId: existing.state_id, municipalityId: existing.municipality_id,
+        localityId: existing.locality_id, streetId: existing.street_id, sucursal: existing.sucursal || '',
+    };
+    if (!existing.site_code && siteCode) {
+        const site = getSiteByCode(clientId, forTestAccount, siteCode);
+        if (site) Object.assign(next, { siteCode: site.code, countryId: site.country_id, stateId: site.state_id, municipalityId: site.municipality_id, localityId: site.locality_id, streetId: site.street_id, sucursal: site.sucursal || '' });
+    }
     db.prepare(`
         UPDATE cost_centers
-        SET code = @code, name = @name, description = @description, responsible = @responsible,
-            country_id = @countryId, state_id = @stateId, municipality_id = @municipalityId,
-            locality_id = @localityId, street_id = @streetId, sucursal = @sucursal, site_code = @siteCode
+        SET name = @name, description = @description, responsible = @responsible, abbreviation = @abbreviation, site_code = @siteCode,
+            country_id = @countryId, state_id = @stateId, municipality_id = @municipalityId, locality_id = @localityId, street_id = @streetId, sucursal = @sucursal
         WHERE id = @id AND client_id = @clientId
-    `).run({
-        id, clientId, code, name, description: description || '', responsible: responsible || '',
-        countryId, stateId, municipalityId: municipalityId || null, localityId, streetId, sucursal: sucursal || '', siteCode: siteCode || '',
-    });
+    `).run({ id, clientId, name, description: description || '', responsible: responsible || '', ...next });
     return getCostCenterById(id, clientId, forTestAccount);
 }
 
 // Apodo -- separate from updateCostCenter on purpose: it never touches
-// code/record_code (see buildCostCenterCodeBase's own note), so it doesn't
-// need a geo cascade re-validated or a new código computed, unlike every
-// other editable field on this table. Free to change as many times as the
+// code/record_code, so it doesn't need a new código computed. Free to change as many times as the
 // client wants.
 function updateCostCenterNickname(id, clientId, nickname, forTestAccount = false) {
     db.prepare('UPDATE cost_centers SET nickname = ? WHERE id = ? AND client_id = ?').run((nickname || '').trim(), id, clientId);
@@ -8951,28 +9034,6 @@ function computeCostCenterRecordCode(clientId, code, accountNumber) {
     return `${companyCode}${code}${COST_CENTER_RECORD_SCREEN_CODE}${padAccountNumber(accountNumber)}`;
 }
 
-// A Centro de Costos' own código -- Empresa + País + Estado + Municipio +
-// Localidad + Calle + Sucursal, one letter each (see the cascading picker in
-// Business-CentrosCosto.js). Unlike record_code above, this one is allowed
-// to change on edit, since it exists to describe the currently-selected
-// location, not to act as a permanent accounting reference. A cost center
-// created before Municipio existed simply has no municipalityId -- its
-// letter falls back to 'X' like any other unset level, same as this always
-// worked for a level with nothing selected.
-function costCenterCodeLetter(word) {
-    return (stripAccents(word || '').trim().charAt(0) || 'X').toUpperCase();
-}
-function buildCostCenterCodeBase(client, countryId, stateId, municipalityId, localityId, streetId, sucursal) {
-    const country = countryId ? db.prepare('SELECT name FROM geo_countries WHERE id = ?').get(countryId) : null;
-    const state = stateId ? db.prepare('SELECT name FROM geo_states WHERE id = ?').get(stateId) : null;
-    const municipality = municipalityId ? db.prepare('SELECT name FROM geo_municipalities WHERE id = ?').get(municipalityId) : null;
-    const locality = localityId ? db.prepare('SELECT name FROM geo_localities WHERE id = ?').get(localityId) : null;
-    const street = streetId ? db.prepare('SELECT name FROM geo_streets WHERE id = ?').get(streetId) : null;
-    return [
-        client?.company_abbreviation || client?.company_name,
-        country?.name, state?.name, municipality?.name, locality?.name, street?.name, sucursal,
-    ].map(costCenterCodeLetter).join('');
-}
 // Two different real places can share the same 6 first letters (two states
 // both starting with "J", say) -- rather than reject the second one, append
 // "-2", "-3"... until it's unique for this client. excludeId lets an edit
@@ -21541,6 +21602,7 @@ backfillFixedAssetHistoryOnce();
 moveScreensToGestionOnce();
 // todo o nada (una sola transacción): si algo falla se avisa, el servidor sigue arriba y se reintenta en el siguiente arranque
 try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos desde TI: no se pudieron mover los permisos de las pantallas (se reintentará al arrancar):', err.message); }
+try { seedSitesFromCostCentersOnce(); } catch (err) { console.error('[db] Sitios propios: no se pudo crear desde los centros (se reintentará al arrancar):', err.message); }
 try { seedTiMinimumOnce(); } catch (err) { console.error('[db] TI por defecto: no se pudo abrir el mínimo (se reintentará al arrancar):', err.message); }
 try { moveTiAdminGroupToConfigAreaOnce(); } catch (err) { console.error('[db] TI › Configuración Compañía: no se pudo pasar el grupo anterior (se reintentará al arrancar):', err.message); }
 seedQrSeguridadScreenGrants();
@@ -21936,8 +21998,16 @@ module.exports = {
     listCostCenters,
     countCostCenters,
     countSites,
-    findSiteInOtherPlace,
-    wouldExceedSitesLimit,
+    listSites,
+    geoNamesOf,
+    getSiteById,
+    getSiteByCode,
+    isAtSitesLimit,
+    createSite,
+    updateSite,
+    setSiteStatus,
+    countActiveCentersOfSite,
+    abbreviationTakenInSite,
     getCostCenterById,
     getCostCenterAnyLane,
     createCostCenter,

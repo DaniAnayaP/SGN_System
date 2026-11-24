@@ -229,7 +229,10 @@
                   "submenu": [
                     { "id": "colSitCodigo", "labelKey": "main.colSitCodigo", "permissionOnly": true },
                     { "id": "colSitSucursal", "labelKey": "main.colSitSucursal", "permissionOnly": true },
-                    { "id": "colSitUbicacion", "labelKey": "main.colSitUbicacion", "permissionOnly": true },
+                    { "id": "colSitEstado", "labelKey": "main.colSitEstado", "permissionOnly": true },
+                    { "id": "colSitMunicipio", "labelKey": "main.colSitMunicipio", "permissionOnly": true },
+                    { "id": "colSitLocalidad", "labelKey": "main.colSitLocalidad", "permissionOnly": true },
+                    { "id": "colSitCalle", "labelKey": "main.colSitCalle", "permissionOnly": true },
                     { "id": "colSitCentros", "labelKey": "main.colSitCentros", "permissionOnly": true },
                     { "id": "colSitNumCentros", "labelKey": "main.colSitNumCentros", "permissionOnly": true },
                     { "id": "colSitEstatus", "labelKey": "main.colSitEstatus", "permissionOnly": true }
