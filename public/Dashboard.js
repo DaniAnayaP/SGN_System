@@ -14795,6 +14795,8 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-centro-dist-edicion-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo' },
     // Admin > Mapa de calor: el Layout pintado con la temperatura o la humedad de los sensores, por hora.
     'cat-admin-mapa-calor': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-admin/cat-admin-mapa-calor' },
+    // Admin > Consumos: los registros de consumos por unidad, artículo y mes (la pantalla está vacía por ahora).
+    'cat-admin-consumos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-admin/cat-admin-consumos' },
     'cat-admin-ti-mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
     'cat-operaciones-ti-casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     'cat-operaciones-ti-habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },

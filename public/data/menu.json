@@ -3125,6 +3125,9 @@
             { "id": "iconMapaCalorCalcular", "labelKey": "main.mapaCalorCalcularBtn", "permissionOnly": true },
             { "id": "iconMapaCalorValor", "labelKey": "main.mapaCalorValorBtn", "permissionOnly": true }
           ]
+        },
+        {
+          "id": "cat-admin-consumos", "labelKey": "menu.adminConsumos", "icon": "bx-line-chart-down", "href": "AdminConsumos.html"
         }
       ]
     },
