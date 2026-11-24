@@ -81,6 +81,10 @@ const {
     listPosSales,
     findPosSale,
     insertPosSales,
+    getPosSaleById,
+    getPosSaleByToken,
+    listPosSaleLines,
+    posSaleLocalTime,
     getCostCenterById,
     getCostCenterAnyLane,
     createCostCenter,
@@ -7133,6 +7137,7 @@ app.patch('/api/business/cost-centers/:id/nickname', requireAuth, requireClientA
 const posSales = require('./posSales');
 const POS_SALES_SCREEN = { area: 'Punto Venta', modulo: 'Cadena de Suministro', pantalla: 'Ventas' };
 const POS_SALES_IMPORT_COL = 'colVenImportAuth';
+const POS_TICKET_COL = 'colVenTicketAuth';
 const posSalesRaw = express.raw({ type: () => true, limit: '5mb' });
 function mapPosSale(row, companyName, timeZone) {
     return {
@@ -7155,7 +7160,7 @@ app.get('/api/business/pos-sales', requireAuth, (req, res) => {
     const client = getClientById(req.user.clientId);
     const { rows, total } = listPosSales(req.user.clientId, req.user.isTestAccount);
     res.set('Cache-Control', 'no-store');
-    res.json({ sales: rows.map((r) => mapPosSale(r, client.company_name, client.time_zone)), total, truncated: total > rows.length, canImport: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_SALES_IMPORT_COL) });
+    res.json({ sales: rows.map((r) => mapPosSale(r, client.company_name, client.time_zone)), total, truncated: total > rows.length, canImport: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_SALES_IMPORT_COL), canTicket: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_TICKET_COL) });
 });
 app.get('/api/business/pos-sales/template', requireAuth, async (req, res) => {
     if (!posSalesImportGate(req, res)) return;
@@ -7212,6 +7217,67 @@ app.post('/api/business/pos-sales/import', requireAuth, posSalesRaw, async (req,
         notifyButtonAction(req, 'ventas', 'import', `${created} tickets`);
     }
     res.json({ mode: 'commit', summary: plan.summary, created });
+});
+
+// ---- Punto Venta › Ventas: ver e imprimir el ticket con su QR (Daniel, 2026-11-24) ----
+// El ticket se arma con lo que ya tiene el sistema: el logo y el nombre del negocio, su razón social y RFC (Datos de Cliente), la sucursal y el domicilio del SITIO del centro de costos, y la venta (renglones, subtotal, IVA, total, pago y cambio).
+// El QR lleva una dirección FIJA (/tk/<token>: 128 bits, no se adivina) que NO cambia nunca: lo impreso sigue sirviendo y lo que muestra esa página se lee en el momento (regla de los QR impresos). Lo que se escanea hoy es solo la página del ticket; la factura en línea
+// y la opinión llegan en las piezas siguientes, sobre esta misma dirección. El domicilio fiscal todavía no existe en Datos de Cliente, así que el ticket no lo trae.
+function posTicketGate(req, res) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return false; }
+    if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_TICKET_COL)) {
+        res.status(403).json({ code: 'POS_FORBIDDEN', message: 'No tienes permiso para ver los tickets.' });
+        return false;
+    }
+    return true;
+}
+const posPad2 = (n) => String(n).padStart(2, '0');
+function buildPosTicket(sale, req) {
+    const client = getClientById(sale.client_id);
+    const site = getSiteByCode(sale.client_id, !!sale.is_test_data, sale.site_code);
+    const names = site ? geoNamesOf(site) : {};
+    const brand = String((client && (client.company_nickname || client.company_name)) || '').trim();
+    const local = posSaleLocalTime(sale.sold_at, client && client.time_zone);
+    const lines = listPosSaleLines(sale.id).map((l) => ({ concept: l.concept, quantity: l.quantity, price: l.unit_price, taxRate: l.tax_rate, total: l.line_total }));
+    const rates = [...new Set(lines.map((l) => l.taxRate))];
+    const seen = new Set();
+    const place = [names.locality, names.municipality, names.state].filter((v) => { const k = String(v || '').trim().toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; }).join(', ');
+    const url = `${req.protocol}://${req.get('host')}/tk/${sale.public_token}`;
+    return {
+        id: sale.id, folio: sale.folio, code: sale.public_code, brand, branch: site && site.sucursal ? site.sucursal : '', legalName: (client && client.razon_social) || '', rfc: (client && client.rfc) || '',
+        addressLines: [names.street || '', place].filter(Boolean),
+        when: `${posPad2(local.d)}/${posPad2(local.m)}/${local.y} ${posPad2(local.h)}:${posPad2(local.mi)}`,
+        validUntil: `${posPad2(local.validUntil.d)}/${posPad2(local.validUntil.m)}/${local.validUntil.y}`,
+        servedBy: sale.served_by, place: sale.place, lines, items: sale.items, subtotal: sale.subtotal, tax: sale.tax, taxLabel: rates.length === 1 ? `${rates[0]}%` : '', total: sale.total,
+        payment: sale.payment_method, received: sale.received, change: sale.received != null && sale.received > sale.total ? posSales.r2(sale.received - sale.total) : null,
+        url, host: req.get('host'), qrRows: layoutQrRows(url), logoUrl: `/api/public/ticket/${sale.public_token}/logo`, hasLogo: !!clientLogoDataUrl(sale.client_id),
+    };
+}
+app.get('/api/business/pos-sales/:id/ticket', requireAuth, (req, res) => {
+    if (!posTicketGate(req, res)) return;
+    const sale = getPosSaleById(Number(req.params.id) || 0, req.user.clientId, req.user.isTestAccount);
+    if (!sale) return res.status(404).json({ code: 'SALE_NOT_FOUND', message: 'Ticket not found.' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ ticket: buildPosTicket(sale, req) });
+});
+// Lo que abre el QR del ticket (sin sesión). Se busca solo por el token aleatorio; un tope por IP frena a quien pruebe códigos. Hoy solo dice de quién es el ticket (nada de importes ni datos de la venta).
+const publicTicketLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false, message: { message: 'Too many requests.' } });
+app.get('/tk/:token', publicTicketLimiter, (req, res) => {
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' });
+    res.sendFile(path.join(PUBLIC_DIR, 'TicketPublico.html'));
+});
+app.get('/api/public/ticket/:token', publicTicketLimiter, (req, res) => {
+    const sale = getPosSaleByToken(req.params.token);
+    if (!sale) return res.status(404).json({ message: 'Ticket not found.' });
+    const client = getClientById(sale.client_id);
+    const site = getSiteByCode(sale.client_id, !!sale.is_test_data, sale.site_code);
+    res.set({ 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' });
+    res.json({ brand: String((client && (client.company_nickname || client.company_name)) || '').trim(), branch: site && site.sucursal ? site.sucursal : '', folio: sale.folio, code: sale.public_code, hasLogo: !!clientLogoDataUrl(sale.client_id) });
+});
+app.get('/api/public/ticket/:token/logo', publicTicketLimiter, (req, res) => {
+    const sale = getPosSaleByToken(req.params.token);
+    if (!sale) return res.status(404).end();
+    sendClientLogo(res, sale.client_id);
 });
 
 // --- Geo catalog (País/Estado/Localidad/Calle behind a Centro de Costos'

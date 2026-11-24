@@ -20,6 +20,7 @@ const qty = (n) => Number(n || 0).toLocaleString(lang() === 'en' ? 'en-US' : 'es
 
 let sales = [];
 let canImport = false;
+let canTicket = false;
 let loaded = false;
 
 (async function init() {
@@ -74,6 +75,18 @@ function buildRow(sale) {
     history.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
     history.addEventListener('click', () => Dashboard.openChangeHistory(TABLE_KEY, sale.id));
     actions.appendChild(history);
+    // «Ver ticket» (ver e imprimir el ticket con su QR): solo con su botón del árbol (el servidor también lo exige)
+    if (canTicket) {
+        const view = document.createElement('button');
+        view.type = 'button';
+        view.className = 'admin-icon-btn';
+        view.setAttribute('data-help-key', 'venTicketView');
+        view.setAttribute('aria-label', t('main.venTicketView'));
+        view.title = t('main.venTicketView');
+        view.innerHTML = '<i class="bx bx-receipt" aria-hidden="true"></i>';
+        view.addEventListener('click', () => openTicket(sale));
+        actions.appendChild(view);
+    }
     const num = (col, value) => cell(col, money(value), 'col-num');
     tr.append(
         ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, sale[key], 'col-system')),
@@ -124,6 +137,7 @@ async function refreshTable() {
         const body = await res.json();
         sales = body.sales || [];
         canImport = !!body.canImport;
+        canTicket = !!body.canTicket;
         loaded = true;
         renderButtons();
         redraw();
@@ -159,6 +173,38 @@ async function downloadTemplate() {
         console.error('Ventas: la plantilla no se pudo bajar', err);
         Dashboard.showToast(t('main.venTplError'), 'error');
     }
+}
+
+// ---- ventana «Ver ticket»: el ticket con su QR y el botón de imprimir ------------------------------------------------------------------------------
+async function openTicket(sale) {
+    let ticket;
+    try {
+        const res = await fetch(`${API}/${sale.id}/ticket`, { credentials: 'include' });
+        if (!res.ok) throw new Error('ticket failed');
+        ticket = (await res.json()).ticket;
+    } catch (err) {
+        console.error('Ventas: el ticket no se pudo abrir', err);
+        Dashboard.showToast(t('main.venTicketError'), 'error');
+        return;
+    }
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal tk-modal" role="dialog" aria-modal="true" aria-labelledby="ven-t-title" aria-label="${esc(t('main.venTicketTitle', { folio: ticket.folio }))}">
+        <h3 id="ven-t-title">${esc(t('main.venTicketTitle', { folio: ticket.folio }))}</h3>
+        <div class="tk-stage" data-help-key="venTicketQr">${PosTicket.html(ticket)}</div>
+        <div class="admin-form-actions"><button type="button" class="btn" data-ven-t="print" data-help-key="venTicketPrint"><i class="bx bx-printer" aria-hidden="true"></i> ${esc(t('main.venTicketPrint'))}</button><button type="button" class="btn btn-secondary" data-ven-t="close">${esc(t('main.venTicketClose'))}</button></div></div>`;
+    document.body.appendChild(overlay);
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) close(); });
+    overlay.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-ven-t]');
+        if (!btn) return;
+        if (btn.dataset.venT === 'close') close(); else PosTicket.print(ticket);
+    });
+    const printBtn = overlay.querySelector('[data-ven-t="print"]');
+    if (printBtn) printBtn.focus();
 }
 
 // ---- ventana «Cargar ventas» ------------------------------------------------------------------------------------------------------------------------

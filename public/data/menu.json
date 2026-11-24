@@ -604,7 +604,8 @@
             {
               "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
               "submenu": [
-                { "id": "colVenImportAuth", "labelKey": "main.colVenImportAuth", "permissionOnly": true }
+                { "id": "colVenImportAuth", "labelKey": "main.colVenImportAuth", "permissionOnly": true },
+                { "id": "colVenTicketAuth", "labelKey": "main.colVenTicketAuth", "permissionOnly": true }
               ]
             }
           ],

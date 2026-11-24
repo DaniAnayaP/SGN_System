@@ -5259,6 +5259,12 @@
     "venCol_concept": "Item",
     "venCol_quantity": "Quantity",
     "venCol_price": "Unit price",
+    "colVenTicketAuth": "View receipt",
+    "venTicketView": "View receipt",
+    "venTicketTitle": "Receipt {folio}",
+    "venTicketPrint": "Print",
+    "venTicketClose": "Close",
+    "venTicketError": "The receipt could not be opened.",
     "venImport": "Load sales",
     "venTemplate": "Download template",
     "venLoadError": "The sales could not be read.",
@@ -9268,6 +9274,18 @@
     "sitLimits": {
       "what": "What you already use of what you hired: sites (physical places) and cost centers. A site can have several centers; adding another center to a site you already have does not use up a site. To create a site use «+ New site»; for a new center in a site you already have, go to Our Cost Centers; to hire more, contact GEIPSA.",
       "example": "«Sites 2 of 3» and «Cost centers 5 of 8»: you have 1 site and 3 centers left to use."
+    },
+    "venTicketView": {
+      "what": "Opens the receipt of this sale, with the design of the register receipt: your brand, the branch data, the items, the subtotal, the VAT and the total, the payment and the change, and at the end the QR with its code. You print it from there.",
+      "example": "Receipt 000482 of Table 12: 5 items, total 595.00 and its QR."
+    },
+    "venTicketPrint": {
+      "what": "Prints only the receipt, on 80 mm thermal paper (if your printer has another width, choose it in the print window). You can also save it as a PDF from that same window.",
+      "example": "You print receipt 000482 on the register printer."
+    },
+    "venTicketQr": {
+      "what": "The QR and the code below belong to this receipt and NEVER change: what you print today will keep working when you add online invoicing and feedback. Today the QR opens the receipt page; the QR only works if you print it from your production system, not from a local test.",
+      "example": "The customer scans the QR of receipt 000482 and lands on its page; the printed code (CHR-000482-K7Q2) is the same receipt to type by hand."
     },
     "venImport": {
       "what": "Loads sales from an Excel file (or from pasted cells). Each row of the file is one item sold and the rows with the same receipt number (inside the same site) make up one receipt. Before loading anything the system checks the file and tells you what is fine, what is skipped and what fails, and why. Only complete, correct receipts are loaded.",

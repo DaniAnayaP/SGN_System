@@ -5258,6 +5258,12 @@
     "venCol_concept": "Concepto",
     "venCol_quantity": "Cantidad",
     "venCol_price": "Precio unitario",
+    "colVenTicketAuth": "Ver ticket",
+    "venTicketView": "Ver ticket",
+    "venTicketTitle": "Ticket {folio}",
+    "venTicketPrint": "Imprimir",
+    "venTicketClose": "Cerrar",
+    "venTicketError": "No se pudo abrir el ticket.",
     "venImport": "Cargar ventas",
     "venTemplate": "Descargar plantilla",
     "venLoadError": "No se pudieron leer las ventas.",
@@ -9267,6 +9273,18 @@
     "sitLimits": {
       "what": "Lo que ya usas de lo que contrataste: los sitios (lugares físicos) y los centros de costos. Un sitio puede tener varios centros; meter otro centro en un sitio que ya tienes no gasta un sitio. Para crear un sitio usa «+ Nuevo sitio»; para un centro nuevo en un sitio que ya tienes, ve a Nuestros Centros Costos; para contratar más, a GEIPSA.",
       "example": "«Sitios 2 de 3» y «Centros de costos 5 de 8»: te falta 1 sitio y 3 centros por usar."
+    },
+    "venTicketView": {
+      "what": "Abre el ticket de esta venta, con el diseño del ticket de caja: tu marca, los datos de la sucursal, los conceptos, el subtotal, el IVA y el total, el pago y el cambio, y al final el QR con su código. Desde ahí lo imprimes.",
+      "example": "El ticket 000482 de la Mesa 12: 5 artículos, total 595.00 y su QR."
+    },
+    "venTicketPrint": {
+      "what": "Imprime solo el ticket, en papel térmico de 80 mm (si tu impresora es de otro ancho, elígelo en la ventana de impresión). También puedes guardarlo como PDF desde esa misma ventana.",
+      "example": "Imprimes el ticket 000482 en la impresora de la caja."
+    },
+    "venTicketQr": {
+      "what": "El QR y el código de abajo son de este ticket y NO cambian nunca: lo que se imprima hoy seguirá sirviendo cuando agregues la factura en línea y la opinión. Hoy el QR abre la página del ticket; el QR solo funciona si lo imprimes desde tu sistema en producción, no desde una prueba local.",
+      "example": "El cliente escanea el QR del ticket 000482 y entra a su página; el código impreso (CHR-000482-K7Q2) es el mismo ticket para escribirlo a mano."
     },
     "venImport": {
       "what": "Carga ventas desde un Excel (o desde celdas pegadas). Cada renglón del archivo es un artículo vendido y los renglones con el mismo folio (dentro del mismo sitio) forman un ticket. Antes de cargar nada el sistema revisa el archivo y te dice qué está bien, qué se salta y qué falla, y por qué. Se cargan solo los tickets completos y correctos.",

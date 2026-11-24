@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="referrer" content="no-referrer">
+    <title>Tu ticket</title>
+    <link rel="icon" href="/icons/icon-512.png">
+    <style>
+        :root{ --bg:#f6eef8; --surface:#ffffff; --ink:#2a1b30; --muted:#7a6a80; --line:#e4d2e9; --accent:#7d3f8f; --shadow:0 10px 26px rgba(60,20,70,.14); }
+        @media (prefers-color-scheme: dark){ :root{ --bg:#1d1422; --surface:#2a1d31; --ink:#f3e8f6; --muted:#b9a5c0; --line:#493556; --accent:#d3a2e6; --shadow:0 10px 26px rgba(0,0,0,.5); } }
+        *{ box-sizing:border-box; }
+        html,body{ margin:0; min-height:100%; }
+        body{ background:var(--bg); color:var(--ink); font:400 15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:18px 14px 36px; display:flex; justify-content:center; }
+        main{ width:100%; max-width:440px; }
+        .card{ background:var(--surface); border:1px solid var(--line); border-radius:22px; box-shadow:var(--shadow); padding:22px 18px 24px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; }
+        .logo{ max-width:150px; max-height:90px; object-fit:contain; }
+        h1{ font-size:20px; margin:0; text-wrap:balance; }
+        .branch{ color:var(--muted); font-size:14px; margin:0; }
+        .folio{ font-weight:700; font-size:18px; letter-spacing:.03em; border:1px solid var(--line); border-radius:999px; padding:4px 16px; margin-top:6px; }
+        .msg{ margin:10px 0 0; color:var(--muted); font-size:14px; max-width:34ch; text-wrap:balance; }
+        .bad{ color:var(--ink); font-weight:600; }
+    </style>
+</head>
+<body>
+<main>
+    <section class="card" id="card" aria-live="polite"><p class="msg" id="loading">Cargando tu ticket…</p></section>
+</main>
+<script>
+(function () {
+    // La dirección es /tk/<token>: el token es lo único que se busca. Hoy esta página solo dice de quién es el ticket; la factura en línea y la opinión se agregarán aquí mismo sin cambiar la dirección del QR.
+    var token = decodeURIComponent((location.pathname.split('/')[2] || '')).trim();
+    var card = document.getElementById('card');
+    function esc(text) { return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+    function notFound() {
+        document.title = 'Ticket no encontrado';
+        card.innerHTML = '<h1>No encontramos este ticket</h1><p class="msg">Revisa que escaneaste el código completo del ticket. Si el problema sigue, pide ayuda en la sucursal.</p>';
+    }
+    if (!/^[a-f0-9]{32}$/.test(token)) { notFound(); return; }
+    fetch('/api/public/ticket/' + token, { cache: 'no-store' }).then(function (res) {
+        if (!res.ok) throw new Error('not found');
+        return res.json();
+    }).then(function (data) {
+        document.title = 'Ticket ' + data.folio + (data.brand ? ' · ' + data.brand : '');
+        card.innerHTML = (data.hasLogo ? '<img class="logo" src="/api/public/ticket/' + token + '/logo" alt="">' : '')
+            + '<h1>' + esc(data.brand) + '</h1>'
+            + (data.branch ? '<p class="branch">' + esc(data.branch) + '</p>' : '')
+            + '<div class="folio">Ticket ' + esc(data.folio) + '</div>'
+            + '<p class="msg">Aquí podrás facturar este consumo y darnos tu opinión. Estamos terminando de prepararlo: tu código sigue siendo el mismo, vuelve a escanearlo más adelante.</p>';
+    }).catch(notFound);
+})();
+</script>
+</body>
+</html>

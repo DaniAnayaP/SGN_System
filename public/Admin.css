@@ -10266,3 +10266,38 @@ a.wp-team-tag:hover{ background: rgba(40, 170, 90, 0.28); }
 .vta-ticket-error td{ background: rgba(220, 70, 60, 0.1); }
 .vta-ticket-skip td{ background: rgba(230, 150, 40, 0.1); }
 td.col-num{ text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Punto Venta › Ventas: el ticket (papel térmico de 80 mm). Es un documento, no una pantalla: no cambia con el tema. */
+.tk-modal{ width: min(25rem, 96vw); max-width: 96vw; }
+.tk-stage{ display: flex; justify-content: center; padding: 0.8rem 0 1.2rem; background: color-mix(in srgb, var(--color-text-secondary) 10%, transparent); border-radius: 0.6rem; margin: 0.6rem 0 0.8rem; max-height: 70vh; overflow: auto; }
+.tk{ position: relative; width: 100%; max-width: 20rem; background: #fbfaf5; color: #1b1b1b; font-family: ui-monospace, "Cascadia Mono", "Courier New", monospace; font-size: 13px; line-height: 1.32; padding: 22px 18px 26px; box-shadow: 0 1px 2px rgba(0,0,0,.12), 0 8px 24px rgba(0,0,0,.14); text-transform: uppercase; }
+.tk-brand{ display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 10px; }
+.tk-logo{ max-width: 150px; max-height: 70px; object-fit: contain; filter: grayscale(1) contrast(1.4); }
+.tk-wordmark{ font-family: system-ui, "Arial Black", Arial, sans-serif; font-weight: 900; font-size: 22px; letter-spacing: .01em; line-height: 1.05; text-align: center; text-wrap: balance; }
+.tk-head{ text-align: center; margin-bottom: 8px; }
+.tk-m span{ color: #4a4a4a; }
+.tk-no{ text-align: right; margin-top: 4px; font-size: 14px; }
+.tk-sep{ height: 15px; margin: 4px 0; overflow: hidden; white-space: nowrap; color: #4a4a4a; }
+.tk-sep::before{ content: "=========================================="; }
+.tk-row{ display: grid; grid-template-columns: minmax(0, 1fr) auto auto; column-gap: 8px; align-items: baseline; }
+.tk-n{ min-width: 6.2ch; text-align: right; font-variant-numeric: tabular-nums; }
+.tk-qty{ color: #4a4a4a; font-size: 11px; padding-left: 2ch; }
+.tk-tot{ padding-left: 34%; }
+.tk-big{ font-size: 15px; margin-top: 4px; }
+.tk-pieces{ text-align: right; margin-top: 4px; color: #4a4a4a; }
+.tk-cta{ display: flex; flex-direction: column; gap: 1px; text-align: center; }
+.tk-cta b{ font-size: 15px; letter-spacing: .02em; }
+.tk-qrbox{ display: flex; justify-content: center; margin: 10px 0 6px; }
+.tk-qr{ width: 132px; height: 132px; display: block; }
+.tk-code, .tk-until{ text-align: center; font-size: 12px; }
+.tk-until{ color: #4a4a4a; }
+.tk-foot{ text-align: center; margin-top: 10px; text-transform: none; font-size: 12px; }
+.tk-ver{ color: #4a4a4a; }
+.tk-print-root{ display: none; }
+@media print{
+    body.tk-printing > *:not(.tk-print-root){ display: none !important; }
+    body.tk-printing .tk-print-root{ display: block !important; background: #fff; }
+    body.tk-printing{ background: #fff !important; margin: 0 !important; padding: 0 !important; }
+    .tk-print-root .tk{ width: 72mm; max-width: none; margin: 0 auto; box-shadow: none; padding: 4mm 3mm 6mm; font-size: 9.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .tk-print-root .tk-qr{ width: 34mm; height: 34mm; }
+}

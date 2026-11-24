@@ -1085,6 +1085,14 @@ db.exec(`
     );
     CREATE INDEX IF NOT EXISTS idx_pos_sale_lines_sale ON pos_sale_lines(sale_id);
 `);
+// El QR del ticket lleva una dirección FIJA (/t/<public_token>, 128 bits, no se puede adivinar) que no cambia nunca aunque cambie lo que muestre la página; public_code es el código corto que va impreso bajo el QR (para escribirlo a mano) y
+// no se repite en todo el sistema. Los tickets que se cargaron antes de que existieran se rellenan al arrancar (backfillPosSalePublic).
+if (!db.prepare('PRAGMA table_info(pos_sales)').all().some((c) => c.name === 'public_token')) {
+    db.exec('ALTER TABLE pos_sales ADD COLUMN public_token TEXT');
+    db.exec('ALTER TABLE pos_sales ADD COLUMN public_code TEXT');
+}
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_sales_token ON pos_sales(public_token) WHERE public_token IS NOT NULL');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_sales_code ON pos_sales(public_code) WHERE public_code IS NOT NULL');
 
 // Seed data for the geo catalog — a real, well-known list of países (not a
 // live internet fetch: no outbound access from this server has been set up,
@@ -4515,17 +4523,60 @@ function listPosSales(clientId, forTestAccount = false, limit = 3000) {
 function findPosSale(clientId, forTestAccount, siteCode, folio) {
     return db.prepare('SELECT id, created_at FROM pos_sales WHERE client_id = ? AND is_test_data = ? AND site_code = ? AND folio = ?').get(clientId, forTestAccount ? 1 : 0, siteCode, folio) || null;
 }
+// El token (para el QR) y el código corto (para escribirlo) de un ticket: «CHR-000482-K7Q2» = 3 letras de la compañía + el folio + 4 caracteres al azar sin letras que se confundan (sin I, L, O, 0, 1).
+const POS_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function newPosSalePublic(clientId, folio) {
+    const client = getClientById(clientId);
+    const company = stripAccents(client && (client.company_abbreviation || client.company_name) || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 3) || 'TKT';
+    const folioPart = stripAccents(folio || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 12) || '0';
+    let code = '';
+    for (let i = 0; i < 30; i += 1) {
+        const suffix = Array.from({ length: 4 }, () => POS_CODE_ALPHABET[crypto.randomInt(POS_CODE_ALPHABET.length)]).join('');
+        code = `${company}-${folioPart}-${suffix}`;
+        if (!db.prepare('SELECT 1 FROM pos_sales WHERE public_code = ?').get(code)) break;
+    }
+    return { token: crypto.randomBytes(16).toString('hex'), code };
+}
+function backfillPosSalePublic() {
+    const rows = db.prepare('SELECT id, client_id, folio FROM pos_sales WHERE public_token IS NULL OR public_code IS NULL').all();
+    if (!rows.length) return;
+    const update = db.prepare('UPDATE pos_sales SET public_token = ?, public_code = ? WHERE id = ?');
+    db.transaction(() => rows.forEach((r) => { const c = newPosSalePublic(r.client_id, r.folio); update.run(c.token, c.code, r.id); }))();
+    console.log(`[db] Ventas: ${rows.length} tickets recibieron su código y su dirección de QR (una vez).`);
+}
+function getPosSaleById(id, clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM pos_sales WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0) || null;
+}
+// Para la dirección fija del QR: se busca solo por el token (aleatorio) y nunca depende del carril ni de la sesión.
+function getPosSaleByToken(token) {
+    if (typeof token !== 'string' || !/^[a-f0-9]{32}$/.test(token)) return null;
+    return db.prepare('SELECT * FROM pos_sales WHERE public_token = ?').get(token) || null;
+}
+function listPosSaleLines(saleId) {
+    return db.prepare('SELECT line_no, concept, quantity, unit_price, tax_rate, line_total FROM pos_sale_lines WHERE sale_id = ? ORDER BY line_no').all(saleId);
+}
+// La hora del ticket en la zona del cliente (es la hora del lugar de la venta) y el último día del mes de la venta (hasta cuándo se puede facturar).
+function posSaleLocalTime(soldAtUtc, timeZone) {
+    const utc = new Date(`${String(soldAtUtc).replace(' ', 'T')}Z`);
+    const zone = timeZone && isValidTimeZone(timeZone) ? timeZone : DEFAULT_CLIENT_TIME_ZONE;
+    const d = wallClockInZone(utc, zone);
+    const y = d.getUTCFullYear(); const m = d.getUTCMonth() + 1;
+    return { y, m, d: d.getUTCDate(), h: d.getUTCHours(), mi: d.getUTCMinutes(), validUntil: { y, m, d: new Date(Date.UTC(y, m, 0)).getUTCDate() } };
+}
+
 // Carga los tickets ya revisados (un ticket entero o ninguno; todos en una sola transacción). Cada ticket deja su renglón «alta» en el historial, con el archivo de donde salió.
 function insertPosSales({ clientId, isTestData = false, tickets, loadedBy, loadedByUserId, sourceFile }) {
     const insertSale = db.prepare(`
-        INSERT INTO pos_sales (client_id, is_test_data, site_code, folio, cost_center_id, sold_at, served_by, place, payment_method, received, subtotal, tax, total, items, lines_count, source_file, loaded_by, loaded_by_user_id)
-        VALUES (@clientId, @isTestData, @siteCode, @folio, @centerId, @soldAt, @servedBy, @place, @payment, @received, @subtotal, @tax, @total, @items, @linesCount, @sourceFile, @loadedBy, @loadedByUserId)
+        INSERT INTO pos_sales (client_id, is_test_data, site_code, folio, cost_center_id, sold_at, served_by, place, payment_method, received, subtotal, tax, total, items, lines_count, source_file, loaded_by, loaded_by_user_id, public_token, public_code)
+        VALUES (@clientId, @isTestData, @siteCode, @folio, @centerId, @soldAt, @servedBy, @place, @payment, @received, @subtotal, @tax, @total, @items, @linesCount, @sourceFile, @loadedBy, @loadedByUserId, @publicToken, @publicCode)
     `);
     const insertLine = db.prepare('INSERT INTO pos_sale_lines (sale_id, line_no, concept, quantity, unit_price, tax_rate, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)');
     const ids = [];
     db.transaction(() => {
         tickets.forEach((tk) => {
+            const pub = newPosSalePublic(clientId, tk.folio);
             const result = insertSale.run({
+                publicToken: pub.token, publicCode: pub.code,
                 clientId, isTestData: isTestData ? 1 : 0, siteCode: tk.siteCode, folio: tk.folio, centerId: tk.centerId, soldAt: tk.soldAt, servedBy: tk.servedBy || '', place: tk.place || '', payment: tk.payment || '',
                 received: tk.received === null || tk.received === undefined ? null : tk.received, subtotal: tk.subtotal, tax: tk.tax, total: tk.total, items: tk.items, linesCount: tk.lines.length,
                 sourceFile: sourceFile || '', loadedBy: loadedBy || '', loadedByUserId: loadedByUserId || null,
@@ -4540,6 +4591,13 @@ function insertPosSales({ clientId, isTestData = false, tickets, loadedBy, loade
 
 // El botón «Cargar ventas» es nuevo: quien ya tiene la pantalla Ventas lo recibe en lo contratado (planes, adicionales y giros), con «Solo ver» + «Ver y operar»; quien lo use en su puesto o usuario lo decide el administrador desde el árbol.
 const POS_SALES_BUTTON_SEED_KEY = 'seed-pv-ventas-cargar-v1';
+// El botón «Ver ticket» (ver e imprimir el ticket con su QR) también es nuevo: mismo trato que «Cargar ventas».
+const POS_SALES_TICKET_SEED_KEY = 'seed-pv-ventas-ticket-v1';
+function seedPosSalesTicketButton() {
+    const path = TABLE_GRANT_PATHS.ventas;
+    if (!path) return;
+    seedLeavesForScreenHolders(POS_SALES_TICKET_SEED_KEY, path, ['solo-ver', 'ver-y-operar'].map((level) => `${path.submenuPrefix}/class-botones/colVenTicketAuth/${level}`), 'the Ventas view-ticket button', { contractOnly: true });
+}
 function seedPosSalesImportButton() {
     const path = TABLE_GRANT_PATHS.ventas;
     if (!path) return;
@@ -21705,6 +21763,8 @@ backfillFixedAssetHistoryOnce();
 moveScreensToGestionOnce();
 // todo o nada (una sola transacción): si algo falla se avisa, el servidor sigue arriba y se reintenta en el siguiente arranque
 try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos desde TI: no se pudieron mover los permisos de las pantallas (se reintentará al arrancar):', err.message); }
+try { backfillPosSalePublic(); } catch (err) { console.error('[db] Ventas: no se pudo rellenar el código de los tickets (se reintentará al arrancar):', err.message); }
+try { seedPosSalesTicketButton(); } catch (err) { console.error('[db] Ventas: no se pudo sembrar el botón Ver ticket (se reintentará al arrancar):', err.message); }
 try { seedPosSalesImportButton(); } catch (err) { console.error('[db] Ventas: no se pudo sembrar el botón Cargar ventas (se reintentará al arrancar):', err.message); }
 try { seedSitesFromCostCentersOnce(); } catch (err) { console.error('[db] Sitios propios: no se pudo crear desde los centros (se reintentará al arrancar):', err.message); }
 try { seedTiMinimumOnce(); } catch (err) { console.error('[db] TI por defecto: no se pudo abrir el mínimo (se reintentará al arrancar):', err.message); }
@@ -22116,6 +22176,10 @@ module.exports = {
     listPosSales,
     findPosSale,
     insertPosSales,
+    getPosSaleById,
+    getPosSaleByToken,
+    listPosSaleLines,
+    posSaleLocalTime,
     getCostCenterById,
     getCostCenterAnyLane,
     createCostCenter,
