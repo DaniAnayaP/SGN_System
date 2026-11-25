@@ -4622,6 +4622,33 @@ function seedPuntoVentaForDistributionHolders() {
     })();
     console.log(`[db] Punto Venta › Ventas para quien ya tiene Centro de Distribución (una vez): ${JSON.stringify(counts)}.`);
 }
+// Admin › Consumos para quien ya tiene Centro de Distribución (Daniel, 2026-11-24: «Sí, asígnale también Consumos»). Misma razón y mismo trato que Ventas (arriba): la pantalla vive en el área Centro de Distribución, pero un contrato armado con
+// pantallas sueltas no la incluye; solo la tienen los planes y adicionales que cubren toda el área. Una sola vez, a cada dueño de lo contratado que ya tiene algo de Centro de Distribución y no cubre toda el área (ni todo el departamento) se le agrega esa
+// pantalla. Solo lo contratado (nada a usuarios ni puestos); solo agrega, y repetirlo no cambia nada.
+const CONSUMOS_FOR_DISTRIBUTION_SEED_KEY = 'seed-consumos-para-distribucion-v1';
+function seedConsumosForDistributionHolders() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(CONSUMOS_FOR_DISTRIBUTION_SEED_KEY)) return;
+    const SECTION = 'supply-chain';
+    const AREA = 'sc-area-distribution-center';
+    const SCREEN = 'cat-admin/cat-admin-consumos';
+    const counts = {};
+    db.transaction(() => {
+        for (const [table, ownerColumn] of [['plan_grants', 'plan_id'], ['client_permission_grants', 'client_id'], ['sector_grants', 'business_sector_id']]) {
+            const owners = db.prepare(`SELECT DISTINCT ${ownerColumn} AS ownerId FROM ${table} WHERE section_id = ? AND item_id = ?`).all(SECTION, AREA);
+            const covered = db.prepare(`SELECT 1 FROM ${table} WHERE ${ownerColumn} = ? AND section_id = ? AND ((item_id = ? AND submenu_id IS NULL) OR (item_id IS NULL AND submenu_id IS NULL))`);
+            const has = db.prepare(`SELECT 1 FROM ${table} WHERE ${ownerColumn} = ? AND section_id = ? AND item_id = ? AND submenu_id = ?`);
+            const insert = db.prepare(`INSERT INTO ${table} (${ownerColumn}, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)`);
+            let inserted = 0;
+            owners.forEach(({ ownerId }) => {
+                if (covered.get(ownerId, SECTION, AREA)) return;
+                if (!has.get(ownerId, SECTION, AREA, SCREEN)) { insert.run(ownerId, SECTION, AREA, SCREEN); inserted += 1; }
+            });
+            counts[table] = inserted;
+        }
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(CONSUMOS_FOR_DISTRIBUTION_SEED_KEY);
+    })();
+    console.log(`[db] Admin › Consumos para quien ya tiene Centro de Distribución (una vez): ${JSON.stringify(counts)}.`);
+}
 // El botón «Ver ticket» (ver e imprimir el ticket con su QR) también es nuevo: mismo trato que «Cargar ventas».
 const POS_SALES_TICKET_SEED_KEY = 'seed-pv-ventas-ticket-v1';
 function seedPosSalesTicketButton() {
@@ -21794,6 +21821,7 @@ backfillFixedAssetHistoryOnce();
 moveScreensToGestionOnce();
 // todo o nada (una sola transacción): si algo falla se avisa, el servidor sigue arriba y se reintenta en el siguiente arranque
 try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos desde TI: no se pudieron mover los permisos de las pantallas (se reintentará al arrancar):', err.message); }
+try { seedConsumosForDistributionHolders(); } catch (err) { console.error('[db] Consumos: no se pudo asignar a quien tiene Centro de Distribución (se reintentará al arrancar):', err.message); }
 try { seedPuntoVentaForDistributionHolders(); } catch (err) { console.error('[db] Punto Venta: no se pudo asignar Ventas a quien tiene Centro de Distribución (se reintentará al arrancar):', err.message); }
 try { backfillPosSalePublic(); } catch (err) { console.error('[db] Ventas: no se pudo rellenar el código de los tickets (se reintentará al arrancar):', err.message); }
 try { seedPosSalesTicketButton(); } catch (err) { console.error('[db] Ventas: no se pudo sembrar el botón Ver ticket (se reintentará al arrancar):', err.message); }
