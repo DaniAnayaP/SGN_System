@@ -4748,6 +4748,46 @@ function moveVentasToCargasManualesOnce() {
     })();
     console.log(`[db] Ventas Manuales (una vez): Ventas pasó de Punto Venta a Cargas Manuales de Centro de Distribución y Consumos se quitó: ${JSON.stringify(stats)}.`);
 }
+// Ventas Manuales como ADICIONAL (Daniel, 2026-11-25, opción B del verde en «+ Permisos Adicionales»): cuando la pantalla se dio «a todos los clientes con Centro de Distribución» se escribió dentro de los PLANES (y de los giros), así que cada cliente la veía
+// como «Incluido en el plan» (verde) y sin costo aparte. Daniel la quiere como lo que se vende aparte (amarillo, con precio). Una sola vez: cada cliente cuyo plan traía la pantalla (con sus botones, columnas e iconos) la conserva como adicional propio,
+// y se quita de los planes y de los giros. Lo de las personas (usuarios, puestos, perfiles) no se toca. Un plan que cubre toda el área (o todo el departamento) la sigue dando completa: ahí no hay nada que mover. No pierde acceso nadie.
+const VENTAS_ADICIONAL_KEY = 'seed-ventas-manuales-adicional-v1';
+function moveVentasManualesToAdditionalOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(VENTAS_ADICIONAL_KEY)) return;
+    const SECTION = 'supply-chain';
+    const ITEM = 'sc-area-distribution-center';
+    const PREFIX = TABLE_GRANT_PATHS.ventas.submenuPrefix;
+    const UNDER = `${PREFIX}/`;
+    const where = 'section_id = ? AND item_id = ? AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?)';
+    const args = [SECTION, ITEM, PREFIX, UNDER.length, UNDER];
+    const stats = { planes: 0, clientes: 0, filasCliente: 0, filasPlan: 0, filasGiro: 0 };
+    db.transaction(() => {
+        const plans = db.prepare(`SELECT DISTINCT plan_id AS id FROM plan_grants WHERE ${where}`).all(...args);
+        const planRows = db.prepare(`SELECT submenu_id FROM plan_grants WHERE plan_id = ? AND ${where}`);
+        const planName = db.prepare('SELECT name FROM plans WHERE id = ?');
+        const clientsOf = db.prepare('SELECT id FROM clients WHERE plan = ?');
+        const planBroad = db.prepare('SELECT 1 FROM plan_grants WHERE plan_id = ? AND section_id = ? AND ((item_id = ? AND submenu_id IS NULL) OR (item_id IS NULL AND submenu_id IS NULL))');
+        const clientBroad = db.prepare('SELECT 1 FROM client_permission_grants WHERE client_id = ? AND section_id = ? AND ((item_id = ? AND submenu_id IS NULL) OR (item_id IS NULL AND submenu_id IS NULL))');
+        const clientHas = db.prepare('SELECT 1 FROM client_permission_grants WHERE client_id = ? AND section_id = ? AND item_id = ? AND submenu_id = ?');
+        const insertClient = db.prepare('INSERT INTO client_permission_grants (client_id, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)');
+        plans.forEach(({ id }) => {
+            stats.planes += 1;
+            const plan = planName.get(id);
+            if (!plan || planBroad.get(id, SECTION, ITEM)) return;
+            const rows = planRows.all(id, ...args).map((r) => r.submenu_id);
+            clientsOf.all(plan.name).forEach((c) => {
+                if (clientBroad.get(c.id, SECTION, ITEM)) return;
+                let added = 0;
+                rows.forEach((sub) => { if (!clientHas.get(c.id, SECTION, ITEM, sub)) { insertClient.run(c.id, SECTION, ITEM, sub); added += 1; } });
+                if (added) { stats.clientes += 1; stats.filasCliente += added; }
+            });
+        });
+        stats.filasPlan = db.prepare(`DELETE FROM plan_grants WHERE ${where}`).run(...args).changes;
+        stats.filasGiro = db.prepare(`DELETE FROM sector_grants WHERE ${where}`).run(...args).changes;
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(VENTAS_ADICIONAL_KEY);
+    })();
+    console.log(`[db] Ventas Manuales como adicional (una vez): ${JSON.stringify(stats)}.`);
+}
 // La franja de «última carga» de las pantallas de Cargas Manuales: cuándo se cargó lo último, quién y de qué archivo, y hasta qué día llegan los datos (la venta más reciente cargada).
 function getPosSalesLastLoad(clientId, forTestAccount = false) {
     const lane = forTestAccount ? 1 : 0;
@@ -22150,6 +22190,7 @@ moveScreensToGestionOnce();
 // todo o nada (una sola transacción): si algo falla se avisa, el servidor sigue arriba y se reintenta en el siguiente arranque
 try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos desde TI: no se pudieron mover los permisos de las pantallas (se reintentará al arrancar):', err.message); }
 try { moveVentasToCargasManualesOnce(); } catch (err) { console.error('[db] Ventas Manuales: no se pudo mover Ventas a Cargas Manuales (se reintentará al arrancar):', err.message); }
+try { moveVentasManualesToAdditionalOnce(); } catch (err) { console.error('[db] Ventas Manuales: no se pudo pasar a adicional (se reintentará al arrancar):', err.message); }
 try { backfillPosSalePublic(); } catch (err) { console.error('[db] Ventas: no se pudo rellenar el código de los tickets (se reintentará al arrancar):', err.message); }
 try { seedSitesFromCostCentersOnce(); } catch (err) { console.error('[db] Sitios propios: no se pudo crear desde los centros (se reintentará al arrancar):', err.message); }
 try { seedTiMinimumOnce(); } catch (err) { console.error('[db] TI por defecto: no se pudo abrir el mínimo (se reintentará al arrancar):', err.message); }
