@@ -3627,6 +3627,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'analisis': { area: 'Cadena de Suministro', modulo: 'Análisis', pantalla: 'Análisis Registros Manuales' },
     'analisis-extracciones': { area: 'Cadena de Suministro', modulo: 'Análisis', pantalla: 'Análisis Registros Manuales' },
     'analisis-archivo': { area: 'Cadena de Suministro', modulo: 'Análisis', pantalla: 'Análisis Registros Manuales' },
+    'pedidos-por-sitio': { area: 'Cadena de Suministro', modulo: 'Análisis', pantalla: 'Pedidos por sitio' },
     'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
@@ -3981,6 +3982,7 @@ const TABLE_GRANT_PATHS = {
     'analisis': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
     'analisis-extracciones': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
     'analisis-archivo': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
+    'pedidos-por-sitio': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-fijos/cat-analisis-fijos-pedidos-sitio' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
     'carga-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-carga-combustible' },
@@ -5123,6 +5125,54 @@ function registrySources(clientId, forTestAccount, registryKey, periods, filters
     return out;
 }
 
+// Análisis fijo «Pedidos por sitio» (Análisis › Cadena de Suministro › Análisis fijos › Distribución): lo que se ha pedido en Pedido Manual, un renglón por SITIO de los centros de costos elegidos (centerIds = null: todos los del cliente).
+// Cuenta pedidos (folios), renglones, códigos distintos, renglones pendientes / parciales / surtidos (el estatus sale de lo que se va surtiendo), los que se pidieron «lo antes posible» (sin fecha) y el primero y el último pedido.
+// El periodo (fromDay / toDay, AAAA-MM-DD) son días de la zona horaria del cliente, los dos incluidos. Todos los sitios de los centros elegidos salen, aunque no tengan pedidos; los centros sin sitio solo salen si tienen pedidos.
+function localDayToUtcSql(day, timeZone, addDays = 0) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(day || ''));
+    if (!m) return null;
+    const guess = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + addDays);
+    const offset = wallClockInZone(new Date(guess), timeZone || 'UTC').getTime() - guess;
+    return new Date(guess - offset).toISOString().slice(0, 19).replace('T', ' ');
+}
+function analysisOrdersBySite(clientId, isTest, { centerIds = null, fromDay = '', toDay = '', timeZone = '' } = {}) {
+    const centers = listCostCenters(clientId, isTest).filter((c) => !centerIds || centerIds.includes(c.id));
+    const siteOfCenter = new Map(centers.map((c) => [c.id, c.site_code || '']));
+    const sites = new Map(listSites(clientId, isTest).map((s) => [s.code, s]));
+    const where = ['l.client_id = ?'];
+    const args = [clientId];
+    const from = localDayToUtcSql(fromDay, timeZone);
+    const to = localDayToUtcSql(toDay, timeZone, 1);
+    if (from) { where.push('o.created_at >= ?'); args.push(from); }
+    if (to) { where.push('o.created_at < ?'); args.push(to); }
+    const base = `FROM manual_order_lines l JOIN manual_orders o ON o.id = l.order_id WHERE ${where.join(' AND ')}`;
+    const perCenter = db.prepare(`SELECT o.cost_center_id AS cc, COUNT(DISTINCT o.id) AS orders, COUNT(*) AS lines,
+        SUM(CASE WHEN l.status = 'pending' THEN 1 ELSE 0 END) AS pending, SUM(CASE WHEN l.status = 'partial' THEN 1 ELSE 0 END) AS partial, SUM(CASE WHEN l.status = 'supplied' THEN 1 ELSE 0 END) AS supplied,
+        SUM(CASE WHEN l.need_by = '' THEN 1 ELSE 0 END) AS asap, MIN(o.created_at) AS first_at, MAX(o.created_at) AS last_at ${base} GROUP BY o.cost_center_id`).all(...args);
+    const codePairs = db.prepare(`SELECT o.cost_center_id AS cc, l.code AS code ${base} GROUP BY o.cost_center_id, l.code`).all(...args);
+    const bySite = new Map();
+    const row = (code) => {
+        if (!bySite.has(code)) bySite.set(code, { siteCode: code, orders: 0, lines: 0, pending: 0, partial: 0, supplied: 0, asap: 0, firstAt: '', lastAt: '', codeSet: new Set() });
+        return bySite.get(code);
+    };
+    centers.forEach((c) => { if (c.site_code) row(c.site_code); });
+    perCenter.forEach((r) => {
+        if (!siteOfCenter.has(r.cc)) return; // un centro de otro carril o que no se eligió
+        const s = row(siteOfCenter.get(r.cc));
+        s.orders += r.orders; s.lines += r.lines; s.pending += r.pending; s.partial += r.partial; s.supplied += r.supplied; s.asap += r.asap;
+        if (!s.firstAt || r.first_at < s.firstAt) s.firstAt = r.first_at;
+        if (r.last_at > s.lastAt) s.lastAt = r.last_at;
+    });
+    codePairs.forEach((p) => { if (siteOfCenter.has(p.cc)) row(siteOfCenter.get(p.cc)).codeSet.add(p.code); });
+    return [...bySite.values()].map((s) => {
+        const site = sites.get(s.siteCode);
+        return {
+            siteCode: s.siteCode, site: site ? (site.sucursal ? `${site.code} · ${site.sucursal}` : site.code) : s.siteCode,
+            orders: s.orders, lines: s.lines, codes: s.codeSet.size, pending: s.pending, partial: s.partial, supplied: s.supplied,
+            pctSupplied: s.lines ? Math.round((s.supplied / s.lines) * 1000) / 10 : null, asap: s.asap, firstAt: s.firstAt, lastAt: s.lastAt,
+        };
+    }).sort((x, y) => (x.siteCode === '' ? 1 : 0) - (y.siteCode === '' ? 1 : 0) || x.siteCode.localeCompare(y.siteCode));
+}
 function getCostCenterById(id, clientId, forTestAccount = false) {
     return db.prepare('SELECT * FROM cost_centers WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
 }
@@ -22705,6 +22755,7 @@ module.exports = {
     getPosSaleById,
     getPosSalesLastLoad,
     listRegistryDefs, createRegistryDef, updateRegistryDef,
+    analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, MR_SCREEN,
     getPosSaleByToken,

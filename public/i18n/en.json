@@ -431,6 +431,10 @@
     "cmAnalisisRegistros": "Record Analysis",
     "cmAnalisisRegistrosAbbr1": "Rec. Analysis",
     "cmAnalisisRegistrosAbbr2": "Analysis",
+    "anGrupoDistribucion": "Distribution",
+    "anPedidosPorSitio": "Orders by site",
+    "anPedidosPorSitioAbbr1": "Orders/site",
+    "anPedidosPorSitioAbbr2": "Orders",
     "cmVentasManuales": "Manual Sales",
     "cmVentasManualesAbbr1": "Manual Sales",
     "cmVentasManualesAbbr2": "Sales",
@@ -5517,6 +5521,20 @@
     "anNewAbbr2": "New anal.",
     "anAll": "All analyses",
     "anAllAbbr1": "All",
+    "colAnpSitio": "Site",
+    "colAnpPedidos": "Orders",
+    "colAnpRenglones": "Lines",
+    "colAnpCodigos": "Codes",
+    "colAnpPendientes": "Pending",
+    "colAnpParciales": "Partial",
+    "colAnpSurtidos": "Supplied",
+    "colAnpPctSurtido": "% supplied",
+    "colAnpAntesPosible": "As soon as possible",
+    "colAnpPrimero": "First order",
+    "colAnpUltimo": "Last order",
+    "filterAnpSearchHint": "Site...",
+    "anpNoSite": "No site",
+    "anpLoadError": "Orders could not be loaded.",
     "regNewTitle": "Add new record set",
     "regNewName": "Record set name",
     "regNewKind": "How often it is loaded",
@@ -9605,6 +9623,14 @@
     "regRenameDialog": {
       "what": "Changes the record set name in the menu and on its cards. Loaded data is not touched.",
       "example": "Monthly consumption → Monthly consumption by code."
+    },
+    "anpTable": {
+      "what": "One row per site with what has been ordered in Manual Order: orders, lines, distinct codes, how many lines are pending, partial or supplied and what percentage has been supplied. It adds up the sites checked in the top bar; a site without orders shows zeros.",
+      "example": "CEDIS Norte: 12 orders, 40 lines, 25 supplied (62.5 %)."
+    },
+    "anpPeriod": {
+      "what": "Limits the analysis to orders placed between two days, in your local time, both included. Empty = all orders.",
+      "example": "From 01/Nov/2026 to 30/Nov/2026."
     },
     "regImport": {
       "what": "Opens the load of this record: with the template or with your own Excel. It always goes through a review before saving, and it only adds.",

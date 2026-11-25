@@ -431,6 +431,10 @@
     "cmAnalisisRegistros": "Análisis Registros Manuales",
     "cmAnalisisRegistrosAbbr1": "Análisis Registros",
     "cmAnalisisRegistrosAbbr2": "Análisis",
+    "anGrupoDistribucion": "Distribución",
+    "anPedidosPorSitio": "Pedidos por sitio",
+    "anPedidosPorSitioAbbr1": "Pedidos/sitio",
+    "anPedidosPorSitioAbbr2": "Pedidos",
     "cmVentasManuales": "Ventas Manuales",
     "cmVentasManualesAbbr1": "Ventas Man.",
     "cmVentasManualesAbbr2": "Ventas",
@@ -5516,6 +5520,20 @@
     "anNewAbbr2": "Nuevo aná.",
     "anAll": "Todos los análisis",
     "anAllAbbr1": "Todos",
+    "colAnpSitio": "Sitio",
+    "colAnpPedidos": "Pedidos",
+    "colAnpRenglones": "Renglones",
+    "colAnpCodigos": "Códigos",
+    "colAnpPendientes": "Pendientes",
+    "colAnpParciales": "Parciales",
+    "colAnpSurtidos": "Surtidos",
+    "colAnpPctSurtido": "% surtido",
+    "colAnpAntesPosible": "Lo antes posible",
+    "colAnpPrimero": "Primer pedido",
+    "colAnpUltimo": "Último pedido",
+    "filterAnpSearchHint": "Sitio...",
+    "anpNoSite": "Sin sitio",
+    "anpLoadError": "No se pudieron cargar los pedidos.",
     "regNewTitle": "Agregar nuevo registro",
     "regNewName": "Nombre del registro",
     "regNewKind": "Cada cuánto se carga",
@@ -9604,6 +9622,14 @@
     "regRenameDialog": {
       "what": "Cambia el nombre del registro en el menú y en sus tarjetas. Los datos cargados no se tocan.",
       "example": "Consumos mensuales → Consumo mensual por código."
+    },
+    "anpTable": {
+      "what": "Un renglón por sitio con lo que se ha pedido en Pedido Manual: pedidos, renglones, códigos distintos, cuántos renglones están pendientes, parciales o surtidos y qué porcentaje se ha surtido. Suma los sitios marcados en la barra de arriba; un sitio sin pedidos sale con ceros.",
+      "example": "CEDIS Norte: 12 pedidos, 40 renglones, 25 surtidos (62.5 %)."
+    },
+    "anpPeriod": {
+      "what": "Limita el análisis a los pedidos hechos entre dos días, en tu hora local, los dos incluidos. Vacío = todos los pedidos.",
+      "example": "Desde 01/nov/2026 hasta 30/nov/2026."
     },
     "regImport": {
       "what": "Abre la carga de este registro: con la plantilla o con tu propio Excel. Siempre pasa por una revisión antes de guardar, y solo agrega.",

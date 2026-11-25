@@ -1450,6 +1450,8 @@ const SIDEBAR_GROUPS = {
     // Operaciones > Mtto. de activos (2026-11-13): Preventivo y Correctivo. Sale desde la primera pantalla que se ve.
     mtto: { labelKey: 'menu.opCentroDistMtto', icon: 'bx-wrench', minItems: 1, abbrKeys: ['menu.opCentroDistMttoAbbr1', 'menu.opCentroDistMttoAbbr2'] },
     // Cargas Manuales > Registros Información (2026-11-25): cada registro (los de siempre y los que agrega el cliente) es una pantalla anidada aquí, con «＋ Agregar nuevo registro» al inicio.
+    // Análisis › Análisis fijos: un menú por proceso (hoy Distribución, con Pedidos por sitio).
+    anDistribucion: { labelKey: 'menu.anGrupoDistribucion', icon: 'bx-package', minItems: 1 },
     registros: { labelKey: 'menu.cmRegistrosInformacion', icon: 'bx-data', minItems: 1, abbrKeys: ['menu.cmRegistrosInformacionAbbr1', 'menu.cmRegistrosInformacionAbbr2'] },
 };
 function groupSidebarScreens(pantallas, categoryId) {
@@ -14847,6 +14849,7 @@ const TABLE_GRANT_PATHS = {
     'analisis': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
     'analisis-extracciones': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
     'analisis-archivo': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
+    'pedidos-por-sitio': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-fijos/cat-analisis-fijos-pedidos-sitio' },
     // Equipo de Trabajo › Registro (la tabla estándar de esa vista); mismo prefijo que db.js
     'equipo-registro': { sectionId: 'main', itemId: 'equipo-trabajo', submenuPrefix: 'et-registro/et-registro-tabla' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
@@ -15008,6 +15011,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-cargas-manuales-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
     'cat-cargas-manuales-registros': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
     'cat-analisis-manuales-lista': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
+    'cat-analisis-fijos-pedidos-sitio': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-fijos/cat-analisis-fijos-pedidos-sitio' },
     'cat-gestion-pv-transacciones': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-gestion/cat-gestion-pv-transacciones' },
     'cat-reportes-ti-kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'cat-catalogos-ti-soporte-ayuda': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },

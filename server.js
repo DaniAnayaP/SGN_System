@@ -84,6 +84,7 @@ const {
     getPosSaleById,
     getPosSalesLastLoad,
     listRegistryDefs, createRegistryDef, updateRegistryDef,
+    analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, MR_SCREEN,
     getPosSaleByToken,
@@ -11597,6 +11598,26 @@ app.post('/api/business/pedido-manual/:id/status', requireAuth, (req, res) => {
     if (!rec) return res.status(404).json({ message: 'Ese registro no existe.' });
     // 2026-11-12 (Surtido Pedido Manual): el estatus ya NO se cambia a mano; sale de lo que se va surtiendo en Operaciones > QR's > Surtido Pedido Manual (cantidad, lote, caducidad, quién recibe).
     return res.status(403).json({ message: 'El estatus ya no se cambia a mano: sale de lo que se surte en Surtido Pedido Manual.', code: 'STATUS_BY_SURTIDO' });
+});
+// ---- Análisis fijo «Pedidos por sitio» (Análisis › Cadena de Suministro › Análisis fijos › Distribución) -------------------------------------------------
+// Un renglón por sitio con lo pedido en Pedido Manual. cc = «all» o «3,5» (los centros de costos marcados arriba, como en las demás pantallas); from / to = días (AAAA-MM-DD) de la zona del cliente.
+const ANP_SCREEN = { area: 'Cadena de Suministro', modulo: 'Análisis', pantalla: 'Pedidos por sitio' };
+app.get('/api/business/analisis-fijos/pedidos-por-sitio', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    const client = getClientById(clientId);
+    const cc = String(req.query.cc === undefined ? 'all' : req.query.cc);
+    const centerIds = cc === 'all' ? null : cc.split(',').map((x) => Number(x)).filter((x) => Number.isInteger(x) && x > 0);
+    const day = (value) => (/^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) ? String(value) : '');
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const rows = analysisOrdersBySite(clientId, isTestAccount, { centerIds, fromDay: day(req.query.from), toDay: day(req.query.to), timeZone: client.time_zone });
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        rows: rows.map((r) => ({
+            ...r, firstAt: r.firstAt ? sqlUtcIso(r.firstAt) : '', lastAt: r.lastAt ? sqlUtcIso(r.lastAt) : '',
+            ...getSystemColumnsForRecord({ companyName: client.company_name, ...ANP_SCREEN, centroCostos: '', createdAt: r.lastAt || now, timeZone: client.time_zone }),
+        })),
+    });
 });
 // ---- Surtido Pedido Manual (Operaciones > QR's) -----------------------------------------------------------------------------------------------------
 // Quien surte anota cada ENTREGA de un renglón (cuánto, lote, caducidad, quién recibe, observaciones); lo surtido (sin las anuladas) da el estatus del renglón: Pendiente, Parcial o Surtido. Solo se marca: no mueve existencias.
