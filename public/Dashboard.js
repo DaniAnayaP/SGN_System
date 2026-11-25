@@ -1452,6 +1452,8 @@ const SIDEBAR_GROUPS = {
     // Cargas Manuales > Registros Información (2026-11-25): cada registro (los de siempre y los que agrega el cliente) es una pantalla anidada aquí, con «＋ Agregar nuevo registro» al inicio.
     // Análisis › Análisis fijos: un menú por proceso (hoy Distribución, con Pedidos por sitio).
     anDistribucion: { labelKey: 'menu.anGrupoDistribucion', icon: 'bx-package', minItems: 1 },
+    // Análisis › Manuales: el segundo desglose, junto a «Registros Información»: «＋ Nuevo análisis», los análisis y «Todos los análisis».
+    analisisReg: { labelKey: 'menu.cmAnalisisRegistros', icon: 'bx-analyse', minItems: 1, abbrKeys: ['menu.cmAnalisisRegistrosAbbr1', 'menu.cmAnalisisRegistrosAbbr2'] },
     registros: { labelKey: 'menu.cmRegistrosInformacion', icon: 'bx-data', minItems: 1, abbrKeys: ['menu.cmRegistrosInformacionAbbr1', 'menu.cmRegistrosInformacionAbbr2'] },
 };
 function groupSidebarScreens(pantallas, categoryId) {
@@ -13907,10 +13909,10 @@ async function loadManualAnalysesMenu() {
                     if (reg) items.push(...registryItems('cat-analisis-manuales-reg', { grantFrom: REGISTROS_GRANT_FROM }));
                     if (an) {
                         // «＋ Agregar nuevo análisis»: solo para quien tiene el botón «Crear análisis»; abre la lista con la ventana de alta
-                        if (an.canCreate) items.push({ id: 'cat-analisis-manuales-nuevo', labelKey: 'main.anNew', abbrKeys: ['main.anNewAbbr1', 'main.anNewAbbr2'], icon: 'bx-plus', href: 'CmAnalisisLista.html?nuevo=1', grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true, addNew: true });
-                        (an.analyses || []).forEach((x) => items.push({ id: `cat-analisis-manuales-an-${x.id}`, label: x.name, icon: 'bx-line-chart', href: `CmAnalisis.html?id=${x.id}`, grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true }));
+                        if (an.canCreate) items.push({ id: 'cat-analisis-manuales-nuevo', labelKey: 'main.anNew', abbrKeys: ['main.anNewAbbr1', 'main.anNewAbbr2'], icon: 'bx-plus', href: 'CmAnalisisLista.html?nuevo=1', grantAs: 'cat-analisis-manuales-lista', sidebarGroup: 'analisisReg', dynamicAnalysis: true, addNew: true });
+                        (an.analyses || []).forEach((x) => items.push({ id: `cat-analisis-manuales-an-${x.id}`, label: x.name, icon: 'bx-line-chart', href: `CmAnalisis.html?id=${x.id}`, grantAs: 'cat-analisis-manuales-lista', sidebarGroup: 'analisisReg', dynamicAnalysis: true }));
                         // «Todos los análisis»: la tabla de la lista (filtros, descarga, historial, cambiar nombre y desactivar). La pantalla de lista con su nombre queda para los permisos y Panel.
-                        items.push({ id: 'cat-analisis-manuales-todos', labelKey: 'main.anAll', abbrKeys: ['main.anAllAbbr1'], icon: 'bx-table', href: 'CmAnalisisLista.html', grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true });
+                        items.push({ id: 'cat-analisis-manuales-todos', labelKey: 'main.anAll', abbrKeys: ['main.anAllAbbr1'], icon: 'bx-table', href: 'CmAnalisisLista.html', grantAs: 'cat-analisis-manuales-lista', sidebarGroup: 'analisisReg', dynamicAnalysis: true });
                     }
                     base.splice(at + 1, 0, ...items);
                     base[at] = { ...base[at], sidebarHidden: true };
