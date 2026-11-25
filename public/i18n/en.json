@@ -9037,6 +9037,20 @@
     "regReason": "Reason",
     "regNeedSignal": "You need signal to void a load.",
     "regLoadNotActive": "That load is no longer active.",
+    "regTemplateShort": "Template",
+    "regWizHow": "How do you want to load it?",
+    "regWizFile": "Choose the file",
+    "regTapToPick": "Tap to choose the file",
+    "regContinue": "Continue",
+    "regStep": "Step {n} of {total}",
+    "regReady": "Done",
+    "regToAdd": "Values to add",
+    "regSeeLoad": "See the load",
+    "regBackToRegistry": "Back to the record",
+    "regBack": "Back",
+    "regLoadNeedSignal": "You need signal to load. Check your connection and try again.",
+    "regByPeriod": "By period",
+    "regIssuesTitle": "Errors and differences ({n})",
     "calNoData": "The certificates have not been downloaded yet. Connect once to see them without signal.",
     "calNoMatch": "No certificate matches your search.",
     "calShowing": "Showing {n} of {total}: type to search the rest.",
@@ -9356,6 +9370,34 @@
     "appTwPass": {"what":"A pass requested by someone on your team: who hands it to whom and why. Approving it moves the activity; rejecting it leaves it where it was (you can write a comment).","example":"Marco → Sofía · \"I will be in training\"."},
     "appTwPerson": {"what":"Shows only the activities that person takes part in.","example":"Sofía Cruz."},
     "appTwTimeline": {"what":"Everything that happened to the activity, with who and when, and it cannot be edited. It needs signal; without it the detail is shown without the timeline.","example":"Born on its own from the repetition → Assigned to Marco Ríos → Confirmed."},
+    "appRegCargar": {
+      "what": "Loads a new record in three steps: how (template or your Excel), the file and the review. Loads only add: what is already saved is not changed. It needs signal and the \"Load with template\" or \"Load with my Excel\" button in your tree.",
+      "example": "Load the file cargos-nov.xlsx with the template."
+    },
+    "appRegPlantilla": {
+      "what": "Downloads the record's empty template (with the next month or day column ready) and shares it with the phone's share sheet: save to Files, Drive, WhatsApp or email.",
+      "example": "Template-cargos-sitio-mensuales.xlsx"
+    },
+    "appRegWizComo": {
+      "what": "With the template the columns are recognized by themselves. With your Excel (as it comes out of the other system) each column is matched once before the review. Both end in the same review.",
+      "example": "With the template · With my Excel"
+    },
+    "appRegWizDia": {
+      "what": "The day these stock levels belong to. It is only asked for daily records and cannot be in the future.",
+      "example": "25/Nov/2026"
+    },
+    "appRegWizArchivo": {
+      "what": "Choose the .xlsx with the phone's file picker (Files, Drive, WhatsApp…). Once chosen it is checked by itself; nothing is saved yet.",
+      "example": "cargos-nov.xlsx"
+    },
+    "appRegWizMapeo": {
+      "what": "Each column of your file and how it is loaded: unit, unit description, code, description, category, UOM (or the value, in a daily record) or \"Not loaded\". Months are ticked or removed. Unit, code and value are required.",
+      "example": "Column \"Branch\" → Unit · \"Jan-26\" → Month jan-26."
+    },
+    "appRegWizRevision": {
+      "what": "What the load would do, saving nothing: new periods and rows, values to add, the ones already there and the different ones (not changed) and the errors. \"Confirm load\" saves it.",
+      "example": "1 new period · 18 new rows · 120 values to add · 0 errors."
+    },
     "appRegTabs": {
       "what": "Switches between the record's codes (Data) and the times it has been loaded (Loads). The number is how many loads there are.",
       "example": "Data · Loads 3"

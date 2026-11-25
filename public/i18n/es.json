@@ -9036,6 +9036,20 @@
     "regReason": "Motivo",
     "regNeedSignal": "Para anular una carga necesitas señal.",
     "regLoadNotActive": "Esa carga ya no está vigente.",
+    "regTemplateShort": "Plantilla",
+    "regWizHow": "¿Cómo la quieres cargar?",
+    "regWizFile": "Elige el archivo",
+    "regTapToPick": "Toca para elegir el archivo",
+    "regContinue": "Continuar",
+    "regStep": "Paso {n} de {total}",
+    "regReady": "Listo",
+    "regToAdd": "Valores por agregar",
+    "regSeeLoad": "Ver la carga",
+    "regBackToRegistry": "Volver al registro",
+    "regBack": "Atrás",
+    "regLoadNeedSignal": "Para cargar necesitas señal. Revisa tu conexión e inténtalo otra vez.",
+    "regByPeriod": "Por periodo",
+    "regIssuesTitle": "Errores y diferencias ({n})",
     "calNoData": "Todavía no se bajaron los certificados. Conéctate una vez para verlos sin señal.",
     "calNoMatch": "Ningún certificado coincide con tu búsqueda.",
     "calShowing": "Se muestran {n} de {total}: escribe para buscar el resto.",
@@ -9355,6 +9369,34 @@
     "appTwPass": {"what":"Un pase pedido por alguien a tu cargo: quién se la pasa a quién y por qué. Aprobarlo la mueve; rechazarlo la deja donde estaba (puedes escribir un comentario).","example":"Marco → Sofía · «estaré en capacitación»."},
     "appTwPerson": {"what":"Deja solo las actividades en las que participa esa persona.","example":"Sofía Cruz."},
     "appTwTimeline": {"what":"Todo lo que le ha pasado a la actividad, con quién y cuándo, sin poderse editar. Necesita señal; sin ella se ve el detalle sin la línea del tiempo.","example":"Nació sola por la repetición → Asignada a Marco Ríos → Confirmada."},
+    "appRegCargar": {
+      "what": "Carga un registro nuevo en tres pasos: cómo (plantilla o tu Excel), el archivo y la revisión. Las cargas solo agregan: lo ya guardado no se modifica. Necesita señal y el botón «Cargar con plantilla» o «Cargar con mi Excel» de tu árbol.",
+      "example": "Cargar el archivo cargos-nov.xlsx con la plantilla."
+    },
+    "appRegPlantilla": {
+      "what": "Baja la plantilla vacía del registro (con la siguiente columna de mes o día lista) y la comparte con la hoja del teléfono: guardar en Archivos, Drive, WhatsApp o correo.",
+      "example": "Plantilla-cargos-sitio-mensuales.xlsx"
+    },
+    "appRegWizComo": {
+      "what": "Con la plantilla las columnas se reconocen solas. Con tu Excel (tal como sale del otro sistema) se empareja cada columna una vez antes de revisar. Las dos terminan en la misma revisión.",
+      "example": "Con la plantilla · Con mi Excel"
+    },
+    "appRegWizDia": {
+      "what": "El día al que corresponden estas existencias. Solo se pide en los registros diarios y no puede ser futuro.",
+      "example": "25/nov/2026"
+    },
+    "appRegWizArchivo": {
+      "what": "Elige el .xlsx con el selector del teléfono (Archivos, Drive, WhatsApp…). Al elegirlo se revisa solo; no se guarda nada todavía.",
+      "example": "cargos-nov.xlsx"
+    },
+    "appRegWizMapeo": {
+      "what": "Cada columna de tu archivo y cómo se carga: unidad, descripción de la unidad, código, descripción, categoría, UDM (o el valor, en un registro diario) o «No se carga». Los meses se marcan o se quitan. Unidad, código y valor son obligatorios.",
+      "example": "Columna «Sucursal» → Unidad · «Ene-26» → Mes ene-26."
+    },
+    "appRegWizRevision": {
+      "what": "Lo que haría la carga, sin guardar nada: periodos y renglones nuevos, valores por agregar, los que ya estaban y los distintos (no se cambian) y los errores. «Confirmar carga» la guarda.",
+      "example": "1 periodo nuevo · 18 renglones nuevos · 120 valores por agregar · 0 errores."
+    },
     "appRegTabs": {
       "what": "Cambia entre los códigos del registro (Datos) y las veces que se ha cargado (Cargas). El número es cuántas cargas hay.",
       "example": "Datos · Cargas 3"

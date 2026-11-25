@@ -5,7 +5,8 @@
 //   · Un código: sus datos, las barras de sus valores por mes (o por día) con los periodos que faltan, la lista de periodos y Control Interno plegado;
 //   · Pestaña Cargas (pieza B): las cargas del registro (lo más reciente arriba, con su estado Vigente / Anulada), el detalle de una carga con sus cifras y «Anular esta carga» (con motivo y confirmación; necesita señal y el botón del árbol).
 // Mismos datos y mismos permisos que la Web (las rutas son las de la Web: ver los datos es de quien tiene la pantalla); en la App la da la «Visión APP». Sin señal se ve lo último que se bajó (guardado en el celular, por empresa).
-// Sigue la pieza C (Cargar registro en tres pasos).
+//   · Pieza C: «Cargar registro» en tres pasos (cuatro con «Con mi Excel»): cómo (plantilla o mi Excel; y el día si el registro es diario) → el archivo (el del teléfono) → emparejar sus columnas (solo mi Excel) → la revisión sin guardar
+//     nada y «Confirmar carga»; y «Plantilla», que se comparte con la hoja del teléfono. Mismas rutas y reglas de la Web (inspect / import en preview y commit; el servidor decide). Necesita señal y un centro de costos completo.
 // ---------------------------------------------------------------------------
 
 const SUPPORTED_LANGS = ['en', 'es'];
@@ -142,7 +143,7 @@ let currentUser = null;
 let registries = [];          // los registros de la empresa (con sus periodos y su última carga)
 let dataByKey = {};           // registro -> lo que el servidor contestó de sus datos
 let dataState = 'loading';    // 'online' | 'cached' | 'none'
-let view = 'list';            // 'list' | 'registry' | 'code' | 'load'
+let view = 'list';            // 'list' | 'registry' | 'code' | 'load' | 'wizard' (Cargar registro)
 let regKey = null;
 let rowId = null;
 let search = '';
@@ -328,7 +329,9 @@ document.getElementById('carga-progress-label').hidden = true;
 
 function render() {
     bodyEl.innerHTML = '';
-    if (view === 'load') renderLoad();
+    if (view !== 'wizard') setProgress(null);
+    if (view === 'wizard') { titleEl.textContent = t('main.regImport'); if (siteBlocked) window.AppSiteGate.show(bodyEl, t); else renderWizard(); }
+    else if (view === 'load') renderLoad();
     else if (view === 'code') renderCode();
     else if (view === 'registry') renderRegistry();
     else renderList();
@@ -400,10 +403,10 @@ function renderRegistry() {
     const periods = data.periods || [];
     const loadsCount = loadsByKey[regKey] ? loadsByKey[regKey].loads.length : 0;
     // sin ninguna carga (ni siquiera una anulada) no hay nada que resumir, que buscar ni que anular
-    if (!periods.length && !loadsCount) { bodyEl.appendChild(el('p', 'home-carga-empty-note', t('main.regCardNone'))); return; }
+    if (!periods.length && !loadsCount) { bodyEl.appendChild(el('p', 'home-carga-empty-note', t('main.regCardNone'))); appendActions(); return; }
     if (tab === 'loads') { renderLoadsTab(); return; }
     // con todas las cargas anuladas ya no hay periodos: queda la pestaña para verlas
-    if (!periods.length) { bodyEl.appendChild(tabsNode(loadsCount)); bodyEl.appendChild(el('p', 'home-carga-empty-note', t('main.regCardNone'))); return; }
+    if (!periods.length) { appendActions(); bodyEl.appendChild(tabsNode(loadsCount)); bodyEl.appendChild(el('p', 'home-carga-empty-note', t('main.regCardNone'))); return; }
     const load = data.lastLoad;
     const hero = el('div', 'pm-app-card rg-app-hero');
     hero.setAttribute('data-help-key', 'appRegHero');
@@ -416,6 +419,7 @@ function renderRegistry() {
     }
     hero.appendChild(stripNode(reg, periods));
     bodyEl.appendChild(hero);
+    appendActions();
     bodyEl.appendChild(tabsNode(loadsCount));
 
     // buscador (la sintaxis de siempre: $ antes, @ después, la coma separa) y los dos filtros
@@ -753,7 +757,450 @@ async function submitAnnul(l, noteText, okBtn, close) {
     showToast(t(res.status === 403 ? 'main.regErr_REG_FORBIDDEN' : 'admin.saveError'));
 }
 
+// --- Cargar registro: tres pasos (cuatro con «Con mi Excel») -----------------------------------------------------------------------------------------
+// start (cómo: plantilla o mi Excel; y el día si el registro es diario) → file (elegir el archivo) → map (solo «Con mi Excel»: emparejar sus columnas) → review (la revisión, sin guardar nada) → done.
+// Mismas rutas y mismas reglas de la Web (inspect, import en modo preview y commit): el servidor decide. Todo esto necesita señal.
+const MAX_FILE_BYTES = 60 * 1024 * 1024;       // el servidor acepta hasta 60 MB
+const ISSUES_SHOWN = 200;
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const XLSX_ACCEPT = `.xlsx,${XLSX_MIME}`;
+const DIM_KEYS = ['unidad', 'unidadNombre', 'codigo', 'descripcion', 'categoria', 'udm'];
+let wiz = null;
+let siteBlocked = false;
+const todayText = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const abilities = () => { const d = currentData() || {}; const reg = currentReg(); return { template: !!d.canTemplate, excel: !!d.canExcel, active: !!reg && reg.status === 'active' }; };
+const progTrack = document.getElementById('carga-progress-track');
+const progFill = document.getElementById('carga-progress-fill');
+const progLabel = document.getElementById('carga-progress-label');
+function setProgress(pct, label) {
+    const on = pct !== null;
+    progTrack.hidden = !on;
+    progLabel.hidden = !on;
+    if (on) { progFill.style.width = `${pct}%`; progLabel.textContent = label; }
+}
+const wizSteps = () => (wiz.source === 'excel' ? ['start', 'file', 'map', 'review'] : ['start', 'file', 'review']);
+
+// Un archivo se comparte con la hoja del teléfono (WhatsApp, correo, Drive…); si el sistema no puede compartir archivos se intenta bajar directo.
+async function shareFile(file) {
+    try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: file.name }); return; }
+    } catch (err) {
+        if (err && err.name === 'AbortError') return;
+    }
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast(t('home.tplappDownloadHint'));
+}
+async function shareTemplate(btn) {
+    if (btn) btn.disabled = true;
+    try {
+        const res = await fetch(apiUrl(`${API}/${encodeURIComponent(regKey)}/template?lang=${currentLang()}`), { credentials: 'include' });
+        if (!res.ok) throw new Error('template failed');
+        const blob = await res.blob();
+        await shareFile(new File([blob], `${currentLang() === 'en' ? 'Template' : 'Plantilla'}-${regKey}.xlsx`, { type: XLSX_MIME }));
+    } catch {
+        showToast(t('main.regTplError'));
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// Los dos botones del registro: «Cargar registro» y «Plantilla» (solo con el botón del árbol, un registro activo y señal).
+function appendActions() {
+    const reg = currentReg();
+    const a = abilities();
+    if (!reg || !a.active || dataState === 'cached' || !(a.template || a.excel)) return;
+    const row = el('div', 'rg-app-acts');
+    const load = el('button', 'rg-app-act rg-app-act-pri');
+    load.type = 'button';
+    load.setAttribute('data-help-key', 'appRegCargar');
+    load.innerHTML = `<i class="bx bx-upload" aria-hidden="true"></i> <span>${esc(t('main.regImport'))}</span>`;
+    load.addEventListener('click', startLoad);
+    const tpl = el('button', 'rg-app-act');
+    tpl.type = 'button';
+    tpl.setAttribute('data-help-key', 'appRegPlantilla');
+    tpl.innerHTML = `<i class="bx bx-download" aria-hidden="true"></i> <span>${esc(t('home.regTemplateShort'))}</span>`;
+    tpl.addEventListener('click', () => shareTemplate(tpl));
+    row.append(load, tpl);
+    bodyEl.appendChild(row);
+}
+async function startLoad() {
+    const reg = currentReg();
+    const a = abilities();
+    if (!reg || !(a.template || a.excel)) return;
+    regScroll = getScroll();
+    // toda operación va ligada a un centro de costos completo (como en las demás pantallas de la App)
+    siteBlocked = await window.AppSiteGate.blocked();
+    wiz = { step: 'start', source: a.template ? 'plantilla' : 'excel', file: null, buffer: null, info: null, sheet: null, include: new Set(), picks: {}, day: todayText(), preview: null, result: null, busy: false, error: '' };
+    view = 'wizard';
+    render();
+    setScroll(0);
+}
+function leaveWizard() {
+    wiz = null;
+    view = 'registry';
+    tab = 'data';
+    render();
+    setScroll(regScroll);
+}
+function wizardBack() {
+    if (!wiz) { leaveWizard(); return; }
+    if (wiz.busy) return;
+    if (wiz.step === 'done') { leaveWizard(); return; }
+    const order = wizSteps();
+    const i = order.indexOf(wiz.step);
+    if (i <= 0) { leaveWizard(); return; }
+    wiz.step = order[i - 1];
+    wiz.error = '';
+    wiz.preview = null;
+    if (wiz.step === 'file') { wiz.file = null; wiz.buffer = null; wiz.info = null; }
+    render();
+    setScroll(0);
+}
+
+// --- Hablar con el servidor ------------------------------------------------------------------------------------------------------------------------
+function errorTextOf(err) {
+    const body = (err && err.body) || {};
+    if (!err || !err.body) return t('home.regLoadNeedSignal');
+    if (body.code === 'IMPORT_HEADERS') return t('main.regErr_IMPORT_HEADERS', { missing: (body.missing || []).map((k) => (k === 'value' ? t('main.regValueColumn') : t(`main.regDim_${k}`))).join(', ') });
+    return ['IMPORT_FILE', 'IMPORT_EMPTY', 'IMPORT_TOO_BIG', 'IMPORT_DAY', 'IMPORT_DAY_FUTURE', 'REG_FORBIDDEN', 'REG_BUSY', 'COST_CENTER_REQUIRED', 'IMPORT_ERROR'].includes(body.code) ? t(`main.regErr_${body.code}`) : t('admin.saveError');
+}
+const problemText = (issue) => t(`main.regProb_${issue.problem}`);
+async function post(path, query, body) {
+    let res;
+    try {
+        res = await fetch(apiUrl(`${API}/${encodeURIComponent(regKey)}/${path}?${new URLSearchParams(query).toString()}`), { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/octet-stream' }, body });
+    } catch {
+        throw new Error('network');
+    }
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) { const err = new Error(out.message || 'failed'); err.body = out; err.status = res.status; throw err; }
+    return out;
+}
+function currentMapping() {
+    const reg = currentReg();
+    const dims = {};
+    Object.entries(wiz.picks).forEach(([col, dim]) => { if (dim && dim !== 'value' && dims[dim] === undefined) dims[dim] = Number(col); });
+    const mapping = { dims, valueCols: [], valueCol: null };
+    if (reg.kind === 'month') (wiz.info.mapping.valueCols || []).forEach((v) => { if (wiz.include.has(v.col)) mapping.valueCols.push(v); });
+    else { const at = Object.entries(wiz.picks).find(([, dim]) => dim === 'value'); if (at) mapping.valueCol = Number(at[0]); }
+    return mapping;
+}
+function importQuery(mode) {
+    const reg = currentReg();
+    const q = { mode, source: wiz.source, file: wiz.file ? wiz.file.name : '' };
+    if (wiz.sheet) q.sheet = wiz.sheet;
+    if (reg.kind === 'day') q.day = wiz.day;
+    if (wiz.source === 'excel') { q.mapping = JSON.stringify(currentMapping()); q.header = String(wiz.info.headerRow); }
+    return q;
+}
+async function inspect(sheet) {
+    const reg = currentReg();
+    const q = {};
+    if (sheet) q.sheet = sheet;
+    wiz.info = await post('inspect', q, wiz.buffer);
+    wiz.sheet = wiz.info.sheet;
+    wiz.include = new Set((wiz.info.mapping.valueCols || []).map((v) => v.col));
+    wiz.picks = {};
+    Object.entries(wiz.info.mapping.dims || {}).forEach(([dim, col]) => { wiz.picks[col] = dim; });
+    if (reg.kind === 'day' && wiz.info.mapping.valueCol !== null && wiz.info.mapping.valueCol !== undefined) wiz.picks[wiz.info.mapping.valueCol] = 'value';
+}
+function failFile(text) {
+    wiz.error = text;
+    wiz.busy = false;
+    wiz.step = 'file';
+    wiz.file = null; wiz.buffer = null; wiz.info = null;
+    render();
+}
+async function chooseFile(file) {
+    if (!file || wiz.busy) return;
+    wiz.error = '';
+    if (file.size > MAX_FILE_BYTES) { wiz.error = t('main.regErr_IMPORT_TOO_BIG'); render(); return; }
+    wiz.file = file;
+    wiz.busy = true;
+    render();
+    try { wiz.buffer = await file.arrayBuffer(); } catch { failFile(t('main.regErr_IMPORT_FILE')); return; }
+    try {
+        await inspect(null);
+        if (wiz.info.missing && wiz.info.missing.length && wiz.source === 'plantilla') { const err = new Error('headers'); err.body = { code: 'IMPORT_HEADERS', missing: wiz.info.missing }; throw err; }
+        if (wiz.source === 'excel') { wiz.step = 'map'; wiz.busy = false; render(); setScroll(0); return; }
+        await review();
+    } catch (err) {
+        failFile(errorTextOf(err));
+    }
+}
+// La revisión: lo que haría la carga, sin guardar nada.
+async function review() {
+    const reg = currentReg();
+    if (wiz.source === 'excel') {
+        const m = currentMapping();
+        const noValue = reg.kind === 'month' ? !m.valueCols.length : m.valueCol === null;
+        if (m.dims.unidad === undefined || m.dims.codigo === undefined || noValue) {
+            wiz.error = t('main.regErr_IMPORT_HEADERS', { missing: [m.dims.unidad === undefined ? t('main.regDim_unidad') : '', m.dims.codigo === undefined ? t('main.regDim_codigo') : '', noValue ? t('main.regValueColumn') : ''].filter(Boolean).join(', ') });
+            wiz.busy = false;
+            render();
+            return;
+        }
+    }
+    wiz.busy = true;
+    wiz.error = '';
+    render();
+    try {
+        wiz.preview = await post('import', importQuery('preview'), wiz.buffer);
+        wiz.step = 'review';
+        wiz.busy = false;
+        render();
+        setScroll(0);
+    } catch (err) {
+        wiz.error = errorTextOf(err);
+        wiz.busy = false;
+        if (wiz.step === 'file') failFile(wiz.error); else render();
+    }
+}
+async function commitLoad() {
+    wiz.busy = true;
+    wiz.error = '';
+    render();
+    try {
+        wiz.result = await post('import', importQuery('commit'), wiz.buffer);
+        await Promise.all([loadRegistries(), loadRegistryData(regKey), loadRegistryLoads(regKey)]);
+        wiz.step = 'done';
+        wiz.busy = false;
+        render();
+        setScroll(0);
+    } catch (err) {
+        wiz.error = errorTextOf(err);
+        wiz.busy = false;
+        render();
+    }
+}
+async function downloadIssues() {
+    const L = currentLang();
+    const heads = L === 'en' ? ['Row', 'Unit', 'Code', 'Period', 'In the file', 'Saved', 'What happens'] : ['Fila', 'Unidad', 'Código', 'Periodo', 'En el archivo', 'Guardado', 'Qué pasa'];
+    const rows = wiz.preview.issues.map((i) => [i.line, i.unidad, i.codigo, i.period ? periodLabel(i.period) : '', i.file === undefined ? '' : i.file, i.saved === undefined ? '' : i.saved, problemText(i)]);
+    try {
+        const filename = `${t('main.regIssuesFile')}_${todayText()}`;
+        const res = await fetch(apiUrl('/api/business/export/xlsx'), { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: t('main.regIssuesFile'), filename, columns: heads.map((label) => ({ label })), rows }) });
+        if (!res.ok) throw new Error('export failed');
+        await shareFile(new File([await res.blob()], `${filename}.xlsx`, { type: XLSX_MIME }));
+    } catch {
+        showToast(t('main.regTplError'));
+    }
+}
+
+// --- Los pasos ---------------------------------------------------------------------------------------------------------------------------------
+const wizBtn = (cls, text, onClick, disabled, iconClass) => {
+    const btn = el('button', `rg-app-btn ${cls}`);
+    btn.type = 'button';
+    if (iconClass) btn.innerHTML = `<i class="bx ${iconClass}" aria-hidden="true"></i> <span>${esc(text)}</span>`; else btn.textContent = text;
+    btn.disabled = !!disabled;
+    btn.addEventListener('click', onClick);
+    return btn;
+};
+function renderWizard() {
+    titleEl.textContent = t('main.regImport');
+    const steps = wizSteps();
+    const idx = Math.max(0, steps.indexOf(wiz.step));
+    const done = wiz.step === 'done';
+    setProgress(done ? 100 : Math.round(((idx + 1) / steps.length) * 100), done ? t('home.regReady') : t('home.regStep', { n: idx + 1, total: steps.length }));
+    const body = el('div', 'rg-app-wiz');
+    const bar = el('div', 'rg-app-bar');
+    ({ start: stepStart, file: stepFile, map: stepMap, review: stepReview, done: stepDone })[wiz.step](body, bar);
+    if (wiz.error) { const err = el('p', 'rg-app-error', wiz.error); err.setAttribute('role', 'alert'); body.appendChild(err); }
+    bodyEl.append(body, bar);
+}
+// Paso 1: cómo (con la plantilla o con mi Excel) y, si el registro es diario, de qué día son las existencias.
+function stepStart(body, bar) {
+    const reg = currentReg();
+    const a = abilities();
+    body.appendChild(el('h3', '', t('home.regWizHow')));
+    const opt = (id, labelKey, enabled) => {
+        const btn = el('button', `rg-app-opt${wiz.source === id ? ' rg-app-opt-on' : ''}${enabled ? '' : ' rg-app-opt-off'}`);
+        btn.type = 'button';
+        btn.disabled = !enabled;
+        btn.setAttribute('role', 'radio');
+        btn.setAttribute('aria-checked', wiz.source === id ? 'true' : 'false');
+        btn.innerHTML = '<span class="rg-app-optic"><i class="bx bxs-file" aria-hidden="true"></i></span>';
+        btn.appendChild(el('b', '', t(labelKey)));
+        btn.appendChild(el('span', `rg-app-rad${wiz.source === id ? ' rg-app-rad-on' : ''}`)).innerHTML = wiz.source === id ? '<i class="bx bx-check" aria-hidden="true"></i>' : '';
+        btn.addEventListener('click', () => { wiz.source = id; wiz.error = ''; render(); });
+        return btn;
+    };
+    const ways = el('div', 'rg-app-ways');
+    ways.setAttribute('role', 'radiogroup');
+    ways.setAttribute('data-help-key', 'appRegWizComo');
+    ways.append(opt('plantilla', 'main.regWayTemplate', a.template), opt('excel', 'main.regWayExcel', a.excel));
+    body.appendChild(ways);
+    if (wiz.source === 'plantilla') {
+        const link = el('button', 'rg-app-link');
+        link.type = 'button';
+        link.innerHTML = `<i class="bx bx-download" aria-hidden="true"></i> <span>${esc(t('main.regTemplate'))}</span>`;
+        link.addEventListener('click', () => shareTemplate(link));
+        body.appendChild(link);
+    }
+    if (reg.kind === 'day') {
+        const field = el('label', 'aa-app-field');
+        field.setAttribute('data-help-key', 'appRegWizDia');
+        const input = el('input', 'pm-app-input');
+        input.type = 'date';
+        input.value = wiz.day;
+        input.max = todayText();
+        input.addEventListener('input', () => { wiz.day = input.value; });
+        input.addEventListener('change', () => { wiz.day = input.value; });
+        field.append(el('span', '', t('main.regDayLabel')), input);
+        body.appendChild(field);
+    }
+    bar.appendChild(wizBtn('rg-app-btn-pri', t('home.regContinue'), () => {
+        if (reg.kind === 'day' && !wiz.day) { wiz.error = t('main.regErr_IMPORT_DAY'); render(); return; }
+        wiz.error = '';
+        wiz.step = 'file';
+        render();
+        setScroll(0);
+    }, !wiz.source || (wiz.source === 'plantilla' ? !a.template : !a.excel)));
+}
+// Paso 2: el archivo. Al elegirlo se revisa solo (con la plantilla se pasa directo a la revisión).
+function stepFile(body, bar) {
+    body.appendChild(el('h3', '', t('home.regWizFile')));
+    const pick = el('label', `rg-app-pick${wiz.busy ? ' rg-app-pick-busy' : ''}`);
+    pick.setAttribute('for', 'rg-app-file');
+    pick.setAttribute('data-help-key', 'appRegWizArchivo');
+    pick.innerHTML = `<i class="bx ${wiz.busy ? 'bx-loader-alt bx-spin' : 'bx-upload'}" aria-hidden="true"></i>`;
+    pick.appendChild(el('b', '', t(wiz.busy ? 'main.regReading' : 'home.regTapToPick')));
+    const input = el('input');
+    input.type = 'file';
+    input.id = 'rg-app-file';
+    input.accept = XLSX_ACCEPT;
+    input.disabled = wiz.busy;
+    input.addEventListener('change', () => { const file = (input.files || [])[0]; input.value = ''; chooseFile(file); });
+    pick.appendChild(input);
+    body.appendChild(pick);
+    if (wiz.file) {
+        const card = el('div', 'pm-app-card rg-app-filecard');
+        card.innerHTML = '<span class="rg-app-optic"><i class="bx bxs-file" aria-hidden="true"></i></span>';
+        const text = el('span', 'rg-app-main');
+        text.append(el('b', '', wiz.file.name), el('span', 'rg-app-sub', `${Math.max(1, Math.round(wiz.file.size / 1024))} KB`));
+        card.appendChild(text);
+        body.appendChild(card);
+    }
+    bar.appendChild(wizBtn('rg-app-btn-tx', t('home.regBack'), wizardBack, wiz.busy));
+}
+// Paso 3 de «Con mi Excel»: cada columna del archivo y cómo se carga (la unidad, el código y el valor son obligatorios).
+function stepMap(body, bar) {
+    const reg = currentReg();
+    const info = wiz.info;
+    body.appendChild(el('h3', '', t('main.regMapTitle')));
+    const monthCols = new Map((info.mapping.valueCols || []).map((v) => [v.col, v.period]));
+    body.appendChild(el('p', 'pm-app-note', t(reg.kind === 'month' ? 'main.regMapRead' : 'main.regMapReadDay', { cols: info.headers.length, months: monthCols.size, rows: num(info.rowsDeclared) })));
+    if ((info.sheets || []).length > 1) {
+        const field = el('label', 'aa-app-field');
+        const select = el('select', 'pm-app-input');
+        info.sheets.forEach((sh) => { const o = el('option', '', sh.name); o.value = sh.name; select.appendChild(o); });
+        select.value = wiz.sheet;
+        select.addEventListener('change', async () => {
+            wiz.busy = true; wiz.error = ''; render();
+            try { await inspect(select.value); wiz.busy = false; render(); } catch (err) { wiz.error = errorTextOf(err); wiz.busy = false; render(); }
+        });
+        field.append(el('span', '', t('main.regSheet')), select);
+        body.appendChild(field);
+    }
+    const list = el('div', 'rg-app-maplist');
+    list.setAttribute('data-help-key', 'appRegWizMapeo');
+    const dimOptions = (selected, includeValue) => {
+        const opts = [['', t('main.regNotLoaded')], ...DIM_KEYS.map((d) => [d, t(`main.regDim_${d}`)])];
+        if (includeValue) opts.push(['value', t('main.regValueColumn')]);
+        return opts.map(([v, label]) => { const o = el('option', '', label); o.value = v; if (selected === v) o.selected = true; return o; });
+    };
+    info.headers.forEach((h, i) => {
+        const row = el('div', 'rg-app-maprow');
+        const name = el('span', 'rg-app-mapname');
+        const sample = info.sample && info.sample[0] ? info.sample[0].values[i] : '';
+        name.append(el('b', '', h.text), el('small', '', sample === undefined || sample === null ? '' : String(sample)));
+        row.appendChild(name);
+        if (reg.kind === 'month' && monthCols.has(h.index)) {
+            const label = el('label', 'rg-app-switch');
+            const box = el('input');
+            box.type = 'checkbox';
+            box.checked = wiz.include.has(h.index);
+            box.addEventListener('change', () => { if (box.checked) wiz.include.add(h.index); else wiz.include.delete(h.index); });
+            label.append(box, el('span', '', t('main.regAsMonth', { period: periodLabel(monthCols.get(h.index)) })));
+            row.appendChild(label);
+        } else {
+            const select = el('select', 'pm-app-input rg-app-mapsel');
+            select.setAttribute('aria-label', h.text);
+            dimOptions(wiz.picks[h.index] || '', reg.kind === 'day').forEach((o) => select.appendChild(o));
+            select.addEventListener('change', () => { wiz.picks[h.index] = select.value; });
+            row.appendChild(select);
+        }
+        list.appendChild(row);
+    });
+    body.appendChild(list);
+    bar.append(wizBtn('rg-app-btn-pri', t('main.regReview'), review, wiz.busy), wizBtn('rg-app-btn-tx', t('main.regChooseAnother'), () => { wiz.step = 'file'; wiz.file = null; wiz.buffer = null; wiz.info = null; wiz.error = ''; render(); setScroll(0); }, wiz.busy));
+}
+// Último paso: la revisión (no se ha guardado nada) y «Confirmar carga».
+function stepReview(body, bar) {
+    const sum = wiz.preview.summary;
+    const issues = wiz.preview.issues || [];
+    body.appendChild(el('h3', '', wiz.file ? wiz.file.name : t('main.regImport')));
+    body.appendChild(el('p', 'rg-app-sub', t('main.regRowsRead', { rows: num(sum.rowsInFile), sheet: sum.sheet })));
+    const grid = el('div', 'rg-app-grid2');
+    grid.setAttribute('data-help-key', 'appRegWizRevision');
+    const cnt = (value, label, cls) => { const box = el('div', `rg-app-cnt${cls ? ` rg-app-cnt-${cls}` : ''}`); box.append(el('b', '', num(value)), el('span', '', label)); return box; };
+    grid.append(
+        cnt((sum.newPeriods || []).length, t('main.colRegCargaPeriodos')), cnt(sum.newRows, t('main.colRegCargaNuevos')), cnt(sum.valuesAdded, t('home.regToAdd'), sum.valuesAdded ? 'ok' : ''),
+        cnt(sum.untouched, t('main.colRegCargaYaEstaba')), cnt(sum.different, t('main.colRegCargaDistintos'), sum.different ? 'warn' : ''), cnt(sum.errors, t('main.colRegCargaErrores'), sum.errors ? 'bad' : 'ok'),
+    );
+    body.appendChild(grid);
+    if ((sum.newPeriods || []).length) body.appendChild(el('p', 'rg-app-sub', t('main.regSumNewPeriods', { periods: sum.newPeriods.map(periodLabel).join(', ') })));
+    if (sum.skippedFuture && sum.skippedFuture.length) body.appendChild(el('p', 'rg-app-note', t('main.regSumFuture', { periods: sum.skippedFuture.map(periodLabel).join(', ') })));
+    if (!sum.valuesAdded) body.appendChild(el('p', 'rg-app-note', t('main.regSumNothing')));
+    if ((sum.periods || []).length) {
+        const det = el('details', 'aa-app-control');
+        det.appendChild(el('summary', '', t('home.regByPeriod')));
+        const list = el('div', 'pm-app-meta');
+        list.innerHTML = sum.periods.map((p) => `<div><span>${esc(periodLabel(p.period))} · ${esc(t(p.status === 'new' ? 'main.regPeriodNew' : 'main.regPeriodExisting'))}</span><b>+${esc(num(p.added))}${p.untouched ? ` · ${esc(num(p.untouched))} =` : ''}${p.different ? ` · ${esc(num(p.different))} ≠` : ''}</b></div>`).join('');
+        det.appendChild(list);
+        body.appendChild(det);
+    }
+    if (issues.length) {
+        const det = el('details', 'aa-app-control');
+        det.setAttribute('open', '');
+        det.appendChild(el('summary', '', t('home.regIssuesTitle', { n: num(sum.issuesTotal || issues.length) })));
+        issues.slice(0, ISSUES_SHOWN).forEach((i) => {
+            const card = el('div', `rg-app-issue rg-app-issue-${i.kind === 'error' ? 'error' : 'warn'}`);
+            card.appendChild(el('b', '', [`${t('main.regIssueRow')} ${i.line}`, i.unidad, i.codigo, i.period ? periodLabel(i.period) : ''].filter(Boolean).join(' · ')));
+            card.appendChild(el('span', '', problemText(i)));
+            if (i.file !== undefined || i.saved !== undefined) card.appendChild(el('small', '', [i.file === undefined ? '' : `${t('main.regIssueFile')}: ${typeof i.file === 'number' ? num(i.file) : i.file}`, i.saved === undefined ? '' : `${t('main.regIssueSaved')}: ${num(i.saved)}`].filter(Boolean).join(' · ')));
+            det.appendChild(card);
+        });
+        if ((sum.issuesTotal || 0) > ISSUES_SHOWN) det.appendChild(el('p', 'rg-app-sub', t('main.regIssuesMore', { shown: ISSUES_SHOWN, total: num(sum.issuesTotal) })));
+        body.appendChild(det);
+    }
+    body.appendChild(el('p', 'rg-app-sub', t('main.regOnlyAdds')));
+    const nothing = !sum.valuesAdded;
+    bar.appendChild(wizBtn('rg-app-btn-ok', nothing ? t('main.regLoadNothing') : t('main.regLoadGo'), commitLoad, nothing || wiz.busy, 'bx-upload'));
+    if (issues.length) bar.appendChild(wizBtn('rg-app-btn-out', t('main.regIssuesDownload'), downloadIssues, wiz.busy, 'bx-download'));
+    bar.appendChild(wizBtn('rg-app-btn-tx', t('main.regChooseAnother'), () => { wiz.step = 'file'; wiz.file = null; wiz.buffer = null; wiz.info = null; wiz.preview = null; wiz.error = ''; render(); setScroll(0); }, wiz.busy));
+}
+function stepDone(body, bar) {
+    const sum = wiz.result.summary;
+    const big = el('div', 'rg-app-okbig');
+    big.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
+    body.append(big, el('h3', 'rg-app-center', t('main.regDoneTitle')), el('p', 'rg-app-sub rg-app-center', t('main.regDoneText', { n: num(sum.valuesAdded), rows: num(sum.newRows) })));
+    if (sum.newPeriods && sum.newPeriods.length) body.appendChild(el('p', 'rg-app-sub rg-app-center', t('main.regDoneNewPeriods', { periods: sum.newPeriods.map(periodLabel).join(', ') })));
+    if (sum.different || sum.errors) body.appendChild(el('p', 'rg-app-sub rg-app-center', t('main.regDoneKept', { n: num(sum.different + sum.errors) })));
+    const loadId = wiz.result.loadId;
+    if (loadId) bar.appendChild(wizBtn('rg-app-btn-pri', t('home.regSeeLoad'), () => { wiz = null; tab = 'loads'; openLoad(loadId); }));
+    bar.appendChild(wizBtn('rg-app-btn-tx', t('home.regBackToRegistry'), leaveWizard));
+}
+
 document.getElementById('carga-back').addEventListener('click', () => {
+    if (view === 'wizard') { wizardBack(); return; }
     if (view === 'load') { view = 'registry'; tab = 'loads'; render(); setScroll(loadsScroll); return; }
     if (view === 'code') { view = 'registry'; render(); setScroll(regScroll); return; }
     if (view === 'registry') { view = 'list'; render(); setScroll(listScroll); return; }
