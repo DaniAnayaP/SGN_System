@@ -1941,6 +1941,8 @@ const MODULE_CATALOG = [
     { key: 'finance', labelKey: 'menu.finance' },
     { key: 'certifications', labelKey: 'menu.certifications' },
     { key: 'information-technology', labelKey: 'menu.informationTechnology' },
+    // Análisis: el departamento donde se concentra el análisis de información de varios sitios; sus áreas son los departamentos del cliente (Daniel, 2026-11-25). Se vende aparte (adicional).
+    { key: 'analysis', labelKey: 'menu.analysis' },
     // Top-bar buttons — contracted at the client level same as departments;
     // a button only actually shows for a given user when it's BOTH
     // contracted here AND granted to them in Accesos y Permisos (see
@@ -3622,9 +3624,9 @@ const TABLE_CHANGES_SYSTEM_META = {
     'ventas': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Ventas Manuales' },
     'registros': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Registros Información' },
     'registros-cargas': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Registros Información' },
-    'analisis': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Análisis Registros Manuales' },
-    'analisis-extracciones': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Análisis Registros Manuales' },
-    'analisis-archivo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Análisis Registros Manuales' },
+    'analisis': { area: 'Cadena de Suministro', modulo: 'Análisis', pantalla: 'Análisis Registros Manuales' },
+    'analisis-extracciones': { area: 'Cadena de Suministro', modulo: 'Análisis', pantalla: 'Análisis Registros Manuales' },
+    'analisis-archivo': { area: 'Cadena de Suministro', modulo: 'Análisis', pantalla: 'Análisis Registros Manuales' },
     'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
@@ -3976,9 +3978,9 @@ const TABLE_GRANT_PATHS = {
     'ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
     'registros': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
     'registros-cargas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
-    'analisis': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
-    'analisis-extracciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
-    'analisis-archivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
+    'analisis': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
+    'analisis-extracciones': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
+    'analisis-archivo': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
     'carga-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-carga-combustible' },
@@ -4807,6 +4809,54 @@ function moveVentasManualesToAdditionalOnce() {
     })();
     console.log(`[db] Ventas Manuales como adicional (una vez): ${JSON.stringify(stats)}.`);
 }
+// Departamento «Análisis» (Daniel, 2026-11-25, «Sí a las propuestas»): «Análisis Registros Manuales» (con sus análisis, botones, columnas e iconos) deja Cargas Manuales de Centro de Distribución y pasa a Análisis › Cadena de Suministro › Análisis manuales.
+// Una sola vez: todo lo que cuelga de la ruta vieja (permisos de planes, adicionales de clientes, giros, perfiles, usuarios y puestos, estatus, orden y costos del árbol) pasa a la ruta nueva sin que nadie pierda nada; si la nueva ya existía, la vieja sobra.
+// Los planes que ahora traen algo de Análisis abren su departamento (syncPlanModulesFromGrants); los adicionales de clientes lo abren al arrancar el servidor. Los análisis, sus versiones y su historial no cambian (la llave de la tabla sigue siendo «analisis»).
+// Lo que se tenía por cubrir toda el área o todo el departamento de Cadena de Suministro NO pasa a Análisis: es un departamento que se vende aparte y solo lo tiene quien tenía la pantalla asignada de forma directa.
+const ANALYSIS_DEPARTMENT_KEY = 'seed-analisis-departamento-v1';
+function moveAnalysisToDepartmentOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(ANALYSIS_DEPARTMENT_KEY)) return;
+    const FROM = { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', prefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' };
+    const TO = { sectionId: 'analysis', itemId: 'an-area-supply-chain', prefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' };
+    const stats = {};
+    const bump = (key, n) => { if (n) stats[key] = (stats[key] || 0) + n; };
+    db.transaction(() => {
+        const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name);
+        tables.forEach((table) => {
+            const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+            if (cols.includes('section_id') && cols.includes('item_id') && cols.includes('submenu_id')) {
+                const skip = new Set(['id', 'section_id', 'item_id', 'submenu_id', 'created_at', 'updated_at', 'granted_at']);
+                const others = cols.filter((c) => !skip.has(c));
+                const exists = db.prepare(`SELECT 1 FROM ${table} WHERE section_id = ? AND item_id = ? AND submenu_id = ?${others.map((c) => ` AND ${c} IS ?`).join('')}`);
+                const move = db.prepare(`UPDATE OR IGNORE ${table} SET section_id = ?, item_id = ?, submenu_id = ? WHERE rowid = ?`);
+                const drop = db.prepare(`DELETE FROM ${table} WHERE rowid = ?`);
+                db.prepare(`SELECT rowid AS _rid, * FROM ${table} WHERE section_id = ? AND item_id = ? AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?)`)
+                    .all(FROM.sectionId, FROM.itemId, FROM.prefix, FROM.prefix.length + 1, `${FROM.prefix}/`).forEach((row) => {
+                        const target = TO.prefix + row.submenu_id.slice(FROM.prefix.length);
+                        if (exists.get(TO.sectionId, TO.itemId, target, ...others.map((c) => row[c]))) { drop.run(row._rid); return; }
+                        if (move.run(TO.sectionId, TO.itemId, target, row._rid).changes) bump(table, 1); else drop.run(row._rid);
+                    });
+            }
+            // llaves de texto («sección::área::ruta…»): solo las que nombran la pantalla movida
+            ['node_key', 'parent_key'].filter((col) => cols.includes(col)).forEach((col) => {
+                const fromKey = `${FROM.sectionId}::${FROM.itemId}::${FROM.prefix}`;
+                const toKey = `${TO.sectionId}::${TO.itemId}::${TO.prefix}`;
+                const rows = db.prepare(`SELECT id, ${col} AS k FROM ${table} WHERE ${col} LIKE ?`).all(`%${fromKey}%`);
+                const update = db.prepare(`UPDATE OR IGNORE ${table} SET ${col} = ? WHERE id = ?`);
+                rows.forEach((row) => {
+                    const key = row.k.split(fromKey).join(toKey);
+                    if (key === row.k) return;
+                    if (update.run(key, row.id).changes) bump(`${table}.${col}`, 1);
+                    else db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(row.id);
+                });
+            });
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(ANALYSIS_DEPARTMENT_KEY);
+    })();
+    // los planes que ahora traen Análisis abren su departamento
+    db.prepare("SELECT DISTINCT plan_id AS id FROM plan_grants WHERE section_id = 'analysis'").all().forEach(({ id }) => { try { syncPlanModulesFromGrants(id); } catch (err) { console.error('[db] Análisis: no se pudo abrir el departamento en el plan', id, err.message); } });
+    console.log(`[db] Departamento Análisis (una vez): «Análisis Registros Manuales» pasó de Cargas Manuales (Centro de Distribución) a Análisis › Cadena de Suministro: ${JSON.stringify(stats)}.`);
+}
 // El botón «Crear registro» (colRegCrearAuth) es nuevo: quien ya tiene la pantalla Registros Información lo recibe en lo contratado (Solo ver + Ver y operar); quien lo use en su puesto o usuario lo decide el administrador desde el árbol.
 const REG_CREATE_BUTTON_SEED_KEY = 'seed-registros-crear-boton-v1';
 function seedRegistrosCreateButton() {
@@ -4970,7 +5020,7 @@ function updateRegistryDef(clientId, forTestAccount, key, patch) {
 }
 
 // ---- Cargas Manuales › Análisis Registros Manuales (la lógica de juntar registros vive en manualAnalyses.js) ----
-const AN_SCREEN = { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Análisis Registros Manuales' };
+const AN_SCREEN = { area: 'Cadena de Suministro', modulo: 'Análisis', pantalla: 'Análisis Registros Manuales' };
 function mapAnalysis(row) {
     return { id: row.id, name: row.name, design: parseJsonObject(row.design_json), status: row.status, createdBy: row.created_by, createdAt: row.created_at, updatedAt: row.updated_at };
 }
@@ -9762,7 +9812,7 @@ async function activateHrWorkerUser(workerId, clientId, forTestAccount = false) 
 const HR_DEPARTMENT_KEYS = MODULE_CATALOG.filter((m) => String(m.labelKey).startsWith('menu.')).map((m) => m.key);
 const HR_DEPARTMENT_NAMES_ES = {
     'steering-committee': 'Comité Directivo', 'general-management': 'Dirección General', 'management-control': 'Control de Gestión', 'supply-chain': 'Cadena de Suministro', purchasing: 'Compras', commercial: 'Comercial',
-    marketing: 'Mercadotecnia', 'human-resources': 'Recursos Humanos', accounting: 'Contabilidad', finance: 'Finanzas', certifications: 'Certificaciones', 'information-technology': 'Tecnologías de la Información',
+    marketing: 'Mercadotecnia', 'human-resources': 'Recursos Humanos', accounting: 'Contabilidad', finance: 'Finanzas', certifications: 'Certificaciones', 'information-technology': 'Tecnologías de la Información', analysis: 'Análisis',
 };
 // Lo guardado: '' = sin asignar todavía (null), 'all' = todos, o un arreglo JSON (departamentos y sitios: sus claves; centros: sus ids).
 function parseHrAssignment(raw) {
@@ -12223,7 +12273,7 @@ function setLevelOrders(level, entityId, rows, updatedBy, clientId = null, defau
 // de las tablas del catálogo de colores, cada una con su orden de menu.json. Solo las de departamentos (no General): son las que
 // el Dashboard del cliente ordena (ver GET /api/business/permission-order).
 // Orden en que el Dashboard del cliente lista los departamentos cuando nadie guardó uno (DEPARTMENTS en public/Dashboard.js; mantener igual).
-const CLIENT_DEPARTMENT_DEFAULT_ORDER = ['finance', 'accounting', 'human-resources', 'marketing', 'commercial', 'purchasing', 'supply-chain', 'management-control', 'general-management', 'steering-committee', 'certifications', 'information-technology'];
+const CLIENT_DEPARTMENT_DEFAULT_ORDER = ['finance', 'accounting', 'human-resources', 'marketing', 'commercial', 'purchasing', 'supply-chain', 'management-control', 'general-management', 'steering-committee', 'certifications', 'information-technology', 'analysis'];
 let cachedOrderListCatalog = null;
 function getOrderListCatalog() {
     if (cachedOrderListCatalog) return cachedOrderListCatalog;
@@ -13477,7 +13527,7 @@ const COLOR_TREE_SECTION_LABEL_KEYS = {
     'general-management': 'menu.generalManagement',
     'steering-committee': 'menu.steeringCommittee',
     certifications: 'menu.certifications',
-    'information-technology': 'menu.informationTechnology',
+    'information-technology': 'menu.informationTechnology', analysis: 'menu.analysis',
 };
 
 function userCanAuthorizeClientColors(userId, clientId) {
@@ -22239,6 +22289,7 @@ moveScreensToGestionOnce();
 try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos desde TI: no se pudieron mover los permisos de las pantallas (se reintentará al arrancar):', err.message); }
 try { moveVentasToCargasManualesOnce(); } catch (err) { console.error('[db] Ventas Manuales: no se pudo mover Ventas a Cargas Manuales (se reintentará al arrancar):', err.message); }
 try { moveVentasManualesToAdditionalOnce(); } catch (err) { console.error('[db] Ventas Manuales: no se pudo pasar a adicional (se reintentará al arrancar):', err.message); }
+try { moveAnalysisToDepartmentOnce(); } catch (err) { console.error('[db] Análisis: no se pudo pasar al departamento Análisis (se reintentará al arrancar):', err.message); }
 try { seedRegistrosCreateButton(); } catch (err) { console.error('[db] Registros: no se pudo sembrar el botón Crear registro (se reintentará al arrancar):', err.message); }
 try { backfillPosSalePublic(); } catch (err) { console.error('[db] Ventas: no se pudo rellenar el código de los tickets (se reintentará al arrancar):', err.message); }
 try { seedSitesFromCostCentersOnce(); } catch (err) { console.error('[db] Sitios propios: no se pudo crear desde los centros (se reintentará al arrancar):', err.message); }

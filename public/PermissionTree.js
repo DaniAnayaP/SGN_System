@@ -46,7 +46,7 @@
         'general-management': 'menu.generalManagement',
         'steering-committee': 'menu.steeringCommittee',
         certifications: 'menu.certifications',
-        'information-technology': 'menu.informationTechnology',
+        'information-technology': 'menu.informationTechnology', analysis: 'menu.analysis',
         'org-empresa': 'menu.orgEmpresa',
     };
 

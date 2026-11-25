@@ -394,7 +394,7 @@ async function loadSaasUsers() {
 // giro, del plan del cliente. Quien tiene el botón «Elegir giros y departamentos que atiende» (árbol de accesos) lo cambia; nadie cambia el suyo propio (lo hace quien coordina). Rutas /api/admin/saas-support-scope.
 const SCOPE_DEPARTMENT_LABELS = {
     finance: 'menu.finance', accounting: 'menu.accounting', 'human-resources': 'menu.humanResources', marketing: 'menu.marketing', commercial: 'menu.commercial', purchasing: 'menu.purchasing', 'supply-chain': 'menu.supplyChain',
-    'management-control': 'menu.managementControl', 'general-management': 'menu.generalManagement', 'steering-committee': 'menu.steeringCommittee', certifications: 'menu.certifications', 'information-technology': 'menu.informationTechnology',
+    'management-control': 'menu.managementControl', 'general-management': 'menu.generalManagement', 'steering-committee': 'menu.steeringCommittee', certifications: 'menu.certifications', 'information-technology': 'menu.informationTechnology', analysis: 'menu.analysis',
 };
 const scopeDeptLabel = (id) => (SCOPE_DEPARTMENT_LABELS[id] ? Dashboard.t(SCOPE_DEPARTMENT_LABELS[id]) : id);
 async function loadSupportScope() {

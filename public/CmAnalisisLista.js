@@ -25,6 +25,7 @@ const table = () => wrapper().querySelector('table.data-table');
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
         await load();
+        openNewFromMenu();
         document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply', () => { st.text = (document.getElementById('filter-search-text')?.value || '').trim().toLowerCase(); draw(); });
         document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', () => { st.text = ''; draw(); });
     } catch (err) {
@@ -116,18 +117,14 @@ function draw() {
     if (!tbl.dataset.colInit && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper(), 0);
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(TABLE);
     wrapper().setAttribute('data-help-key', 'anTable');
-    renderButtons();
     if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(TABLE, { getTitle: () => `${t('menu.cmAnalisisRegistros')}_${new Date().toISOString().slice(0, 10)}` });
 }
-function renderButtons() {
-    const toolbar = wrapper().previousElementSibling;
-    if (!toolbar || !toolbar.classList.contains('data-table-zoom') || !st.canCreate || toolbar.querySelector('#an-new-btn')) return;
-    const btn = document.createElement('button');
-    btn.type = 'button'; btn.className = 'data-table-new-record-btn'; btn.id = 'an-new-btn'; btn.setAttribute('data-help-key', 'anNew');
-    btn.innerHTML = `<i class="bx bx-plus" aria-hidden="true"></i><span>${esc(t('main.anNew'))}</span>`;
-    btn.addEventListener('click', openCreate);
-    toolbar.classList.add('ven-toolbar');
-    toolbar.prepend(btn);
+// La opción «＋ Agregar nuevo análisis» del menú lateral abre esta pantalla con ?nuevo=1: se muestra la ventana de alta (solo con el botón «Crear análisis») y se limpia la dirección.
+function openNewFromMenu() {
+    const params = new URLSearchParams(location.search);
+    if (params.get('nuevo') !== '1') return;
+    history.replaceState(null, '', location.pathname);
+    if (st.canCreate) openCreate();
 }
 function errorText(body) {
     const code = body && body.code;

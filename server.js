@@ -3447,7 +3447,14 @@ function applyEffectiveEntitlements(clientId) {
 // Una vez al arrancar: un cliente con adicionales guardados antes de que un adicional abriera su departamento con uno solo asignado no tenía el
 // departamento abierto. Solo agrega (nunca quita) y no hace nada si ya está todo abierto, así que repetirlo en cada arranque no cambia nada.
 try {
-    listClients().forEach((c) => { if (syncClientModulesFromPermissionGrants(c.id)) applyEffectiveEntitlements(c.id); });
+    listClients().forEach((c) => {
+        let changed = syncClientModulesFromPermissionGrants(c.id);
+        // un plan que ahora trae un departamento (p. ej. Análisis, que se mudó de lugar) y que el cliente todavía no tiene abierto
+        const plan = c.plan ? getPlanByName(c.plan) : null;
+        const open = new Set(getClientModuleKeys(c.id));
+        if (plan && plan.modules.some((key) => !open.has(key))) changed = true;
+        if (changed) applyEffectiveEntitlements(c.id);
+    });
 } catch (err) {
     console.error('[accesos] no se pudieron abrir los departamentos de los adicionales guardados:', err.message);
 }
@@ -5434,7 +5441,7 @@ const ACCESS_REL_SCREEN = 'saas-access-relations';
 const ES_LABELS = require('./public/i18n/es.json');
 const DEPARTMENT_LABEL_KEYS = {
     main: 'menu.mainSection', finance: 'menu.finance', accounting: 'menu.accounting', 'human-resources': 'menu.humanResources', marketing: 'menu.marketing', commercial: 'menu.commercial', purchasing: 'menu.purchasing',
-    'supply-chain': 'menu.supplyChain', 'management-control': 'menu.managementControl', 'general-management': 'menu.generalManagement', 'steering-committee': 'menu.steeringCommittee', certifications: 'menu.certifications', 'information-technology': 'menu.informationTechnology',
+    'supply-chain': 'menu.supplyChain', 'management-control': 'menu.managementControl', 'general-management': 'menu.generalManagement', 'steering-committee': 'menu.steeringCommittee', certifications: 'menu.certifications', 'information-technology': 'menu.informationTechnology', analysis: 'menu.analysis',
 };
 function esLabel(labelKey, params) {
     let value = String(labelKey || '').split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), ES_LABELS);
@@ -7278,8 +7285,8 @@ app.get('/api/business/manual-registries', requireAuth, (req, res) => {
 // Para el menú lateral: los registros agregados por el cliente que están activos (cada uno es una pantalla más debajo de «Registros Información»).
 app.get('/api/business/manual-registries/menu', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
-    if (!req.user.clientId) return res.json({ registries: [] });
-    res.json({ registries: regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => r.custom && r.status === 'active').map((r) => ({ key: r.key, name: r.name })) });
+    if (!req.user.clientId) return res.json({ registries: [], canCreateRegistry: false });
+    res.json({ registries: regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => r.custom && r.status === 'active').map((r) => ({ key: r.key, name: r.name })), canCreateRegistry: regAbilities(req).canCreateRegistry });
 });
 // Agregar un registro nuevo: nombre, periodicidad (mensual o diaria) y lo que mide. Lleva las mismas columnas de referencia que los demás. Del botón «Crear registro» (colRegCrearAuth).
 function regNameTaken(req, name, exceptKey = '') {
@@ -7520,8 +7527,8 @@ const anRegistriesInfo = (req) => regClientRegistries(req.user.clientId, req.use
 // Para el menú lateral: los análisis activos (cualquier persona del cliente; el menú ya decide quién ve la pantalla).
 app.get('/api/business/manual-analyses/menu', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
-    if (!req.user.clientId) return res.json({ analyses: [] });
-    res.json({ analyses: listAnalyses(req.user.clientId, req.user.isTestAccount, { onlyActive: true }).map((a) => ({ id: a.id, name: a.name })) });
+    if (!req.user.clientId) return res.json({ analyses: [], canCreate: false });
+    res.json({ analyses: listAnalyses(req.user.clientId, req.user.isTestAccount, { onlyActive: true }).map((a) => ({ id: a.id, name: a.name })), canCreate: anAbilities(req).canCreate });
 });
 app.get('/api/business/manual-analyses', requireAuth, (req, res) => {
     if (!anClient(req, res)) return;

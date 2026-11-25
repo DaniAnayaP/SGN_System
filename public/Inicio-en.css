@@ -4143,3 +4143,10 @@
     @media (prefers-reduced-motion: reduce){
         body::before{ transition: none; }
     }
+
+/* «＋ Agregar nuevo …» dentro de un desplegable del menú (Análisis manuales, Registros Información): opción con borde punteado */
+.sub-menu .sub-menu-add .sub-menu-link{
+    border: 1px dashed var(--color-accent);
+    color: var(--color-accent);
+    font-weight: 600;
+}

@@ -46,7 +46,7 @@ const DEPARTMENT_LABEL_KEYS = {
     accounting: 'menu.accounting',
     finance: 'menu.finance',
     certifications: 'menu.certifications',
-    'information-technology': 'menu.informationTechnology',
+    'information-technology': 'menu.informationTechnology', analysis: 'menu.analysis',
 };
 
 function pad(n, len = 2) {

@@ -52,6 +52,7 @@ const tableOf = (tableId) => wrapperOf(tableId)?.querySelector('table.data-table
         renderCards();
         await refreshData();
         wireStatic();
+        openNewFromMenu();
     } catch (err) {
         console.error('Registros Información: failed to initialize', err);
     }
@@ -115,16 +116,6 @@ function renderCards() {
         });
         host.appendChild(card);
     });
-    if (st.canCreateRegistry) {
-        const add = document.createElement('button');
-        add.type = 'button';
-        add.className = 'reg-card reg-card-new';
-        add.id = 'reg-new-btn';
-        add.setAttribute('data-help-key', 'regNew');
-        add.innerHTML = `<span class="reg-card-top"><b><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.regNew'))}</b></span>`;
-        add.addEventListener('click', openCreateRegistry);
-        host.appendChild(add);
-    }
     renderManage();
 }
 // Cambiar nombre y desactivar/activar: solo para los registros que agregó el cliente (los dos de siempre no se tocan) y para quien tiene el botón «Crear registro».
@@ -152,6 +143,14 @@ function renderManage() {
     };
     make('bx-edit', 'main.regRename', () => openRenameRegistry(reg));
     make(reg.status === 'active' ? 'bx-hide' : 'bx-show', reg.status === 'active' ? 'main.regDeactivate' : 'main.regActivate', () => toggleRegistry(reg));
+}
+// La opción «＋ Agregar nuevo registro» del menú lateral abre esta pantalla con ?nuevo=1: se muestra la ventana de alta (solo con el botón «Crear registro») y se limpia la dirección.
+function openNewFromMenu() {
+    const params = new URLSearchParams(location.search);
+    if (params.get('nuevo') !== '1') return;
+    params.delete('nuevo');
+    history.replaceState(null, '', params.toString() ? `${location.pathname}?${params}` : location.pathname);
+    if (st.canCreateRegistry) openCreateRegistry();
 }
 function regErrorText(body) {
     const code = body && body.code;

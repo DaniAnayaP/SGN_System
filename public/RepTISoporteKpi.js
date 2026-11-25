@@ -19,7 +19,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const lang = () => (Dashboard.getLanguage ? Dashboard.getLanguage() : (localStorage.getItem('lang') || 'es'));
 const locale = () => (lang() === 'en' ? 'en-US' : 'es-MX');
-const DEPT_KEYS = { marketing: 'menu.marketing', commercial: 'menu.commercial', purchasing: 'menu.purchasing', 'supply-chain': 'menu.supplyChain', 'management-control': 'menu.managementControl', 'general-management': 'menu.generalManagement', 'steering-committee': 'menu.steeringCommittee', certifications: 'menu.certifications', 'information-technology': 'menu.informationTechnology', 'human-resources': 'menu.humanResources', accounting: 'menu.accounting', finance: 'menu.finance' };
+const DEPT_KEYS = { marketing: 'menu.marketing', commercial: 'menu.commercial', purchasing: 'menu.purchasing', 'supply-chain': 'menu.supplyChain', 'management-control': 'menu.managementControl', 'general-management': 'menu.generalManagement', 'steering-committee': 'menu.steeringCommittee', certifications: 'menu.certifications', 'information-technology': 'menu.informationTechnology', analysis: 'menu.analysis', 'human-resources': 'menu.humanResources', accounting: 'menu.accounting', finance: 'menu.finance' };
 const state = { period: 'month', type: 'all', data: null, dim: 'dept', picks: [], loading: false };
 // Minutos → «38 min», «9 h 24», «1 d 4 h»
 function dur(min) {

@@ -352,7 +352,7 @@ let currentUser = null;
 const EMBEDDED_TRANSLATIONS = {
     en: {
         meta: { loginTitle: "SGN by GEIPSA - Login", dashboardTitle: "SGN - Home" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", logoutConfirm: "Are you sure you want to log out?", logoutConfirmGreeting: "{name}, are you sure you want to log out?", department: "Department", deptAbbr: { finance: "FIN", accounting: "ACC", humanResources: "HR", marketing: "MKT", commercial: "COM", purchasing: "PUR", supplyChain: "SCM", managementControl: "MC", generalManagement: "GM", steeringCommittee: "STC", certifications: "CERT", informationTechnology: "IT" }, area: "Area", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Search", searchNoResults: "No matches found.", notifications: "Notifications", settings: "Settings", logout: "Log out", logoutConfirm: "Are you sure you want to log out?", logoutConfirmGreeting: "{name}, are you sure you want to log out?", department: "Department", deptAbbr: { finance: "FIN", accounting: "ACC", humanResources: "HR", marketing: "MKT", commercial: "COM", purchasing: "PUR", supplyChain: "SCM", managementControl: "MC", generalManagement: "GM", steeringCommittee: "STC", certifications: "CERT", informationTechnology: "IT", analysis: "ANL" }, area: "Area", costCenters: "Cost Centers", costCentersAll: "All cost centers", costCentersAllCount: "All ({count})", costCentersNone: "None selected", costCentersSelectedCount: "Several ({count})" },
         menu: {
             home: "Home", panel: "Panel", dashboard: "Dashboard", adminBusiness: "Admin Business",
             contractedService: "Contracted Service", expansions: "Expansions", businessConfig: "Business Style",
@@ -367,6 +367,7 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Human Resources", accounting: "Accounting", finance: "Finance",
             certifications: "Certifications",
             informationTechnology: "Information Technology",
+            analysis: "Analysis",
             deptArea: "Dept. Area {n}", option: "Option {n}",
             area: { generic: "Area {n}", rawMaterial: "Raw Material", production: "Production", transportVolume: "Volume Transport", transportLastMile: "Last-Mile Transport", distributionCenter: "Distribution Center", pointOfSale: "Point of Sale", delivery: "Delivery", endCustomer: "End Customer", customerComplaints: "Customer Complaints", iso9001: "ISO 9001:2015 Quality Management System", iso9001Abbr: "QMS 9001:2015", recruitment: "Recruitment and Selection", personnelAdmin: "Personnel Administration", trainingDevelopment: "Training and Development", compensationBenefits: "Compensation and Benefits", organizationalDevelopment: "Organizational Development", occupationalHealthSafety: "Occupational Health and Safety", hris: "HR Information System (HRIS)", hrAnalytics: "HR Analytics" },
             clientesRegistrados: "Our Clients", addClientNew: "Add New Client", contrataciones: "Contracted Modules", clientAdmin: "Client Administration", plansRegistered: "Our Plans", addPlanNew: "Add New Plan", moduleCosts: "Access & Permissions Cost", saasTeam: "SaaS Team", mainSection: "General",
@@ -499,7 +500,7 @@ const EMBEDDED_TRANSLATIONS = {
     },
     es: {
         meta: { loginTitle: "SGN by GEIPSA - Iniciar sesión", dashboardTitle: "SGN - Inicio" },
-        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", logoutConfirm: "¿Seguro que deseas salir?", logoutConfirmGreeting: "{name}, ¿seguro que deseas salir?", department: "Departamento", deptAbbr: { finance: "FIN", accounting: "CONT", humanResources: "RRHH", marketing: "MKT", commercial: "COM", purchasing: "COMP", supplyChain: "CDS", managementControl: "CG", generalManagement: "DG", steeringCommittee: "CD", certifications: "CERT", informationTechnology: "TI" }, area: "Área", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
+        sidebar: { brand: "SGN", searchPlaceholder: "Buscar", searchNoResults: "Sin resultados.", notifications: "Notificaciones", settings: "Configuración", logout: "Cerrar sesión", logoutConfirm: "¿Seguro que deseas salir?", logoutConfirmGreeting: "{name}, ¿seguro que deseas salir?", department: "Departamento", deptAbbr: { finance: "FIN", accounting: "CONT", humanResources: "RRHH", marketing: "MKT", commercial: "COM", purchasing: "COMP", supplyChain: "CDS", managementControl: "CG", generalManagement: "DG", steeringCommittee: "CD", certifications: "CERT", informationTechnology: "TI", analysis: "ANA" }, area: "Área", costCenters: "Centros de Costo", costCentersAll: "Todos los centros de costo", costCentersAllCount: "Todos ({count})", costCentersNone: "Ninguno seleccionado", costCentersSelectedCount: "Varios ({count})" },
         menu: {
             home: "Inicio", panel: "Panel", dashboard: "Tablero", adminBusiness: "Administración del Negocio",
             contractedService: "Servicio Contratado", expansions: "Expansiones", businessConfig: "Estilo del Negocio",
@@ -514,6 +515,7 @@ const EMBEDDED_TRANSLATIONS = {
             humanResources: "Recursos Humanos", accounting: "Contabilidad", finance: "Finanzas",
             certifications: "Certificaciones",
             informationTechnology: "Tecnologías de la Información",
+            analysis: "Análisis",
             deptArea: "Área Dep. {n}", option: "Opción {n}",
             area: { generic: "Área {n}", rawMaterial: "M. Prima", production: "Producción", transportVolume: "Transporte Volumen", transportLastMile: "Transporte Última Milla", distributionCenter: "C. Distribución", pointOfSale: "Punto Venta", delivery: "Delivery", endCustomer: "Cliente Final", customerComplaints: "Quejas de Cliente", iso9001: "ISO 9001:2015 Sistema de Gestión de Calidad", iso9001Abbr: "SGC 9001:2015", recruitment: "Reclutamiento y Selección", personnelAdmin: "Administración de Personal", trainingDevelopment: "Formación y Desarrollo", compensationBenefits: "Compensaciones y Beneficios", organizationalDevelopment: "Desarrollo Organizacional", occupationalHealthSafety: "Seguridad y Salud Laboral", hris: "Sistema de Información de RRHH (SIRH)", hrAnalytics: "Analítica Recursos Humanos (RH Analytics)" },
             clientesRegistrados: "Nuestros Clientes", addClientNew: "Agregar Cliente Nuevo", contrataciones: "Contrataciones", clientAdmin: "Administración de Clientes", plansRegistered: "Nuestros Planes", addPlanNew: "Agregar Plan Nuevo", moduleCosts: "Costo Accesos-Permisos", saasTeam: "Equipo SaaS", mainSection: "General",
@@ -1227,7 +1229,9 @@ const DEPARTMENTS = [
     { key: 'general-management', labelKey: 'menu.generalManagement', abbrKey: 'sidebar.deptAbbr.generalManagement', icon: 'bx-crown' },
     { key: 'steering-committee', labelKey: 'menu.steeringCommittee', abbrKey: 'sidebar.deptAbbr.steeringCommittee', icon: 'bx-group' },
     { key: 'certifications', labelKey: 'menu.certifications', abbrKey: 'sidebar.deptAbbr.certifications', icon: 'bx-certification' },
-    { key: 'information-technology', labelKey: 'menu.informationTechnology', abbrKey: 'sidebar.deptAbbr.informationTechnology', icon: 'bx-chip' }
+    { key: 'information-technology', labelKey: 'menu.informationTechnology', abbrKey: 'sidebar.deptAbbr.informationTechnology', icon: 'bx-chip' },
+    // Análisis: sus áreas son los departamentos del cliente (ver availableAreasForDepartment); se vende aparte (adicional).
+    { key: 'analysis', labelKey: 'menu.analysis', abbrKey: 'sidebar.deptAbbr.analysis', icon: 'bx-analyse' }
 ];
 const ALWAYS_VISIBLE_SECTIONS = ['main'];
 
@@ -1332,6 +1336,10 @@ const AREAS_BY_DEPARTMENT = {
         { key: 'it-area-operations', labelKey: 'menu.area.itOperations', icon: 'bx-chip' },
         { key: 'it-area-company-config', labelKey: 'menu.area.itCompanyConfig', icon: 'bx-cog' },
         { key: 'it-area-implementation', labelKey: 'menu.area.itImplementation', icon: 'bx-rocket' }
+    ],
+    // Una área por departamento (an-area-<departamento>); solo sale la de un departamento que el cliente tiene contratado y solo existen las que ya tienen análisis (hoy Cadena de Suministro).
+    analysis: [
+        { key: 'an-area-supply-chain', labelKey: 'menu.supplyChain', icon: 'bx-package' }
     ]
 };
 
@@ -1669,6 +1677,7 @@ function buildSubmenu(items) {
     ul.className = 'sub-menu';
     items.forEach((item) => {
         const li = document.createElement('li');
+        if (item.addNew) li.classList.add('sub-menu-add'); // «＋ Agregar nuevo …»: opción con borde punteado dentro del desplegable
         const a = document.createElement('a');
         a.href = item.href || '#';
         a.className = 'sub-menu-link';
@@ -3202,7 +3211,7 @@ const SECTION_LABEL_KEYS = {
     'general-management': 'menu.generalManagement',
     'steering-committee': 'menu.steeringCommittee',
     certifications: 'menu.certifications',
-    'information-technology': 'menu.informationTechnology',
+    'information-technology': 'menu.informationTechnology', analysis: 'menu.analysis',
 };
 function sectionGrantLabel(sectionId) {
     if (sectionId === 'main') return t('menu.mainSection');
@@ -13108,7 +13117,8 @@ function isEstatusVisible(sectionId, itemId, submenuId) {
 // department's own sectionId).
 function availableAreasForDepartment(deptKey) {
     const areas = orderByIds((deptKey && AREAS_BY_DEPARTMENT[deptKey]) || [], cascadedOrder && (cascadedOrder.areaOrders || {})[deptKey], (a) => a.key);
-    const visible = areas.filter((a) => isEstatusVisible(deptKey, a.key, null));
+    // Análisis: las áreas son los departamentos del cliente; la de un departamento que no tiene contratado no sale.
+    const visible = areas.filter((a) => isEstatusVisible(deptKey, a.key, null) && (deptKey !== 'analysis' || contractedModuleKeys.includes(a.key.replace(/^an-area-/, ''))));
     if (isUnrestrictedClientAdmin()) {
         // El administrador del cliente solo ve las áreas donde se le asignó algo (o todo el departamento).
         const contract = adminContractGrants();
@@ -13841,38 +13851,49 @@ function updateDatabaseMenuLabel(branding) {
     label.textContent = branding?.companyAbbreviation ? `${base} ${branding.companyAbbreviation}` : base;
 }
 
-// Cargas Manuales (Daniel, 2026-11-25): cada análisis y cada registro que se agrega es una pantalla más del menú, debajo de «Análisis Registros Manuales» y de «Registros Información» (Centro de Distribución). El nombre es dato del cliente, así que va en item.label.
+// Cada registro agregado es una pantalla más debajo de «Registros Información» (Cargas Manuales de Centro de Distribución) y cada análisis agregado, debajo de «Análisis Registros Manuales» (Análisis › Cadena de Suministro › Análisis manuales). El nombre es dato del cliente, así que va en item.label.
 // El permiso de cada uno es el de su pantalla de grupo (grantAs): quien la tiene ve todos. Se quita lo anterior antes de poner la lista, así que se puede llamar de nuevo.
 async function loadManualAnalysesMenu() {
     try {
         const getJson = async (url) => { try { const res = await fetch(url, { credentials: 'include' }); return res.ok ? await res.json() : null; } catch { return null; } };
         const [anBody, regBody] = await Promise.all([getJson('/api/business/manual-analyses/menu'), getJson('/api/business/manual-registries/menu')]);
-        const list = menuData?.areaOverrides?.['supply-chain/sc-area-distribution-center']?.['cat-cargas-manuales'];
-        if (!Array.isArray(list)) return;
-        // lo que no se pudo leer se deja como estaba
-        let base = list.filter((n) => !(anBody && n.dynamicAnalysis) && !(regBody && n.dynamicRegistry));
         const page = window.location.pathname;
         const query = new URLSearchParams(window.location.search);
         const openAnalysis = page.endsWith('CmAnalisis.html') ? query.get('id') : null;
         const openRegistry = page.endsWith('CmRegistrosInformacion.html') ? query.get('registry') : null;
+        const overrides = menuData && menuData.areaOverrides;
+        if (!overrides) return;
+        // lo que no se pudo leer se deja como estaba
         if (regBody) {
-            const at = base.findIndex((n) => n.id === 'cat-cargas-manuales-registros');
-            if (at >= 0) {
-                const dynamic = (regBody.registries || []).map((r) => ({ id: `cat-cargas-manuales-reg-${r.key}`, label: r.name, icon: 'bx-data', href: `CmRegistrosInformacion.html?registry=${encodeURIComponent(r.key)}`, grantAs: 'cat-cargas-manuales-registros', dynamicRegistry: true, ...(openRegistry && r.key === openRegistry ? { active: true } : {}) }));
-                base.splice(at + 1, 0, ...dynamic);
+            const list = overrides['supply-chain/sc-area-distribution-center'] && overrides['supply-chain/sc-area-distribution-center']['cat-cargas-manuales'];
+            if (Array.isArray(list)) {
+                const base = list.filter((n) => !n.dynamicRegistry);
+                const at = base.findIndex((n) => n.id === 'cat-cargas-manuales-registros');
+                if (at >= 0) {
+                    const dynamic = (regBody.registries || []).map((r) => ({ id: `cat-cargas-manuales-reg-${r.key}`, label: r.name, icon: 'bx-data', href: `CmRegistrosInformacion.html?registry=${encodeURIComponent(r.key)}`, grantAs: 'cat-cargas-manuales-registros', dynamicRegistry: true, ...(openRegistry && r.key === openRegistry ? { active: true } : {}) }));
+                    // «＋ Agregar nuevo registro»: solo para quien tiene el botón «Crear registro»; abre la pantalla con la ventana de alta
+                    const addNew = regBody.canCreateRegistry ? [{ id: 'cat-cargas-manuales-reg-nuevo', labelKey: 'main.regNew', abbrKeys: ['main.regNewAbbr1', 'main.regNewAbbr2'], icon: 'bx-plus', href: 'CmRegistrosInformacion.html?nuevo=1', grantAs: 'cat-cargas-manuales-registros', dynamicRegistry: true, addNew: true }] : [];
+                    base.splice(at + 1, 0, ...addNew, ...dynamic);
+                    if (openRegistry && dynamic.some((n) => n.active)) base.forEach((n) => { if (n.id === 'cat-cargas-manuales-registros') n.active = false; }); // en la pantalla de un registro agregado se marca ese, no la del grupo
+                    overrides['supply-chain/sc-area-distribution-center']['cat-cargas-manuales'] = base;
+                }
             }
         }
         if (anBody) {
-            const at = base.findIndex((n) => n.id === 'cat-cargas-manuales-analisis');
-            if (at >= 0) {
-                const dynamic = (anBody.analyses || []).map((a) => ({ id: `cat-cargas-manuales-an-${a.id}`, label: a.name, icon: 'bx-line-chart', href: `CmAnalisis.html?id=${a.id}`, grantAs: 'cat-cargas-manuales-analisis', dynamicAnalysis: true, ...(openAnalysis && String(a.id) === openAnalysis ? { active: true } : {}) }));
-                base.splice(at + 1, 0, ...dynamic);
+            const list = overrides['analysis/an-area-supply-chain'] && overrides['analysis/an-area-supply-chain']['cat-analisis-manuales'];
+            if (Array.isArray(list)) {
+                const base = list.filter((n) => !n.dynamicAnalysis);
+                const at = base.findIndex((n) => n.id === 'cat-analisis-manuales-lista');
+                if (at >= 0) {
+                    const dynamic = (anBody.analyses || []).map((a) => ({ id: `cat-analisis-manuales-an-${a.id}`, label: a.name, icon: 'bx-line-chart', href: `CmAnalisis.html?id=${a.id}`, grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true, ...(openAnalysis && String(a.id) === openAnalysis ? { active: true } : {}) }));
+                    // «＋ Agregar nuevo análisis»: solo para quien tiene el botón «Crear análisis»; abre la lista con la ventana de alta
+                    const addNew = anBody.canCreate ? [{ id: 'cat-analisis-manuales-nuevo', labelKey: 'main.anNew', abbrKeys: ['main.anNewAbbr1', 'main.anNewAbbr2'], icon: 'bx-plus', href: 'CmAnalisisLista.html?nuevo=1', grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true, addNew: true }] : [];
+                    base.splice(at + 1, 0, ...addNew, ...dynamic);
+                    if (openAnalysis) base.forEach((n) => { if (n.id === 'cat-analisis-manuales-lista') n.active = false; }); // en la pantalla de un análisis se marca ese análisis, no la lista
+                    overrides['analysis/an-area-supply-chain']['cat-analisis-manuales'] = base;
+                }
             }
         }
-        // en la pantalla de un análisis o de un registro agregado se marca ese, no la pantalla del grupo
-        if (openAnalysis) base.forEach((n) => { if (n.id === 'cat-cargas-manuales-analisis') n.active = false; });
-        if (openRegistry && base.some((n) => n.dynamicRegistry && n.active)) base.forEach((n) => { if (n.id === 'cat-cargas-manuales-registros') n.active = false; });
-        menuData.areaOverrides['supply-chain/sc-area-distribution-center']['cat-cargas-manuales'] = base;
         renderFilteredMenu();
     } catch (err) {
         console.error('Análisis Registros Manuales: no se pudieron cargar en el menú', err);
@@ -14801,9 +14822,9 @@ const TABLE_GRANT_PATHS = {
     'ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
     'registros': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
     'registros-cargas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
-    'analisis': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
-    'analisis-extracciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
-    'analisis-archivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
+    'analisis': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
+    'analisis-extracciones': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
+    'analisis-archivo': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
     // Equipo de Trabajo › Registro (la tabla estándar de esa vista); mismo prefijo que db.js
     'equipo-registro': { sectionId: 'main', itemId: 'equipo-trabajo', submenuPrefix: 'et-registro/et-registro-tabla' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
@@ -14964,7 +14985,7 @@ const SCREEN_GRANT_PATHS = {
     // Punto Venta: Ventas (Operaciones) y Transacciones (Gestión), por ahora vacías
     'cat-cargas-manuales-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
     'cat-cargas-manuales-registros': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
-    'cat-cargas-manuales-analisis': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
+    'cat-analisis-manuales-lista': { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-lista' },
     'cat-gestion-pv-transacciones': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-gestion/cat-gestion-pv-transacciones' },
     'cat-reportes-ti-kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'cat-catalogos-ti-soporte-ayuda': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },

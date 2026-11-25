@@ -285,7 +285,8 @@
     { "id": "accounting", "items": [] },
     { "id": "finance", "items": [] },
     { "id": "certifications", "items": [] },
-    { "id": "information-technology", "items": [] }
+    { "id": "information-technology", "items": [] },
+    { "id": "analysis", "items": [] }
   ],
   "areaCategories": [
     {
@@ -568,9 +569,81 @@
     {
       "id": "cat-cargas-manuales", "labelKey": "menu.catCargasManuales", "abbrKey": "menu.catCargasManualesAbbr", "abbrKeys": ["menu.catCargasManualesAbbr1", "menu.catCargasManualesAbbr2"], "icon": "bx-spreadsheet",
       "submenu": []
+    },
+    {
+      "id": "cat-analisis-fijos", "labelKey": "menu.catAnalisisFijos", "abbrKey": "menu.catAnalisisFijosAbbr", "abbrKeys": ["menu.catAnalisisFijosAbbr1", "menu.catAnalisisFijosAbbr2"], "icon": "bx-bar-chart-alt-2", "hideWhenEmpty": true,
+      "submenu": []
+    },
+    {
+      "id": "cat-analisis-manuales", "labelKey": "menu.catAnalisisManuales", "abbrKey": "menu.catAnalisisManualesAbbr", "abbrKeys": ["menu.catAnalisisManualesAbbr1", "menu.catAnalisisManualesAbbr2"], "icon": "bx-line-chart", "hideWhenEmpty": true,
+      "submenu": []
     }
   ],
   "areaOverrides": {
+    "analysis/an-area-supply-chain": {
+      "cat-catalogos": [],
+      "cat-operaciones": [],
+      "cat-gestion": [],
+      "cat-admin": [],
+      "cat-analisis-manuales": [
+        {
+          "id": "cat-analisis-manuales-lista", "labelKey": "menu.cmAnalisisRegistros", "abbrKeys": ["menu.cmAnalisisRegistrosAbbr1", "menu.cmAnalisisRegistrosAbbr2"], "icon": "bx-analyse", "href": "CmAnalisisLista.html",
+          "submenu": [
+            {
+              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
+              "submenu": [
+                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
+                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
+                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
+                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
+                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
+                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
+                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
+                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
+                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
+                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
+                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
+                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
+                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
+              ]
+            },
+            { "id": "colAnNombre", "labelKey": "main.colAnNombre", "permissionOnly": true },
+            { "id": "colAnRegistros", "labelKey": "main.colAnRegistros", "permissionOnly": true },
+            { "id": "colAnColumnas", "labelKey": "main.colAnColumnas", "permissionOnly": true },
+            { "id": "colAnUltimaVersion", "labelKey": "main.colAnUltimaVersion", "permissionOnly": true },
+            { "id": "colAnVersiones", "labelKey": "main.colAnVersiones", "permissionOnly": true },
+            { "id": "colAnEstado", "labelKey": "main.colAnEstado", "permissionOnly": true },
+            { "id": "colAnExtVersion", "labelKey": "main.colAnExtVersion", "permissionOnly": true },
+            { "id": "colAnExtRenglones", "labelKey": "main.colAnExtRenglones", "permissionOnly": true },
+            { "id": "colAnExtPeriodos", "labelKey": "main.colAnExtPeriodos", "permissionOnly": true },
+            { "id": "colAnExtEstado", "labelKey": "main.colAnExtEstado", "permissionOnly": true },
+            {
+              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
+              "submenu": [
+                { "id": "colAnCrearAuth", "labelKey": "main.colAnCrearAuth", "permissionOnly": true },
+                { "id": "colAnExtraerAuth", "labelKey": "main.colAnExtraerAuth", "permissionOnly": true },
+                { "id": "colAnAnularAuth", "labelKey": "main.colAnAnularAuth", "permissionOnly": true }
+              ]
+            }
+          ],
+          "iconsSubmenu": [
+            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
+            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
+            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
+            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
+            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
+            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
+            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
+            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
+            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
+            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
+            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
+            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true },
+            { "id": "iconDownload", "labelKey": "main.downloadReport", "permissionOnly": true }
+          ]
+        }
+      ]
+    },
     "supply-chain/sc-area-point-of-sale": {
       "cat-operaciones": [
         {
@@ -3230,62 +3303,6 @@
                 { "id": "colRegCargarExcelAuth", "labelKey": "main.colRegCargarExcelAuth", "permissionOnly": true },
                 { "id": "colRegAnularAuth", "labelKey": "main.colRegAnularAuth", "permissionOnly": true },
                 { "id": "colRegCrearAuth", "labelKey": "main.colRegCrearAuth", "permissionOnly": true }
-              ]
-            }
-          ],
-          "iconsSubmenu": [
-            { "id": "iconZoomOut", "labelKey": "main.decreaseFontSize", "permissionOnly": true },
-            { "id": "iconZoomIn", "labelKey": "main.increaseFontSize", "permissionOnly": true },
-            { "id": "iconPin", "labelKey": "main.pinColumns", "permissionOnly": true },
-            { "id": "iconVisibility", "labelKey": "main.columnVisibility", "permissionOnly": true },
-            { "id": "iconHistory", "labelKey": "main.changeHistory", "permissionOnly": true },
-            { "id": "iconLegend", "labelKey": "main.columnLegendBtn", "permissionOnly": true },
-            { "id": "iconFilter", "labelKey": "main.filterToggle", "permissionOnly": true },
-            { "id": "iconFilterClear", "labelKey": "main.filterClearBtn", "permissionOnly": true },
-            { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
-            { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
-            { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
-            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true },
-            { "id": "iconDownload", "labelKey": "main.downloadReport", "permissionOnly": true }
-          ]
-        },
-        {
-          "id": "cat-cargas-manuales-analisis", "labelKey": "menu.cmAnalisisRegistros", "abbrKeys": ["menu.cmAnalisisRegistrosAbbr1", "menu.cmAnalisisRegistrosAbbr2"], "icon": "bx-analyse", "href": "CmAnalisisLista.html",
-          "submenu": [
-            {
-              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
-              "submenu": [
-                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
-                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
-                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
-                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
-                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
-                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
-                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
-                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
-                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
-                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
-                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
-                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
-                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
-              ]
-            },
-            { "id": "colAnNombre", "labelKey": "main.colAnNombre", "permissionOnly": true },
-            { "id": "colAnRegistros", "labelKey": "main.colAnRegistros", "permissionOnly": true },
-            { "id": "colAnColumnas", "labelKey": "main.colAnColumnas", "permissionOnly": true },
-            { "id": "colAnUltimaVersion", "labelKey": "main.colAnUltimaVersion", "permissionOnly": true },
-            { "id": "colAnVersiones", "labelKey": "main.colAnVersiones", "permissionOnly": true },
-            { "id": "colAnEstado", "labelKey": "main.colAnEstado", "permissionOnly": true },
-            { "id": "colAnExtVersion", "labelKey": "main.colAnExtVersion", "permissionOnly": true },
-            { "id": "colAnExtRenglones", "labelKey": "main.colAnExtRenglones", "permissionOnly": true },
-            { "id": "colAnExtPeriodos", "labelKey": "main.colAnExtPeriodos", "permissionOnly": true },
-            { "id": "colAnExtEstado", "labelKey": "main.colAnExtEstado", "permissionOnly": true },
-            {
-              "id": "class-botones", "labelKey": "menu.classBotones", "isClassification": true,
-              "submenu": [
-                { "id": "colAnCrearAuth", "labelKey": "main.colAnCrearAuth", "permissionOnly": true },
-                { "id": "colAnExtraerAuth", "labelKey": "main.colAnExtraerAuth", "permissionOnly": true },
-                { "id": "colAnAnularAuth", "labelKey": "main.colAnAnularAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -6947,6 +6964,9 @@
       { "id": "it-area-operations", "labelKey": "menu.area.itOperations" },
       { "id": "it-area-company-config", "labelKey": "menu.area.itCompanyConfig" },
       { "id": "it-area-implementation", "labelKey": "menu.area.itImplementation" }
+    ],
+    "analysis": [
+      { "id": "an-area-supply-chain", "labelKey": "menu.supplyChain" }
     ]
   },
   "footer": []
