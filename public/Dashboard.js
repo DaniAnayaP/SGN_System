@@ -3614,7 +3614,8 @@ function reconcileDataTableConfig(raw, columnKeys) {
     return { order, hidden, widths, pinned, signature: dataTableColumnsSignature(columnKeys) };
 }
 
-function loadDataTableConfig(tableId, columnKeys) {
+// keepOnGrow (tablas con data-columns-grow="1"): si solo se SUMARON columnas (ninguna se fue), la personalización guardada se conserva y la columna nueva entra al final; con una columna que ya no existe se reinicia como siempre.
+function loadDataTableConfig(tableId, columnKeys, keepOnGrow = false) {
     let stored = null;
     try {
         stored = JSON.parse(localStorage.getItem(dataTableConfigStorageKey(tableId)) || 'null');
@@ -3622,7 +3623,9 @@ function loadDataTableConfig(tableId, columnKeys) {
         stored = null;
     }
     if (stored && stored.signature !== dataTableColumnsSignature(columnKeys)) {
-        stored = null;
+        const keySet = new Set(columnKeys);
+        const onlyGrew = keepOnGrow && Array.isArray(stored.order) && stored.order.every((k) => keySet.has(k));
+        if (!onlyGrew) stored = null;
     }
     return reconcileDataTableConfig(stored, columnKeys);
 }
@@ -3741,7 +3744,7 @@ function distributeDataTableColumnWidths(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
     const { table, colgroup, config, wrapper } = state;
-    const hiddenSet = new Set(config.hidden);
+    const hiddenSet = isFadeTable(wrapper) ? new Set() : new Set(config.hidden); // una columna difuminada sigue ocupando su lugar
     const visible = getVisualColumnOrder(config).filter((k) => !hiddenSet.has(k));
     const pinnedSet = new Set(state.visiblePinned);
     const baseOf = (k) => config.widths[k] || DATA_TABLE_COL_MIN_WIDTH;
@@ -3780,7 +3783,8 @@ function applyDataTableColumnLayout(tableId) {
     const { table, colgroup, config } = state;
     const visualOrder = getVisualColumnOrder(config);
     const headerRow = getHeaderRow(table);
-    const hiddenSet = new Set(config.hidden);
+    const fadeMode = isFadeTable(state.wrapper);
+    const hiddenSet = fadeMode ? new Set() : new Set(config.hidden); // en una tabla «fade» lo oculto no se colapsa: se queda en su lugar, difuminado (ver updateFadeStyle)
     const visiblePinned = config.pinned.filter((k) => !hiddenSet.has(k));
     state.visiblePinned = visiblePinned;
 
@@ -3845,8 +3849,23 @@ function applyDataTableColumnLayout(tableId) {
         if (!tr.querySelector('td.data-table-empty-cell')) applyRowColumnState(tr, tableId);
     });
 
+    if (fadeMode) updateFadeStyle(tableId, config.hidden);
     renderColumnGroupBand(tableId);
     refreshSavedLayoutPillForTable(tableId);
+}
+// Las tablas con data-hidden-style="fade" (Cargas Manuales: Daniel, 2026-11-25, «que se queden en el mismo lugar, pero con un color difuminado») no esconden la columna que la persona oculta con Personalizar columnas:
+// la dejan en su lugar con el color apagado (una hoja de estilos por tabla, sin tocar cada celda). Una columna difuminada no baja en las descargas (getVisibleTableSnapshot) y su filtro, si lo tiene, sigue aplicando.
+const isFadeTable = (wrapper) => wrapper?.dataset?.hiddenStyle === 'fade';
+function updateFadeStyle(tableId, hiddenKeys) {
+    let style = document.querySelector(`style[data-fade-for="${CSS.escape(tableId)}"]`);
+    if (!style) {
+        style = document.createElement('style');
+        style.dataset.fadeFor = tableId;
+        document.head.appendChild(style);
+    }
+    const base = `.data-table-wrapper[data-table-id="${CSS.escape(tableId)}"]`;
+    const selectors = hiddenKeys.flatMap((key) => [`${base} th[data-col="${CSS.escape(key)}"]`, `${base} td[data-col="${CSS.escape(key)}"]`]);
+    style.textContent = selectors.length ? `${selectors.join(',')} { opacity: .42; filter: blur(.4px); background-image: repeating-linear-gradient(135deg, rgba(120,100,130,.06) 0 6px, rgba(120,100,130,.14) 6px 12px); }` : '';
 }
 // Re-stretches every already-initialized table to its wrapper's current
 // width on resize (window resize, or the sidebar collapsing/expanding --
@@ -5512,7 +5531,7 @@ function initDataTableColumns(wrapper, index) {
     // that call itself is what would populate it going forward. See
     // maybeApplyDefaultSavedLayout below.
     const hadNoStoredLayout = localStorage.getItem(dataTableConfigStorageKey(tableId)) == null;
-    const config = loadDataTableConfig(tableId, columnKeys);
+    const config = loadDataTableConfig(tableId, columnKeys, wrapper.dataset.columnsGrow === '1');
     const naturalWidths = measureNaturalColumnWidths(table);
     columnKeys.forEach((key) => {
         if (config.widths[key] == null) config.widths[key] = naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
@@ -5652,6 +5671,69 @@ function getVisibleTableSnapshot(tableId) {
         .filter((tr) => !tr.hidden && !tr.classList.contains('data-table-row-col-filtered'))
         .map((tr) => visualOrder.map((key) => (tr.querySelector(`[data-col="${key}"]`)?.textContent || '').trim()));
     return { columns, rows };
+}
+
+// El icono Descargar de una tabla (Daniel, 2026-11-25): baja SIEMPRE lo que se ve, o sea los renglones que pasan los filtros y las columnas que no están ocultas o difuminadas, en Excel, CSV o PDF.
+// Es del icono iconDownload del árbol (el administrador del cliente lo ve siempre). getTitle() da el nombre del archivo; getNotice() puede devolver un aviso (p. ej. la tabla solo trae una parte de los renglones).
+// Va en la misma barra .data-table-zoom que los demás iconos; se llama una vez por tabla, cuando ya se armó.
+function attachTableDownloadButton(tableId, { getTitle, getNotice } = {}) {
+    const wrapper = document.querySelector(`.data-table-wrapper[data-table-id="${CSS.escape(tableId)}"]`);
+    const zoom = wrapper?.previousElementSibling;
+    if (!zoom?.classList?.contains('data-table-zoom') || zoom.querySelector('[data-download-btn]')) return;
+    if (!resolveIconGrant(tableId, 'iconDownload')) return;
+    const csvEscape = (value) => { const text = String(value ?? ''); return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; };
+    const saveBlob = (blob, filename) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url; link.download = filename;
+        document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+    };
+    const run = async (format) => {
+        const { columns, rows } = getVisibleTableSnapshot(tableId);
+        if (!columns.length) return;
+        const title = String((getTitle && getTitle()) || tableId).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+        const notice = getNotice && getNotice();
+        if (notice) showToast(notice, 'info');
+        try {
+            if (format === 'csv') {
+                const lines = [columns.map((c) => csvEscape(c.label)).join(',')];
+                rows.forEach((row) => lines.push(row.map(csvEscape).join(',')));
+                saveBlob(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `${title}.csv`); // con BOM: Excel adivina mal los acentos sin él
+            } else {
+                const res = await fetch(`/api/business/export/${format}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ columns, rows, title }) });
+                if (!res.ok) throw new Error('export failed');
+                saveBlob(await res.blob(), `${title}.${format}`);
+            }
+        } catch (err) {
+            console.error('Descargar: no se pudo bajar la tabla', err);
+            showToast(t('main.downloadError'), 'error');
+        }
+    };
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.dataset.downloadBtn = '1';
+    btn.className = 'data-table-zoom-btn';
+    btn.setAttribute('aria-label', t('main.downloadReport'));
+    btn.title = t('main.downloadReport');
+    btn.setAttribute('data-help-key', 'download');
+    btn.style.position = 'relative';
+    btn.innerHTML = '<i class="bx bx-download" aria-hidden="true"></i>';
+    const menu = document.createElement('div');
+    menu.className = 'data-table-col-filter-mode-menu';
+    menu.hidden = true;
+    [['xlsx', 'main.downloadAsExcel', 'main.downloadAsExcelHint'], ['csv', 'main.downloadAsCsv', 'main.downloadAsCsvHint'], ['pdf', 'main.downloadAsPdf', 'main.downloadAsPdfHint']].forEach(([format, labelKey, hintKey]) => {
+        const option = document.createElement('button');
+        option.type = 'button';
+        option.className = 'data-table-col-filter-mode-option';
+        option.textContent = `${t(labelKey)} — ${t(hintKey)}`;
+        option.addEventListener('click', (event) => { event.stopPropagation(); menu.hidden = true; run(format); });
+        menu.appendChild(option);
+    });
+    btn.addEventListener('click', (event) => { event.stopPropagation(); menu.hidden = !menu.hidden; });
+    document.addEventListener('click', (event) => { if (!menu.hidden && !btn.contains(event.target)) menu.hidden = true; });
+    btn.appendChild(menu);
+    zoom.appendChild(btn);
 }
 
 // Rebuilds both cosmetic group-band rows (table-of-origin on top,
@@ -15484,6 +15566,7 @@ window.Dashboard = {
     // filter. Call this directly once the real columns are in the DOM.
     initDataTableColumns,
     getVisibleTableSnapshot,
+    attachTableDownloadButton,
     showToast,
     setMessagesBadge,
     addMenuResizeGrip,

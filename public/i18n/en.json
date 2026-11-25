@@ -5280,6 +5280,7 @@
     "cmStampNone": "Nothing has been loaded on this screen yet.",
     "regTabData": "Data",
     "regTabLoads": "Loads",
+    "regDownloadTruncated": "The table shows {shown} of {total} rows: what you see is downloaded. Use the search Filter to narrow it down before downloading.",
     "filterRegSearchHint": "Unit, code, description, category…",
     "regCargosNombre": "Monthly charges by site",
     "regExistenciasNombre": "Current daily stock",

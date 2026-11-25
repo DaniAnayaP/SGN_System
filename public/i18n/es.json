@@ -5279,6 +5279,7 @@
     "cmStampNone": "Todavía no se ha cargado nada en esta pantalla.",
     "regTabData": "Datos",
     "regTabLoads": "Cargas",
+    "regDownloadTruncated": "La tabla muestra {shown} de {total} renglones: se baja lo que se ve. Usa el Filtro de búsqueda para acotar antes de descargar.",
     "filterRegSearchHint": "Unidad, código, descripción, categoría…",
     "regCargosNombre": "Cargos por sitio mensuales",
     "regExistenciasNombre": "Existencias actuales diarias",

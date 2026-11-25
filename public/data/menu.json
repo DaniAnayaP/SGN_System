@@ -3244,7 +3244,8 @@
             { "id": "iconFilterAdvanced", "labelKey": "main.filterAdvancedBtn", "permissionOnly": true },
             { "id": "iconSavedSearch", "labelKey": "main.savedSearchBtn", "permissionOnly": true },
             { "id": "iconSavedLayout", "labelKey": "main.savedLayoutBtn", "permissionOnly": true },
-            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true }
+            { "id": "iconFieldRules", "labelKey": "main.fieldRulesBtn", "permissionOnly": true },
+            { "id": "iconDownload", "labelKey": "main.downloadReport", "permissionOnly": true }
           ]
         }
       ]

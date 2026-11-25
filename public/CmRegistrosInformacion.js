@@ -32,6 +32,7 @@ function periodLabel(period) {
     return m[3] ? `${m[3]}/${abbr}/${m[1]}` : `${abbr}-${m[1].slice(2)}`;
 }
 const periodKey = (period) => `p_${String(period).replace(/-/g, '_')}`;
+const todayStamp = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
 const st = { registries: [], key: null, tab: 'data', data: null, loads: null, canTemplate: false, canExcel: false, canAnnul: false, text: '', loadsInit: false };
 const currentRegistry = () => st.registries.find((r) => r.key === st.key) || null;
@@ -207,6 +208,10 @@ function drawData() {
     if (first && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 0);
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(DATA_TABLE);
     wrapper.setAttribute('data-help-key', 'regTable');
+    if (Dashboard.attachTableDownloadButton) {
+        const regName = () => t((currentRegistry() || {}).nameKey || 'menu.cmRegistrosInformacion');
+        Dashboard.attachTableDownloadButton(DATA_TABLE, { getTitle: () => `${regName()}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : '') });
+    }
     let note = document.getElementById('reg-truncated');
     if (body.truncated) {
         if (!note) { note = document.createElement('p'); note.id = 'reg-truncated'; note.className = 'admin-hint'; wrapper.after(note); }
@@ -269,6 +274,7 @@ function drawLoads() {
     if (first && st.tab === 'loads' && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 1);
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(LOADS_TABLE);
     wrapper.setAttribute('data-help-key', 'regLoadsTable');
+    if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(LOADS_TABLE, { getTitle: () => `${t((currentRegistry() || {}).nameKey || 'menu.cmRegistrosInformacion')}_${t('main.regTabLoads')}_${todayStamp()}` });
 }
 async function refreshData() {
     if (!st.key) return;
