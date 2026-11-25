@@ -1382,6 +1382,8 @@ let sidebarClientSites = []; // los sitios activos del cliente (registros propio
 // (department-wide, not área-scoped) grant side of the same data.
 // Un apartado marcado hideWhenEmpty (menu.json: «Cargas Manuales») solo sale en las áreas que le tienen pantallas propias (areaOverrides); en las demás ni se dibuja.
 const isHiddenEmptyCategory = (cat) => !!cat.hideWhenEmpty && !(cat.submenu && cat.submenu.length);
+// Departamentos donde un apartado sin pantallas para esta persona no se dibuja (en los demás sale atenuado, regla del 2026-11-18). Análisis solo tiene sus dos apartados; los seis de siempre irían vacíos (Daniel, 2026-11-25).
+const HIDE_EMPTY_CATEGORIES_IN = new Set(['analysis']);
 function effectiveAreaCategories(data) {
     const base = data.areaCategories || [];
     const overrides = (data.areaOverrides || {})[`${selectedDepartment}/${selectedArea}`];
@@ -1498,7 +1500,8 @@ function applyScreenGrantFilter(data) {
                             pantalla.permissionOnly || sidebarScreenAllowed(cat, pantalla)
                         )), cat.id);
                         return { ...cat, submenu, empty: !submenu.some((p) => !p.permissionOnly) };
-                    }),
+                    })
+                    .filter((cat) => !(cat.empty && HIDE_EMPTY_CATEGORIES_IN.has(selectedDepartment))),
             };
         }),
     };
@@ -1585,13 +1588,14 @@ function renderFilteredMenu() {
 // 0 count instead of silently disappearing.
 function getPanelCategories() {
     if (!menuData || !selectedDepartment || !selectedArea) return [];
-    return effectiveAreaCategories(menuData).map((cat) => ({
+    const categories = effectiveAreaCategories(menuData).map((cat) => ({
         ...cat,
         submenu: (cat.submenu || []).filter((s) => (
             !s.permissionOnly && s.href && s.href !== '#'
             && sidebarScreenAllowed(cat, s)
         )),
     }));
+    return HIDE_EMPTY_CATEGORIES_IN.has(selectedDepartment) ? categories.filter((cat) => cat.submenu.length) : categories;
 }
 
 // Most areas' full names are already short enough to show as-is; a few
