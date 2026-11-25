@@ -10306,3 +10306,34 @@ td.col-num{ text-align: right; font-variant-numeric: tabular-nums; white-space: 
 .cm-stamp{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.9rem; padding: 0.55rem 0.9rem; margin: 0 0 0.8rem; border-radius: 0.7rem; background: color-mix(in srgb, var(--color-accent) 12%, transparent); font-size: 0.78rem; line-height: 1.35; }
 .cm-stamp-part{ display: inline-flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
 .cm-stamp-pill{ background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 1rem; padding: 0.1rem 0.7rem; font-weight: 600; }
+
+/* Registros Información: las tarjetas de registros, las pestañas y la ventana de carga */
+.reg-cards{ display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 0.8rem; margin: 0 0 0.8rem; }
+.reg-card{ text-align: left; display: grid; gap: 0.35rem; align-content: start; padding: 0.75rem 0.95rem; border-radius: 0.9rem; border: 1px solid var(--color-border); background: var(--color-surface); color: inherit; font: inherit; cursor: pointer; }
+.reg-card-on{ border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 9%, var(--color-surface)); }
+.reg-card-top{ display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
+.reg-card-per{ font-size: 0.7rem; font-weight: 600; border-radius: 1rem; padding: 0.05rem 0.6rem; background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+.reg-card-sum{ font-size: 0.78rem; opacity: 0.8; }
+.reg-card-miss{ font-size: 0.75rem; font-weight: 600; color: #8a5a00; }
+.reg-strip{ display: flex; flex-wrap: wrap; gap: 3px; }
+.reg-strip i{ width: 0.85rem; height: 0.85rem; border-radius: 0.25rem; display: block; }
+.reg-strip-ok{ background: color-mix(in srgb, #2f7d4f 28%, transparent); }
+.reg-strip-miss{ background: #fdecc8; border: 1px dashed #8a5a00; }
+.reg-tabs{ display: flex; gap: 0.4rem; margin: 0 0 0.7rem; flex-wrap: wrap; }
+.reg-tab{ border: 1px solid var(--color-border); border-radius: 1rem; padding: 0.25rem 0.95rem; background: var(--color-surface); color: inherit; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+.reg-tab-on{ background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface)); border-color: transparent; }
+.reg-pill{ display: inline-block; border-radius: 1rem; padding: 0 0.6rem; font-size: 0.72rem; font-weight: 600; }
+.reg-pill-ok{ background: #dff3e6; color: #2f7d4f; }
+.reg-pill-off{ background: #ece5ee; color: #6c6475; }
+.reg-ways{ display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 0.6rem; margin: 0.6rem 0; }
+.reg-way{ display: grid; gap: 0.3rem; align-content: start; border: 1px solid var(--color-border); border-radius: 0.8rem; padding: 0.65rem 0.8rem; cursor: pointer; }
+.reg-way-on{ border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 9%, transparent); }
+.reg-way-off{ opacity: 0.5; cursor: not-allowed; }
+.reg-way input{ position: absolute; opacity: 0; pointer-events: none; }
+.reg-way ol{ margin: 0; padding-left: 1.1rem; font-size: 0.76rem; opacity: 0.85; display: grid; gap: 0.1rem; }
+.reg-day, .reg-sheet{ display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
+.reg-map-table select{ max-width: 100%; }
+.reg-map-ex{ opacity: 0.7; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reg-map-month{ display: inline-flex; gap: 0.4rem; align-items: center; }
+.reg-periods{ margin-bottom: 0.5rem; }
+.wp-imp-pv-keep{ background: #ece5ee; color: #6c6475; }

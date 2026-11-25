@@ -83,6 +83,7 @@ const {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,
@@ -659,7 +660,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { 'equipo-registro': 'menu.teamWork', 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'implementacion-historial': 'menu.gesTiImplHistorial', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', ventas: 'menu.cmVentasManuales', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual', work_plans: 'menu.workPlans' };
+const EXTRA_SCREEN_LABEL_KEYS = { 'equipo-registro': 'menu.teamWork', 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'implementacion-historial': 'menu.gesTiImplHistorial', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', ventas: 'menu.cmVentasManuales', registros: 'menu.cmRegistrosInformacion', 'registros-cargas': 'menu.cmRegistrosInformacion', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual', work_plans: 'menu.workPlans' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -7218,6 +7219,194 @@ app.post('/api/business/pos-sales/import', requireAuth, posSalesRaw, async (req,
         notifyButtonAction(req, 'ventas', 'import', `${created} tickets`);
     }
     res.json({ mode: 'commit', summary: plan.summary, created });
+});
+
+// ---- Cargas Manuales › Registros Información (Daniel, 2026-11-25, «Sí a las propuestas, con la opción B») ----
+// Los históricos de lo que se carga a mano. Un registro (manualRegistries.js) es un tipo de dato con su plantilla: «Cargos por sitio mensuales» (un mes por columna) y «Existencias actuales diarias» (una foto por día).
+// Las cargas SOLO AGREGAN: un mes nuevo entra como columna nueva, un código nuevo como renglón nuevo y NADA de lo ya cargado se modifica (un valor distinto al guardado se queda como estaba y se avisa). Una carga equivocada se ANULA (no se borra).
+// Cargar es de los botones «Cargar con plantilla» (colRegCargarPlantillaAuth) y «Cargar con mi Excel» (colRegCargarExcelAuth); anular, de «Anular carga» (colRegAnularAuth), todos de la clase Botones del árbol. Ver los datos: quien tenga la pantalla.
+const manualRegistries = require('./manualRegistries');
+const REG_TABLE = 'registros';
+const REG_LOADS_TABLE = 'registros-cargas';
+const REG_COLS = { plantilla: 'colRegCargarPlantillaAuth', excel: 'colRegCargarExcelAuth', annul: 'colRegAnularAuth' };
+const regRaw = express.raw({ type: () => true, limit: '60mb' });
+const regLoading = new Set(); // una carga a la vez por registro y por cliente
+const REG_MESSAGES = {
+    IMPORT_FILE: 'No se pudo leer el archivo: sube un .xlsx.', IMPORT_HEADERS: 'Faltan columnas: la fila de títulos debe traer Unidad, Código y los meses (o la existencia).', IMPORT_EMPTY: 'El archivo no trae renglones.',
+    IMPORT_TOO_BIG: `El archivo trae demasiados renglones (máximo ${manualRegistries.MAX_DATA_ROWS}).`, IMPORT_DAY: 'Elige el día de estas existencias.', IMPORT_DAY_FUTURE: 'El día de las existencias no puede ser futuro.',
+};
+function regAbilities(req) {
+    const admin = !!req.user.isClientAdmin;
+    const grants = admin ? null : getUserEffectiveGrants(req.user.sub);
+    return { canTemplate: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.plantilla), canExcel: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.excel), canAnnul: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.annul) };
+}
+function regRegistry(req, res) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
+    const registry = manualRegistries.registryOf(String(req.params.key || ''));
+    if (!registry) { res.status(404).json({ code: 'REGISTRY_NOT_FOUND', message: 'Ese registro no existe.' }); return null; }
+    return registry;
+}
+function regForbidden(res) { res.status(403).json({ code: 'REG_FORBIDDEN', message: 'No tienes permiso para cargar registros.' }); }
+function regSystemColumns(req, createdAt) {
+    const client = getClientById(req.user.clientId);
+    return getSystemColumnsForRecord({ companyName: client.company_name, ...MR_SCREEN, centroCostos: '', createdAt, timeZone: client.time_zone });
+}
+function mapRegistryLoadRow(req, load) { return { ...load, ...regSystemColumns(req, load.createdAt) }; }
+app.get('/api/business/manual-registries', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    const { clientId, isTestAccount } = req.user;
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        registries: Object.values(manualRegistries.REGISTRIES).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, periods: registryPeriods(clientId, isTestAccount, r.key), lastLoad: registryLastLoad(clientId, isTestAccount, r.key) })),
+        ...regAbilities(req),
+    });
+});
+app.get('/api/business/manual-registries/:key/data', requireAuth, (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    const { clientId, isTestAccount } = req.user;
+    const q = req.query || {};
+    const { rows, total } = listRegistryData(clientId, isTestAccount, registry.key, { unidad: q.unidad, codigo: q.codigo, descripcion: q.descripcion, categoria: q.categoria, text: q.text });
+    res.set('Cache-Control', 'no-store');
+    res.json({
+        registry: { key: registry.key, kind: registry.kind, nameKey: registry.nameKey }, periods: registryPeriods(clientId, isTestAccount, registry.key), lastLoad: registryLastLoad(clientId, isTestAccount, registry.key),
+        rows: rows.map((r) => ({ ...r, ...regSystemColumns(req, r.createdAt) })), total, truncated: total > rows.length, ...regAbilities(req),
+    });
+});
+app.get('/api/business/manual-registries/:key/loads', requireAuth, (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    res.set('Cache-Control', 'no-store');
+    res.json({ loads: listRegistryLoads(req.user.clientId, req.user.isTestAccount, registry.key).map((l) => mapRegistryLoadRow(req, l)), ...regAbilities(req) });
+});
+app.get('/api/business/manual-registries/:key/template', requireAuth, async (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    const ability = regAbilities(req);
+    if (!ability.canTemplate && !ability.canExcel) return regForbidden(res);
+    const lang = req.query.lang === 'en' ? 'en' : 'es';
+    const periods = registryPeriods(req.user.clientId, req.user.isTestAccount, registry.key);
+    const now = new Date();
+    const thisMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const nextPeriod = periods.length ? manualRegistries.nextMonth(periods[periods.length - 1]) : thisMonth;
+    const workbook = await manualRegistries.buildTemplate(registry, lang, { nextPeriod });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', buildContentDisposition(`${lang === 'en' ? 'Template' : 'Plantilla'}-${registry.key}.xlsx`));
+    res.set('Cache-Control', 'no-store');
+    await workbook.xlsx.write(res);
+    res.end();
+});
+// El archivo a la vista antes de cargar: sus hojas, el renglón de títulos, las columnas y su emparejamiento propuesto, y unos renglones de ejemplo (no escribe nada).
+app.post('/api/business/manual-registries/:key/inspect', requireAuth, regRaw, async (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    const ability = regAbilities(req);
+    if (!ability.canTemplate && !ability.canExcel) return regForbidden(res);
+    if (!Buffer.isBuffer(req.body)) return res.status(400).json({ code: 'IMPORT_FILE', message: REG_MESSAGES.IMPORT_FILE });
+    const info = await manualRegistries.inspectWorkbook(req.body, registry, { sheet: req.query.sheet ? String(req.query.sheet) : undefined });
+    res.set('Cache-Control', 'no-store');
+    if (info.error && !info.sheets) return res.status(400).json({ code: info.error, message: REG_MESSAGES[info.error] || REG_MESSAGES.IMPORT_FILE });
+    res.json(info);
+});
+// El emparejamiento que manda el navegador, revisado: columnas enteras, meses «YYYY-MM» y sin repetir nada.
+function regParseMapping(text, registry) {
+    let m;
+    try { m = JSON.parse(String(text || '')); } catch { return null; }
+    if (!m || typeof m !== 'object') return null;
+    const col = (v) => (Number.isInteger(v) && v >= 0 && v <= 2000 ? v : null);
+    const mapping = { dims: {}, valueCols: [], valueCol: null };
+    const used = new Set();
+    manualRegistries.DIMS.forEach((dim) => { const c = col(m.dims && m.dims[dim]); if (c !== null && !used.has(c)) { mapping.dims[dim] = c; used.add(c); } });
+    if (registry.kind === 'month') {
+        const periods = new Set();
+        (Array.isArray(m.valueCols) ? m.valueCols.slice(0, 400) : []).forEach((v) => {
+            const c = col(v && v.col);
+            if (c === null || used.has(c) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(v.period || '')) || periods.has(v.period)) return;
+            used.add(c); periods.add(v.period); mapping.valueCols.push({ col: c, period: v.period });
+        });
+    } else {
+        const c = col(m.valueCol);
+        if (c !== null && !used.has(c)) mapping.valueCol = c;
+    }
+    return mapping;
+}
+app.post('/api/business/manual-registries/:key/import', requireAuth, regRaw, async (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    const source = req.query.source === 'excel' ? 'excel' : 'plantilla';
+    const ability = regAbilities(req);
+    if (!(source === 'excel' ? ability.canExcel : ability.canTemplate)) return regForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const commit = req.query.mode === 'commit';
+    if (commit && !hasCompleteCostCenter(clientId, isTestAccount)) {
+        return res.status(409).json({ code: 'COST_CENTER_REQUIRED', message: 'Primero crea un centro de costos completo en Nuestros Centros Costos: toda operación va ligada a uno.' });
+    }
+    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ code: 'IMPORT_FILE', message: REG_MESSAGES.IMPORT_FILE });
+    // con la plantilla las columnas se reconocen solas; con «mi Excel» el emparejamiento lo confirmó la persona
+    let sheet = req.query.sheet ? String(req.query.sheet) : undefined;
+    let headerRow = Number(req.query.header) || 0;
+    let mapping = source === 'excel' ? regParseMapping(req.query.mapping, registry) : null;
+    if (!mapping || !headerRow) {
+        const info = await manualRegistries.inspectWorkbook(req.body, registry, { sheet });
+        if (info.error) return res.status(400).json({ code: info.error, message: REG_MESSAGES[info.error] || REG_MESSAGES.IMPORT_FILE, missing: info.missing });
+        sheet = info.sheet;
+        headerRow = headerRow || info.headerRow;
+        mapping = mapping || info.mapping;
+    }
+    const lockKey = `${clientId}:${isTestAccount ? 1 : 0}:${registry.key}`;
+    if (regLoading.has(lockKey)) return res.status(409).json({ code: 'REG_BUSY', message: 'Ya hay una carga de este registro en curso. Espera a que termine.' });
+    regLoading.add(lockKey);
+    const options = { sheet, headerRow, mapping, day: String(req.query.day || ''), now: Date.now() };
+    const fileName = String(req.query.file || '').replace(/[\u0000-\u001f]/g, '').slice(0, 160);
+    res.set('Cache-Control', 'no-store');
+    let loadId = null;
+    try {
+        if (!commit) {
+            const store = registryStore({ clientId, isTestData: isTestAccount, registryKey: registry.key, loadId: 0 });
+            const result = await manualRegistries.runImport(req.body, registry, options, store, { dryRun: true });
+            if (result.error) return res.status(result.error === 'IMPORT_TOO_BIG' ? 413 : 400).json({ code: result.error, message: REG_MESSAGES[result.error] || REG_MESSAGES.IMPORT_FILE, missing: result.missing });
+            return res.json({ mode: 'preview', sheet, headerRow, summary: result.summary, issues: result.issues });
+        }
+        loadId = createRegistryLoad({ clientId, isTestData: isTestAccount, registryKey: registry.key, source, fileName, sheet, day: registry.kind === 'day' ? options.day : '', loadedBy: changedByLabel(req), loadedByUserId: req.user.sub });
+        const store = registryStore({ clientId, isTestData: isTestAccount, registryKey: registry.key, loadId });
+        const result = await manualRegistries.runImport(req.body, registry, options, store, { dryRun: false });
+        if (result.error) {
+            store.rollback();
+            failRegistryLoad(loadId, result.error);
+            return res.status(result.error === 'IMPORT_TOO_BIG' ? 413 : 400).json({ code: result.error, message: REG_MESSAGES[result.error] || REG_MESSAGES.IMPORT_FILE, missing: result.missing });
+        }
+        if (!result.summary.valuesAdded) {
+            // nada nuevo que agregar: no queda una carga vacía en el historial
+            discardEmptyRegistryLoad(loadId);
+            return res.json({ mode: 'commit', loadId: null, sheet, headerRow, summary: result.summary, issues: result.issues });
+        }
+        finishRegistryLoad(loadId, result.summary);
+        logTableChange({ clientId, tableKey: REG_LOADS_TABLE, recordId: loadId, recordLabel: fileName || registry.key, action: 'create', fieldKey: 'main.regCargaArchivo', newValue: fileName, changedBy: changedByLabel(req) });
+        notifyButtonAction(req, REG_TABLE, source === 'excel' ? 'importExcel' : 'import', `${result.summary.valuesAdded} valores`);
+        return res.json({ mode: 'commit', loadId, sheet, headerRow, summary: result.summary, issues: result.issues });
+    } catch (err) {
+        console.error('Registros Información: la carga falló:', err);
+        if (loadId) failRegistryLoad(loadId, 'ERROR');
+        return res.status(500).json({ code: 'IMPORT_ERROR', message: 'La carga no se pudo completar. No se agregó nada.' });
+    } finally {
+        regLoading.delete(lockKey);
+    }
+});
+// Anular una carga equivocada: deja de contar (no se borra; queda en el historial) y se puede volver a cargar bien.
+app.post('/api/business/manual-registries/:key/loads/:id/annul', requireAuth, (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    if (!regAbilities(req).canAnnul) return regForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const load = getRegistryLoad(Number(req.params.id) || 0, clientId, isTestAccount);
+    if (!load || load.registryKey !== registry.key) return res.status(404).json({ code: 'LOAD_NOT_FOUND', message: 'Esa carga no existe.' });
+    if (load.status !== 'vigente') return res.status(409).json({ code: 'LOAD_NOT_ACTIVE', message: 'Esa carga ya no está vigente.' });
+    const note = String((req.body && req.body.note) || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 300);
+    const annulled = annulRegistryLoad(load.id, clientId, isTestAccount, changedByLabel(req), note);
+    if (!annulled) return res.status(409).json({ code: 'LOAD_NOT_ACTIVE', message: 'Esa carga ya no está vigente.' });
+    logTableChange({ clientId, tableKey: REG_LOADS_TABLE, recordId: load.id, recordLabel: load.fileName || registry.key, action: 'update', fieldKey: 'main.regCargaEstado', oldValue: 'vigente', newValue: note ? `anulada · ${note}` : 'anulada', changedBy: changedByLabel(req) });
+    notifyButtonAction(req, REG_TABLE, 'annul', load.fileName || registry.key);
+    res.json({ load: mapRegistryLoadRow(req, annulled) });
 });
 
 // ---- Punto Venta › Ventas: ver e imprimir el ticket con su QR (Daniel, 2026-11-24) ----

@@ -1094,6 +1094,61 @@ if (!db.prepare('PRAGMA table_info(pos_sales)').all().some((c) => c.name === 'pu
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_sales_token ON pos_sales(public_token) WHERE public_token IS NOT NULL');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_pos_sales_code ON pos_sales(public_code) WHERE public_code IS NOT NULL');
 
+// Cargas Manuales › Registros Información (Daniel, 2026-11-25): los históricos de lo que se carga a mano. Un registro (manualRegistries.js) es un tipo de dato con su plantilla: «Cargos por sitio mensuales» y «Existencias actuales diarias».
+// Las CARGAS SOLO AGREGAN: un renglón es una unidad + un código (nunca se modifica), cada valor es de un periodo («YYYY-MM» o «YYYY-MM-DD») y NUNCA se cambia; una carga equivocada se ANULA (status 'anulada', no se borra) y deja de contar.
+// Lo vigente es lo de las cargas con status 'vigente'; una carga 'en_proceso' todavía no cuenta.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_registry_loads (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id         INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data      INTEGER NOT NULL DEFAULT 0,
+        registry_key      TEXT NOT NULL,
+        source            TEXT NOT NULL DEFAULT 'plantilla',
+        file_name         TEXT NOT NULL DEFAULT '',
+        sheet             TEXT NOT NULL DEFAULT '',
+        day               TEXT NOT NULL DEFAULT '',
+        rows_in_file      INTEGER NOT NULL DEFAULT 0,
+        new_rows          INTEGER NOT NULL DEFAULT 0,
+        values_added      INTEGER NOT NULL DEFAULT 0,
+        untouched         INTEGER NOT NULL DEFAULT 0,
+        different         INTEGER NOT NULL DEFAULT 0,
+        errors            INTEGER NOT NULL DEFAULT 0,
+        periods_json      TEXT NOT NULL DEFAULT '[]',
+        new_periods_json  TEXT NOT NULL DEFAULT '[]',
+        status            TEXT NOT NULL DEFAULT 'en_proceso',
+        loaded_by         TEXT NOT NULL DEFAULT '',
+        loaded_by_user_id INTEGER,
+        created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+        annulled_at       TEXT,
+        annulled_by       TEXT NOT NULL DEFAULT '',
+        annul_note        TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_mr_loads_registry ON manual_registry_loads(client_id, is_test_data, registry_key, status);
+    CREATE TABLE IF NOT EXISTS manual_registry_rows (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id     INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data  INTEGER NOT NULL DEFAULT 0,
+        registry_key  TEXT NOT NULL,
+        unidad        TEXT NOT NULL,
+        unidad_nombre TEXT NOT NULL DEFAULT '',
+        codigo        TEXT NOT NULL,
+        descripcion   TEXT NOT NULL DEFAULT '',
+        categoria     TEXT NOT NULL DEFAULT '',
+        udm           TEXT NOT NULL DEFAULT '',
+        first_load_id INTEGER,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (client_id, is_test_data, registry_key, unidad, codigo)
+    );
+    CREATE TABLE IF NOT EXISTS manual_registry_values (
+        row_id  INTEGER NOT NULL REFERENCES manual_registry_rows(id) ON DELETE CASCADE,
+        period  TEXT NOT NULL,
+        value   REAL NOT NULL,
+        load_id INTEGER NOT NULL REFERENCES manual_registry_loads(id),
+        PRIMARY KEY (row_id, period, load_id)
+    ) WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS idx_mr_values_load ON manual_registry_values(load_id);
+`);
+
 // Seed data for the geo catalog — a real, well-known list of países (not a
 // live internet fetch: no outbound access from this server has been set up,
 // and the world's country list is static enough to hardcode reliably) plus
@@ -3504,6 +3559,8 @@ const TABLE_CHANGES_SYSTEM_META = {
     'ayuda-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Errores y ayuda' },
     'sitios-contratados': { area: '', modulo: 'Administración del Negocio', pantalla: 'Sitios Contratados' },
     'ventas': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Ventas Manuales' },
+    'registros': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Registros Información' },
+    'registros-cargas': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Registros Información' },
     'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
@@ -3853,6 +3910,8 @@ function getLastChangedBy(clientId, tableKey, recordId, fieldKey) {
 const TABLE_GRANT_PATHS = {
     'sitios-contratados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-contracted-sites' },
     'ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
+    'registros': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
+    'registros-cargas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
     'carga-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-carga-combustible' },
@@ -4157,6 +4216,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'mtto-preventivo': { create: 'colMpCreateAuth', delete: 'colMpDeleteAuth' },
     'mtto-correctivo': { create: 'colMcCreateAuth' },
     'ventas': { import: 'colVenImportAuth' },
+    'registros': { import: 'colRegCargarPlantillaAuth', importExcel: 'colRegCargarExcelAuth', annul: 'colRegAnularAuth' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
 const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];
@@ -4646,6 +4706,130 @@ function getPosSalesLastLoad(clientId, forTestAccount = false) {
     if (!last) return null;
     const until = db.prepare('SELECT MAX(sold_at) AS d FROM pos_sales WHERE client_id = ? AND is_test_data = ?').get(clientId, lane).d;
     return { at: last.created_at, by: last.loaded_by, file: last.source_file, dataUntil: until };
+}
+
+// ---- Cargas Manuales › Registros Información: la base de los registros (la lógica de leer y planear la carga vive en manualRegistries.js) ----
+const MR_SCREEN = { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Registros Información' };
+const parseJsonList = (text) => { try { const v = JSON.parse(text || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
+function mapRegistryLoad(row) {
+    return {
+        id: row.id, registryKey: row.registry_key, source: row.source, fileName: row.file_name, sheet: row.sheet, day: row.day, rowsInFile: row.rows_in_file, newRows: row.new_rows, valuesAdded: row.values_added,
+        untouched: row.untouched, different: row.different, errors: row.errors, periods: parseJsonList(row.periods_json), newPeriods: parseJsonList(row.new_periods_json), status: row.status,
+        loadedBy: row.loaded_by, createdAt: row.created_at, annulledAt: row.annulled_at, annulledBy: row.annulled_by, annulNote: row.annul_note,
+    };
+}
+function createRegistryLoad({ clientId, isTestData = false, registryKey, source, fileName, sheet, day, loadedBy, loadedByUserId }) {
+    return db.prepare(`INSERT INTO manual_registry_loads (client_id, is_test_data, registry_key, source, file_name, sheet, day, loaded_by, loaded_by_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(clientId, isTestData ? 1 : 0, registryKey, source === 'excel' ? 'excel' : 'plantilla', String(fileName || '').slice(0, 160), String(sheet || '').slice(0, 80), day || '', loadedBy || '', loadedByUserId || null).lastInsertRowid;
+}
+function finishRegistryLoad(id, summary) {
+    const periods = (summary.periods || []).filter((p) => p.added > 0).map((p) => p.period);
+    db.prepare(`UPDATE manual_registry_loads SET status = 'vigente', rows_in_file = ?, new_rows = ?, values_added = ?, untouched = ?, different = ?, errors = ?, periods_json = ?, new_periods_json = ? WHERE id = ?`)
+        .run(summary.rowsInFile || 0, summary.newRows || 0, summary.valuesAdded || 0, summary.untouched || 0, summary.different || 0, summary.errors || 0, JSON.stringify(periods), JSON.stringify(summary.newPeriods || []), id);
+}
+// Una carga que no terminó: queda anulada con su nota (sus valores no cuentan); no se borra nada.
+function failRegistryLoad(id, note) {
+    db.prepare("UPDATE manual_registry_loads SET status = 'anulada', annulled_at = datetime('now'), annulled_by = 'sistema', annul_note = ? WHERE id = ? AND status = 'en_proceso'").run(String(note || '').slice(0, 300), id);
+}
+// Una carga que no agregó nada (todo ya estaba o era error) no deja renglón en el historial: se descarta (no tiene valores ni renglones que conservar).
+function discardEmptyRegistryLoad(id) {
+    return db.prepare("DELETE FROM manual_registry_loads WHERE id = ? AND status = 'en_proceso' AND NOT EXISTS (SELECT 1 FROM manual_registry_values WHERE load_id = ?)").run(id, id).changes > 0;
+}
+function getRegistryLoad(id, clientId, forTestAccount = false) {
+    const row = db.prepare('SELECT * FROM manual_registry_loads WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+    return row ? mapRegistryLoad(row) : null;
+}
+function listRegistryLoads(clientId, forTestAccount = false, registryKey = null, limit = 500) {
+    const rows = registryKey
+        ? db.prepare("SELECT * FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND status <> 'en_proceso' ORDER BY id DESC LIMIT ?").all(clientId, forTestAccount ? 1 : 0, registryKey, limit)
+        : db.prepare("SELECT * FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND status <> 'en_proceso' ORDER BY id DESC LIMIT ?").all(clientId, forTestAccount ? 1 : 0, limit);
+    return rows.map(mapRegistryLoad);
+}
+// Anular una carga equivocada: deja de contar (sus valores se quedan guardados, no se borra nada). Solo una carga vigente se anula.
+function annulRegistryLoad(id, clientId, forTestAccount, byLabel, note) {
+    const changed = db.prepare("UPDATE manual_registry_loads SET status = 'anulada', annulled_at = datetime('now'), annulled_by = ?, annul_note = ? WHERE id = ? AND client_id = ? AND is_test_data = ? AND status = 'vigente'")
+        .run(byLabel || '', String(note || '').slice(0, 300), id, clientId, forTestAccount ? 1 : 0).changes;
+    return changed ? getRegistryLoad(id, clientId, forTestAccount) : null;
+}
+// Los periodos con datos vigentes de un registro (en orden) y la última carga vigente.
+function registryPeriods(clientId, forTestAccount, registryKey) {
+    const set = new Set();
+    db.prepare("SELECT periods_json FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND status = 'vigente'").all(clientId, forTestAccount ? 1 : 0, registryKey)
+        .forEach((r) => parseJsonList(r.periods_json).forEach((p) => set.add(p)));
+    return [...set].sort();
+}
+function registryLastLoad(clientId, forTestAccount, registryKey) {
+    const row = db.prepare("SELECT * FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND status = 'vigente' ORDER BY id DESC LIMIT 1").get(clientId, forTestAccount ? 1 : 0, registryKey);
+    return row ? mapRegistryLoad(row) : null;
+}
+// La «base» que usa runImport: lee lo vigente y escribe en lotes. Un renglón que existe pero no tiene ningún valor vigente (su carga se anuló) cuenta como nuevo y se reutiliza.
+function registryStore({ clientId, isTestData = false, registryKey, loadId }) {
+    const lane = isTestData ? 1 : 0;
+    const findRowStmt = db.prepare('SELECT id FROM manual_registry_rows WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND unidad = ? AND codigo = ?');
+    const valuesStmt = db.prepare("SELECT v.period, v.value FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE v.row_id = ? AND l.status = 'vigente'");
+    const insertRow = db.prepare('INSERT INTO manual_registry_rows (client_id, is_test_data, registry_key, unidad, unidad_nombre, codigo, descripcion, categoria, udm, first_load_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const reuseRow = db.prepare('UPDATE manual_registry_rows SET unidad_nombre = ?, descripcion = ?, categoria = ?, udm = ?, first_load_id = ? WHERE id = ?');
+    const insertValue = db.prepare('INSERT OR IGNORE INTO manual_registry_values (row_id, period, value, load_id) VALUES (?, ?, ?, ?)');
+    let cache = null;
+    // cada lote se junta en memoria y se escribe de golpe en UNA transacción (nunca queda una transacción abierta mientras el servidor atiende otras peticiones)
+    let queue = [];
+    let tmpId = 0;
+    const addRowNow = (dims) => {
+        const row = findRowStmt.get(clientId, lane, registryKey, dims.unidad, dims.codigo);
+        if (row) { reuseRow.run(dims.unidadNombre || '', dims.descripcion || '', dims.categoria || '', dims.udm || '', loadId, row.id); return row.id; }
+        return insertRow.run(clientId, lane, registryKey, dims.unidad, dims.unidadNombre || '', dims.codigo, dims.descripcion || '', dims.categoria || '', dims.udm || '', loadId).lastInsertRowid;
+    };
+    return {
+        existingPeriods: () => new Set(registryPeriods(clientId, isTestData, registryKey)),
+        findRow: (unidad, codigo) => {
+            const row = findRowStmt.get(clientId, lane, registryKey, unidad, codigo);
+            cache = null;
+            if (!row) return null;
+            const values = new Map(valuesStmt.all(row.id).map((v) => [v.period, v.value]));
+            if (!values.size) return null; // existe pero ya no tiene nada vigente: se trata como nuevo
+            cache = { id: row.id, values };
+            return { id: row.id };
+        },
+        valuesOf: (id) => (cache && cache.id === id ? cache.values : new Map(valuesStmt.all(id).map((v) => [v.period, v.value]))),
+        beginBatch: () => { queue = []; },
+        endBatch: () => {
+            if (!queue.length) return;
+            const ops = queue;
+            queue = [];
+            db.transaction(() => {
+                const real = new Map();
+                ops.forEach((op) => {
+                    if (op.type === 'row') real.set(op.tmp, addRowNow(op.dims));
+                    else insertValue.run(op.row < 0 ? real.get(op.row) : op.row, op.period, op.value, loadId);
+                });
+            })();
+        },
+        addRow: (dims) => { tmpId -= 1; queue.push({ type: 'row', tmp: tmpId, dims }); return tmpId; },
+        addValue: (rowId, period, value) => { queue.push({ type: 'value', row: rowId, period, value }); },
+        rollback: () => { queue = []; },
+    };
+}
+// Los renglones (con sus valores por periodo) que pasan los filtros, hasta un tope. filters: { unidad, codigo, descripcion, categoria, text } con «contiene» sin importar mayúsculas.
+function listRegistryData(clientId, forTestAccount, registryKey, filters = {}, limit = 2000) {
+    const lane = forTestAccount ? 1 : 0;
+    const where = ['r.client_id = ?', 'r.is_test_data = ?', 'r.registry_key = ?'];
+    const params = [clientId, lane, registryKey];
+    const like = (col, value) => { const text = String(value || '').trim(); if (text) { where.push(`${col} LIKE ? ESCAPE '\\'`); params.push(`%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`); } };
+    like('r.unidad', filters.unidad); like('r.codigo', filters.codigo); like('r.descripcion', filters.descripcion); like('r.categoria', filters.categoria);
+    const text = String(filters.text || '').trim();
+    if (text) {
+        const pattern = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        where.push("(r.unidad LIKE ? ESCAPE '\\' OR r.unidad_nombre LIKE ? ESCAPE '\\' OR r.codigo LIKE ? ESCAPE '\\' OR r.descripcion LIKE ? ESCAPE '\\' OR r.categoria LIKE ? ESCAPE '\\' OR r.udm LIKE ? ESCAPE '\\')");
+        for (let i = 0; i < 6; i += 1) params.push(pattern);
+    }
+    const alive = "EXISTS (SELECT 1 FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE v.row_id = r.id AND l.status = 'vigente')";
+    const total = db.prepare(`SELECT COUNT(*) AS n FROM manual_registry_rows r WHERE ${where.join(' AND ')} AND ${alive}`).get(...params).n;
+    const rows = db.prepare(`SELECT r.* FROM manual_registry_rows r WHERE ${where.join(' AND ')} AND ${alive} ORDER BY r.unidad, r.codigo LIMIT ?`).all(...params, limit);
+    const byId = new Map(rows.map((r) => [r.id, { id: r.id, unidad: r.unidad, unidadNombre: r.unidad_nombre, codigo: r.codigo, descripcion: r.descripcion, categoria: r.categoria, udm: r.udm, createdAt: r.created_at, values: {} }]));
+    const ids = [...byId.keys()];
+    const valuesStmt = db.prepare("SELECT v.row_id, v.period, v.value FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE l.status = 'vigente' AND v.row_id = ?");
+    ids.forEach((id) => { valuesStmt.all(id).forEach((v) => { byId.get(id).values[v.period] = v.value; }); });
+    return { rows: [...byId.values()], total };
 }
 
 function getCostCenterById(id, clientId, forTestAccount = false) {
@@ -22226,6 +22410,7 @@ module.exports = {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,

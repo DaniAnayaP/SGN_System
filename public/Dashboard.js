@@ -14678,6 +14678,8 @@ async function initDashboardInner({ activePage } = {}) {
 const TABLE_GRANT_PATHS = {
     'sitios-contratados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-contracted-sites' },
     'ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
+    'registros': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
+    'registros-cargas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
     // Equipo de Trabajo › Registro (la tabla estándar de esa vista); mismo prefijo que db.js
     'equipo-registro': { sectionId: 'main', itemId: 'equipo-trabajo', submenuPrefix: 'et-registro/et-registro-tabla' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
@@ -14837,6 +14839,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-gestion-ti-soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     // Punto Venta: Ventas (Operaciones) y Transacciones (Gestión), por ahora vacías
     'cat-cargas-manuales-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
+    'cat-cargas-manuales-registros': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
     'cat-gestion-pv-transacciones': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-gestion/cat-gestion-pv-transacciones' },
     'cat-reportes-ti-kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'cat-catalogos-ti-soporte-ayuda': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },

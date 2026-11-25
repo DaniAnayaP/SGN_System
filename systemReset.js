@@ -43,6 +43,9 @@ const TABLES = {
     // Punto Venta: los tickets cargados y sus renglones son datos de captura del cliente
     pos_sales: { action: WIPE, group: 'captures' },
     pos_sale_lines: { action: WIPE, group: 'captures' },
+    manual_registry_loads: { action: WIPE, group: 'captures' },
+    manual_registry_rows: { action: WIPE, group: 'captures' },
+    manual_registry_values: { action: WIPE, group: 'captures' },
     job_positions: { action: WIPE, group: 'organization' },
     job_position_grants: { action: WIPE, group: 'organization' },
     job_position_alt_supervisors: { action: WIPE, group: 'organization' },
