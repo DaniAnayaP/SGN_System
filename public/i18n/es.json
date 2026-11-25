@@ -411,7 +411,13 @@
     "opCentroDistTemperaturas": "Temperaturas",
     "opCentroDistSeguridad": "Seguridad",
     "adminMapaCalor": "Mapa de calor",
-    "adminConsumos": "Consumos",
+    "catCargasManuales": "Cargas Manuales",
+    "catCargasManualesAbbr": "Cargas Man.",
+    "catCargasManualesAbbr1": "Cargas Man.",
+    "catCargasManualesAbbr2": "Cargas",
+    "cmVentasManuales": "Ventas Manuales",
+    "cmVentasManualesAbbr1": "Ventas Man.",
+    "cmVentasManualesAbbr2": "Ventas",
     "opCentroDistAltaArticulosAbbr1": "Alta Artículos (Sku)",
     "opCentroDistAltaArticulosAbbr2": "Alta Artículos",
     "opCentroDistAltaArticulosAbbr3": "Alta Art.",
@@ -527,7 +533,6 @@
     "opTiHabilitacionCodigosAbbr1": "Habilit. Códigos",
     "opTiHabilitacionCodigosAbbr2": "Habilit.",
     "gesTiSoportesCerrados": "Soportes cerrados",
-    "opPvVentas": "Ventas",
     "gesPvTransacciones": "Transacciones",
     "gesTiSoportesCerradosAbbr1": "Cerrados",
     "repTiKpiSoporte": "KPI de Soporte",
@@ -5264,6 +5269,11 @@
     "venTicketPrint": "Imprimir",
     "venTicketClose": "Cerrar",
     "venTicketError": "No se pudo abrir el ticket.",
+    "cmStampLast": "Última carga:",
+    "cmStampBy": "por",
+    "cmStampFile": "archivo",
+    "cmStampUntil": "Datos al día hasta el {date}",
+    "cmStampNone": "Todavía no se ha cargado nada en esta pantalla.",
     "venImport": "Cargar ventas",
     "venTemplate": "Descargar plantilla",
     "venLoadError": "No se pudieron leer las ventas.",
@@ -9285,6 +9295,10 @@
     "venTicketQr": {
       "what": "El QR y el código de abajo son de este ticket y NO cambian nunca: lo que se imprima hoy seguirá sirviendo cuando agregues la factura en línea y la opinión. Hoy el QR abre la página del ticket; el QR solo funciona si lo imprimes desde tu sistema en producción, no desde una prueba local.",
       "example": "El cliente escanea el QR del ticket 000482 y entra a su página; el código impreso (CHR-000482-K7Q2) es el mismo ticket para escribirlo a mano."
+    },
+    "cmStamp": {
+      "what": "Los datos de esta pantalla son los de la última plantilla que se cargó, no se actualizan solos. La franja dice cuándo fue esa carga (con la hora de tu zona y la hora base UTC), quién la hizo, de qué archivo y hasta qué día llegan los datos (la venta más reciente cargada). Así nadie confunde un dato de ayer con uno de hoy.",
+      "example": "Última carga: hoy 08:15 por Ana Ramírez, archivo ventas-24-nov.xlsx, datos al día hasta el 23/nov/2026: si hoy es 25, faltan las ventas de ayer."
     },
     "venImport": {
       "what": "Carga ventas desde un Excel (o desde celdas pegadas). Cada renglón del archivo es un artículo vendido y los renglones con el mismo folio (dentro del mismo sitio) forman un ticket. Antes de cargar nada el sistema revisa el archivo y te dice qué está bien, qué se salta y qué falla, y por qué. Se cargan solo los tickets completos y correctos.",

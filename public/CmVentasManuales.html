@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title data-i18n="menu.adminConsumos">Consumption</title>
+    <title data-i18n="menu.cmVentasManuales">Manual Sales</title>
     <link rel="icon" href="icons/icon-512.png">
     <link rel="stylesheet" href="Inicio-en.css">
     <link rel="stylesheet" href="Admin.css">
     <link rel="stylesheet" href="vendor/boxicons/css/boxicons.min.css">
 </head>
-<body data-requires-site data-active-page="cat-admin-consumos">
+<body data-requires-site data-active-page="cat-cargas-manuales-ventas">
     <nav class="Sidebar" id="Sidebar" aria-label="Main navigation">
         <div class="header">
             <div class="menu-btn" id="menu-btn" role="button" tabindex="0"
@@ -364,7 +364,63 @@
             </div>
         </div>
 
-        <div class="page-content"></div>
+        <div class="page-content">
+            <div class="filter-bar" id="filter-bar">
+                <div class="filter-bar-panel">
+                    <h3 class="filter-bar-title" data-i18n="main.filterToggle">Filter</h3>
+                    <div class="filter-bar-fields">
+                        <div class="filter-field">
+                            <label for="filter-search-text" data-i18n="main.filterVenSearchHint">Receipt no., cost center, served by, table or register, payment...</label>
+                            <input type="search" id="filter-search-text" data-i18n-placeholder="main.filterVenSearchHint" placeholder="Receipt no., cost center, served by, table or register, payment...">
+                        </div>
+                    </div>
+                    <div class="filter-bar-actions">
+                        <button type="button" class="btn filter-bar-search-btn" data-i18n="main.filterSearchBtn">Search</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-table-wrapper" data-table-id="ventas">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th data-i18n="main.colSysEmpresa" data-col="colSysEmpresa" data-group="menu.classControlInterno" class="col-system">Company</th>
+                            <th data-i18n="main.colSysArea" data-col="colSysArea" data-group="menu.classControlInterno" class="col-system">Area</th>
+                            <th data-i18n="main.colSysModulo" data-col="colSysModulo" data-group="menu.classControlInterno" class="col-system">Module</th>
+                            <th data-i18n="main.colSysPantalla" data-col="colSysPantalla" data-group="menu.classControlInterno" class="col-system">Screen</th>
+                            <th data-i18n="main.colSysCentroCostos" data-col="colSysCentroCostos" data-group="menu.classControlInterno" class="col-system">Cost Center</th>
+                            <th data-i18n="main.colSysFecha" data-col="colSysFecha" data-group="menu.classControlInterno" class="col-system">Date (dd/mmm/yyyy)</th>
+                            <th data-i18n="main.colSysDiaNum" data-col="colSysDiaNum" data-group="menu.classControlInterno" class="col-system">Day (dd)</th>
+                            <th data-i18n="main.colSysDiaTexto" data-col="colSysDiaTexto" data-group="menu.classControlInterno" class="col-system">Day (ddd)</th>
+                            <th data-i18n="main.colSysMesNum" data-col="colSysMesNum" data-group="menu.classControlInterno" class="col-system">Month (mm)</th>
+                            <th data-i18n="main.colSysMesTexto" data-col="colSysMesTexto" data-group="menu.classControlInterno" class="col-system">Month (mmm)</th>
+                            <th data-i18n="main.colSysAnio" data-col="colSysAnio" data-group="menu.classControlInterno" class="col-system">Year (yyyy)</th>
+                            <th data-i18n="main.colSysSemana" data-col="colSysSemana" data-group="menu.classControlInterno" class="col-system">Week (wk+yyyy)</th>
+                            <th data-i18n="main.colSysHora" data-col="colSysHora" data-group="menu.classControlInterno" class="col-system">Time (hh:mm:ss)</th>
+                            <th data-i18n="main.colVenFolio" data-col="colVenFolio" data-group="menu.cmVentasManuales">Receipt no.</th>
+                            <th data-i18n="main.colVenFechaHora" data-col="colVenFechaHora" data-group="menu.cmVentasManuales">Date and time</th>
+                            <th data-i18n="main.colVenCentro" data-col="colVenCentro" data-group="menu.cmVentasManuales">Cost center</th>
+                            <th data-i18n="main.colVenSitio" data-col="colVenSitio" data-group="menu.cmVentasManuales">Site</th>
+                            <th data-i18n="main.colVenAtendio" data-col="colVenAtendio" data-group="menu.cmVentasManuales">Served by</th>
+                            <th data-i18n="main.colVenMesaCaja" data-col="colVenMesaCaja" data-group="menu.cmVentasManuales">Table or register</th>
+                            <th data-i18n="main.colVenArticulos" data-col="colVenArticulos" data-group="menu.cmVentasManuales">Items</th>
+                            <th data-i18n="main.colVenSubtotal" data-col="colVenSubtotal" data-group="menu.cmVentasManuales">Subtotal</th>
+                            <th data-i18n="main.colVenIva" data-col="colVenIva" data-group="menu.cmVentasManuales">VAT</th>
+                            <th data-i18n="main.colVenTotal" data-col="colVenTotal" data-group="menu.cmVentasManuales">Total</th>
+                            <th data-i18n="main.colVenPago" data-col="colVenPago" data-group="menu.cmVentasManuales">Payment</th>
+                            <th data-i18n="main.colActions" data-col="actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td class="data-table-empty-cell" colspan="25">
+                                <div class="data-table-empty-inner" data-i18n="main.emptyStateText">No data yet.</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </main>
 
     <div class="modal-overlay" id="business-summary-modal" hidden>
@@ -422,6 +478,7 @@
 
     <script src="SearchSyntax.js"></script>
     <script src="Dashboard.js"></script>
-    <script src="AdminConsumos.js"></script>
+    <script src="PosTicket.js"></script>
+    <script src="CmVentasManuales.js"></script>
 </body>
 </html>

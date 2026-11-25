@@ -82,6 +82,7 @@ const {
     findPosSale,
     insertPosSales,
     getPosSaleById,
+    getPosSalesLastLoad,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,
@@ -658,7 +659,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { 'equipo-registro': 'menu.teamWork', 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'implementacion-historial': 'menu.gesTiImplHistorial', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', ventas: 'menu.opPvVentas', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual', work_plans: 'menu.workPlans' };
+const EXTRA_SCREEN_LABEL_KEYS = { 'equipo-registro': 'menu.teamWork', 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'implementacion-historial': 'menu.gesTiImplHistorial', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', ventas: 'menu.cmVentasManuales', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual', work_plans: 'menu.workPlans' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -7135,7 +7136,7 @@ app.patch('/api/business/cost-centers/:id/nickname', requireAuth, requireClientA
 // (se prueba sola). POST /import?mode=preview revisa sin escribir nada; mode=commit vuelve a revisar el mismo archivo y carga SOLO los tickets completos y correctos (un ticket entero o ninguno; un folio que ya existe en ese sitio se salta y nunca se modifica).
 // Cargar es del botón «Cargar ventas» (colVenImportAuth, clase Botones del árbol): sin él tampoco se baja la plantilla ni se revisa un archivo. Ver la lista de tickets: quien tenga la pantalla.
 const posSales = require('./posSales');
-const POS_SALES_SCREEN = { area: 'Punto Venta', modulo: 'Cadena de Suministro', pantalla: 'Ventas' };
+const POS_SALES_SCREEN = { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Ventas Manuales' };
 const POS_SALES_IMPORT_COL = 'colVenImportAuth';
 const POS_TICKET_COL = 'colVenTicketAuth';
 const posSalesRaw = express.raw({ type: () => true, limit: '5mb' });
@@ -7160,7 +7161,7 @@ app.get('/api/business/pos-sales', requireAuth, (req, res) => {
     const client = getClientById(req.user.clientId);
     const { rows, total } = listPosSales(req.user.clientId, req.user.isTestAccount);
     res.set('Cache-Control', 'no-store');
-    res.json({ sales: rows.map((r) => mapPosSale(r, client.company_name, client.time_zone)), total, truncated: total > rows.length, canImport: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_SALES_IMPORT_COL), canTicket: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_TICKET_COL) });
+    res.json({ sales: rows.map((r) => mapPosSale(r, client.company_name, client.time_zone)), total, truncated: total > rows.length, lastLoad: getPosSalesLastLoad(req.user.clientId, req.user.isTestAccount), canImport: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_SALES_IMPORT_COL), canTicket: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_TICKET_COL) });
 });
 app.get('/api/business/pos-sales/template', requireAuth, async (req, res) => {
     if (!posSalesImportGate(req, res)) return;

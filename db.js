@@ -3503,7 +3503,7 @@ const TABLE_CHANGES_SYSTEM_META = {
     'soportes-cerrados': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Soportes cerrados' },
     'ayuda-soporte': { area: 'Operaciones TI', modulo: 'Tecnologías de la Información', pantalla: 'Errores y ayuda' },
     'sitios-contratados': { area: '', modulo: 'Administración del Negocio', pantalla: 'Sitios Contratados' },
-    'ventas': { area: 'Punto Venta', modulo: 'Cadena de Suministro', pantalla: 'Ventas' },
+    'ventas': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Ventas Manuales' },
     'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
@@ -3852,7 +3852,7 @@ function getLastChangedBy(clientId, tableKey, recordId, fieldKey) {
 // that pantalla's column entries in menu.json exactly.
 const TABLE_GRANT_PATHS = {
     'sitios-contratados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-contracted-sites' },
-    'ventas': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-operaciones/cat-operaciones-pv-ventas' },
+    'ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
     'carga-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-carga-combustible' },
@@ -4589,77 +4589,63 @@ function insertPosSales({ clientId, isTestData = false, tickets, loadedBy, loade
     return ids;
 }
 
-// El botón «Cargar ventas» es nuevo: quien ya tiene la pantalla Ventas lo recibe en lo contratado (planes, adicionales y giros), con «Solo ver» + «Ver y operar»; quien lo use en su puesto o usuario lo decide el administrador desde el árbol.
-const POS_SALES_BUTTON_SEED_KEY = 'seed-pv-ventas-cargar-v1';
-// Punto Venta › Ventas para quien ya tiene Centro de Distribución (Daniel, 2026-11-24: «¿por qué no cargaste en operaciones?… lo de ventas que me mostraste», y pidió dársela a TODOS los clientes con Centro de Distribución).
-// El administrador del cliente solo ve las áreas que están en su CONTRATO (planes, adicionales del cliente y giros): como Punto Venta es un área nueva, nadie la tenía y Ventas no salía aunque ya estuviera en producción.
-// Una sola vez: a cada dueño de lo contratado que ya tiene algo del área Centro de Distribución se le agrega el área Punto Venta con la pantalla Ventas y sus dos botones (Cargar ventas y Ver ticket, «Solo ver» + «Ver y operar»,
-// solo en lo contratado: quién de su equipo los usa lo decide su administrador desde el árbol). Solo agrega: quien ya cubre toda el área Punto Venta o todo el departamento no recibe nada suelto, y repetirlo no cambia nada.
-const PV_FOR_DISTRIBUTION_SEED_KEY = 'seed-pv-ventas-para-distribucion-v1';
-function seedPuntoVentaForDistributionHolders() {
-    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(PV_FOR_DISTRIBUTION_SEED_KEY)) return;
+// Ventas Manuales (Daniel, 2026-11-25, «Sí a las propuestas» de las Cargas Manuales): la pantalla de ventas por plantilla deja el área Punto Venta (Operaciones › Ventas) y pasa a Cadena de Suministro › Centro de Distribución › Cargas Manuales › Ventas Manuales, y la pantalla
+// vacía Admin › Consumos desaparece. Una sola vez: todo lo que cuelga de la ruta vieja (permisos de planes, adicionales, giros, perfiles, usuarios y puestos, con sus botones «Cargar ventas» y «Ver ticket», estatus del árbol, etc.) pasa a la ruta nueva sin que nadie pierda nada;
+// si la ruta nueva ya existía (choque), lo viejo sobra. Lo de Consumos (nunca llevó datos) se borra. Los tickets cargados, su historial y la dirección de sus QR no cambian (la llave de la tabla sigue siendo «ventas»).
+const CM_VENTAS_KEY = 'seed-cargas-manuales-ventas-v1';
+function moveVentasToCargasManualesOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(CM_VENTAS_KEY)) return;
     const SECTION = 'supply-chain';
-    const FROM_AREA = 'sc-area-distribution-center';
-    const TO_AREA = 'sc-area-point-of-sale';
-    const screen = TABLE_GRANT_PATHS.ventas.submenuPrefix;
-    const leaves = [screen];
-    ['colVenImportAuth', 'colVenTicketAuth'].forEach((col) => ['solo-ver', 'ver-y-operar'].forEach((level) => leaves.push(`${screen}/class-botones/${col}/${level}`)));
-    const counts = {};
+    const FROM = { itemId: 'sc-area-point-of-sale', prefix: 'cat-operaciones/cat-operaciones-pv-ventas' };
+    const TO = { itemId: 'sc-area-distribution-center', prefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' };
+    const GONE = { itemId: 'sc-area-distribution-center', prefix: 'cat-admin/cat-admin-consumos' };
+    const stats = {};
+    const bump = (key, n) => { if (n) stats[key] = (stats[key] || 0) + n; };
     db.transaction(() => {
-        for (const [table, ownerColumn] of [['plan_grants', 'plan_id'], ['client_permission_grants', 'client_id'], ['sector_grants', 'business_sector_id']]) {
-            const owners = db.prepare(`SELECT DISTINCT ${ownerColumn} AS ownerId FROM ${table} WHERE section_id = ? AND item_id = ?`).all(SECTION, FROM_AREA);
-            const covered = db.prepare(`SELECT 1 FROM ${table} WHERE ${ownerColumn} = ? AND section_id = ? AND ((item_id = ? AND submenu_id IS NULL) OR (item_id IS NULL AND submenu_id IS NULL))`);
-            const has = db.prepare(`SELECT 1 FROM ${table} WHERE ${ownerColumn} = ? AND section_id = ? AND item_id = ? AND submenu_id = ?`);
-            const insert = db.prepare(`INSERT INTO ${table} (${ownerColumn}, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)`);
-            let inserted = 0;
-            owners.forEach(({ ownerId }) => {
-                if (covered.get(ownerId, SECTION, TO_AREA)) return;
-                leaves.forEach((leaf) => { if (!has.get(ownerId, SECTION, TO_AREA, leaf)) { insert.run(ownerId, SECTION, TO_AREA, leaf); inserted += 1; } });
+        const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name);
+        tables.forEach((table) => {
+            const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+            if (cols.includes('section_id') && cols.includes('item_id') && cols.includes('submenu_id')) {
+                // la pantalla (submenu_id = ruta) y todo lo que cuelga de ella (ruta/…): cambia de área y de ruta, conservando el resto de la ruta. Si la fila nueva ya existía para el mismo dueño (choque), la vieja sobra.
+                const skip = new Set(['id', 'section_id', 'item_id', 'submenu_id', 'created_at', 'updated_at', 'granted_at']);
+                const others = cols.filter((c) => !skip.has(c));
+                const exists = db.prepare(`SELECT 1 FROM ${table} WHERE section_id = ? AND item_id = ? AND submenu_id = ?${others.map((c) => ` AND ${c} IS ?`).join('')}`);
+                const move = db.prepare(`UPDATE OR IGNORE ${table} SET item_id = ?, submenu_id = ? WHERE rowid = ?`);
+                const drop = db.prepare(`DELETE FROM ${table} WHERE rowid = ?`);
+                db.prepare(`SELECT rowid AS _rid, * FROM ${table} WHERE section_id = ? AND item_id = ? AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?)`)
+                    .all(SECTION, FROM.itemId, FROM.prefix, FROM.prefix.length + 1, `${FROM.prefix}/`).forEach((row) => {
+                        const target = TO.prefix + row.submenu_id.slice(FROM.prefix.length);
+                        if (exists.get(SECTION, TO.itemId, target, ...others.map((c) => row[c]))) { drop.run(row._rid); return; }
+                        if (move.run(TO.itemId, target, row._rid).changes) bump(table, 1); else drop.run(row._rid);
+                    });
+                // Consumos: la pantalla sale del sistema
+                bump(`${table} (Consumos quitado)`, db.prepare(`DELETE FROM ${table} WHERE section_id = ? AND item_id = ? AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?)`).run(SECTION, GONE.itemId, GONE.prefix, GONE.prefix.length + 1, `${GONE.prefix}/`).changes);
+            }
+            // llaves de texto («sección::área::ruta…»): solo las que nombran la pantalla movida
+            ['node_key', 'parent_key'].filter((col) => cols.includes(col)).forEach((col) => {
+                const fromKey = `${SECTION}::${FROM.itemId}::${FROM.prefix}`;
+                const toKey = `${SECTION}::${TO.itemId}::${TO.prefix}`;
+                const rows = db.prepare(`SELECT id, ${col} AS k FROM ${table} WHERE ${col} LIKE ?`).all(`%${fromKey}%`);
+                const update = db.prepare(`UPDATE OR IGNORE ${table} SET ${col} = ? WHERE id = ?`);
+                rows.forEach((row) => {
+                    const key = row.k.split(fromKey).join(toKey);
+                    if (key === row.k) return;
+                    if (update.run(key, row.id).changes) bump(`${table}.${col}`, 1);
+                    else db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(row.id);
+                });
             });
-            counts[table] = inserted;
-        }
-        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(PV_FOR_DISTRIBUTION_SEED_KEY);
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(CM_VENTAS_KEY);
     })();
-    console.log(`[db] Punto Venta › Ventas para quien ya tiene Centro de Distribución (una vez): ${JSON.stringify(counts)}.`);
+    console.log(`[db] Ventas Manuales (una vez): Ventas pasó de Punto Venta a Cargas Manuales de Centro de Distribución y Consumos se quitó: ${JSON.stringify(stats)}.`);
 }
-// Admin › Consumos para quien ya tiene Centro de Distribución (Daniel, 2026-11-24: «Sí, asígnale también Consumos»). Misma razón y mismo trato que Ventas (arriba): la pantalla vive en el área Centro de Distribución, pero un contrato armado con
-// pantallas sueltas no la incluye; solo la tienen los planes y adicionales que cubren toda el área. Una sola vez, a cada dueño de lo contratado que ya tiene algo de Centro de Distribución y no cubre toda el área (ni todo el departamento) se le agrega esa
-// pantalla. Solo lo contratado (nada a usuarios ni puestos); solo agrega, y repetirlo no cambia nada.
-const CONSUMOS_FOR_DISTRIBUTION_SEED_KEY = 'seed-consumos-para-distribucion-v1';
-function seedConsumosForDistributionHolders() {
-    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(CONSUMOS_FOR_DISTRIBUTION_SEED_KEY)) return;
-    const SECTION = 'supply-chain';
-    const AREA = 'sc-area-distribution-center';
-    const SCREEN = 'cat-admin/cat-admin-consumos';
-    const counts = {};
-    db.transaction(() => {
-        for (const [table, ownerColumn] of [['plan_grants', 'plan_id'], ['client_permission_grants', 'client_id'], ['sector_grants', 'business_sector_id']]) {
-            const owners = db.prepare(`SELECT DISTINCT ${ownerColumn} AS ownerId FROM ${table} WHERE section_id = ? AND item_id = ?`).all(SECTION, AREA);
-            const covered = db.prepare(`SELECT 1 FROM ${table} WHERE ${ownerColumn} = ? AND section_id = ? AND ((item_id = ? AND submenu_id IS NULL) OR (item_id IS NULL AND submenu_id IS NULL))`);
-            const has = db.prepare(`SELECT 1 FROM ${table} WHERE ${ownerColumn} = ? AND section_id = ? AND item_id = ? AND submenu_id = ?`);
-            const insert = db.prepare(`INSERT INTO ${table} (${ownerColumn}, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)`);
-            let inserted = 0;
-            owners.forEach(({ ownerId }) => {
-                if (covered.get(ownerId, SECTION, AREA)) return;
-                if (!has.get(ownerId, SECTION, AREA, SCREEN)) { insert.run(ownerId, SECTION, AREA, SCREEN); inserted += 1; }
-            });
-            counts[table] = inserted;
-        }
-        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(CONSUMOS_FOR_DISTRIBUTION_SEED_KEY);
-    })();
-    console.log(`[db] Admin › Consumos para quien ya tiene Centro de Distribución (una vez): ${JSON.stringify(counts)}.`);
-}
-// El botón «Ver ticket» (ver e imprimir el ticket con su QR) también es nuevo: mismo trato que «Cargar ventas».
-const POS_SALES_TICKET_SEED_KEY = 'seed-pv-ventas-ticket-v1';
-function seedPosSalesTicketButton() {
-    const path = TABLE_GRANT_PATHS.ventas;
-    if (!path) return;
-    seedLeavesForScreenHolders(POS_SALES_TICKET_SEED_KEY, path, ['solo-ver', 'ver-y-operar'].map((level) => `${path.submenuPrefix}/class-botones/colVenTicketAuth/${level}`), 'the Ventas view-ticket button', { contractOnly: true });
-}
-function seedPosSalesImportButton() {
-    const path = TABLE_GRANT_PATHS.ventas;
-    if (!path) return;
-    seedLeavesForScreenHolders(POS_SALES_BUTTON_SEED_KEY, path, ['solo-ver', 'ver-y-operar'].map((level) => `${path.submenuPrefix}/class-botones/colVenImportAuth/${level}`), 'the Ventas load button', { contractOnly: true });
+// La franja de «última carga» de las pantallas de Cargas Manuales: cuándo se cargó lo último, quién y de qué archivo, y hasta qué día llegan los datos (la venta más reciente cargada).
+function getPosSalesLastLoad(clientId, forTestAccount = false) {
+    const lane = forTestAccount ? 1 : 0;
+    const last = db.prepare('SELECT created_at, loaded_by, source_file FROM pos_sales WHERE client_id = ? AND is_test_data = ? ORDER BY created_at DESC, id DESC LIMIT 1').get(clientId, lane);
+    if (!last) return null;
+    const until = db.prepare('SELECT MAX(sold_at) AS d FROM pos_sales WHERE client_id = ? AND is_test_data = ?').get(clientId, lane).d;
+    return { at: last.created_at, by: last.loaded_by, file: last.source_file, dataUntil: until };
 }
 
 function getCostCenterById(id, clientId, forTestAccount = false) {
@@ -21821,11 +21807,8 @@ backfillFixedAssetHistoryOnce();
 moveScreensToGestionOnce();
 // todo o nada (una sola transacción): si algo falla se avisa, el servidor sigue arriba y se reintenta en el siguiente arranque
 try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos desde TI: no se pudieron mover los permisos de las pantallas (se reintentará al arrancar):', err.message); }
-try { seedConsumosForDistributionHolders(); } catch (err) { console.error('[db] Consumos: no se pudo asignar a quien tiene Centro de Distribución (se reintentará al arrancar):', err.message); }
-try { seedPuntoVentaForDistributionHolders(); } catch (err) { console.error('[db] Punto Venta: no se pudo asignar Ventas a quien tiene Centro de Distribución (se reintentará al arrancar):', err.message); }
+try { moveVentasToCargasManualesOnce(); } catch (err) { console.error('[db] Ventas Manuales: no se pudo mover Ventas a Cargas Manuales (se reintentará al arrancar):', err.message); }
 try { backfillPosSalePublic(); } catch (err) { console.error('[db] Ventas: no se pudo rellenar el código de los tickets (se reintentará al arrancar):', err.message); }
-try { seedPosSalesTicketButton(); } catch (err) { console.error('[db] Ventas: no se pudo sembrar el botón Ver ticket (se reintentará al arrancar):', err.message); }
-try { seedPosSalesImportButton(); } catch (err) { console.error('[db] Ventas: no se pudo sembrar el botón Cargar ventas (se reintentará al arrancar):', err.message); }
 try { seedSitesFromCostCentersOnce(); } catch (err) { console.error('[db] Sitios propios: no se pudo crear desde los centros (se reintentará al arrancar):', err.message); }
 try { seedTiMinimumOnce(); } catch (err) { console.error('[db] TI por defecto: no se pudo abrir el mínimo (se reintentará al arrancar):', err.message); }
 try { moveTiAdminGroupToConfigAreaOnce(); } catch (err) { console.error('[db] TI › Configuración Compañía: no se pudo pasar el grupo anterior (se reintentará al arrancar):', err.message); }
@@ -22237,6 +22220,7 @@ module.exports = {
     findPosSale,
     insertPosSales,
     getPosSaleById,
+    getPosSalesLastLoad,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,

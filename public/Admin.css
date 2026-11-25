@@ -10301,3 +10301,8 @@ td.col-num{ text-align: right; font-variant-numeric: tabular-nums; white-space: 
     .tk-print-root .tk{ width: 72mm; max-width: none; margin: 0 auto; box-shadow: none; padding: 4mm 3mm 6mm; font-size: 9.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .tk-print-root .tk-qr{ width: 34mm; height: 34mm; }
 }
+
+/* Cargas Manuales: la franja de «última carga» que va arriba de cada pantalla del apartado */
+.cm-stamp{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.9rem; padding: 0.55rem 0.9rem; margin: 0 0 0.8rem; border-radius: 0.7rem; background: color-mix(in srgb, var(--color-accent) 12%, transparent); font-size: 0.78rem; line-height: 1.35; }
+.cm-stamp-part{ display: inline-flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
+.cm-stamp-pill{ background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 1rem; padding: 0.1rem 0.7rem; font-weight: 600; }

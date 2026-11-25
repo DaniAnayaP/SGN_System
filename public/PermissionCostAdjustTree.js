@@ -67,10 +67,12 @@
 
     function categoriesForArea(sectionId, areaId, categories, areaOverrides) {
         const overrides = areaOverrides && areaOverrides[`${sectionId}/${areaId}`];
-        if (!overrides) return categories;
+        // un apartado hideWhenEmpty (Cargas Manuales) solo sale en las áreas que le tienen pantallas propias
+        const hidden = (cat) => !!cat.hideWhenEmpty && !(cat.submenu && cat.submenu.length);
+        if (!overrides) return categories.filter((cat) => !hidden(cat));
         return categories.map((cat) => (
             overrides[cat.id] && overrides[cat.id].length ? { ...cat, submenu: overrides[cat.id] } : cat
-        ));
+        )).filter((cat) => !hidden(cat));
     }
 
     // ownerType/ownerId are display-only here (the host screen owns the

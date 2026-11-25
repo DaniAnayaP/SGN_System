@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Cadena de Suministro › Punto Venta › Operaciones › Ventas: los tickets cargados por plantilla (Daniel, 2026-11-24, «Sí a las propuestas»). La lista trae un renglón por ticket (folio) con su subtotal, IVA y total (los calcula el sistema: precios con IVA incluido);
+// Cadena de Suministro › Centro de Distribución › Cargas Manuales › Ventas Manuales: los tickets cargados por plantilla (Daniel, 2026-11-24, «Sí a las propuestas»). La lista trae un renglón por ticket (folio) con su subtotal, IVA y total (los calcula el sistema: precios con IVA incluido);
 // «Cargar ventas» abre la ventana de carga (bajar la plantilla de Excel, elegir el archivo o pegar las celdas, revisar —lista / se salta / error, con su razón— y cargar solo los tickets completos y correctos) y «Descargar plantilla» baja el Excel.
 // Los dos botones son del botón «Cargar ventas» del árbol (colVenImportAuth). Ver o imprimir el ticket con su QR, la factura y la opinión llegan en las piezas siguientes.
 // ---------------------------------------------------------------------------
@@ -21,6 +21,7 @@ const qty = (n) => Number(n || 0).toLocaleString(lang() === 'en' ? 'en-US' : 'es
 let sales = [];
 let canImport = false;
 let canTicket = false;
+let lastLoad = null; // la franja de «última carga» (todas las pantallas de Cargas Manuales la traen)
 let loaded = false;
 
 (async function init() {
@@ -29,7 +30,7 @@ let loaded = false;
         if (!role) return;
         await refreshTable();
     } catch (err) {
-        console.error('Ventas: failed to initialize', err);
+        console.error('Ventas Manuales: failed to initialize', err);
     }
 })();
 
@@ -138,8 +139,10 @@ async function refreshTable() {
         sales = body.sales || [];
         canImport = !!body.canImport;
         canTicket = !!body.canTicket;
+        lastLoad = body.lastLoad || null;
         loaded = true;
         renderButtons();
+        renderStamp();
         redraw();
         const tableWrapper = document.querySelector(`[data-table-id="${TABLE_KEY}"]`);
         if (tableWrapper) tableWrapper.setAttribute('data-help-key', 'venTable');
@@ -151,6 +154,39 @@ async function refreshTable() {
     } catch (err) {
         console.error('Ventas: failed to load records', err);
         Dashboard.showToast(t('main.venLoadError'), 'error');
+    }
+}
+
+// La franja de arriba: los datos de estas pantallas son los de la última plantilla que se subió, así que dice cuándo fue, quién la cargó, de qué archivo y hasta qué día llegan los datos (la venta más reciente cargada).
+function renderStamp() {
+    let bar = document.getElementById('cm-stamp');
+    if (!bar) {
+        const content = document.querySelector('.page-content');
+        if (!content) return;
+        bar = document.createElement('div');
+        bar.id = 'cm-stamp';
+        bar.className = 'cm-stamp';
+        bar.setAttribute('data-help-key', 'cmStamp');
+        content.prepend(bar);
+    }
+    bar.textContent = '';
+    if (!lastLoad) {
+        const none = document.createElement('span');
+        none.textContent = t('main.cmStampNone');
+        bar.appendChild(none);
+        return;
+    }
+    const part = (node) => { const span = document.createElement('span'); span.className = 'cm-stamp-part'; span.append(...(Array.isArray(node) ? node : [node])); bar.appendChild(span); return span; };
+    const strong = (text) => { const b = document.createElement('b'); b.textContent = text; return b; };
+    const when = document.createElement('span');
+    Dashboard.renderTimeStamp(when, lastLoad.at);
+    part([strong(`${t('main.cmStampLast')} `), when]);
+    if (lastLoad.by) part([document.createTextNode(`${t('main.cmStampBy')} `), strong(lastLoad.by)]);
+    if (lastLoad.file) part([document.createTextNode(`${t('main.cmStampFile')} `), strong(lastLoad.file)]);
+    const until = lastLoad.dataUntil ? Dashboard.parseUtcStamp(lastLoad.dataUntil) : null;
+    if (until) {
+        const pill = part(document.createTextNode(t('main.cmStampUntil', { date: Dashboard.formatLocalStamp(until).split(' ')[0] })));
+        pill.classList.add('cm-stamp-pill');
     }
 }
 
@@ -377,6 +413,7 @@ document.getElementById('filter-bar')?.addEventListener('data-table:filter-apply
 document.getElementById('filter-bar')?.addEventListener('data-table:filter-clear', redraw);
 document.addEventListener('dashboard:language-changed', () => {
     if (!loaded) return;
+    renderStamp();
     redraw();
 });
 })();

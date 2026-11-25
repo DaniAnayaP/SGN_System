@@ -1371,10 +1371,12 @@ let sidebarSites = []; // [{ code, sucursal }] de los centros que esta cuenta pu
 // that one category's submenu in, leaving every other área/categoría on
 // the shared template untouched. See PermissionTree.js for the matching
 // (department-wide, not área-scoped) grant side of the same data.
+// Un apartado marcado hideWhenEmpty (menu.json: «Cargas Manuales») solo sale en las áreas que le tienen pantallas propias (areaOverrides); en las demás ni se dibuja.
+const isHiddenEmptyCategory = (cat) => !!cat.hideWhenEmpty && !(cat.submenu && cat.submenu.length);
 function effectiveAreaCategories(data) {
     const base = data.areaCategories || [];
     const overrides = (data.areaOverrides || {})[`${selectedDepartment}/${selectedArea}`];
-    return applyCascadedCategoryOrder(overrides ? base.map((cat) => (overrides[cat.id] ? { ...cat, submenu: overrides[cat.id] } : cat)) : base);
+    return applyCascadedCategoryOrder((overrides ? base.map((cat) => (overrides[cat.id] ? { ...cat, submenu: overrides[cat.id] } : cat)) : base).filter((cat) => !isHiddenEmptyCategory(cat)));
 }
 
 // Orden de Departamentos, Áreas, Apartados y Pantallas que le toca a esta cuenta: el del Árbol Maestro y, bajando, el de su
@@ -14660,7 +14662,7 @@ async function initDashboardInner({ activePage } = {}) {
 // by hand when a table's pantalla moves in the tree or a new table is added.
 const TABLE_GRANT_PATHS = {
     'sitios-contratados': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-contracted-sites' },
-    'ventas': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-operaciones/cat-operaciones-pv-ventas' },
+    'ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
     // Equipo de Trabajo › Registro (la tabla estándar de esa vista); mismo prefijo que db.js
     'equipo-registro': { sectionId: 'main', itemId: 'equipo-trabajo', submenuPrefix: 'et-registro/et-registro-tabla' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
@@ -14796,8 +14798,6 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-centro-dist-edicion-codigo': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-centro-dist-edicion-codigo' },
     // Admin > Mapa de calor: el Layout pintado con la temperatura o la humedad de los sensores, por hora.
     'cat-admin-mapa-calor': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-admin/cat-admin-mapa-calor' },
-    // Admin > Consumos: los registros de consumos por unidad, artículo y mes (la pantalla está vacía por ahora).
-    'cat-admin-consumos': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-admin/cat-admin-consumos' },
     'cat-admin-ti-mapa-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-admin/cat-admin-ti-mapa-soporte' },
     'cat-operaciones-ti-casos-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-casos-soporte' },
     'cat-operaciones-ti-habilitacion-codigos': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-habilitacion-codigos' },
@@ -14821,7 +14821,7 @@ const SCREEN_GRANT_PATHS = {
     'cat-operaciones-ti-impl-startup': { sectionId: 'information-technology', itemId: 'it-area-implementation', submenuPrefix: 'cat-operaciones/cat-operaciones-ti-impl-startup' },
     'cat-gestion-ti-soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     // Punto Venta: Ventas (Operaciones) y Transacciones (Gestión), por ahora vacías
-    'cat-operaciones-pv-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-operaciones/cat-operaciones-pv-ventas' },
+    'cat-cargas-manuales-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
     'cat-gestion-pv-transacciones': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-gestion/cat-gestion-pv-transacciones' },
     'cat-reportes-ti-kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'cat-catalogos-ti-soporte-ayuda': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },

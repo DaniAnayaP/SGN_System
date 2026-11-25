@@ -2266,8 +2266,10 @@ ccBtn.addEventListener('click', (event) => {
 function effectiveAreaCategories() {
     const base = menuData?.areaCategories || [];
     const overrides = (menuData?.areaOverrides || {})[`${selectedDepartment}/${selectedArea}`];
-    if (!overrides) return base;
-    return base.map((cat) => (overrides[cat.id] ? { ...cat, submenu: overrides[cat.id] } : cat));
+    // un apartado hideWhenEmpty (Cargas Manuales) solo sale donde el área le tiene pantallas propias
+    const hidden = (cat) => !!cat.hideWhenEmpty && !(cat.submenu && cat.submenu.length);
+    if (!overrides) return base.filter((cat) => !hidden(cat));
+    return base.map((cat) => (overrides[cat.id] ? { ...cat, submenu: overrides[cat.id] } : cat)).filter((cat) => !hidden(cat));
 }
 function categoryHasGrantedScreen(cat) {
     if (!selectedDepartment || !selectedArea) return false;

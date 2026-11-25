@@ -411,7 +411,13 @@
     "opCentroDistTemperaturas": "Temperatures",
     "opCentroDistSeguridad": "Safety",
     "adminMapaCalor": "Heat map",
-    "adminConsumos": "Consumption",
+    "catCargasManuales": "Manual Loads",
+    "catCargasManualesAbbr": "Manual Loads",
+    "catCargasManualesAbbr1": "Manual Loads",
+    "catCargasManualesAbbr2": "Loads",
+    "cmVentasManuales": "Manual Sales",
+    "cmVentasManualesAbbr1": "Manual Sales",
+    "cmVentasManualesAbbr2": "Sales",
     "opCentroDistAltaArticulosAbbr1": "Sku Registration",
     "opCentroDistAltaArticulosAbbr2": "Sku Reg.",
     "opCentroDistAltaArticulosAbbr3": "New Sku",
@@ -523,7 +529,6 @@
     "opTiHabilitacionCodigosAbbr1": "Code Enabl.",
     "opTiHabilitacionCodigosAbbr2": "Enabl.",
     "gesTiSoportesCerrados": "Closed support cases",
-    "opPvVentas": "Sales",
     "gesPvTransacciones": "Transactions",
     "gesTiSoportesCerradosAbbr1": "Closed",
     "repTiKpiSoporte": "Support KPI",
@@ -5265,6 +5270,11 @@
     "venTicketPrint": "Print",
     "venTicketClose": "Close",
     "venTicketError": "The receipt could not be opened.",
+    "cmStampLast": "Last load:",
+    "cmStampBy": "by",
+    "cmStampFile": "file",
+    "cmStampUntil": "Data up to date until {date}",
+    "cmStampNone": "Nothing has been loaded on this screen yet.",
     "venImport": "Load sales",
     "venTemplate": "Download template",
     "venLoadError": "The sales could not be read.",
@@ -9286,6 +9296,10 @@
     "venTicketQr": {
       "what": "The QR and the code below belong to this receipt and NEVER change: what you print today will keep working when you add online invoicing and feedback. Today the QR opens the receipt page; the QR only works if you print it from your production system, not from a local test.",
       "example": "The customer scans the QR of receipt 000482 and lands on its page; the printed code (CHR-000482-K7Q2) is the same receipt to type by hand."
+    },
+    "cmStamp": {
+      "what": "The data on this screen is the data of the last template that was loaded; it does not update by itself. The strip says when that load was (with your time zone and the UTC base time), who did it, from which file and up to which day the data goes (the most recent sale loaded). That way nobody mistakes yesterday's data for today's.",
+      "example": "Last load: today 08:15 by Ana Ramírez, file sales-24-nov.xlsx, data up to date until 23/nov/2026: if today is the 25th, yesterday's sales are missing."
     },
     "venImport": {
       "what": "Loads sales from an Excel file (or from pasted cells). Each row of the file is one item sold and the rows with the same receipt number (inside the same site) make up one receipt. Before loading anything the system checks the file and tells you what is fine, what is skipped and what fails, and why. Only complete, correct receipts are loaded.",
