@@ -2,9 +2,10 @@
 // Registros Información (App) — la misma pantalla de la Web (Cargas Manuales > Registros Información) hecha para el celular, sin tablas (Daniel, 2026-11-25, «Sí a las propuestas»: tipo banco, intuitivo, pocos toques). PIEZA A (solo ver):
 //   · Lista: un registro por tarjeta (los dos de siempre y los que agregó la empresa): su nombre, si es Mensual o Diario, cuándo se cargó por última vez y su tira de periodos (verde = cargado, ámbar punteado = falta en medio);
 //   · Un registro: la última carga (fecha, hora, quién y de qué archivo), la tira de periodos, el buscador (la sintaxis de siempre: $ antes, @ después, la coma separa), dos filtros (categoría y unidad) y una tarjeta por código y unidad con su último valor;
-//   · Un código: sus datos, las barras de sus valores por mes (o por día) con los periodos que faltan, la lista de periodos y Control Interno plegado.
+//   · Un código: sus datos, las barras de sus valores por mes (o por día) con los periodos que faltan, la lista de periodos y Control Interno plegado;
+//   · Pestaña Cargas (pieza B): las cargas del registro (lo más reciente arriba, con su estado Vigente / Anulada), el detalle de una carga con sus cifras y «Anular esta carga» (con motivo y confirmación; necesita señal y el botón del árbol).
 // Mismos datos y mismos permisos que la Web (las rutas son las de la Web: ver los datos es de quien tiene la pantalla); en la App la da la «Visión APP». Sin señal se ve lo último que se bajó (guardado en el celular, por empresa).
-// Siguen las piezas B (Cargas y Anular) y C (Cargar registro en tres pasos).
+// Sigue la pieza C (Cargar registro en tres pasos).
 // ---------------------------------------------------------------------------
 
 const SUPPORTED_LANGS = ['en', 'es'];
@@ -141,7 +142,7 @@ let currentUser = null;
 let registries = [];          // los registros de la empresa (con sus periodos y su última carga)
 let dataByKey = {};           // registro -> lo que el servidor contestó de sus datos
 let dataState = 'loading';    // 'online' | 'cached' | 'none'
-let view = 'list';            // 'list' | 'registry' | 'code'
+let view = 'list';            // 'list' | 'registry' | 'code' | 'load'
 let regKey = null;
 let rowId = null;
 let search = '';
@@ -151,6 +152,11 @@ let shown = MAX_ROWS;
 let allPeriods = false;       // el detalle de un código lista todos sus periodos
 let listScroll = 0;
 let regScroll = 0;
+let tab = 'data';             // en un registro: 'data' (sus códigos) | 'loads' (sus cargas)
+let loadsByKey = {};          // registro -> { loads, canAnnul, state } lo que el servidor contestó de sus cargas
+let loadId = null;
+let loadSearch = '';
+let loadsScroll = 0;
 
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined && text !== null) node.textContent = text; return node; };
 // Lo que se desplaza es la página o el cuerpo de la pantalla según el celular: se guarda y se restaura el que se haya movido.
@@ -224,7 +230,7 @@ function cacheDb() {
 async function cacheSave() {
     try {
         const db = await cacheDb();
-        const value = { clientId: currentUser ? (currentUser.clientId ?? null) : null, registries, data: dataByKey, at: Date.now() };
+        const value = { clientId: currentUser ? (currentUser.clientId ?? null) : null, registries, data: dataByKey, loads: loadsByKey, at: Date.now() };
         await new Promise((resolve, reject) => {
             const tx = db.transaction('kv', 'readwrite');
             tx.objectStore('kv').put(value, 'data');
@@ -259,7 +265,12 @@ async function loadRegistries() {
             dataState = 'online';
             // los datos que ya estaban guardados siguen sirviendo si luego se pierde la señal dentro de la pantalla
             const saved = await savedForThisClient();
-            if (saved) dataByKey = { ...(saved.data || {}) };
+            // lo guardado de la vez pasada solo completa lo que todavía no se bajó en esta sesión; sus cargas se ven pero no se anulan
+            if (saved) {
+                Object.values(saved.loads || {}).forEach((v) => { v.state = 'cached'; v.canAnnul = false; });
+                dataByKey = { ...(saved.data || {}), ...dataByKey };
+                loadsByKey = { ...(saved.loads || {}), ...loadsByKey };
+            }
             cacheSave();
             return;
         }
@@ -268,6 +279,8 @@ async function loadRegistries() {
     if (saved) {
         registries = saved.registries || [];
         dataByKey = saved.data || {};
+        loadsByKey = saved.loads || {};
+        Object.values(loadsByKey).forEach((v) => { v.state = 'cached'; v.canAnnul = false; });
         dataState = 'cached';
         return;
     }
@@ -291,6 +304,22 @@ async function loadRegistryData(key) {
     return !!dataByKey[key];
 }
 
+// Las cargas de un registro (con quién y cuándo, lo que trajeron y su estado); sin señal se usan las guardadas y entonces no se puede anular.
+async function loadRegistryLoads(key) {
+    try {
+        const res = await fetch(apiUrl(`${API}/${encodeURIComponent(key)}/loads`), { credentials: 'include' });
+        if (res.status === 401) { window.location.replace('Login.html'); return false; }
+        if (res.ok) {
+            const body = await res.json();
+            loadsByKey[key] = { loads: body.loads || [], canAnnul: !!body.canAnnul, state: 'online' };
+            cacheSave();
+            return true;
+        }
+    } catch { /* sin señal: se usa lo guardado */ }
+    if (loadsByKey[key]) { loadsByKey[key].state = 'cached'; loadsByKey[key].canAnnul = false; return true; }
+    return false;
+}
+
 // --- Pantalla --------------------------------------------------------------------------------------------------------------------------
 const titleEl = document.getElementById('carga-title');
 const bodyEl = document.getElementById('carga-body');
@@ -299,7 +328,8 @@ document.getElementById('carga-progress-label').hidden = true;
 
 function render() {
     bodyEl.innerHTML = '';
-    if (view === 'code') renderCode();
+    if (view === 'load') renderLoad();
+    else if (view === 'code') renderCode();
     else if (view === 'registry') renderRegistry();
     else renderList();
 }
@@ -352,8 +382,9 @@ function registryCard(reg) {
 async function openRegistry(key) {
     listScroll = getScroll();
     regKey = key;
-    search = ''; catFilter = ''; unitFilter = ''; shown = MAX_ROWS;
-    if (!(await loadRegistryData(key))) { showToast(t('main.regLoadError')); return; }
+    search = ''; catFilter = ''; unitFilter = ''; shown = MAX_ROWS; tab = 'data'; loadSearch = '';
+    const [dataOk] = await Promise.all([loadRegistryData(key), loadRegistryLoads(key)]);
+    if (!dataOk) { showToast(t('main.regLoadError')); return; }
     view = 'registry';
     render();
     setScroll(0);
@@ -367,8 +398,12 @@ function renderRegistry() {
     titleEl.textContent = regName(reg);
     if (dataState === 'cached') bodyEl.appendChild(el('p', 'pm-app-note', t('home.regCached')));
     const periods = data.periods || [];
-    // sin ninguna carga no hay nada que resumir ni que buscar
-    if (!periods.length) { bodyEl.appendChild(el('p', 'home-carga-empty-note', t('main.regCardNone'))); return; }
+    const loadsCount = loadsByKey[regKey] ? loadsByKey[regKey].loads.length : 0;
+    // sin ninguna carga (ni siquiera una anulada) no hay nada que resumir, que buscar ni que anular
+    if (!periods.length && !loadsCount) { bodyEl.appendChild(el('p', 'home-carga-empty-note', t('main.regCardNone'))); return; }
+    if (tab === 'loads') { renderLoadsTab(); return; }
+    // con todas las cargas anuladas ya no hay periodos: queda la pestaña para verlas
+    if (!periods.length) { bodyEl.appendChild(tabsNode(loadsCount)); bodyEl.appendChild(el('p', 'home-carga-empty-note', t('main.regCardNone'))); return; }
     const load = data.lastLoad;
     const hero = el('div', 'pm-app-card rg-app-hero');
     hero.setAttribute('data-help-key', 'appRegHero');
@@ -381,6 +416,7 @@ function renderRegistry() {
     }
     hero.appendChild(stripNode(reg, periods));
     bodyEl.appendChild(hero);
+    bodyEl.appendChild(tabsNode(loadsCount));
 
     // buscador (la sintaxis de siempre: $ antes, @ después, la coma separa) y los dos filtros
     const input = el('input', 'pm-app-input seg-app-search');
@@ -530,7 +566,195 @@ function renderCode() {
     bodyEl.appendChild(control);
 }
 
+// --- Pestañas: Datos | Cargas -----------------------------------------------------------------------------------------------------------------
+function tabsNode(loadsCount) {
+    const seg = el('div', 'rg-app-seg');
+    seg.setAttribute('role', 'tablist');
+    seg.setAttribute('data-help-key', 'appRegTabs');
+    [['data', 'main.regTabData', 0], ['loads', 'main.regTabLoads', loadsCount]].forEach(([key, labelKey, count]) => {
+        const btn = el('button', `rg-app-seg-btn${tab === key ? ' rg-app-seg-on' : ''}`);
+        btn.type = 'button';
+        btn.setAttribute('role', 'tab');
+        btn.setAttribute('aria-selected', tab === key ? 'true' : 'false');
+        btn.append(t(labelKey));
+        if (count) btn.appendChild(el('em', '', String(count)));
+        btn.addEventListener('click', () => { if (tab === key) return; tab = key; render(); setScroll(0); });
+        seg.appendChild(btn);
+    });
+    return seg;
+}
+
+// --- Las cargas de un registro: lo más reciente arriba ----------------------------------------------------------------------------------------------
+const newRowsText = (n) => t(n === 1 ? 'home.regNewRowOne' : 'home.regNewRowMany', { n: num(n) });
+const errorsText = (n) => t(n === 1 ? 'home.regErrOne' : 'home.regErrMany', { n: num(n) });
+function newPeriodsText(reg, l) {
+    const n = (l.newPeriods || []).length;
+    if (!n) return t('home.regNoNewPeriods');
+    const day = !!reg && reg.kind === 'day';
+    if (n === 1) return t(day ? 'home.regNewDayOne' : 'home.regNewMonthOne', { list: periodLabel(l.newPeriods[0]) });
+    return t(day ? 'home.regNewDayMany' : 'home.regNewMonthMany', { n });
+}
+const whenText = (l) => [dayText(l.createdAt), timeText(l.createdAt), l.loadedBy].filter(Boolean).join(' · ');
+const statusPill = (l) => el('i', `rg-app-pill ${l.status === 'vigente' ? 'rg-app-pill-ok' : 'rg-app-pill-off'}`, t(l.status === 'vigente' ? 'main.regStatus_vigente' : 'main.regStatus_anulada'));
+function renderLoadsTab() {
+    const info = loadsByKey[regKey] || { loads: [] };
+    bodyEl.appendChild(tabsNode(info.loads.length));
+    const input = el('input', 'pm-app-input seg-app-search');
+    input.type = 'search';
+    input.placeholder = t('home.regLoadsSearch');
+    input.setAttribute('aria-label', t('main.aaBuscar'));
+    input.setAttribute('data-help-key', 'appRegBuscarCargas');
+    input.value = loadSearch;
+    bodyEl.appendChild(input);
+    const listEl = el('div', 'cal-app-list');
+    listEl.setAttribute('data-help-key', 'appRegCargas');
+    bodyEl.appendChild(listEl);
+    let timer = 0;
+    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { loadSearch = input.value; drawLoads(listEl); }, 150); });
+    drawLoads(listEl);
+}
+function loadHaystack(l) {
+    return [l.fileName, l.loadedBy, t(`main.regSource_${l.source}`), t(l.status === 'vigente' ? 'main.regStatus_vigente' : 'main.regStatus_anulada'), l.annulNote, ...(l.newPeriods || []).map(periodLabel)].join(' ');
+}
+function drawLoads(listEl) {
+    listEl.innerHTML = '';
+    const info = loadsByKey[regKey] || { loads: [] };
+    const text = loadSearch.trim();
+    const test = window.SearchSyntax ? window.SearchSyntax.compile('contains', text) : (v) => String(v).toLowerCase().includes(text.toLowerCase());
+    const items = info.loads.filter((l) => !text || test(loadHaystack(l)));
+    if (!items.length) { listEl.appendChild(el('p', 'home-carga-empty-note', t(text ? 'home.regNoMatchLoads' : 'home.regLoadsNone'))); return; }
+    items.forEach((l) => listEl.appendChild(loadCard(l)));
+}
+// Una carga: el archivo y su estado, cuándo y quién la hizo, cómo se cargó y lo que trajo; un toque abre su detalle.
+function loadCard(l) {
+    const reg = currentReg();
+    const off = l.status !== 'vigente';
+    const card = el('button', `pm-app-card rg-app-load${off ? ' rg-app-off' : ''}`);
+    card.type = 'button';
+    card.setAttribute('data-help-key', 'appRegCarga');
+    const top = el('span', 'rg-app-top');
+    const name = el('span', 'rg-app-fname');
+    name.innerHTML = '<i class="bx bx-file" aria-hidden="true"></i>';
+    name.appendChild(el('b', '', l.fileName || '—'));
+    top.append(name, statusPill(l));
+    card.appendChild(top);
+    card.appendChild(el('span', 'rg-app-sub', whenText(l)));
+    card.appendChild(el('span', 'rg-app-sub', t(`main.regSource_${l.source}`)));
+    const chips = el('span', 'rg-app-chips');
+    chips.append(el('i', 'rg-app-chip', newPeriodsText(reg, l)), el('i', 'rg-app-chip', newRowsText(l.newRows || 0)), el('i', `rg-app-chip ${l.errors ? 'rg-app-chip-bad' : 'rg-app-chip-ok'}`, errorsText(l.errors || 0)));
+    card.appendChild(chips);
+    if (off && l.annulNote) card.appendChild(el('span', 'rg-app-note', l.annulNote));
+    card.addEventListener('click', () => openLoad(l.id));
+    return card;
+}
+function openLoad(id) {
+    loadsScroll = getScroll();
+    loadId = id;
+    view = 'load';
+    render();
+    setScroll(0);
+}
+
+// --- El detalle de una carga y «Anular esta carga» ---------------------------------------------------------------------------------------------------
+function renderLoad() {
+    const reg = currentReg();
+    const info = loadsByKey[regKey];
+    const l = info && info.loads.find((x) => x.id === loadId);
+    if (!reg || !l) { view = 'registry'; tab = 'loads'; render(); return; }
+    titleEl.textContent = l.fileName || regName(reg);
+    if (dataState === 'cached' || info.state === 'cached') bodyEl.appendChild(el('p', 'pm-app-note', t('home.regCached')));
+    const off = l.status !== 'vigente';
+    const head = el('div', 'rg-app-top');
+    head.append(el('span', 'rg-app-sub', whenText(l)), statusPill(l));
+    bodyEl.appendChild(head);
+    const grid = el('div', 'rg-app-grid2');
+    grid.setAttribute('data-help-key', 'appRegCargaCifras');
+    const cnt = (value, labelKey, cls) => { const box = el('div', `rg-app-cnt${cls ? ` rg-app-cnt-${cls}` : ''}`); box.append(el('b', '', num(value)), el('span', '', t(labelKey))); return box; };
+    grid.append(
+        cnt((l.newPeriods || []).length, 'main.colRegCargaPeriodos'), cnt(l.newRows, 'main.colRegCargaNuevos'), cnt(l.valuesAdded, 'main.colRegCargaAgregados'),
+        cnt(l.untouched, 'main.colRegCargaYaEstaba'), cnt(l.different, 'main.colRegCargaDistintos'), cnt(l.errors, 'main.colRegCargaErrores', l.errors ? 'bad' : 'ok'),
+    );
+    bodyEl.appendChild(grid);
+    const meta = el('div', 'pm-app-meta');
+    const metaRow = (label, value) => { const div = el('div'); div.append(el('span', '', label), el('b', '', value || '—')); meta.appendChild(div); };
+    metaRow(t('main.colRegCargaPeriodos'), (l.newPeriods || []).map(periodLabel).join(', '));
+    metaRow(t('main.colRegCargaOrigen'), t(`main.regSource_${l.source}`));
+    metaRow(t('main.colRegCargaRenglones'), num(l.rowsInFile));
+    if (off) {
+        metaRow(t('home.regAnnulledOn'), [dayText(l.annulledAt), timeText(l.annulledAt)].filter(Boolean).join(' · '));
+        metaRow(t('home.regAnnulledBy'), l.annulledBy);
+        if (l.annulNote) metaRow(t('home.regReason'), l.annulNote);
+    }
+    bodyEl.appendChild(meta);
+    // Control Interno (lo que el servidor guarda de cada carga)
+    const control = el('details', 'aa-app-control');
+    control.appendChild(el('summary', '', t('menu.classControlInterno')));
+    const ctl = el('div', 'pm-app-meta');
+    ctl.innerHTML = SYSTEM_KEYS.map((key) => `<div><span>${esc(t(`main.${key}`))}</span><b>${esc(l[key] === undefined || l[key] === null || l[key] === '' ? '—' : String(l[key]))}</b></div>`).join('');
+    control.appendChild(ctl);
+    bodyEl.appendChild(control);
+    // anular: solo una carga vigente, con el botón del árbol y con señal (la decide el servidor, que también lo revisa)
+    if (!off && info.canAnnul && info.state === 'online') {
+        const btn = el('button', 'home-carga-secondary-btn rg-app-danger');
+        btn.type = 'button';
+        btn.setAttribute('data-help-key', 'appRegAnular');
+        btn.innerHTML = `<i class="bx bx-block" aria-hidden="true"></i> <span>${esc(t('home.regAnnulThis'))}</span>`;
+        btn.addEventListener('click', () => openAnnulSheet(l));
+        bodyEl.appendChild(btn);
+    }
+}
+// La hoja de confirmación: el motivo (opcional) y dos botones. Anular no borra nada: la carga deja de contar y queda en el historial.
+function openAnnulSheet(l) {
+    const backdrop = el('div', 'rg-app-sheet');
+    const panel = el('div', 'rg-app-sheet-panel');
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('data-help-key', 'appRegAnular');
+    panel.append(el('h3', '', t('main.regAnnulTitle', { file: l.fileName || '' })), el('p', 'pm-app-note', t('main.regAnnulHint')));
+    const label = el('label', 'aa-app-field');
+    const note = el('textarea', 'pm-app-input seg-app-note-area');
+    note.maxLength = 300;
+    label.append(el('span', '', t('main.regAnnulNote')), note);
+    panel.appendChild(label);
+    const ok = el('button', 'home-carga-new-btn rg-app-danger-fill');
+    ok.type = 'button';
+    ok.innerHTML = `<i class="bx bx-block" aria-hidden="true"></i><span>${esc(t('main.regAnnul'))}</span>`;
+    const cancel = el('button', 'home-carga-secondary-btn', t('main.regCancel'));
+    cancel.type = 'button';
+    panel.append(ok, cancel);
+    backdrop.appendChild(panel);
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    const close = () => { backdrop.remove(); document.removeEventListener('keydown', onKey); };
+    document.addEventListener('keydown', onKey);
+    backdrop.addEventListener('click', (event) => { if (event.target === backdrop) close(); });
+    cancel.addEventListener('click', close);
+    ok.addEventListener('click', () => submitAnnul(l, note.value, ok, close));
+    document.body.appendChild(backdrop);
+    note.focus();
+}
+async function refreshAfterAnnul() {
+    await Promise.all([loadRegistries(), loadRegistryData(regKey), loadRegistryLoads(regKey)]);
+    render();
+}
+async function submitAnnul(l, noteText, okBtn, close) {
+    okBtn.disabled = true;
+    let res;
+    try {
+        res = await fetch(apiUrl(`${API}/${encodeURIComponent(regKey)}/loads/${l.id}/annul`), { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: noteText }) });
+    } catch {
+        showToast(t('home.regNeedSignal'));
+        okBtn.disabled = false;
+        return;
+    }
+    if (res.status === 401) { window.location.replace('Login.html'); return; }
+    if (res.ok) { close(); await refreshAfterAnnul(); showToast(t('main.regAnnulled')); return; }
+    okBtn.disabled = false;
+    if (res.status === 409) { close(); await refreshAfterAnnul(); showToast(t('home.regLoadNotActive')); return; }
+    showToast(t(res.status === 403 ? 'main.regErr_REG_FORBIDDEN' : 'admin.saveError'));
+}
+
 document.getElementById('carga-back').addEventListener('click', () => {
+    if (view === 'load') { view = 'registry'; tab = 'loads'; render(); setScroll(loadsScroll); return; }
     if (view === 'code') { view = 'registry'; render(); setScroll(regScroll); return; }
     if (view === 'registry') { view = 'list'; render(); setScroll(listScroll); return; }
     window.location.href = 'AppInicio.html';

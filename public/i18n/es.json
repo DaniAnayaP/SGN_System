@@ -9018,6 +9018,24 @@
     "regNoLoad": "Sin carga",
     "regShowAll": "Ver los {n} periodos",
     "regShowLess": "Ver menos",
+    "regLoadsSearch": "Buscar archivo o persona…",
+    "regLoadsNone": "Todavía no hay cargas.",
+    "regNoMatchLoads": "Ninguna carga coincide con lo que buscas.",
+    "regNoNewPeriods": "Sin periodos nuevos",
+    "regNewMonthOne": "+1 mes · {list}",
+    "regNewMonthMany": "+{n} meses",
+    "regNewDayOne": "+1 día · {list}",
+    "regNewDayMany": "+{n} días",
+    "regNewRowOne": "1 renglón nuevo",
+    "regNewRowMany": "{n} renglones nuevos",
+    "regErrOne": "1 error",
+    "regErrMany": "{n} errores",
+    "regAnnulThis": "Anular esta carga",
+    "regAnnulledOn": "Anulada el",
+    "regAnnulledBy": "Anulada por",
+    "regReason": "Motivo",
+    "regNeedSignal": "Para anular una carga necesitas señal.",
+    "regLoadNotActive": "Esa carga ya no está vigente.",
     "calNoData": "Todavía no se bajaron los certificados. Conéctate una vez para verlos sin señal.",
     "calNoMatch": "Ningún certificado coincide con tu búsqueda.",
     "calShowing": "Se muestran {n} de {total}: escribe para buscar el resto.",
@@ -9337,6 +9355,30 @@
     "appTwPass": {"what":"Un pase pedido por alguien a tu cargo: quién se la pasa a quién y por qué. Aprobarlo la mueve; rechazarlo la deja donde estaba (puedes escribir un comentario).","example":"Marco → Sofía · «estaré en capacitación»."},
     "appTwPerson": {"what":"Deja solo las actividades en las que participa esa persona.","example":"Sofía Cruz."},
     "appTwTimeline": {"what":"Todo lo que le ha pasado a la actividad, con quién y cuándo, sin poderse editar. Necesita señal; sin ella se ve el detalle sin la línea del tiempo.","example":"Nació sola por la repetición → Asignada a Marco Ríos → Confirmada."},
+    "appRegTabs": {
+      "what": "Cambia entre los códigos del registro (Datos) y las veces que se ha cargado (Cargas). El número es cuántas cargas hay.",
+      "example": "Datos · Cargas 3"
+    },
+    "appRegBuscarCargas": {
+      "what": "Busca en el nombre del archivo, quién lo cargó, cómo se cargó, su estado y sus periodos, con la sintaxis de siempre: $ antes, @ después, la coma separa.",
+      "example": "cargos-nov  ·  Ana  ·  anulada"
+    },
+    "appRegCargas": {
+      "what": "Las cargas del registro, la más reciente arriba. Un toque abre su detalle.",
+      "example": "cargos-nov.xlsx · Vigente · +1 mes · nov-26."
+    },
+    "appRegCarga": {
+      "what": "Una carga: el archivo y si sigue Vigente o quedó Anulada, cuándo y quién la hizo, cómo se cargó (plantilla o su Excel) y lo que trajo: periodos nuevos, renglones nuevos y errores.",
+      "example": "cargos-nov.xlsx · 25 nov 2026 · Con plantilla · 18 renglones nuevos · 0 errores."
+    },
+    "appRegCargaCifras": {
+      "what": "Lo que hizo la carga. Nuevos se agregaron; «Ya estaba» y «Distintos» no se tocaron (las cargas solo agregan); los errores son renglones que no se pudieron leer.",
+      "example": "Renglones nuevos 18 · Valores agregados 120 · Errores 0."
+    },
+    "appRegAnular": {
+      "what": "Anula una carga equivocada: deja de contar en el registro y en los análisis. No se borra nada: queda en el historial y se puede volver a cargar el archivo bien. Necesita señal y el botón «Anular carga» de tu árbol.",
+      "example": "Anular cargos-ago-mal.xlsx con el motivo «Archivo equivocado»."
+    },
     "appRegLista": {
       "what": "La lista de lo que se carga a mano. Cada tarjeta es un registro (o un código, ya dentro de uno); un toque la abre.",
       "example": "Cargos por sitio mensuales: un mes por columna en la Web, aquí un valor por mes."

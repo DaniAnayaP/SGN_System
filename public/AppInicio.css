@@ -2611,3 +2611,29 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .rg-app-bars i{ flex: 1; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, var(--home-accent-strong-1), var(--home-accent-strong-2)); display: block; }
 .rg-app-bars i.rg-app-barmiss{ background: #fdecc8; border: 1px dashed #8a5a00; border-bottom: 0; }
 .rg-app-plist .rg-app-none b{ color: #8a5a00; }
+
+/* Registros Información (App), pieza B: pestañas Datos | Cargas, las cargas, el detalle de una carga y la hoja para anularla. */
+.rg-app-seg{ display: flex; padding: 3px; margin-bottom: 0.6rem; border-radius: 999px; background: var(--home-surface-2); }
+.rg-app-seg-btn{ flex: 1; padding: 0.45rem 0; border: 0; border-radius: 999px; background: transparent; font-family: inherit; font-size: 0.78rem; font-weight: 600; color: var(--home-text-muted); cursor: pointer; }
+.rg-app-seg-btn em{ font-style: normal; font-size: 0.62rem; margin-left: 0.3rem; padding: 0 0.4rem; border-radius: 999px; background: var(--home-neutral-soft); color: var(--home-text-secondary); }
+.rg-app-seg-on{ background: var(--home-surface); color: var(--home-text-primary); box-shadow: 0 1px 3px var(--home-shadow); }
+.rg-app-load{ width: 100%; text-align: left; font-family: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 0.3rem; }
+.rg-app-fname{ display: inline-flex; align-items: center; gap: 0.4rem; min-width: 0; color: var(--home-accent); }
+.rg-app-fname b{ font-size: 0.86rem; color: var(--home-text-primary); overflow-wrap: anywhere; }
+.rg-app-pill-ok{ background: #dff3e6; color: #2f7d4f; }
+.rg-app-chips{ display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.15rem; }
+.rg-app-chip{ font-style: normal; font-size: 0.62rem; font-weight: 600; padding: 0.1rem 0.6rem; border-radius: 999px; border: 1px solid var(--home-border); background: var(--home-surface); color: var(--home-text-secondary); }
+.rg-app-chip-ok{ background: #dff3e6; color: #2f7d4f; border-color: transparent; }
+.rg-app-chip-bad{ background: #fbdde1; color: #a1273a; border-color: transparent; }
+.rg-app-note{ font-size: 0.68rem; font-weight: 600; color: #8a5a00; overflow-wrap: anywhere; }
+.rg-app-grid2{ display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin: 0.6rem 0; }
+.rg-app-cnt{ display: flex; flex-direction: column; padding: 0.55rem 0.75rem; border: 1px solid var(--home-border); border-radius: 0.8rem; background: var(--home-surface); }
+.rg-app-cnt b{ font-size: 1.1rem; color: var(--home-text-primary); font-variant-numeric: tabular-nums; }
+.rg-app-cnt span{ font-size: 0.62rem; color: var(--home-text-muted); }
+.rg-app-cnt-ok b{ color: #2f7d4f; }
+.rg-app-cnt-bad b{ color: var(--home-danger); }
+.rg-app-danger{ color: var(--home-danger); border-color: color-mix(in srgb, var(--home-danger) 45%, transparent); margin-top: 0.8rem; }
+.rg-app-danger-fill{ background: var(--home-danger); color: #fff; }
+.rg-app-sheet{ position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center; background: var(--home-overlay-backdrop); }
+.rg-app-sheet-panel{ width: 100%; max-width: 32rem; max-height: 90vh; overflow: auto; display: flex; flex-direction: column; gap: 0.6rem; padding: 1.1rem 1.1rem calc(1.1rem + env(safe-area-inset-bottom, 0px)); border-radius: 1.2rem 1.2rem 0 0; background: var(--home-surface); color: var(--home-text-primary); }
+.rg-app-sheet-panel h3{ margin: 0; font-size: 0.95rem; }

@@ -9019,6 +9019,24 @@
     "regNoLoad": "Not uploaded",
     "regShowAll": "See all {n} periods",
     "regShowLess": "See less",
+    "regLoadsSearch": "Search file or person…",
+    "regLoadsNone": "There are no loads yet.",
+    "regNoMatchLoads": "No load matches what you are looking for.",
+    "regNoNewPeriods": "No new periods",
+    "regNewMonthOne": "+1 month · {list}",
+    "regNewMonthMany": "+{n} months",
+    "regNewDayOne": "+1 day · {list}",
+    "regNewDayMany": "+{n} days",
+    "regNewRowOne": "1 new row",
+    "regNewRowMany": "{n} new rows",
+    "regErrOne": "1 error",
+    "regErrMany": "{n} errors",
+    "regAnnulThis": "Void this load",
+    "regAnnulledOn": "Voided on",
+    "regAnnulledBy": "Voided by",
+    "regReason": "Reason",
+    "regNeedSignal": "You need signal to void a load.",
+    "regLoadNotActive": "That load is no longer active.",
     "calNoData": "The certificates have not been downloaded yet. Connect once to see them without signal.",
     "calNoMatch": "No certificate matches your search.",
     "calShowing": "Showing {n} of {total}: type to search the rest.",
@@ -9338,6 +9356,30 @@
     "appTwPass": {"what":"A pass requested by someone on your team: who hands it to whom and why. Approving it moves the activity; rejecting it leaves it where it was (you can write a comment).","example":"Marco → Sofía · \"I will be in training\"."},
     "appTwPerson": {"what":"Shows only the activities that person takes part in.","example":"Sofía Cruz."},
     "appTwTimeline": {"what":"Everything that happened to the activity, with who and when, and it cannot be edited. It needs signal; without it the detail is shown without the timeline.","example":"Born on its own from the repetition → Assigned to Marco Ríos → Confirmed."},
+    "appRegTabs": {
+      "what": "Switches between the record's codes (Data) and the times it has been loaded (Loads). The number is how many loads there are.",
+      "example": "Data · Loads 3"
+    },
+    "appRegBuscarCargas": {
+      "what": "Searches the file name, who loaded it, how it was loaded, its status and its periods, with the usual syntax: $ before, @ after, the comma separates.",
+      "example": "cargos-nov  ·  Ana  ·  voided"
+    },
+    "appRegCargas": {
+      "what": "The record's loads, the most recent first. Tap one to open its detail.",
+      "example": "cargos-nov.xlsx · Active · +1 month · Nov-26."
+    },
+    "appRegCarga": {
+      "what": "One load: the file and whether it is still Active or was Voided, when and who did it, how it was loaded (template or My Excel) and what it brought: new periods, new rows and errors.",
+      "example": "cargos-nov.xlsx · 25 Nov 2026 · Template · 18 new rows · 0 errors."
+    },
+    "appRegCargaCifras": {
+      "what": "What the load did. New ones were added; \"Already there\" and \"Different\" were not touched (loads only add); errors are rows that could not be read.",
+      "example": "New rows 18 · Values added 120 · Errors 0."
+    },
+    "appRegAnular": {
+      "what": "Voids a wrong load: it stops counting in the record and in the analyses. Nothing is deleted: it stays in the history and the file can be loaded again correctly. It needs signal and the \"Void load\" button in your tree.",
+      "example": "Void cargos-ago-mal.xlsx with the reason \"Wrong file\"."
+    },
     "appRegLista": {
       "what": "The list of what is uploaded by hand. Each card is a record (or a code, once inside one); tap it to open.",
       "example": "Monthly charges by site: one month per column on the Web, one value per month here."
