@@ -4591,6 +4591,37 @@ function insertPosSales({ clientId, isTestData = false, tickets, loadedBy, loade
 
 // El botón «Cargar ventas» es nuevo: quien ya tiene la pantalla Ventas lo recibe en lo contratado (planes, adicionales y giros), con «Solo ver» + «Ver y operar»; quien lo use en su puesto o usuario lo decide el administrador desde el árbol.
 const POS_SALES_BUTTON_SEED_KEY = 'seed-pv-ventas-cargar-v1';
+// Punto Venta › Ventas para quien ya tiene Centro de Distribución (Daniel, 2026-11-24: «¿por qué no cargaste en operaciones?… lo de ventas que me mostraste», y pidió dársela a TODOS los clientes con Centro de Distribución).
+// El administrador del cliente solo ve las áreas que están en su CONTRATO (planes, adicionales del cliente y giros): como Punto Venta es un área nueva, nadie la tenía y Ventas no salía aunque ya estuviera en producción.
+// Una sola vez: a cada dueño de lo contratado que ya tiene algo del área Centro de Distribución se le agrega el área Punto Venta con la pantalla Ventas y sus dos botones (Cargar ventas y Ver ticket, «Solo ver» + «Ver y operar»,
+// solo en lo contratado: quién de su equipo los usa lo decide su administrador desde el árbol). Solo agrega: quien ya cubre toda el área Punto Venta o todo el departamento no recibe nada suelto, y repetirlo no cambia nada.
+const PV_FOR_DISTRIBUTION_SEED_KEY = 'seed-pv-ventas-para-distribucion-v1';
+function seedPuntoVentaForDistributionHolders() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(PV_FOR_DISTRIBUTION_SEED_KEY)) return;
+    const SECTION = 'supply-chain';
+    const FROM_AREA = 'sc-area-distribution-center';
+    const TO_AREA = 'sc-area-point-of-sale';
+    const screen = TABLE_GRANT_PATHS.ventas.submenuPrefix;
+    const leaves = [screen];
+    ['colVenImportAuth', 'colVenTicketAuth'].forEach((col) => ['solo-ver', 'ver-y-operar'].forEach((level) => leaves.push(`${screen}/class-botones/${col}/${level}`)));
+    const counts = {};
+    db.transaction(() => {
+        for (const [table, ownerColumn] of [['plan_grants', 'plan_id'], ['client_permission_grants', 'client_id'], ['sector_grants', 'business_sector_id']]) {
+            const owners = db.prepare(`SELECT DISTINCT ${ownerColumn} AS ownerId FROM ${table} WHERE section_id = ? AND item_id = ?`).all(SECTION, FROM_AREA);
+            const covered = db.prepare(`SELECT 1 FROM ${table} WHERE ${ownerColumn} = ? AND section_id = ? AND ((item_id = ? AND submenu_id IS NULL) OR (item_id IS NULL AND submenu_id IS NULL))`);
+            const has = db.prepare(`SELECT 1 FROM ${table} WHERE ${ownerColumn} = ? AND section_id = ? AND item_id = ? AND submenu_id = ?`);
+            const insert = db.prepare(`INSERT INTO ${table} (${ownerColumn}, section_id, item_id, submenu_id) VALUES (?, ?, ?, ?)`);
+            let inserted = 0;
+            owners.forEach(({ ownerId }) => {
+                if (covered.get(ownerId, SECTION, TO_AREA)) return;
+                leaves.forEach((leaf) => { if (!has.get(ownerId, SECTION, TO_AREA, leaf)) { insert.run(ownerId, SECTION, TO_AREA, leaf); inserted += 1; } });
+            });
+            counts[table] = inserted;
+        }
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(PV_FOR_DISTRIBUTION_SEED_KEY);
+    })();
+    console.log(`[db] Punto Venta › Ventas para quien ya tiene Centro de Distribución (una vez): ${JSON.stringify(counts)}.`);
+}
 // El botón «Ver ticket» (ver e imprimir el ticket con su QR) también es nuevo: mismo trato que «Cargar ventas».
 const POS_SALES_TICKET_SEED_KEY = 'seed-pv-ventas-ticket-v1';
 function seedPosSalesTicketButton() {
@@ -21763,6 +21794,7 @@ backfillFixedAssetHistoryOnce();
 moveScreensToGestionOnce();
 // todo o nada (una sola transacción): si algo falla se avisa, el servidor sigue arriba y se reintenta en el siguiente arranque
 try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos desde TI: no se pudieron mover los permisos de las pantallas (se reintentará al arrancar):', err.message); }
+try { seedPuntoVentaForDistributionHolders(); } catch (err) { console.error('[db] Punto Venta: no se pudo asignar Ventas a quien tiene Centro de Distribución (se reintentará al arrancar):', err.message); }
 try { backfillPosSalePublic(); } catch (err) { console.error('[db] Ventas: no se pudo rellenar el código de los tickets (se reintentará al arrancar):', err.message); }
 try { seedPosSalesTicketButton(); } catch (err) { console.error('[db] Ventas: no se pudo sembrar el botón Ver ticket (se reintentará al arrancar):', err.message); }
 try { seedPosSalesImportButton(); } catch (err) { console.error('[db] Ventas: no se pudo sembrar el botón Cargar ventas (se reintentará al arrancar):', err.message); }
