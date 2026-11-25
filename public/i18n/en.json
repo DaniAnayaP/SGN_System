@@ -418,6 +418,9 @@
     "cmRegistrosInformacion": "Information Records",
     "cmRegistrosInformacionAbbr1": "Info. Records",
     "cmRegistrosInformacionAbbr2": "Records",
+    "cmAnalisisRegistros": "Record Analysis",
+    "cmAnalisisRegistrosAbbr1": "Rec. Analysis",
+    "cmAnalisisRegistrosAbbr2": "Analysis",
     "cmVentasManuales": "Manual Sales",
     "cmVentasManualesAbbr1": "Manual Sales",
     "cmVentasManualesAbbr2": "Sales",
@@ -5279,6 +5282,94 @@
     "cmStampUntil": "Data up to date until {date}",
     "cmStampNone": "Nothing has been loaded on this screen yet.",
     "regTabData": "Data",
+    "filterAnSearchHint": "Name, record…",
+    "filterAnFileHint": "Unit, code, description…",
+    "regCargosValor": "Consumption",
+    "regExistenciasValor": "Stock",
+    "colAnNombre": "Analysis",
+    "colAnRegistros": "Records",
+    "colAnColumnas": "Queried columns",
+    "colAnUltimaVersion": "Latest version",
+    "colAnVersiones": "Versions",
+    "colAnEstado": "Status",
+    "colAnExtVersion": "Version",
+    "colAnExtRenglones": "Rows",
+    "colAnExtPeriodos": "Periods used",
+    "colAnExtEstado": "Status",
+    "colAnCrearAuth": "Create analysis",
+    "colAnExtraerAuth": "Extract analysis",
+    "colAnAnularAuth": "Void extraction",
+    "anLoadError": "The analysis could not be loaded.",
+    "anNew": "Add new analysis",
+    "anNewTitle": "Add new analysis",
+    "anName": "Screen name",
+    "anRegistriesLabel": "Which records does it take data from?",
+    "anStart": "How does it start?",
+    "anStartBlank": "Blank",
+    "anStartCopy": "Copying another analysis",
+    "anCreate": "Create and open",
+    "anOpen": "Open",
+    "anRename": "Rename",
+    "anActivate": "Activate",
+    "anDeactivate": "Deactivate",
+    "anStatus_active": "Active",
+    "anStatus_inactive": "Deactivated",
+    "anStatusExt_vigente": "Active",
+    "anStatusExt_anulada": "Voided",
+    "anErr_AN_NAME_REQUIRED": "Give the analysis a name.",
+    "anErr_AN_NAME_TAKEN": "There is already an analysis with that name.",
+    "anErr_DESIGN_REGISTRIES": "Choose at least one record.",
+    "anErr_DESIGN_COLUMN_REGISTRY": "A column uses a record the analysis does not have.",
+    "anErr_DESIGN_COLUMN_PERIODS": "Choose at least one period.",
+    "anErr_AN_NO_COLUMNS": "Add at least one queried column before extracting.",
+    "anErr_AN_EMPTY": "This design produces no rows: check the periods and the filters.",
+    "anErr_AN_INACTIVE": "The analysis is deactivated.",
+    "anErr_AN_BUSY": "This analysis is already being extracted. Wait for it to finish.",
+    "anErr_AN_FORBIDDEN": "You do not have permission for this.",
+    "anErr_AN_ERROR": "The extraction could not be completed. Nothing was saved.",
+    "anTabDesign": "Design",
+    "anTabFile": "File",
+    "anTabVersions": "Extractions",
+    "anGroupRef": "Reference",
+    "anGroupCons": "Queried from records",
+    "anRefTitle": "1 · Reference columns",
+    "anKey": "key",
+    "anConsTitle": "2 · Columns queried from records",
+    "anNoColumns": "There are no queried columns yet.",
+    "anFiltersTitle": "Filters when extracting (optional)",
+    "anFilter_unidades": "Units",
+    "anFilter_categorias": "Categories",
+    "anFilter_codigos": "Codes",
+    "anFilterHint": "Comma-separated",
+    "anAddColumn": "Add a column from a record",
+    "anColLabel": "Column name",
+    "anColRegistry": "Record",
+    "anColWhat": "What it brings",
+    "anColPeriods": "Period(s)",
+    "anNoPeriods": "This record has no periods loaded yet.",
+    "anRemove": "Remove",
+    "anAgg_value": "The value",
+    "anAgg_avg": "The average",
+    "anAgg_sum": "The sum",
+    "anAgg_min": "The minimum",
+    "anAgg_max": "The maximum",
+    "anAggShort_avg": "Average",
+    "anAggShort_sum": "Sum",
+    "anAggShort_min": "Minimum",
+    "anAggShort_max": "Maximum",
+    "anSaveDesign": "Save design",
+    "anSaved": "Design saved.",
+    "anExtract": "Extract analysis",
+    "anExtracting": "Extracting…",
+    "anExtractDone": "Version {v} was extracted ({n} rows).",
+    "anFileNone": "There is no version yet: build the design and extract.",
+    "anTruncated": "Showing {shown} of {total} rows: use the search Filter to narrow it down.",
+    "anDownloadTruncated": "The file has {total} rows and the table shows {shown}: what you see is downloaded. Use the search Filter to narrow it down before downloading.",
+    "anVersionView": "View file",
+    "anAnnul": "Void extraction",
+    "anAnnulTitle": "Void version {v}",
+    "anAnnulHint": "The version stops being the active one. Nothing is deleted: it stays in the history and can still be viewed.",
+    "anAnnulled": "Version voided.",
     "regTabLoads": "Loads",
     "regDownloadTruncated": "The table shows {shown} of {total} rows: what you see is downloaded. Use the search Filter to narrow it down before downloading.",
     "filterRegSearchHint": "Unit, code, description, category…",
@@ -9477,6 +9568,70 @@
     "regPreview": {
       "what": "The review before loading. Green: what is added (a new month is a new column; a new code, a new row). Gray: what was already there and is not touched. Yellow: values that differ from the saved ones, which are NOT changed. Red: errors, which are not loaded.",
       "example": "oct-26: 106,122 values are added; 17 different values are not changed; 12 with an error."
+    },
+    "anTable": {
+      "what": "The list of analyses. Each new analysis is added as one more screen of the menu, below this one. An analysis is not deleted: it is deactivated.",
+      "example": "Inventory days by unit: 3 versions; the latest, v3."
+    },
+    "anNew": {
+      "what": "Creates a new analysis: you name it, choose which records it takes data from and whether it starts blank or by copying another. It opens in its design and appears in the menu.",
+      "example": "Gauze coverage by unit, with Monthly charges by site and Current daily stock."
+    },
+    "anOpen": {
+      "what": "Opens this analysis.",
+      "example": "Inventory days by unit."
+    },
+    "anRename": {
+      "what": "Changes the analysis name; the menu shows it with the new name.",
+      "example": "From «Analysis 1» to «Inventory days»."
+    },
+    "anToggle": {
+      "what": "Deactivates the analysis (it stops showing in the menu, its versions are kept) or activates it again.",
+      "example": "You deactivate the test analysis."
+    },
+    "anTabDesign": {
+      "what": "The analysis design: which columns it carries, in three groups. The reference goes first (which row it is) and then the columns queried from the records. The formulated ones arrive in the next piece.",
+      "example": "Unit and Code as reference; Consumption sep-26, oct-26 and Stock 24/nov queried."
+    },
+    "anTabFile": {
+      "what": "The file of the chosen version (by default, the latest): a copy of the data from the moment it was extracted, in a standard table with filters. It does not change even if a record changes later.",
+      "example": "v3, extracted today: 7 rows."
+    },
+    "anTabVersions": {
+      "what": "The versions of this analysis (v1, v2, v3…), each with its date, who extracted it and which periods it used. A wrong version is voided; it is not deleted.",
+      "example": "v2: periods aug-26 and sep-26; v3: sep-26 and oct-26."
+    },
+    "anRefBlock": {
+      "what": "The reference columns (at the start of the file). Unit and Code are the key: they match the two records; the others only accompany.",
+      "example": "Unit, Code, Description and UoM."
+    },
+    "anConsBlock": {
+      "what": "The queried columns: what is brought from each record. You can bring the value of one month or day, or the average, sum, minimum or maximum of several. A code that is not in a record comes out with an empty cell.",
+      "example": "Average consumption of sep-26 and oct-26; Stock of 24/nov."
+    },
+    "anFiltersBlock": {
+      "what": "Optional filters when extracting, to avoid bringing everything: by unit, category or code (comma-separated, case does not matter).",
+      "example": "Units: GAE, GPA."
+    },
+    "anExtract": {
+      "what": "Takes out the file with today's design and saves it as a new version. It is a copy: it does not change even if a record changes later. If the design produces no rows, nothing is saved.",
+      "example": "The v4 with today's data."
+    },
+    "anFile": {
+      "what": "The file table: the reference first and then the queried columns. The months or days of each column are in its title.",
+      "example": "GAE 100013: 420, 380, average 400, stock 160."
+    },
+    "anVersions": {
+      "what": "The versions table. «Active» can be viewed and is the one shown by default; «Voided» is kept but is no longer the latest.",
+      "example": "v3 active, v2 voided."
+    },
+    "anVersionView": {
+      "what": "Opens the file of this version.",
+      "example": "View the file of v2."
+    },
+    "anAnnul": {
+      "what": "Voids this version: it stops being the active one, but it is kept and can still be viewed.",
+      "example": "It was extracted with a wrong filter: you void it and extract another."
     },
     "venImport": {
       "what": "Loads sales from an Excel file (or from pasted cells). Each row of the file is one item sold and the rows with the same receipt number (inside the same site) make up one receipt. Before loading anything the system checks the file and tells you what is fine, what is skipped and what fails, and why. Only complete, correct receipts are loaded.",

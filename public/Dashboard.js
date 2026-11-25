@@ -1476,7 +1476,7 @@ function applyScreenGrantFilter(data) {
                 items: s.items
                     .map((cat) => {
                         const submenu = groupSidebarScreens((cat.submenu || []).filter((pantalla) => (
-                            pantalla.permissionOnly || hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${pantalla.id}`)
+                            pantalla.permissionOnly || hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${pantalla.grantAs || pantalla.id}`)
                         )), cat.id);
                         return { ...cat, submenu, empty: !submenu.some((p) => !p.permissionOnly) };
                     }),
@@ -1570,7 +1570,7 @@ function getPanelCategories() {
         ...cat,
         submenu: (cat.submenu || []).filter((s) => (
             !s.permissionOnly && s.href && s.href !== '#'
-            && hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${s.id}`)
+            && hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${s.grantAs || s.id}`)
         )),
     }));
 }
@@ -13841,6 +13841,29 @@ function updateDatabaseMenuLabel(branding) {
     label.textContent = branding?.companyAbbreviation ? `${base} ${branding.companyAbbreviation}` : base;
 }
 
+// Cargas Manuales › Análisis Registros Manuales (Daniel, 2026-11-25): cada análisis que se agrega es una pantalla más del menú, debajo de «Análisis Registros Manuales» (Centro de Distribución). El nombre es dato del cliente, así que va en item.label.
+// Su permiso es el de la pantalla «Análisis Registros Manuales» (grantAs): quien la tiene ve todos los análisis. Se quita lo anterior antes de poner la lista, así que se puede llamar de nuevo.
+async function loadManualAnalysesMenu() {
+    try {
+        const res = await fetch('/api/business/manual-analyses/menu', { credentials: 'include' });
+        if (!res.ok) return;
+        const { analyses } = await res.json();
+        const list = menuData?.areaOverrides?.['supply-chain/sc-area-distribution-center']?.['cat-cargas-manuales'];
+        if (!Array.isArray(list)) return;
+        const base = list.filter((n) => !n.dynamicAnalysis);
+        const at = base.findIndex((n) => n.id === 'cat-cargas-manuales-analisis');
+        if (at < 0) return;
+        const openId = window.location.pathname.endsWith('CmAnalisis.html') ? new URLSearchParams(window.location.search).get('id') : null;
+        const dynamic = (analyses || []).map((a) => ({ id: `cat-cargas-manuales-an-${a.id}`, label: a.name, icon: 'bx-line-chart', href: `CmAnalisis.html?id=${a.id}`, grantAs: 'cat-cargas-manuales-analisis', dynamicAnalysis: true, ...(openId && String(a.id) === openId ? { active: true } : {}) }));
+        base.splice(at + 1, 0, ...dynamic);
+        if (openId) base.forEach((n) => { if (n.id === 'cat-cargas-manuales-analisis') n.active = false; }); // en la pantalla de un análisis se marca ese análisis, no la lista
+        menuData.areaOverrides['supply-chain/sc-area-distribution-center']['cat-cargas-manuales'] = base;
+        renderFilteredMenu();
+    } catch (err) {
+        console.error('Análisis Registros Manuales: no se pudieron cargar en el menú', err);
+    }
+}
+
 // "Reportes > Personalizados" — sidebar. menuData.areaCategories is the ONE
 // shared template every área's own "Reportes" reads from (see
 // effectiveAreaCategories) — mutating cat-reportes here once means every
@@ -14707,6 +14730,7 @@ async function initDashboardInner({ activePage } = {}) {
             return null;
         }
         await loadPersonalizedReports(loads.reports);
+        await loadManualAnalysesMenu();
     } else {
         document.getElementById('cc-picker')?.classList.add('cc-picker-disabled');
     }
@@ -14762,6 +14786,9 @@ const TABLE_GRANT_PATHS = {
     'ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
     'registros': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
     'registros-cargas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
+    'analisis': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
+    'analisis-extracciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
+    'analisis-archivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
     // Equipo de Trabajo › Registro (la tabla estándar de esa vista); mismo prefijo que db.js
     'equipo-registro': { sectionId: 'main', itemId: 'equipo-trabajo', submenuPrefix: 'et-registro/et-registro-tabla' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
@@ -14921,7 +14948,8 @@ const SCREEN_GRANT_PATHS = {
     'cat-gestion-ti-soportes-cerrados': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-gestion/cat-gestion-ti-soportes-cerrados' },
     // Punto Venta: Ventas (Operaciones) y Transacciones (Gestión), por ahora vacías
     'cat-cargas-manuales-ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
-    'cat-cargas-manuales-registros': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
+    'cat-cargas-manuales-registros': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
+    'cat-cargas-manuales-analisis': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
     'cat-gestion-pv-transacciones': { sectionId: 'supply-chain', itemId: 'sc-area-point-of-sale', submenuPrefix: 'cat-gestion/cat-gestion-pv-transacciones' },
     'cat-reportes-ti-kpi-soporte': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-reportes/cat-reportes-ti-kpi-soporte' },
     'cat-catalogos-ti-soporte-ayuda': { sectionId: 'information-technology', itemId: 'it-area-operations', submenuPrefix: 'cat-catalogos/cat-catalogos-ti-soporte-ayuda' },

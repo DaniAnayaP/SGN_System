@@ -1149,6 +1149,48 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_mr_values_load ON manual_registry_values(load_id);
 `);
 
+// Cargas Manuales › Análisis Registros Manuales (Daniel, 2026-11-25): un análisis junta uno o dos registros por unidad + código; «Extraer» saca un ARCHIVO propio (una versión con su fecha) que es una COPIA: no cambia aunque después cambie un registro.
+// Los análisis y las versiones nunca se borran: un análisis se desactiva y una versión se anula.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_analyses (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id          INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data       INTEGER NOT NULL DEFAULT 0,
+        name               TEXT NOT NULL,
+        design_json        TEXT NOT NULL DEFAULT '{}',
+        status             TEXT NOT NULL DEFAULT 'active',
+        created_by         TEXT NOT NULL DEFAULT '',
+        created_by_user_id INTEGER,
+        created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_manual_analyses_name ON manual_analyses(client_id, is_test_data, name COLLATE NOCASE);
+    CREATE TABLE IF NOT EXISTS manual_analysis_extractions (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        analysis_id        INTEGER NOT NULL REFERENCES manual_analyses(id) ON DELETE CASCADE,
+        version            INTEGER NOT NULL,
+        design_json        TEXT NOT NULL DEFAULT '{}',
+        columns_json       TEXT NOT NULL DEFAULT '[]',
+        rows_count         INTEGER NOT NULL DEFAULT 0,
+        notes_json         TEXT NOT NULL DEFAULT '{}',
+        status             TEXT NOT NULL DEFAULT 'en_proceso',
+        created_by         TEXT NOT NULL DEFAULT '',
+        created_by_user_id INTEGER,
+        created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+        annulled_at        TEXT,
+        annulled_by        TEXT NOT NULL DEFAULT '',
+        annul_note         TEXT NOT NULL DEFAULT '',
+        UNIQUE (analysis_id, version)
+    );
+    CREATE TABLE IF NOT EXISTS manual_analysis_rows (
+        extraction_id INTEGER NOT NULL REFERENCES manual_analysis_extractions(id) ON DELETE CASCADE,
+        row_no        INTEGER NOT NULL,
+        data_json     TEXT NOT NULL,
+        search_text   TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (extraction_id, row_no)
+    ) WITHOUT ROWID;
+`);
+
 // Seed data for the geo catalog — a real, well-known list of países (not a
 // live internet fetch: no outbound access from this server has been set up,
 // and the world's country list is static enough to hardcode reliably) plus
@@ -3561,6 +3603,9 @@ const TABLE_CHANGES_SYSTEM_META = {
     'ventas': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Ventas Manuales' },
     'registros': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Registros Información' },
     'registros-cargas': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Registros Información' },
+    'analisis': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Análisis Registros Manuales' },
+    'analisis-extracciones': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Análisis Registros Manuales' },
+    'analisis-archivo': { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Análisis Registros Manuales' },
     'centros-costo': { area: '', modulo: 'Administración del Negocio', pantalla: 'Servicio Contratado' },
     'registro-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Registro Combustible' },
     'carga-combustible': { area: 'Transporte Volumen', modulo: 'Cadena de Suministro', pantalla: 'Carga Combustible' },
@@ -3912,6 +3957,9 @@ const TABLE_GRANT_PATHS = {
     'ventas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas' },
     'registros': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
     'registros-cargas': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' },
+    'analisis': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
+    'analisis-extracciones': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
+    'analisis-archivo': { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', submenuPrefix: 'cat-cargas-manuales/cat-cargas-manuales-analisis' },
     'centros-costo': { sectionId: 'main', itemId: 'btn-configuracion', submenuPrefix: 'btn-admin-negocio/ab-contracted-service/ab-our-cost-centers' },
     'registro-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-combustible' },
     'carga-combustible': { sectionId: 'supply-chain', itemId: 'sc-area-transport-1', submenuPrefix: 'cat-operaciones/cat-operaciones-transporte-vol-carga-combustible' },
@@ -4217,6 +4265,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'mtto-correctivo': { create: 'colMcCreateAuth' },
     'ventas': { import: 'colVenImportAuth' },
     'registros': { import: 'colRegCargarPlantillaAuth', importExcel: 'colRegCargarExcelAuth', annul: 'colRegAnularAuth' },
+    'analisis': { create: 'colAnCrearAuth', extract: 'colAnExtraerAuth', annul: 'colAnAnularAuth' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
 const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];
@@ -4830,6 +4879,110 @@ function listRegistryData(clientId, forTestAccount, registryKey, filters = {}, l
     const valuesStmt = db.prepare("SELECT v.row_id, v.period, v.value FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE l.status = 'vigente' AND v.row_id = ?");
     ids.forEach((id) => { valuesStmt.all(id).forEach((v) => { byId.get(id).values[v.period] = v.value; }); });
     return { rows: [...byId.values()], total };
+}
+
+// ---- Cargas Manuales › Análisis Registros Manuales (la lógica de juntar registros vive en manualAnalyses.js) ----
+const AN_SCREEN = { area: 'C. Distribución', modulo: 'Cadena de Suministro', pantalla: 'Análisis Registros Manuales' };
+function mapAnalysis(row) {
+    return { id: row.id, name: row.name, design: parseJsonObject(row.design_json), status: row.status, createdBy: row.created_by, createdAt: row.created_at, updatedAt: row.updated_at };
+}
+const parseJsonObject = (text) => { try { const v = JSON.parse(text || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } };
+function mapExtraction(row) {
+    return {
+        id: row.id, analysisId: row.analysis_id, version: row.version, rowsCount: row.rows_count, status: row.status, createdBy: row.created_by, createdAt: row.created_at,
+        annulledAt: row.annulled_at, annulledBy: row.annulled_by, annulNote: row.annul_note, columns: JSON.parse(row.columns_json || '[]'), design: parseJsonObject(row.design_json), notes: parseJsonObject(row.notes_json),
+    };
+}
+// El nombre no se repite sin importar mayúsculas ni acentos («Días de inventario» = «DIAS DE INVENTARIO»).
+const foldAnalysisName = (text) => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+function analysisNameTaken(clientId, forTestAccount, name, exceptId = 0) {
+    const wanted = foldAnalysisName(name);
+    return db.prepare('SELECT name FROM manual_analyses WHERE client_id = ? AND is_test_data = ? AND id <> ?').all(clientId, forTestAccount ? 1 : 0, exceptId).some((r) => foldAnalysisName(r.name) === wanted);
+}
+function createAnalysis({ clientId, isTestData = false, name, design, createdBy, createdByUserId }) {
+    return db.prepare('INSERT INTO manual_analyses (client_id, is_test_data, name, design_json, created_by, created_by_user_id) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(clientId, isTestData ? 1 : 0, name, JSON.stringify(design || {}), createdBy || '', createdByUserId || null).lastInsertRowid;
+}
+function getAnalysis(id, clientId, forTestAccount = false) {
+    const row = db.prepare('SELECT * FROM manual_analyses WHERE id = ? AND client_id = ? AND is_test_data = ?').get(id, clientId, forTestAccount ? 1 : 0);
+    return row ? mapAnalysis(row) : null;
+}
+// La lista de análisis, con su última versión vigente y cuántas versiones tienen.
+function listAnalyses(clientId, forTestAccount = false, { onlyActive = false } = {}) {
+    const rows = db.prepare(`SELECT * FROM manual_analyses WHERE client_id = ? AND is_test_data = ?${onlyActive ? " AND status = 'active'" : ''} ORDER BY id`).all(clientId, forTestAccount ? 1 : 0);
+    const last = db.prepare("SELECT id, version, created_at, created_by, rows_count FROM manual_analysis_extractions WHERE analysis_id = ? AND status = 'vigente' ORDER BY version DESC LIMIT 1");
+    const count = db.prepare("SELECT COUNT(*) AS n FROM manual_analysis_extractions WHERE analysis_id = ? AND status <> 'en_proceso'");
+    return rows.map((row) => {
+        const l = last.get(row.id);
+        return { ...mapAnalysis(row), lastExtraction: l ? { id: l.id, version: l.version, createdAt: l.created_at, createdBy: l.created_by, rowsCount: l.rows_count } : null, extractionsCount: count.get(row.id).n };
+    });
+}
+function updateAnalysis(id, clientId, forTestAccount, patch) {
+    const sets = []; const params = [];
+    if (patch.name !== undefined) { sets.push('name = ?'); params.push(patch.name); }
+    if (patch.design !== undefined) { sets.push('design_json = ?'); params.push(JSON.stringify(patch.design)); }
+    if (patch.status !== undefined) { sets.push('status = ?'); params.push(patch.status); }
+    if (!sets.length) return getAnalysis(id, clientId, forTestAccount);
+    sets.push("updated_at = datetime('now')");
+    db.prepare(`UPDATE manual_analyses SET ${sets.join(', ')} WHERE id = ? AND client_id = ? AND is_test_data = ?`).run(...params, id, clientId, forTestAccount ? 1 : 0);
+    return getAnalysis(id, clientId, forTestAccount);
+}
+function listExtractions(analysisId) {
+    return db.prepare("SELECT * FROM manual_analysis_extractions WHERE analysis_id = ? AND status <> 'en_proceso' ORDER BY version DESC").all(analysisId).map(mapExtraction);
+}
+function getExtraction(id, analysisId) {
+    const row = db.prepare('SELECT * FROM manual_analysis_extractions WHERE id = ? AND analysis_id = ?').get(id, analysisId);
+    return row ? mapExtraction(row) : null;
+}
+function createExtractionRecord({ analysisId, design, columns, createdBy, createdByUserId }) {
+    const version = db.prepare('SELECT COALESCE(MAX(version), 0) + 1 AS v FROM manual_analysis_extractions WHERE analysis_id = ?').get(analysisId).v;
+    const id = db.prepare('INSERT INTO manual_analysis_extractions (analysis_id, version, design_json, columns_json, created_by, created_by_user_id) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(analysisId, version, JSON.stringify(design || {}), JSON.stringify(columns || []), createdBy || '', createdByUserId || null).lastInsertRowid;
+    return { id, version };
+}
+// Un lote de renglones del archivo de una vez, en UNA transacción: [{ no, data (arreglo), search }].
+function insertExtractionRows(extractionId, batch) {
+    const insert = db.prepare('INSERT INTO manual_analysis_rows (extraction_id, row_no, data_json, search_text) VALUES (?, ?, ?, ?)');
+    db.transaction(() => { batch.forEach((r) => insert.run(extractionId, r.no, JSON.stringify(r.data), r.search || '')); })();
+}
+function finishExtraction(id, rowsCount, notes) {
+    db.prepare("UPDATE manual_analysis_extractions SET status = 'vigente', rows_count = ?, notes_json = ? WHERE id = ?").run(rowsCount, JSON.stringify(notes || {}), id);
+}
+function failExtraction(id, note) {
+    db.prepare("UPDATE manual_analysis_extractions SET status = 'anulada', annulled_at = datetime('now'), annulled_by = 'sistema', annul_note = ? WHERE id = ? AND status = 'en_proceso'").run(String(note || '').slice(0, 300), id);
+}
+function annulExtraction(id, analysisId, byLabel, note) {
+    const changed = db.prepare("UPDATE manual_analysis_extractions SET status = 'anulada', annulled_at = datetime('now'), annulled_by = ?, annul_note = ? WHERE id = ? AND analysis_id = ? AND status = 'vigente'")
+        .run(byLabel || '', String(note || '').slice(0, 300), id, analysisId).changes;
+    return changed ? getExtraction(id, analysisId) : null;
+}
+function listExtractionRows(extractionId, { text = '', limit = 2000 } = {}) {
+    const where = ['extraction_id = ?']; const params = [extractionId];
+    const needle = String(text || '').trim().toLowerCase();
+    if (needle) { where.push("search_text LIKE ? ESCAPE '\\'"); params.push(`%${needle.replace(/[\\%_]/g, (c) => `\\${c}`)}%`); }
+    const total = db.prepare(`SELECT COUNT(*) AS n FROM manual_analysis_rows WHERE ${where.join(' AND ')}`).get(...params).n;
+    const rows = db.prepare(`SELECT data_json FROM manual_analysis_rows WHERE ${where.join(' AND ')} ORDER BY row_no LIMIT ?`).all(...params, limit).map((r) => JSON.parse(r.data_json));
+    return { rows, total };
+}
+// Lo vigente de un registro en los periodos pedidos, como el análisis lo necesita: Map(unidad\u0001codigo → { dims, values: { periodo: valor } }). filters: { unidades, categorias, codigos } (exactos, sin importar mayúsculas).
+function registrySources(clientId, forTestAccount, registryKey, periods, filters = {}) {
+    const out = new Map();
+    if (!periods.length) return out;
+    const where = ['r.client_id = ?', 'r.is_test_data = ?', 'r.registry_key = ?', "l.status = 'vigente'", `v.period IN (${periods.map(() => '?').join(',')})`];
+    const params = [clientId, forTestAccount ? 1 : 0, registryKey, ...periods];
+    [['r.unidad', filters.unidades], ['r.categoria', filters.categorias], ['r.codigo', filters.codigos]].forEach(([col, list]) => {
+        if (Array.isArray(list) && list.length) { where.push(`${col} COLLATE NOCASE IN (${list.map(() => '?').join(',')})`); params.push(...list); }
+    });
+    const stmt = db.prepare(`SELECT r.unidad, r.unidad_nombre, r.codigo, r.descripcion, r.categoria, r.udm, v.period, v.value
+        FROM manual_registry_rows r JOIN manual_registry_values v ON v.row_id = r.id JOIN manual_registry_loads l ON l.id = v.load_id
+        WHERE ${where.join(' AND ')}`);
+    for (const row of stmt.iterate(...params)) {
+        const key = `${row.unidad}\u0001${row.codigo}`;
+        let entry = out.get(key);
+        if (!entry) { entry = { dims: { unidad: row.unidad, unidadNombre: row.unidad_nombre, codigo: row.codigo, descripcion: row.descripcion, categoria: row.categoria, udm: row.udm }, values: {} }; out.set(key, entry); }
+        entry.values[row.period] = row.value;
+    }
+    return out;
 }
 
 function getCostCenterById(id, clientId, forTestAccount = false) {
@@ -22410,6 +22563,7 @@ module.exports = {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
+    AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,

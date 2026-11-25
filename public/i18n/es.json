@@ -418,6 +418,9 @@
     "cmRegistrosInformacion": "Registros Información",
     "cmRegistrosInformacionAbbr1": "Registros Info.",
     "cmRegistrosInformacionAbbr2": "Registros",
+    "cmAnalisisRegistros": "Análisis Registros Manuales",
+    "cmAnalisisRegistrosAbbr1": "Análisis Registros",
+    "cmAnalisisRegistrosAbbr2": "Análisis",
     "cmVentasManuales": "Ventas Manuales",
     "cmVentasManualesAbbr1": "Ventas Man.",
     "cmVentasManualesAbbr2": "Ventas",
@@ -5278,6 +5281,94 @@
     "cmStampUntil": "Datos al día hasta el {date}",
     "cmStampNone": "Todavía no se ha cargado nada en esta pantalla.",
     "regTabData": "Datos",
+    "filterAnSearchHint": "Nombre, registro…",
+    "filterAnFileHint": "Unidad, código, descripción…",
+    "regCargosValor": "Consumo",
+    "regExistenciasValor": "Existencia",
+    "colAnNombre": "Análisis",
+    "colAnRegistros": "Registros",
+    "colAnColumnas": "Columnas consultadas",
+    "colAnUltimaVersion": "Última versión",
+    "colAnVersiones": "Versiones",
+    "colAnEstado": "Estado",
+    "colAnExtVersion": "Versión",
+    "colAnExtRenglones": "Renglones",
+    "colAnExtPeriodos": "Periodos usados",
+    "colAnExtEstado": "Estado",
+    "colAnCrearAuth": "Crear análisis",
+    "colAnExtraerAuth": "Extraer análisis",
+    "colAnAnularAuth": "Anular extracción",
+    "anLoadError": "No se pudo cargar el análisis.",
+    "anNew": "Agregar nuevo análisis",
+    "anNewTitle": "Agregar nuevo análisis",
+    "anName": "Nombre de la pantalla",
+    "anRegistriesLabel": "¿De qué registros toma datos?",
+    "anStart": "¿Cómo empieza?",
+    "anStartBlank": "En blanco",
+    "anStartCopy": "Copiando otro análisis",
+    "anCreate": "Crear y abrir",
+    "anOpen": "Abrir",
+    "anRename": "Renombrar",
+    "anActivate": "Activar",
+    "anDeactivate": "Desactivar",
+    "anStatus_active": "Activo",
+    "anStatus_inactive": "Desactivado",
+    "anStatusExt_vigente": "Vigente",
+    "anStatusExt_anulada": "Anulada",
+    "anErr_AN_NAME_REQUIRED": "Ponle un nombre al análisis.",
+    "anErr_AN_NAME_TAKEN": "Ya hay un análisis con ese nombre.",
+    "anErr_DESIGN_REGISTRIES": "Elige al menos un registro.",
+    "anErr_DESIGN_COLUMN_REGISTRY": "Una columna usa un registro que el análisis no tiene.",
+    "anErr_DESIGN_COLUMN_PERIODS": "Elige al menos un periodo.",
+    "anErr_AN_NO_COLUMNS": "Agrega al menos una columna consultada antes de extraer.",
+    "anErr_AN_EMPTY": "Con este diseño no sale ningún renglón: revisa los periodos y los filtros.",
+    "anErr_AN_INACTIVE": "El análisis está desactivado.",
+    "anErr_AN_BUSY": "Ya se está extrayendo este análisis. Espera a que termine.",
+    "anErr_AN_FORBIDDEN": "No tienes permiso para esto.",
+    "anErr_AN_ERROR": "La extracción no se pudo completar. No se guardó nada.",
+    "anTabDesign": "Diseño",
+    "anTabFile": "Archivo",
+    "anTabVersions": "Extracciones",
+    "anGroupRef": "Referencia",
+    "anGroupCons": "Consultadas de registros",
+    "anRefTitle": "1 · Columnas de referencia",
+    "anKey": "llave",
+    "anConsTitle": "2 · Columnas consultadas de registros",
+    "anNoColumns": "Todavía no hay columnas consultadas.",
+    "anFiltersTitle": "Filtros al extraer (opcional)",
+    "anFilter_unidades": "Unidades",
+    "anFilter_categorias": "Categorías",
+    "anFilter_codigos": "Códigos",
+    "anFilterHint": "Separados por coma",
+    "anAddColumn": "Agregar columna de un registro",
+    "anColLabel": "Nombre de la columna",
+    "anColRegistry": "Registro",
+    "anColWhat": "Qué trae",
+    "anColPeriods": "Periodo(s)",
+    "anNoPeriods": "Este registro todavía no tiene periodos cargados.",
+    "anRemove": "Quitar",
+    "anAgg_value": "El valor",
+    "anAgg_avg": "El promedio",
+    "anAgg_sum": "La suma",
+    "anAgg_min": "El mínimo",
+    "anAgg_max": "El máximo",
+    "anAggShort_avg": "Promedio",
+    "anAggShort_sum": "Suma",
+    "anAggShort_min": "Mínimo",
+    "anAggShort_max": "Máximo",
+    "anSaveDesign": "Guardar diseño",
+    "anSaved": "Diseño guardado.",
+    "anExtract": "Extraer análisis",
+    "anExtracting": "Extrayendo…",
+    "anExtractDone": "Se extrajo la versión {v} ({n} renglones).",
+    "anFileNone": "Todavía no hay ninguna versión: arma el diseño y extrae.",
+    "anTruncated": "Se muestran {shown} de {total} renglones: usa el Filtro de búsqueda para acotar.",
+    "anDownloadTruncated": "El archivo trae {total} renglones y la tabla muestra {shown}: se baja lo que se ve. Usa el Filtro de búsqueda para acotar antes de descargar.",
+    "anVersionView": "Ver archivo",
+    "anAnnul": "Anular extracción",
+    "anAnnulTitle": "Anular la versión {v}",
+    "anAnnulHint": "La versión deja de ser la vigente. No se borra nada: queda en el historial y se puede seguir consultando.",
+    "anAnnulled": "Versión anulada.",
     "regTabLoads": "Cargas",
     "regDownloadTruncated": "La tabla muestra {shown} de {total} renglones: se baja lo que se ve. Usa el Filtro de búsqueda para acotar antes de descargar.",
     "filterRegSearchHint": "Unidad, código, descripción, categoría…",
@@ -9476,6 +9567,70 @@
     "regPreview": {
       "what": "La revisión antes de cargar. Verde: lo que se agrega (un mes nuevo es una columna nueva; un código nuevo, un renglón nuevo). Gris: lo que ya estaba y no se toca. Amarillo: valores distintos a los guardados, que NO se cambian. Rojo: errores, que no se cargan.",
       "example": "oct-26: 106,122 valores se agregan; 17 valores distintos no se cambian; 12 con error."
+    },
+    "anTable": {
+      "what": "La lista de análisis. Cada análisis nuevo se agrega como una pantalla más del menú, debajo de esta. Un análisis no se borra: se desactiva.",
+      "example": "Días de inventario por unidad: 3 versiones; la última, v3."
+    },
+    "anNew": {
+      "what": "Crea un análisis nuevo: le pones nombre, eliges de qué registros toma datos y si empieza en blanco o copiando otro. Se abre en su diseño y aparece en el menú.",
+      "example": "Cobertura de gasas por unidad, con Cargos por sitio mensuales y Existencias actuales diarias."
+    },
+    "anOpen": {
+      "what": "Abre este análisis.",
+      "example": "Días de inventario por unidad."
+    },
+    "anRename": {
+      "what": "Cambia el nombre del análisis; el menú lo muestra con el nombre nuevo.",
+      "example": "De «Análisis 1» a «Días de inventario»."
+    },
+    "anToggle": {
+      "what": "Desactiva el análisis (deja de salir en el menú, sus versiones se conservan) o lo vuelve a activar.",
+      "example": "Desactivas el análisis de prueba."
+    },
+    "anTabDesign": {
+      "what": "El diseño del análisis: qué columnas lleva, en tres grupos. La referencia va al inicio (de qué renglón se trata) y luego las consultadas de los registros. Las formuladas llegan en la siguiente pieza.",
+      "example": "Unidad y Código de referencia; Consumo sep-26, oct-26 y Existencia 24/nov consultadas."
+    },
+    "anTabFile": {
+      "what": "El archivo de la versión elegida (por defecto, la última): una copia de los datos del momento en que se extrajo, en tabla estándar con filtros. No cambia aunque después cambie un registro.",
+      "example": "v3, extraída hoy: 7 renglones."
+    },
+    "anTabVersions": {
+      "what": "Las versiones de este análisis (v1, v2, v3…), cada una con su fecha, quién la extrajo y qué periodos usó. Una versión equivocada se anula; no se borra.",
+      "example": "v2: periodos ago-26 y sep-26; v3: sep-26 y oct-26."
+    },
+    "anRefBlock": {
+      "what": "Las columnas de referencia (al inicio del archivo). Unidad y Código son la llave: con ellas se emparejan los dos registros; las demás solo acompañan.",
+      "example": "Unidad, Código, Descripción y UDM."
+    },
+    "anConsBlock": {
+      "what": "Las columnas consultadas: lo que se trae de cada registro. Puedes traer el valor de un mes o día, o el promedio, la suma, el mínimo o el máximo de varios. Un código que no está en un registro sale con la celda vacía.",
+      "example": "Consumo promedio de sep-26 y oct-26; Existencia del 24/nov."
+    },
+    "anFiltersBlock": {
+      "what": "Filtros opcionales al extraer, para no traer todo: por unidad, categoría o código (separados por coma, sin importar mayúsculas).",
+      "example": "Unidades: GAE, GPA."
+    },
+    "anExtract": {
+      "what": "Saca el archivo con el diseño de hoy y lo guarda como una versión nueva. Es una copia: no cambia aunque después cambie un registro. Si el diseño no saca ningún renglón, no se guarda nada.",
+      "example": "La v4 con los datos de hoy."
+    },
+    "anFile": {
+      "what": "La tabla del archivo: la referencia primero y luego las columnas consultadas. Los meses o días de cada columna están en su título.",
+      "example": "GAE 100013: 420, 380, promedio 400, existencia 160."
+    },
+    "anVersions": {
+      "what": "La tabla de versiones. «Vigente» se puede consultar y es la que sale por defecto; «Anulada» se conserva pero ya no es la última.",
+      "example": "v3 vigente, v2 anulada."
+    },
+    "anVersionView": {
+      "what": "Abre el archivo de esta versión.",
+      "example": "Ver el archivo de la v2."
+    },
+    "anAnnul": {
+      "what": "Anula esta versión: deja de ser la vigente, pero se conserva y se puede consultar.",
+      "example": "Se extrajo con un filtro equivocado: la anulas y extraes otra."
     },
     "venImport": {
       "what": "Carga ventas desde un Excel (o desde celdas pegadas). Cada renglón del archivo es un artículo vendido y los renglones con el mismo folio (dentro del mismo sitio) forman un ticket. Antes de cargar nada el sistema revisa el archivo y te dice qué está bien, qué se salta y qué falla, y por qué. Se cargan solo los tickets completos y correctos.",

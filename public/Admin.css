@@ -10337,3 +10337,37 @@ td.col-num{ text-align: right; font-variant-numeric: tabular-nums; white-space: 
 .reg-map-month{ display: inline-flex; gap: 0.4rem; align-items: center; }
 .reg-periods{ margin-bottom: 0.5rem; }
 .wp-imp-pv-keep{ background: #ece5ee; color: #6c6475; }
+
+/* Análisis Registros Manuales: la cabecera de un análisis, su diseño y los colores de los grupos de columnas (referencia azul grisáceo, consultadas rosa) */
+.an-head{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem; margin: 0 0 0.8rem; }
+.an-title{ margin: 0; font-size: 1.15rem; }
+.an-chips{ display: inline-flex; gap: 0.35rem; flex-wrap: wrap; }
+.an-chip{ font-size: 0.72rem; font-weight: 600; border-radius: 1rem; padding: 0.05rem 0.65rem; background: color-mix(in srgb, var(--color-accent) 16%, transparent); }
+.an-file-info{ font-size: 0.78rem; opacity: 0.85; margin-left: auto; }
+.an-link{ font-weight: 600; text-decoration: none; color: inherit; border-bottom: 1px dotted currentColor; }
+.an-design{ display: grid; gap: 0.9rem; margin: 0 0 1rem; }
+.an-block{ border: 1px solid var(--color-border); border-radius: 0.9rem; overflow: hidden; background: var(--color-surface); }
+.an-block > header{ padding: 0.5rem 0.9rem; font-size: 0.82rem; }
+.an-block > :not(header){ margin-left: 0.9rem; margin-right: 0.9rem; }
+.an-block > :last-child{ margin-bottom: 0.8rem; }
+.an-block-ref > header{ background: #dde7f0; color: #2f3a48; }
+.an-block-cons > header{ background: #f7d9f5; color: #8a3590; }
+.an-block-filters > header{ background: #ece5ee; color: #6c6475; }
+.an-checks-row{ display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; padding-top: 0.6rem; }
+.an-check{ display: inline-flex; gap: 0.4rem; align-items: center; font-size: 0.82rem; }
+.an-check small{ font-size: 0.68rem; font-weight: 700; border-radius: 1rem; padding: 0 0.5rem; background: #dde7f0; color: #2f3a48; }
+.an-cons-table .an-label{ width: 100%; min-width: 12rem; }
+.an-filters{ display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.6rem; padding-top: 0.6rem; }
+.an-checks{ display: grid; gap: 0.35rem; margin: 0.3rem 0 0.6rem; }
+.an-checks label{ display: flex; gap: 0.5rem; align-items: center; font-size: 0.85rem; }
+.an-checks small{ opacity: 0.7; }
+.an-periods{ display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; max-height: 9rem; overflow: auto; margin: 0.3rem 0 0.6rem; }
+.an-periods label{ display: inline-flex; gap: 0.3rem; align-items: center; font-size: 0.82rem; }
+.reg-field-label{ margin: 0.6rem 0 0.2rem; font-size: 0.78rem; font-weight: 600; opacity: 0.8; }
+td.an-ref, th.an-ref{ background: color-mix(in srgb, #dde7f0 55%, transparent); }
+td.an-cons, th.an-cons{ background: color-mix(in srgb, #f7d9f5 45%, transparent); }
+
+/* Cuadros de Análisis y Registros: campos uno debajo de otro y a todo el ancho; la línea de la versión abierta va en su propio renglón */
+.exp-panel > label{ display: block; margin: 0.55rem 0 0.2rem; font-size: 0.78rem; font-weight: 600; }
+.exp-panel > select, .exp-panel > input[type="text"], .exp-panel > textarea{ width: 100%; }
+.an-file-info{ flex-basis: 100%; margin-left: 0; }

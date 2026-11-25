@@ -83,6 +83,7 @@ const {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
+    AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
@@ -660,7 +661,7 @@ function changedByLabel(req) {
 }
 
 // Las pantallas que no están en la lista de las APPs (WEB_SCREEN_CATALOG) también necesitan su nombre en los avisos y en el historial de cambios.
-const EXTRA_SCREEN_LABEL_KEYS = { 'equipo-registro': 'menu.teamWork', 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'implementacion-historial': 'menu.gesTiImplHistorial', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', ventas: 'menu.cmVentasManuales', registros: 'menu.cmRegistrosInformacion', 'registros-cargas': 'menu.cmRegistrosInformacion', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual', work_plans: 'menu.workPlans' };
+const EXTRA_SCREEN_LABEL_KEYS = { 'equipo-registro': 'menu.teamWork', 'expansiones': 'menu.expansions', 'sesiones-capacitacion': 'menu.trainingSessions', 'implementacion-historial': 'menu.gesTiImplHistorial', 'config-botones': 'menu.ccConfigBotones', 'solicitudes-codigo': 'menu.opTiSolicitudesCodigo', 'pedir-alta-codigo': 'menu.opPedirAltaCodigo', ventas: 'menu.cmVentasManuales', registros: 'menu.cmRegistrosInformacion', 'registros-cargas': 'menu.cmRegistrosInformacion', analisis: 'menu.cmAnalisisRegistros', 'analisis-extracciones': 'menu.cmAnalisisRegistros', 'analisis-archivo': 'menu.cmAnalisisRegistros', lecturas: 'menu.opCentroDistLecturas', limpieza: 'menu.opCentroDistLimpieza', temperaturas: 'menu.opCentroDistTemperaturas', seguridad: 'menu.opCentroDistSeguridad', 'pedido-manual': 'menu.opCentroDistPedidoManual', 'capacidad-almacenamiento': 'menu.opCentroDistCapacidadAlmacenamiento', incidentes: 'menu.opCentroDistIncidentes', 'udm-distribucion': 'menu.opCentroDistUdmDistribucion', 'relacion-envio': 'menu.opCentroDistRelacionEnvio', 'alta-activos': 'menu.opCentroDistAltaActivos', calibraciones: 'menu.opCentroDistCalibraciones', 'mtto-preventivo': 'menu.opCentroDistMttoPreventivo', 'mtto-correctivo': 'menu.opCentroDistMttoCorrectivo', 'surtido-pedido-manual': 'menu.opCentroDistSurtidoPedidoManual', work_plans: 'menu.workPlans' };
 const screenLabelKeyOf = (tableKey) => (WEB_SCREEN_CATALOG.find((s) => s.key === tableKey) || {}).labelKey || EXTRA_SCREEN_LABEL_KEYS[tableKey] || tableKey;
 
 const app = express();
@@ -7407,6 +7408,178 @@ app.post('/api/business/manual-registries/:key/loads/:id/annul', requireAuth, (r
     logTableChange({ clientId, tableKey: REG_LOADS_TABLE, recordId: load.id, recordLabel: load.fileName || registry.key, action: 'update', fieldKey: 'main.regCargaEstado', oldValue: 'vigente', newValue: note ? `anulada · ${note}` : 'anulada', changedBy: changedByLabel(req) });
     notifyButtonAction(req, REG_TABLE, 'annul', load.fileName || registry.key);
     res.json({ load: mapRegistryLoadRow(req, annulled) });
+});
+
+// ---- Cargas Manuales › Análisis Registros Manuales (Daniel, 2026-11-25, «Sí, empieza el Análisis») ----
+// Un análisis junta uno o dos registros por unidad + código. Se arma con tres grupos de columnas (referencia, consultadas de registros y —en la siguiente pieza— formuladas) y «Extraer» saca un ARCHIVO propio: una versión (v1, v2…) con su fecha que es una COPIA
+// (no cambia aunque después cambie un registro). Nada se borra: un análisis se desactiva y una versión se anula. Los botones son del árbol: «Crear análisis» (colAnCrearAuth: crear, renombrar, armar el diseño, activar/desactivar), «Extraer análisis» (colAnExtraerAuth)
+// y «Anular extracción» (colAnAnularAuth). Cada análisis nuevo sale en el menú como una pantalla más, debajo de «Análisis Registros Manuales»; ve todos quien tenga esa pantalla.
+const manualAnalyses = require('./manualAnalyses');
+const AN_TABLE = 'analisis';
+const AN_EXT_TABLE = 'analisis-extracciones';
+const AN_COLS = { create: 'colAnCrearAuth', extract: 'colAnExtraerAuth', annul: 'colAnAnularAuth' };
+const AN_MESSAGES = {
+    AN_NAME_REQUIRED: 'Ponle un nombre al análisis.', AN_NAME_TAKEN: 'Ya hay un análisis con ese nombre.', DESIGN_REGISTRIES: 'Elige al menos un registro.', DESIGN_COLUMN_REGISTRY: 'Una columna usa un registro que el análisis no tiene.',
+    DESIGN_COLUMN_PERIODS: 'Cada columna consultada necesita al menos un periodo.', AN_NO_COLUMNS: 'Agrega al menos una columna consultada antes de extraer.', AN_EMPTY: 'Con este diseño no sale ningún renglón: revisa los periodos y los filtros.',
+    AN_INACTIVE: 'El análisis está desactivado.', AN_BUSY: 'Ya se está extrayendo este análisis. Espera a que termine.', AN_FORBIDDEN: 'No tienes permiso para esto.',
+};
+const anExtracting = new Set();
+function anAbilities(req) {
+    const admin = !!req.user.isClientAdmin;
+    const grants = admin ? null : getUserEffectiveGrants(req.user.sub);
+    return { canCreate: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.create), canExtract: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.extract), canAnnul: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.annul) };
+}
+const anRegistryKeys = () => Object.keys(manualRegistries.REGISTRIES);
+function anSystemColumns(req, createdAt) {
+    const client = getClientById(req.user.clientId);
+    return getSystemColumnsForRecord({ companyName: client.company_name, ...AN_SCREEN, centroCostos: '', createdAt, timeZone: client.time_zone });
+}
+function anClient(req, res) {
+    if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return false; }
+    return true;
+}
+function anForbidden(res) { res.status(403).json({ code: 'AN_FORBIDDEN', message: AN_MESSAGES.AN_FORBIDDEN }); }
+function anFail(res, code, status = 400, extra = {}) { return res.status(status).json({ code, message: AN_MESSAGES[code] || code, ...extra }); }
+function anLoad(req, res) {
+    if (!anClient(req, res)) return null;
+    const analysis = getAnalysis(Number(req.params.id) || 0, req.user.clientId, req.user.isTestAccount);
+    if (!analysis) { res.status(404).json({ code: 'AN_NOT_FOUND', message: 'Ese análisis no existe.' }); return null; }
+    return analysis;
+}
+const mapExtractionOut = (req, e) => ({ ...e, ...anSystemColumns(req, e.createdAt) });
+const anRegistriesInfo = (req) => Object.values(manualRegistries.REGISTRIES).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, valueNameKey: r.valueNameKey, periods: registryPeriods(req.user.clientId, req.user.isTestAccount, r.key) }));
+// Para el menú lateral: los análisis activos (cualquier persona del cliente; el menú ya decide quién ve la pantalla).
+app.get('/api/business/manual-analyses/menu', requireAuth, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (!req.user.clientId) return res.json({ analyses: [] });
+    res.json({ analyses: listAnalyses(req.user.clientId, req.user.isTestAccount, { onlyActive: true }).map((a) => ({ id: a.id, name: a.name })) });
+});
+app.get('/api/business/manual-analyses', requireAuth, (req, res) => {
+    if (!anClient(req, res)) return;
+    res.set('Cache-Control', 'no-store');
+    res.json({ analyses: listAnalyses(req.user.clientId, req.user.isTestAccount).map((a) => ({ ...a, ...anSystemColumns(req, a.createdAt) })), registries: anRegistriesInfo(req), ...anAbilities(req) });
+});
+app.post('/api/business/manual-analyses', requireAuth, (req, res) => {
+    if (!anClient(req, res)) return;
+    if (!anAbilities(req).canCreate) return anForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const body = req.body || {};
+    const name = manualAnalyses.cleanText(body.name, 80);
+    if (!name) return anFail(res, 'AN_NAME_REQUIRED');
+    if (analysisNameTaken(clientId, isTestAccount, name)) return anFail(res, 'AN_NAME_TAKEN', 409);
+    let source = body;
+    if (body.copyFrom) {
+        const from = getAnalysis(Number(body.copyFrom) || 0, clientId, isTestAccount);
+        if (!from) return res.status(404).json({ code: 'AN_NOT_FOUND', message: 'Ese análisis no existe.' });
+        source = from.design;
+    }
+    const checked = manualAnalyses.normalizeDesign(source, anRegistryKeys());
+    if (checked.error) return anFail(res, checked.error);
+    const id = createAnalysis({ clientId, isTestData: isTestAccount, name, design: checked.design, createdBy: changedByLabel(req), createdByUserId: req.user.sub });
+    logTableChange({ clientId, tableKey: AN_TABLE, recordId: id, recordLabel: name, action: 'create', fieldKey: 'main.anNombre', newValue: name, changedBy: changedByLabel(req) });
+    notifyButtonAction(req, AN_TABLE, 'create', name);
+    res.status(201).json({ analysis: getAnalysis(id, clientId, isTestAccount) });
+});
+app.get('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    res.set('Cache-Control', 'no-store');
+    res.json({ analysis, registries: anRegistriesInfo(req), extractions: listExtractions(analysis.id).map((e) => mapExtractionOut(req, e)), ...anAbilities(req) });
+});
+app.patch('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    if (!anAbilities(req).canCreate) return anForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const body = req.body || {};
+    const patch = {};
+    if (body.name !== undefined) {
+        const name = manualAnalyses.cleanText(body.name, 80);
+        if (!name) return anFail(res, 'AN_NAME_REQUIRED');
+        if (analysisNameTaken(clientId, isTestAccount, name, analysis.id)) return anFail(res, 'AN_NAME_TAKEN', 409);
+        if (name !== analysis.name) patch.name = name;
+    }
+    if (body.design !== undefined) {
+        const checked = manualAnalyses.normalizeDesign(body.design, anRegistryKeys());
+        if (checked.error) return anFail(res, checked.error);
+        patch.design = checked.design;
+    }
+    if (body.status !== undefined) {
+        if (!['active', 'inactive'].includes(body.status)) return res.status(400).json({ code: 'AN_STATUS', message: 'Estado no válido.' });
+        if (body.status !== analysis.status) patch.status = body.status;
+    }
+    const updated = updateAnalysis(analysis.id, clientId, isTestAccount, patch);
+    const by = changedByLabel(req);
+    if (patch.name) logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: patch.name, action: 'update', fieldKey: 'main.anNombre', oldValue: analysis.name, newValue: patch.name, changedBy: by });
+    if (patch.design) logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: updated.name, action: 'update', fieldKey: 'main.anDiseno', oldValue: '', newValue: 'actualizado', changedBy: by });
+    if (patch.status) logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: updated.name, action: 'update', fieldKey: 'main.anEstado', oldValue: analysis.status, newValue: patch.status, changedBy: by });
+    res.json({ analysis: updated });
+});
+// Extraer: arma el archivo con el diseño de hoy y lo guarda como una versión nueva (copia de los datos de hoy).
+app.post('/api/business/manual-analyses/:id/extract', requireAuth, async (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    if (!anAbilities(req).canExtract) return anForbidden(res);
+    if (analysis.status !== 'active') return anFail(res, 'AN_INACTIVE', 409);
+    const { clientId, isTestAccount } = req.user;
+    const checked = manualAnalyses.normalizeDesign(analysis.design, anRegistryKeys());
+    if (checked.error) return anFail(res, checked.error);
+    const design = checked.design;
+    if (!design.consulted.length) return anFail(res, 'AN_NO_COLUMNS');
+    const lockKey = String(analysis.id);
+    if (anExtracting.has(lockKey)) return anFail(res, 'AN_BUSY', 409);
+    anExtracting.add(lockKey);
+    let recordId = null;
+    try {
+        const needed = manualAnalyses.periodsNeeded(design);
+        const sources = {};
+        design.registries.forEach((key) => { sources[key] = registrySources(clientId, isTestAccount, key, needed[key] || [], design.filters); });
+        const built = manualAnalyses.buildExtraction(design, sources);
+        if (!built.rows.length) return anFail(res, 'AN_EMPTY');
+        const record = createExtractionRecord({ analysisId: analysis.id, design, columns: built.columns, createdBy: changedByLabel(req), createdByUserId: req.user.sub });
+        recordId = record.id;
+        const refCount = built.columns.filter((c) => c.group === 'reference').length;
+        for (let at = 0; at < built.rows.length; at += 3000) {
+            insertExtractionRows(record.id, built.rows.slice(at, at + 3000).map((data, i) => ({ no: at + i + 1, data, search: data.slice(0, refCount).join(' ').toLowerCase() })));
+            await new Promise((resolve) => setImmediate(resolve));
+        }
+        const lastLoads = {};
+        design.registries.forEach((key) => { const l = registryLastLoad(clientId, isTestAccount, key); if (l) lastLoads[key] = { id: l.id, fileName: l.fileName, createdAt: l.createdAt }; });
+        finishExtraction(record.id, built.rows.length, { periods: needed, lastLoads, truncated: built.truncated });
+        logTableChange({ clientId, tableKey: AN_EXT_TABLE, recordId: record.id, recordLabel: `${analysis.name} v${record.version}`, action: 'create', fieldKey: 'main.anExtraccion', newValue: `v${record.version}`, changedBy: changedByLabel(req) });
+        notifyButtonAction(req, AN_TABLE, 'extract', `${analysis.name} v${record.version}`);
+        res.status(201).json({ extraction: mapExtractionOut(req, getExtraction(record.id, analysis.id)) });
+    } catch (err) {
+        console.error('Análisis: la extracción falló:', err);
+        if (recordId) failExtraction(recordId, 'ERROR');
+        res.status(500).json({ code: 'AN_ERROR', message: 'La extracción no se pudo completar. No se guardó nada.' });
+    } finally {
+        anExtracting.delete(lockKey);
+    }
+});
+app.get('/api/business/manual-analyses/:id/extractions/:eid/data', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    const extraction = getExtraction(Number(req.params.eid) || 0, analysis.id);
+    if (!extraction || extraction.status === 'en_proceso') return res.status(404).json({ code: 'EXTRACTION_NOT_FOUND', message: 'Esa versión no existe.' });
+    const { rows, total } = listExtractionRows(extraction.id, { text: req.query.text });
+    res.set('Cache-Control', 'no-store');
+    res.json({ extraction: mapExtractionOut(req, extraction), columns: extraction.columns, rows, total, truncated: total > rows.length, sys: anSystemColumns(req, extraction.createdAt) });
+});
+app.post('/api/business/manual-analyses/:id/extractions/:eid/annul', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    if (!anAbilities(req).canAnnul) return anForbidden(res);
+    const { clientId } = req.user;
+    const extraction = getExtraction(Number(req.params.eid) || 0, analysis.id);
+    if (!extraction) return res.status(404).json({ code: 'EXTRACTION_NOT_FOUND', message: 'Esa versión no existe.' });
+    if (extraction.status !== 'vigente') return res.status(409).json({ code: 'EXTRACTION_NOT_ACTIVE', message: 'Esa versión ya no está vigente.' });
+    const note = String((req.body && req.body.note) || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 300);
+    const annulled = annulExtraction(extraction.id, analysis.id, changedByLabel(req), note);
+    if (!annulled) return res.status(409).json({ code: 'EXTRACTION_NOT_ACTIVE', message: 'Esa versión ya no está vigente.' });
+    logTableChange({ clientId, tableKey: AN_EXT_TABLE, recordId: extraction.id, recordLabel: `${analysis.name} v${extraction.version}`, action: 'update', fieldKey: 'main.anExtraccionEstado', oldValue: 'vigente', newValue: note ? `anulada · ${note}` : 'anulada', changedBy: changedByLabel(req) });
+    notifyButtonAction(req, AN_TABLE, 'annul', `${analysis.name} v${extraction.version}`);
+    res.json({ extraction: mapExtractionOut(req, annulled) });
 });
 
 // ---- Punto Venta › Ventas: ver e imprimir el ticket con su QR (Daniel, 2026-11-24) ----
