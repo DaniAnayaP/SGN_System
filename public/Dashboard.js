@@ -1473,6 +1473,11 @@ function groupSidebarScreens(pantallas, categoryId) {
     });
     return out;
 }
+// Una pantalla del menú que se muestra también en otra área comparte el permiso de la original (grantFrom: { dept, area, path }): se ve si se tiene ese permiso. Las demás se miden en el área elegida (grantAs = la ruta de otra pantalla de la misma área).
+function sidebarScreenAllowed(cat, pantalla) {
+    if (pantalla.grantFrom) return hasScreenGrant(pantalla.grantFrom.dept, pantalla.grantFrom.area, pantalla.grantFrom.path);
+    return hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${pantalla.grantAs || pantalla.id}`);
+}
 function applyScreenGrantFilter(data) {
     if (!selectedDepartment || !selectedArea) return data;
     return {
@@ -1486,7 +1491,7 @@ function applyScreenGrantFilter(data) {
                 items: s.items
                     .map((cat) => {
                         const submenu = groupSidebarScreens((cat.submenu || []).filter((pantalla) => !pantalla.sidebarHidden && (
-                            pantalla.permissionOnly || hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${pantalla.grantAs || pantalla.id}`)
+                            pantalla.permissionOnly || sidebarScreenAllowed(cat, pantalla)
                         )), cat.id);
                         return { ...cat, submenu, empty: !submenu.some((p) => !p.permissionOnly) };
                     }),
@@ -1580,7 +1585,7 @@ function getPanelCategories() {
         ...cat,
         submenu: (cat.submenu || []).filter((s) => (
             !s.permissionOnly && s.href && s.href !== '#'
-            && hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${s.grantAs || s.id}`)
+            && sidebarScreenAllowed(cat, s)
         )),
     }));
 }
@@ -13854,51 +13859,60 @@ function updateDatabaseMenuLabel(branding) {
     label.textContent = branding?.companyAbbreviation ? `${base} ${branding.companyAbbreviation}` : base;
 }
 
-// Cada registro agregado es una pantalla más debajo de «Registros Información» (Cargas Manuales de Centro de Distribución) y cada análisis agregado, debajo de «Análisis Registros Manuales» (Análisis › Cadena de Suministro › Análisis manuales). El nombre es dato del cliente, así que va en item.label.
-// El permiso de cada uno es el de su pantalla de grupo (grantAs): quien la tiene ve todos. Se quita lo anterior antes de poner la lista, así que se puede llamar de nuevo.
+// Los registros (los de siempre y los agregados) son pantallas anidadas dentro de «Registros Información» en Cargas Manuales de Centro de Distribución y también en Análisis › Cadena de Suministro › Manuales (con el mismo permiso: grantFrom);
+// los análisis agregados salen en Análisis › Manuales. El nombre de los agregados es dato del cliente, así que va en item.label. Se quita lo anterior antes de poner la lista, así que se puede llamar de nuevo.
+// Lo que no se pudo leer esta vez se arma con la última lectura buena.
+const manualMenuBodies = { an: null, reg: null };
+const REGISTROS_GRANT_FROM = { dept: 'supply-chain', area: 'sc-area-distribution-center', path: 'cat-cargas-manuales/cat-cargas-manuales-registros' };
 async function loadManualAnalysesMenu() {
     try {
         const getJson = async (url) => { try { const res = await fetch(url, { credentials: 'include' }); return res.ok ? await res.json() : null; } catch { return null; } };
         const [anBody, regBody] = await Promise.all([getJson('/api/business/manual-analyses/menu'), getJson('/api/business/manual-registries/menu')]);
-        const page = window.location.pathname;
-        const query = new URLSearchParams(window.location.search);
-        const openAnalysis = page.endsWith('CmAnalisis.html') ? query.get('id') : null;
-        const openRegistry = page.endsWith('CmRegistrosInformacion.html') ? query.get('registry') : null;
+        if (anBody) manualMenuBodies.an = anBody;
+        if (regBody) manualMenuBodies.reg = regBody;
+        const { an, reg } = manualMenuBodies;
         const overrides = menuData && menuData.areaOverrides;
         if (!overrides) return;
-        // lo que no se pudo leer se deja como estaba
-        if (regBody) {
-            const list = overrides['supply-chain/sc-area-distribution-center'] && overrides['supply-chain/sc-area-distribution-center']['cat-cargas-manuales'];
+        // «＋ Agregar nuevo registro» (solo para quien tiene el botón «Crear registro»; abre la pantalla con la ventana de alta) y cada registro, anidados en «Registros Información»
+        const registryItems = (idPrefix, gate) => {
+            const nested = { sidebarGroup: 'registros', dynamicRegistry: true, ...gate };
+            const addNew = reg.canCreateRegistry ? [{ id: `${idPrefix}-nuevo`, labelKey: 'main.regNew', abbrKeys: ['main.regNewAbbr1', 'main.regNewAbbr2'], icon: 'bx-plus', href: 'CmRegistrosInformacion.html?nuevo=1', addNew: true, ...nested }] : [];
+            const registries = (reg.registries || []).map((r) => ({ id: `${idPrefix}-${r.key}`, ...(r.custom ? { label: r.name } : { labelKey: r.nameKey }), icon: 'bx-data', href: `CmRegistrosInformacion.html?registry=${encodeURIComponent(r.key)}`, ...(r.status === 'active' ? {} : { dimmed: true }), ...nested }));
+            return [...addNew, ...registries];
+        };
+        if (reg) {
+            const key = 'supply-chain/sc-area-distribution-center';
+            const list = overrides[key] && overrides[key]['cat-cargas-manuales'];
             if (Array.isArray(list)) {
                 const base = list.filter((n) => !n.dynamicRegistry);
                 const at = base.findIndex((n) => n.id === 'cat-cargas-manuales-registros');
                 if (at >= 0) {
-                    // Cada registro es una pantalla anidada dentro de «Registros Información» (sidebarGroup) y comparte el permiso de esa pantalla (grantAs). Los de siempre llevan su nombre por idioma; los agregados, el que les puso el cliente.
-                    const nested = { grantAs: 'cat-cargas-manuales-registros', sidebarGroup: 'registros', dynamicRegistry: true };
-                    // «＋ Agregar nuevo registro»: solo para quien tiene el botón «Crear registro»; abre la pantalla con la ventana de alta
-                    const addNew = regBody.canCreateRegistry ? [{ id: 'cat-cargas-manuales-reg-nuevo', labelKey: 'main.regNew', abbrKeys: ['main.regNewAbbr1', 'main.regNewAbbr2'], icon: 'bx-plus', href: 'CmRegistrosInformacion.html?nuevo=1', addNew: true, ...nested }] : [];
-                    const dynamic = (regBody.registries || []).map((r) => ({ id: `cat-cargas-manuales-reg-${r.key}`, ...(r.custom ? { label: r.name } : { labelKey: r.nameKey }), icon: 'bx-data', href: `CmRegistrosInformacion.html?registry=${encodeURIComponent(r.key)}`, ...(r.status === 'active' ? {} : { dimmed: true }), ...nested }));
-                    base.splice(at + 1, 0, ...addNew, ...dynamic);
-                    // la pantalla de lista (CmRegistrosInformacion.html sola) queda para los permisos y Panel; en el menú la reemplaza el grupo
-                    base[at] = { ...base[at], sidebarHidden: true };
-                    overrides['supply-chain/sc-area-distribution-center']['cat-cargas-manuales'] = base;
+                    base.splice(at + 1, 0, ...registryItems('cat-cargas-manuales-reg', { grantAs: 'cat-cargas-manuales-registros' }));
+                    base[at] = { ...base[at], sidebarHidden: true }; // la pantalla de lista sola queda para los permisos y Panel; en el menú la reemplaza el grupo
+                    overrides[key]['cat-cargas-manuales'] = base;
                 }
             }
         }
-        if (anBody) {
-            const list = overrides['analysis/an-area-supply-chain'] && overrides['analysis/an-area-supply-chain']['cat-analisis-manuales'];
+        if (an || reg) {
+            const key = 'analysis/an-area-supply-chain';
+            const list = overrides[key] && overrides[key]['cat-analisis-manuales'];
             if (Array.isArray(list)) {
-                const base = list.filter((n) => !n.dynamicAnalysis);
+                const base = list.filter((n) => !n.dynamicAnalysis && !n.dynamicRegistry);
                 const at = base.findIndex((n) => n.id === 'cat-analisis-manuales-lista');
                 if (at >= 0) {
-                    const dynamic = (anBody.analyses || []).map((a) => ({ id: `cat-analisis-manuales-an-${a.id}`, label: a.name, icon: 'bx-line-chart', href: `CmAnalisis.html?id=${a.id}`, grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true, ...(openAnalysis && String(a.id) === openAnalysis ? { active: true } : {}) }));
-                    // «＋ Agregar nuevo análisis»: solo para quien tiene el botón «Crear análisis»; abre la lista con la ventana de alta
-                    const addNew = anBody.canCreate ? [{ id: 'cat-analisis-manuales-nuevo', labelKey: 'main.anNew', abbrKeys: ['main.anNewAbbr1', 'main.anNewAbbr2'], icon: 'bx-plus', href: 'CmAnalisisLista.html?nuevo=1', grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true, addNew: true }] : [];
-                    // «Todos los análisis»: la tabla de la lista (filtros, descarga, historial, cambiar nombre y desactivar). En el menú sale al final; la pantalla de lista con su nombre queda para los permisos y Panel.
-                    const all = { id: 'cat-analisis-manuales-todos', labelKey: 'main.anAll', abbrKeys: ['main.anAllAbbr1'], icon: 'bx-table', href: 'CmAnalisisLista.html', grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true };
-                    base.splice(at + 1, 0, ...addNew, ...dynamic, all);
+                    const items = [];
+                    // primero «Registros Información» (anidado: Nuevo registro y los registros), con el permiso de esa pantalla en Cargas Manuales
+                    if (reg) items.push(...registryItems('cat-analisis-manuales-reg', { grantFrom: REGISTROS_GRANT_FROM }));
+                    if (an) {
+                        // «＋ Agregar nuevo análisis»: solo para quien tiene el botón «Crear análisis»; abre la lista con la ventana de alta
+                        if (an.canCreate) items.push({ id: 'cat-analisis-manuales-nuevo', labelKey: 'main.anNew', abbrKeys: ['main.anNewAbbr1', 'main.anNewAbbr2'], icon: 'bx-plus', href: 'CmAnalisisLista.html?nuevo=1', grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true, addNew: true });
+                        (an.analyses || []).forEach((x) => items.push({ id: `cat-analisis-manuales-an-${x.id}`, label: x.name, icon: 'bx-line-chart', href: `CmAnalisis.html?id=${x.id}`, grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true }));
+                        // «Todos los análisis»: la tabla de la lista (filtros, descarga, historial, cambiar nombre y desactivar). La pantalla de lista con su nombre queda para los permisos y Panel.
+                        items.push({ id: 'cat-analisis-manuales-todos', labelKey: 'main.anAll', abbrKeys: ['main.anAllAbbr1'], icon: 'bx-table', href: 'CmAnalisisLista.html', grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true });
+                    }
+                    base.splice(at + 1, 0, ...items);
                     base[at] = { ...base[at], sidebarHidden: true };
-                    overrides['analysis/an-area-supply-chain']['cat-analisis-manuales'] = base;
+                    overrides[key]['cat-analisis-manuales'] = base;
                 }
             }
         }
