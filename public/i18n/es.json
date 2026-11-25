@@ -5392,6 +5392,7 @@
     "regKindDay": "Diaria",
     "regCardNone": "Todavía no se ha cargado nada.",
     "regCiColumns": "{n} columnas",
+    "regPastedName": "Datos pegados",
     "regCardMonths": "{n} meses cargados · de {from} a {to}",
     "regCardDays": "{n} días cargados · el último, {last}",
     "regCardMissOne": "Falta 1 periodo en medio",

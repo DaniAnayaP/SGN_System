@@ -10380,6 +10380,9 @@ td.an-cons, th.an-cons{ background: color-mix(in srgb, #f7d9f5 45%, transparent)
 .reg-manage{ display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0 0 0.8rem; }
 .reg-manage-btn{ display: inline-flex; gap: 0.35rem; align-items: center; padding-block: 0.3rem; font-size: 0.8rem; }
 .reg-card-static{ cursor: default; }
+/* Cargar registro › Pegar desde Excel: el cuadro donde se pegan las celdas copiadas (igual que el de Alta de artículos por plantilla) */
+.reg-paste{ display: grid; gap: 0.5rem; margin: 0.5rem 0; justify-items: start; }
+#reg-i-paste{ font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; width: 100%; min-height: 8rem; resize: vertical; padding: 0.5rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); color: var(--color-text-primary); white-space: pre; }
 
 /* Registros Información en el celular (Daniel, 2026-11-25, «Si!» a la maqueta «Registros en celular»): solo esta pantalla.
    1 márgenes de los lados de 56 a 12 px · 2 tarjeta y franja de «última carga» como un solo bloque · 3 «Cargar registro» y «Descargar plantilla» a mitad de ancho en su renglón

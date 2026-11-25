@@ -837,7 +837,7 @@ async function startLoad() {
     regScroll = getScroll();
     // toda operación va ligada a un centro de costos completo (como en las demás pantallas de la App)
     siteBlocked = await window.AppSiteGate.blocked();
-    wiz = { step: 'start', source: a.template ? 'plantilla' : 'excel', file: null, buffer: null, info: null, sheet: null, include: new Set(), picks: {}, day: todayText(), preview: null, result: null, busy: false, error: '' };
+    wiz = { step: 'start', source: a.template ? 'plantilla' : 'excel', file: null, buffer: null, info: null, sheet: null, include: new Set(), picks: {}, day: todayText(), preview: null, result: null, busy: false, error: '', mode: 'file', pasteText: '' };
     view = 'wizard';
     render();
     setScroll(0);
@@ -1064,22 +1064,61 @@ function stepStart(body, bar) {
         setScroll(0);
     }, !wiz.source || (wiz.source === 'plantilla' ? !a.template : !a.excel)));
 }
-// Paso 2: el archivo. Al elegirlo se revisa solo (con la plantilla se pasa directo a la revisión).
+// Lo pegado de Excel (celdas separadas por tabulador) se vuelve un .xlsx de una hoja y sigue el mismo camino que un archivo elegido (Daniel, 2026-11-25: «como cargábamos la plantilla que la podíamos pegar»).
+function pastedFile(text) {
+    const T = window.SkuTemplate;
+    const X = window.SimpleXlsx;
+    if (!T || !X) return null;
+    const rows = T.parseDelimited(text);
+    if (!rows.length) return null;
+    return new File([X.writeXlsx([{ name: t('main.regPastedName'), rows }])], `${t('main.regPastedName')}.xlsx`, { type: XLSX_MIME });
+}
+function pasteGo() {
+    const file = pastedFile(wiz.pasteText);
+    if (!file) { wiz.error = t('main.tplNoRows'); render(); return; }
+    chooseFile(file);
+}
+// Paso 2: el archivo. Se elige del teléfono o se pegan las celdas copiadas de Excel; al elegirlo se revisa solo (con la plantilla se pasa directo a la revisión).
 function stepFile(body, bar) {
     body.appendChild(el('h3', '', t('home.regWizFile')));
-    const pick = el('label', `rg-app-pick${wiz.busy ? ' rg-app-pick-busy' : ''}`);
-    pick.setAttribute('for', 'rg-app-file');
-    pick.setAttribute('data-help-key', 'appRegWizArchivo');
-    pick.innerHTML = `<i class="bx ${wiz.busy ? 'bx-loader-alt bx-spin' : 'bx-upload'}" aria-hidden="true"></i>`;
-    pick.appendChild(el('b', '', t(wiz.busy ? 'main.regReading' : 'home.regTapToPick')));
-    const input = el('input');
-    input.type = 'file';
-    input.id = 'rg-app-file';
-    input.accept = XLSX_ACCEPT;
-    input.disabled = wiz.busy;
-    input.addEventListener('change', () => { const file = (input.files || [])[0]; input.value = ''; chooseFile(file); });
-    pick.appendChild(input);
-    body.appendChild(pick);
+    const seg = el('div', 'tplapp-seg');
+    seg.setAttribute('role', 'group');
+    [['file', 'main.tplModeFile', 'tplUpload'], ['paste', 'main.tplModePaste', 'tplPaste']].forEach(([mode, labelKey, help]) => {
+        const btn = el('button', '', t(labelKey));
+        btn.type = 'button';
+        btn.setAttribute('aria-pressed', wiz.mode === mode ? 'true' : 'false');
+        btn.setAttribute('data-help-key', help);
+        btn.disabled = wiz.busy;
+        btn.addEventListener('click', () => { wiz.mode = mode; wiz.error = ''; render(); });
+        seg.appendChild(btn);
+    });
+    body.appendChild(seg);
+    if (wiz.mode === 'paste') {
+        const box = el('textarea', 'relapp-input tplapp-paste');
+        box.spellcheck = false;
+        box.placeholder = t('main.tplPastePlaceholder');
+        box.value = wiz.pasteText;
+        box.disabled = wiz.busy;
+        box.setAttribute('data-help-key', 'tplPaste');
+        box.addEventListener('input', () => { wiz.pasteText = box.value; });
+        box.addEventListener('paste', () => setTimeout(() => { wiz.pasteText = box.value; if (wiz.pasteText.trim() && !wiz.busy) pasteGo(); }, 50));
+        body.appendChild(box);
+        bar.appendChild(wizBtn('rg-app-btn-pri', t(wiz.busy ? 'main.regReading' : 'main.tplPasteGo'), pasteGo, wiz.busy));
+    } else {
+        const pick = el('label', `rg-app-pick${wiz.busy ? ' rg-app-pick-busy' : ''}`);
+        pick.setAttribute('for', 'rg-app-file');
+        pick.setAttribute('data-help-key', 'appRegWizArchivo');
+        pick.innerHTML = `<i class="bx ${wiz.busy ? 'bx-loader-alt bx-spin' : 'bx-upload'}" aria-hidden="true"></i>`;
+        pick.appendChild(el('b', '', t(wiz.busy ? 'main.regReading' : 'home.regTapToPick')));
+        const input = el('input');
+        input.type = 'file';
+        input.id = 'rg-app-file';
+        input.accept = XLSX_ACCEPT;
+        input.disabled = wiz.busy;
+        input.addEventListener('change', () => { const file = (input.files || [])[0]; input.value = ''; chooseFile(file); });
+        pick.appendChild(input);
+        body.appendChild(pick);
+    }
     if (wiz.file) {
         const card = el('div', 'pm-app-card rg-app-filecard');
         card.innerHTML = '<span class="rg-app-optic"><i class="bx bxs-file" aria-hidden="true"></i></span>';

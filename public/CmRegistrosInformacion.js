@@ -471,6 +471,15 @@ function wireStatic() {
     document.addEventListener('dashboard:language-changed', () => { renderCards(); renderStamp(); foldControlInterno(DATA_TABLE); foldControlInterno(LOADS_TABLE); });
 }
 
+// Lo pegado de Excel (celdas separadas por tabulador) se vuelve un .xlsx de una hoja: el servidor lo lee igual que un archivo elegido.
+function pastedFile(text) {
+    const T = window.SkuTemplate;
+    const X = window.SimpleXlsx;
+    if (!T || !X) return null;
+    const rows = T.parseDelimited(text);
+    if (!rows.length) return null;
+    return new File([X.writeXlsx([{ name: t('main.regPastedName'), rows }])], `${t('main.regPastedName')}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
 function saveFile(blob, filename) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -539,7 +548,7 @@ function openLoadModal() {
     document.body.appendChild(overlay);
     const today = new Date();
     const todayText = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    const s = { step: 'start', source: st.canTemplate && !st.canExcel ? 'plantilla' : 'excel', file: null, buffer: null, info: null, sheet: null, include: null, picks: null, day: todayText, preview: null, result: null, busy: false, error: '', reload: false };
+    const s = { step: 'start', source: st.canTemplate && !st.canExcel ? 'plantilla' : 'excel', file: null, buffer: null, info: null, sheet: null, include: null, picks: null, day: todayText, preview: null, result: null, busy: false, error: '', reload: false, mode: 'file', pasteText: '' };
     const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
     const onKey = (event) => { if (event.key === 'Escape' && !s.busy) close(); };
     document.addEventListener('keydown', onKey);
@@ -552,8 +561,9 @@ function openLoadModal() {
         <div class="reg-ways" data-help-key="regWays">${wayCard('plantilla', 'main.regWayTemplate', ['main.regWayTemplate1', reg.kind === 'month' ? 'main.regWayTemplate2' : 'main.regWayTemplate2Day', 'main.regWayTemplate3'], s.source === 'plantilla', st.canTemplate)}${wayCard('excel', 'main.regWayExcel', ['main.regWayExcel1', 'main.regWayExcel2', 'main.regWayExcel3'], s.source === 'excel', st.canExcel)}</div>
         ${s.source === 'plantilla' ? `<p><button type="button" class="btn btn-secondary" data-reg-i="template"${s.busy ? ' disabled' : ''}><i class="bx bx-download" aria-hidden="true"></i> ${esc(t('main.regTemplate'))}</button></p>` : ''}
         ${reg.kind === 'day' && s.source === 'plantilla' ? dayField() : ''}
-        <label class="wp-imp-drop" id="reg-i-drop" for="reg-i-file" data-help-key="regDrop"><b>${esc(s.busy ? t('main.regReading') : t('main.regDrop'))}</b><span>${esc(t('main.regDropOr'))}</span></label>
-        <input type="file" id="reg-i-file" class="wp-imp-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"${s.busy ? ' disabled' : ''}>
+        <div class="tpl-seg" role="group"><button type="button" data-reg-i="mode-file" aria-pressed="${s.mode === 'file'}" data-help-key="tplUpload"${s.busy ? ' disabled' : ''}>${esc(t('main.tplModeFile'))}</button><button type="button" data-reg-i="mode-paste" aria-pressed="${s.mode === 'paste'}" data-help-key="tplPaste"${s.busy ? ' disabled' : ''}>${esc(t('main.tplModePaste'))}</button></div>
+        ${s.mode === 'paste' ? `<div class="reg-paste"><textarea id="reg-i-paste" spellcheck="false" placeholder="${esc(t('main.tplPastePlaceholder'))}"${s.busy ? ' disabled' : ''}>${esc(s.pasteText)}</textarea><button type="button" class="btn btn-secondary" data-reg-i="paste-go"${s.busy ? ' disabled' : ''}>${esc(s.busy ? t('main.regReading') : t('main.tplPasteGo'))}</button></div>` : `<label class="wp-imp-drop" id="reg-i-drop" for="reg-i-file" data-help-key="regDrop"><b>${esc(s.busy ? t('main.regReading') : t('main.regDrop'))}</b><span>${esc(t('main.regDropOr'))}</span></label>
+        <input type="file" id="reg-i-file" class="wp-imp-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"${s.busy ? ' disabled' : ''}>`}
         ${errBox()}<div class="admin-form-actions"><button type="button" class="btn btn-secondary" data-reg-i="cancel"${s.busy ? ' disabled' : ''}>${esc(t('main.regCancel'))}</button></div>`;
     const dimOptions = (selected, includeValue) => `<option value=""${selected === '' ? ' selected' : ''}>${esc(t('main.regNotLoaded'))}</option>${['unidad', 'unidadNombre', 'codigo', 'descripcion', 'categoria', 'udm'].map((d) => `<option value="${d}"${selected === d ? ' selected' : ''}>${esc(t(`main.regDim_${d}`))}</option>`).join('')}${includeValue ? `<option value="value"${selected === 'value' ? ' selected' : ''}>${esc(t('main.regValueColumn'))}</option>` : ''}`;
     const mapHtml = () => {
@@ -699,12 +709,22 @@ function openLoadModal() {
             s.step = 'done'; s.busy = false; paint();
         } catch (err) { s.error = errorTextOf(err); s.busy = false; paint(); }
     };
+    // lo pegado de Excel se vuelve un archivo y sigue el mismo camino que uno elegido
+    const pasteGo = () => {
+        const box = overlay.querySelector('#reg-i-paste');
+        if (box) s.pasteText = box.value;
+        const file = pastedFile(s.pasteText);
+        if (!file) { s.error = t('main.tplNoRows'); paint(); return; }
+        chooseFile(file);
+    };
     overlay.addEventListener('click', (event) => {
         const btn = event.target.closest('[data-reg-i]');
         if (!btn || s.busy) return;
         const op = btn.dataset.regI;
         if (op === 'cancel') close();
         else if (op === 'template') downloadTemplate();
+        else if (op === 'mode-file' || op === 'mode-paste') { s.mode = op === 'mode-paste' ? 'paste' : 'file'; s.error = ''; paint(); }
+        else if (op === 'paste-go') pasteGo();
         else if (op === 'review') review();
         else if (op === 'issues') downloadIssues();
         else if (op === 'load') load();
@@ -720,6 +740,8 @@ function openLoadModal() {
         else if (el.dataset && el.dataset.regPick !== undefined) s.picks[el.dataset.regPick] = el.value;
         else if (el.dataset && el.dataset.regMonth !== undefined) { const col = Number(el.dataset.regMonth); if (el.checked) s.include.add(col); else s.include.delete(col); }
     });
+    overlay.addEventListener('input', (event) => { if (event.target.id === 'reg-i-paste') s.pasteText = event.target.value; });
+    overlay.addEventListener('paste', (event) => { if (event.target.id !== 'reg-i-paste') return; setTimeout(() => { s.pasteText = event.target.value; if (s.pasteText.trim() && !s.busy) pasteGo(); }, 50); });
     overlay.addEventListener('dragover', (event) => { const zone = event.target.closest && event.target.closest('#reg-i-drop'); if (zone) { event.preventDefault(); zone.classList.add('wp-imp-drop-over'); } });
     overlay.addEventListener('dragleave', (event) => { const zone = event.target.closest && event.target.closest('#reg-i-drop'); if (zone) zone.classList.remove('wp-imp-drop-over'); });
     overlay.addEventListener('drop', (event) => {
