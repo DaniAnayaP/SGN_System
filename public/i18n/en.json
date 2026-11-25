@@ -9005,6 +9005,20 @@
     "viewList": "List",
     "categorySoonTag": "Soon",
     "calCached": "No signal: showing the certificates saved on your phone.",
+    "regCached": "No signal: showing the records saved on your phone.",
+    "regNoData": "No signal and there are no records saved on this phone yet.",
+    "regLast": "Last upload:",
+    "regLastLoad": "Last upload",
+    "regMissOne": "Missing {period}",
+    "regMissMany": "{n} periods missing",
+    "regAllCategories": "All categories",
+    "regAllUnits": "All units",
+    "regShowMore": "Show {n} more",
+    "regNoMatch": "No code matches what you are looking for.",
+    "regValues": "Values",
+    "regNoLoad": "Not uploaded",
+    "regShowAll": "See all {n} periods",
+    "regShowLess": "See less",
     "calNoData": "The certificates have not been downloaded yet. Connect once to see them without signal.",
     "calNoMatch": "No certificate matches your search.",
     "calShowing": "Showing {n} of {total}: type to search the rest.",
@@ -9324,6 +9338,38 @@
     "appTwPass": {"what":"A pass requested by someone on your team: who hands it to whom and why. Approving it moves the activity; rejecting it leaves it where it was (you can write a comment).","example":"Marco → Sofía · \"I will be in training\"."},
     "appTwPerson": {"what":"Shows only the activities that person takes part in.","example":"Sofía Cruz."},
     "appTwTimeline": {"what":"Everything that happened to the activity, with who and when, and it cannot be edited. It needs signal; without it the detail is shown without the timeline.","example":"Born on its own from the repetition → Assigned to Marco Ríos → Confirmed."},
+    "appRegLista": {
+      "what": "The list of what is uploaded by hand. Each card is a record (or a code, once inside one); tap it to open.",
+      "example": "Monthly charges by site: one month per column on the Web, one value per month here."
+    },
+    "appRegCard": {
+      "what": "A record: its name, whether it is uploaded by month or by day, when it was last uploaded and which periods it has. Amber dashed squares are periods missing in between.",
+      "example": "Monthly charges by site · Monthly · Last upload 25 Nov 2026."
+    },
+    "appRegHero": {
+      "what": "The record summary: the last upload (day, time, who and from which file) and the strip of uploaded periods.",
+      "example": "Last upload 25 Nov 2026 · 10:42 · Ana Ruiz · cargos-nov.xlsx."
+    },
+    "appRegStrip": {
+      "what": "One square per period, oldest to newest: green = already uploaded, amber dashed = missing in between. A daily record covers the last 45 days.",
+      "example": "Dec-25 to Nov-26 with Aug-26 in amber: Aug-26 is missing."
+    },
+    "appRegBuscar": {
+      "what": "Searches unit, code, description, category and UOM with the usual syntax: $ puts a word before, @ a word after and the comma separates searches.",
+      "example": "milk, cheese  ·  100245  ·  yogurt@natural"
+    },
+    "appRegFiltros": {
+      "what": "Keeps only the codes of one category or one unit.",
+      "example": "Category: Dairy · Unit: S-001."
+    },
+    "appRegRow": {
+      "what": "A code in a unit: its description, its category and UOM, and its latest value with the period. Tap it to open its values by period.",
+      "example": "Whole milk 1 L · 100245 · S-001 → 1,240 in Nov-26."
+    },
+    "appRegValores": {
+      "what": "The bars are the record's latest periods (24 months or 30 days). The amber dashed bar is a period with no value for this code.",
+      "example": "Bars from Dec-25 to Nov-26; Aug-26 not uploaded."
+    },
     "appCalNuevo": {
       "what": "Opens the form to register a calibration certificate: you choose the asset, type what the certificate says and, if you want, add its photo or PDF. A new certificate of the same asset becomes the valid one and the previous one stays as history. Without signal it is saved on your phone.",
       "example": "H001, certificate 4227-16787565, calibrated on 01 Jun 2026, due on 01 Jun 2028."

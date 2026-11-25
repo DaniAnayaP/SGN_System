@@ -2577,3 +2577,37 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .scapp-line b{ color: var(--home-text-primary); font-weight: 600; }
 .scapp-more{ align-self: center; }
 .scapp-due{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
+
+/* Registros Información (App), pieza A: la lista de registros, un registro con sus datos como tarjetas y el detalle de un código. */
+.rg-app-reg, .rg-app-row{ width: 100%; text-align: left; font-family: inherit; color: inherit; cursor: pointer; }
+.rg-app-reg{ display: flex; flex-direction: column; gap: 0.45rem; }
+.rg-app-off{ opacity: 0.65; }
+.rg-app-top{ display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+.rg-app-top b{ font-size: 0.92rem; color: var(--home-text-primary); }
+.rg-app-pill{ font-style: normal; font-size: 0.62rem; font-weight: 600; padding: 0.08rem 0.6rem; border-radius: 999px; background: var(--home-surface-2); color: var(--home-text-secondary); }
+.rg-app-pill-off{ background: var(--home-neutral-soft); color: var(--home-text-muted); }
+.rg-app-sub{ font-size: 0.7rem; color: var(--home-text-muted); overflow-wrap: anywhere; }
+.rg-app-lbl{ font-size: 0.66rem; font-weight: 500; color: var(--home-text-muted); }
+.rg-app-hero{ display: flex; flex-direction: column; gap: 0.2rem; }
+.rg-app-big{ font-size: 1.35rem; font-weight: 700; color: var(--home-text-primary); line-height: 1.2; }
+.rg-app-stripwrap{ display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.4rem; align-items: stretch; }
+.rg-app-strip{ display: flex; flex-wrap: wrap; gap: 3px; }
+.rg-app-strip i{ width: 0.8rem; height: 0.8rem; border-radius: 0.22rem; display: block; }
+.rg-app-ok{ background: color-mix(in srgb, #2f7d4f 32%, transparent); }
+.rg-app-miss{ background: #fdecc8; border: 1px dashed #8a5a00; }
+.rg-app-stripl{ display: flex; justify-content: space-between; font-size: 0.6rem; color: var(--home-text-muted); }
+.rg-app-warn{ align-self: flex-start; display: inline-flex; align-items: center; gap: 0.3rem; margin-top: 0.25rem; padding: 0.12rem 0.65rem; border-radius: 999px; background: #fdecc8; color: #8a5a00; font-size: 0.66rem; font-weight: 600; }
+.rg-app-filters{ display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+.rg-app-select{ flex: 1 1 8rem; min-width: 0; }
+.rg-app-row{ flex-direction: row; align-items: center; justify-content: space-between; gap: 0.7rem; }
+.rg-app-main{ display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.rg-app-main b{ font-size: 0.82rem; color: var(--home-text-primary); overflow-wrap: anywhere; }
+.rg-app-pills{ display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.rg-app-val{ display: flex; flex-direction: column; align-items: flex-end; flex: none; }
+.rg-app-val b{ font-size: 1.05rem; color: var(--home-text-primary); font-variant-numeric: tabular-nums; }
+.rg-app-val span{ font-size: 0.6rem; color: var(--home-text-muted); }
+.rg-app-values{ display: flex; flex-direction: column; gap: 0.4rem; }
+.rg-app-bars{ height: 4.6rem; display: flex; align-items: flex-end; gap: 3px; }
+.rg-app-bars i{ flex: 1; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, var(--home-accent-strong-1), var(--home-accent-strong-2)); display: block; }
+.rg-app-bars i.rg-app-barmiss{ background: #fdecc8; border: 1px dashed #8a5a00; border-bottom: 0; }
+.rg-app-plist .rg-app-none b{ color: #8a5a00; }

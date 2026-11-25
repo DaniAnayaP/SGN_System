@@ -9004,6 +9004,20 @@
     "viewList": "Lista",
     "categorySoonTag": "Pronto",
     "calCached": "Sin señal: se muestran los certificados guardados en tu celular.",
+    "regCached": "Sin señal: se muestran los registros guardados en tu celular.",
+    "regNoData": "Sin señal y todavía no hay registros guardados en este celular.",
+    "regLast": "Última carga:",
+    "regLastLoad": "Última carga",
+    "regMissOne": "Falta {period}",
+    "regMissMany": "Faltan {n} periodos",
+    "regAllCategories": "Todas las categorías",
+    "regAllUnits": "Todas las unidades",
+    "regShowMore": "Mostrar {n} más",
+    "regNoMatch": "Ningún código coincide con lo que buscas.",
+    "regValues": "Valores",
+    "regNoLoad": "Sin carga",
+    "regShowAll": "Ver los {n} periodos",
+    "regShowLess": "Ver menos",
     "calNoData": "Todavía no se bajaron los certificados. Conéctate una vez para verlos sin señal.",
     "calNoMatch": "Ningún certificado coincide con tu búsqueda.",
     "calShowing": "Se muestran {n} de {total}: escribe para buscar el resto.",
@@ -9323,6 +9337,38 @@
     "appTwPass": {"what":"Un pase pedido por alguien a tu cargo: quién se la pasa a quién y por qué. Aprobarlo la mueve; rechazarlo la deja donde estaba (puedes escribir un comentario).","example":"Marco → Sofía · «estaré en capacitación»."},
     "appTwPerson": {"what":"Deja solo las actividades en las que participa esa persona.","example":"Sofía Cruz."},
     "appTwTimeline": {"what":"Todo lo que le ha pasado a la actividad, con quién y cuándo, sin poderse editar. Necesita señal; sin ella se ve el detalle sin la línea del tiempo.","example":"Nació sola por la repetición → Asignada a Marco Ríos → Confirmada."},
+    "appRegLista": {
+      "what": "La lista de lo que se carga a mano. Cada tarjeta es un registro (o un código, ya dentro de uno); un toque la abre.",
+      "example": "Cargos por sitio mensuales: un mes por columna en la Web, aquí un valor por mes."
+    },
+    "appRegCard": {
+      "what": "Un registro: su nombre, si se carga por mes o por día, cuándo se cargó por última vez y qué periodos trae. Los cuadros ámbar con borde punteado son periodos que faltan en medio.",
+      "example": "Cargos por sitio mensuales · Mensual · Última carga 25 nov 2026."
+    },
+    "appRegHero": {
+      "what": "El resumen del registro: la última carga (día, hora, quién y de qué archivo) y la tira de periodos cargados.",
+      "example": "Última carga 25 nov 2026 · 10:42 · Ana Ruiz · cargos-nov.xlsx."
+    },
+    "appRegStrip": {
+      "what": "Un cuadro por periodo, de más viejo a más nuevo: verde = ya se cargó, ámbar punteado = falta en medio. En un registro diario son los últimos 45 días.",
+      "example": "dic-25 a nov-26 con ago-26 en ámbar: falta ago-26."
+    },
+    "appRegBuscar": {
+      "what": "Busca en unidad, código, descripción, categoría y UDM con la sintaxis de siempre: $ pone una palabra antes, @ una después y la coma separa búsquedas.",
+      "example": "leche, queso  ·  100245  ·  yogurt@natural"
+    },
+    "appRegFiltros": {
+      "what": "Deja solo los códigos de una categoría o de una unidad.",
+      "example": "Categoría: Lácteos · Unidad: S-001."
+    },
+    "appRegRow": {
+      "what": "Un código en una unidad: su descripción, su categoría y UDM, y su último valor con el periodo. Un toque abre sus valores por periodo.",
+      "example": "Leche entera 1 L · 100245 · S-001 → 1,240 en nov-26."
+    },
+    "appRegValores": {
+      "what": "Las barras son los últimos periodos del registro (24 meses o 30 días). La barra ámbar con borde punteado es un periodo sin valor para este código.",
+      "example": "Barras de dic-25 a nov-26; ago-26 sin carga."
+    },
     "appCalNuevo": {
       "what": "Abre el formulario para registrar un certificado de calibración: eliges el activo, escribes lo que dice el certificado y, si quieres, agregas su foto o PDF. Un certificado nuevo del mismo activo pasa a ser el vigente y el anterior queda de historial. Sin señal se guarda en tu celular.",
       "example": "H001, certificado 4227-16787565, calibrado el 01 jun 2026, vence el 01 jun 2028."

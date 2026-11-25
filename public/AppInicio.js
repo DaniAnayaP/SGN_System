@@ -174,6 +174,7 @@ const WEB_SCREEN_PAGES = {
     'capacidad-almacenamiento': { href: 'AppCapacidadAlmacenamiento.html', icon: 'bx-package' },
     'soportes-cerrados': { href: 'AppSoportesCerrados.html', icon: 'bx-check-shield' },
     'casos-soporte': { href: 'AppCasosSoporte.html', icon: 'bx-support' },
+    'registros': { href: 'AppRegistros.html', icon: 'bx-data' },
     'layout': { href: 'AppLayout.html', icon: 'bx-building-house' },
 };
 
@@ -209,6 +210,7 @@ const PANTALLA_ID_TO_WEB_SCREEN_KEY = {
     'cat-operaciones-centro-dist-capacidad-almacenamiento': 'capacidad-almacenamiento',
     'cat-gestion-ti-soportes-cerrados': 'soportes-cerrados',
     'cat-operaciones-ti-casos-soporte': 'casos-soporte',
+    'cat-cargas-manuales-registros': 'registros',
     'cat-operaciones-centro-dist-layout': 'layout',
 };
 
