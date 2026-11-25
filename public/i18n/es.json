@@ -5514,6 +5514,8 @@
     "regNewAbbr2": "Nuevo reg.",
     "anNewAbbr1": "Nuevo análisis",
     "anNewAbbr2": "Nuevo aná.",
+    "anAll": "Todos los análisis",
+    "anAllAbbr1": "Todos",
     "regNewTitle": "Agregar nuevo registro",
     "regNewName": "Nombre del registro",
     "regNewKind": "Cada cuánto se carga",

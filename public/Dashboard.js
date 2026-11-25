@@ -13894,8 +13894,10 @@ async function loadManualAnalysesMenu() {
                     const dynamic = (anBody.analyses || []).map((a) => ({ id: `cat-analisis-manuales-an-${a.id}`, label: a.name, icon: 'bx-line-chart', href: `CmAnalisis.html?id=${a.id}`, grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true, ...(openAnalysis && String(a.id) === openAnalysis ? { active: true } : {}) }));
                     // «＋ Agregar nuevo análisis»: solo para quien tiene el botón «Crear análisis»; abre la lista con la ventana de alta
                     const addNew = anBody.canCreate ? [{ id: 'cat-analisis-manuales-nuevo', labelKey: 'main.anNew', abbrKeys: ['main.anNewAbbr1', 'main.anNewAbbr2'], icon: 'bx-plus', href: 'CmAnalisisLista.html?nuevo=1', grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true, addNew: true }] : [];
-                    base.splice(at + 1, 0, ...addNew, ...dynamic);
-                    if (openAnalysis) base.forEach((n) => { if (n.id === 'cat-analisis-manuales-lista') n.active = false; }); // en la pantalla de un análisis se marca ese análisis, no la lista
+                    // «Todos los análisis»: la tabla de la lista (filtros, descarga, historial, cambiar nombre y desactivar). En el menú sale al final; la pantalla de lista con su nombre queda para los permisos y Panel.
+                    const all = { id: 'cat-analisis-manuales-todos', labelKey: 'main.anAll', abbrKeys: ['main.anAllAbbr1'], icon: 'bx-table', href: 'CmAnalisisLista.html', grantAs: 'cat-analisis-manuales-lista', dynamicAnalysis: true };
+                    base.splice(at + 1, 0, ...addNew, ...dynamic, all);
+                    base[at] = { ...base[at], sidebarHidden: true };
                     overrides['analysis/an-area-supply-chain']['cat-analisis-manuales'] = base;
                 }
             }

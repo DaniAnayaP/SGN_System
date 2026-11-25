@@ -5515,6 +5515,8 @@
     "regNewAbbr2": "New set",
     "anNewAbbr1": "New analysis",
     "anNewAbbr2": "New anal.",
+    "anAll": "All analyses",
+    "anAllAbbr1": "All",
     "regNewTitle": "Add new record set",
     "regNewName": "Record set name",
     "regNewKind": "How often it is loaded",
