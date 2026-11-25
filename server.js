@@ -16764,9 +16764,9 @@ function habOptions(req) {
     options.departments.forEach((department) => (options.areas[department] || []).forEach((a) => {
         if (!/^area-\d+$/.test(a.id)) areas.push({ department, area: a.id, labelKey: a.labelKey, labelParams: a.labelParams || null });
     }));
-    const sites = options.sites.map((code) => {
+    const sites = options.siteList.map(({ code, sucursal }) => {
         const centers = options.centers.filter((c) => c.site_code === code);
-        return { code, sucursal: (centers[0] || {}).sucursal || '', centers: centers.map((c) => ({ id: c.id, code: c.code, name: c.name })) };
+        return { code, sucursal, centers: centers.map((c) => ({ id: c.id, code: c.code, name: c.name })) };
     });
     return { areas, sites };
 }
@@ -17050,7 +17050,7 @@ app.get('/api/business/sku-requests/options', requireAuth, (req, res) => {
     res.json({
         department, area, validArea, canRequest: validArea && skuReqCanRequest(req, department, area),
         areaLabel: validArea ? `${HR_DEPARTMENT_NAMES_ES[department] || department} › ${hrAreaNameEs(department, area)}` : '',
-        sites: habOptions(req).sites.map((s) => ({ code: s.code, sucursal: s.sucursal, centers: s.centers })),
+        sites: habOptions(req).sites.filter((s) => s.centers.length).map((s) => ({ code: s.code, sucursal: s.sucursal, centers: s.centers })), // pedir un código sigue siendo en un sitio con centros de costos
     });
 });
 app.get('/api/business/sku-requests/:id', requireAuth, (req, res) => {
@@ -20646,7 +20646,7 @@ app.get('/api/business/hr-assignment-options', requireAuth, (req, res) => {
         departments: options.departments,
         // Las áreas de cada departamento contratado ({ id, labelKey, labelParams? }); en lo asignado cada una va como «departamento/área».
         areas: options.areas,
-        sites: options.sites.map((code) => ({ code, sucursal: (options.centers.find((cc) => cc.site_code === code) || {}).sucursal || '' })),
+        sites: options.siteList,
         costCenters: options.centers.map((cc) => ({ id: cc.id, code: cc.code, name: cc.name, siteCode: cc.site_code })),
         // Los centros que no se pueden asignar y por qué (la pantalla los muestra bloqueados): inactivo, o activo pero sin Código del sitio.
         lockedCostCenters: listCostCenters(req.user.clientId, req.user.isTestAccount).filter((cc) => !selectable.has(cc.id)).map((cc) => ({ id: cc.id, code: cc.code, name: cc.name, reason: cc.status !== 'active' ? 'inactive' : 'noSite' })),

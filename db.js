@@ -9386,10 +9386,15 @@ function hrAssignmentOptions(clientId, forTestAccount = false) {
     const centers = listCostCenters(clientId, forTestAccount).filter((cc) => cc.status === 'active' && cc.site_code);
     const departments = HR_DEPARTMENT_KEYS.filter((key) => contracted.has(key));
     const catalog = hrAreaCatalog();
+    // Los sitios son los registros activos de Sitios Contratados, con o sin centros de costos (un sitio recién dado de alta todavía no tiene centros y ya se puede asignar y habilitar), y por si acaso los códigos de sitio de los centros activos.
+    const siteList = listSites(clientId, forTestAccount).filter((s) => s.status === 'active').map((s) => ({ code: s.code, sucursal: s.sucursal || '' }));
+    centers.forEach((cc) => { if (!siteList.some((s) => s.code === cc.site_code)) siteList.push({ code: cc.site_code, sucursal: cc.sucursal || '' }); });
+    siteList.sort((a, b) => String(a.code).localeCompare(String(b.code)));
     return {
         departments,
         areas: Object.fromEntries(departments.map((dept) => [dept, catalog[dept]])),
-        sites: [...new Set(centers.map((cc) => cc.site_code))],
+        sites: siteList.map((s) => s.code),
+        siteList,
         centers,
     };
 }
