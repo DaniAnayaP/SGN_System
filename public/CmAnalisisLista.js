@@ -6,11 +6,6 @@
 (function () {
 const API = '/api/business/manual-analyses';
 const TABLE = 'analisis';
-const SYSTEM_COLUMN_KEYS = [
-    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
-    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
-    'colSysAnio', 'colSysSemana', 'colSysHora',
-];
 const COLUMNS = ['colAnNombre', 'colAnRegistros', 'colAnColumnas', 'colAnUltimaVersion', 'colAnVersiones', 'colAnEstado'];
 const t = (key, params) => Dashboard.t(key, params);
 const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -70,7 +65,6 @@ function draw() {
         const row = tbl.tHead.rows[0] || tbl.tHead.insertRow();
         row.textContent = '';
         const th = (col, group, key, cls) => { const el = document.createElement('th'); el.dataset.col = col; if (group) el.dataset.group = group; el.dataset.i18n = key; el.textContent = t(key); if (cls) el.className = cls; return el; };
-        SYSTEM_COLUMN_KEYS.forEach((k) => row.appendChild(th(k, 'menu.classControlInterno', `main.${k}`, 'col-system')));
         COLUMNS.forEach((k) => row.appendChild(th(k, 'menu.cmAnalisisRegistros', `main.${k}`)));
         row.appendChild(th('actions', null, 'main.colActions'));
     }
@@ -102,7 +96,7 @@ function draw() {
             actions.appendChild(iconBtn(a.status === 'active' ? 'bx-hide' : 'bx-show', a.status === 'active' ? 'main.anDeactivate' : 'main.anActivate', 'anToggle', () => toggle(a)));
         }
         tr.append(
-            ...SYSTEM_COLUMN_KEYS.map((k) => cell(k, a[k], 'col-system')), name,
+            name,
             cell('colAnRegistros', (a.design.registries || []).map((k) => { const r = st.registries.find((x) => x.key === k); return r ? regName(r) : k; }).join(' · ')),
             cell('colAnColumnas', (a.design.consulted || []).length, 'col-num'), lastCell, cell('colAnVersiones', a.extractionsCount, 'col-num'), status, actions,
         );
@@ -110,7 +104,7 @@ function draw() {
     });
     if (!tbody.querySelector('tr')) {
         const tr = document.createElement('tr'); const td = document.createElement('td');
-        td.className = 'data-table-empty-cell'; td.colSpan = SYSTEM_COLUMN_KEYS.length + COLUMNS.length + 1;
+        td.className = 'data-table-empty-cell'; td.colSpan = COLUMNS.length + 1;
         const inner = document.createElement('div'); inner.className = 'data-table-empty-inner'; inner.textContent = t('main.emptyStateText');
         td.appendChild(inner); tr.appendChild(td); tbody.appendChild(tr);
     }

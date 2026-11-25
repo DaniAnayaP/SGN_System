@@ -8,11 +8,6 @@
 const API = '/api/business/manual-analyses';
 const FILE_TABLE = 'analisis-archivo';
 const VERSIONS_TABLE = 'analisis-extracciones';
-const SYSTEM_COLUMN_KEYS = [
-    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
-    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
-    'colSysAnio', 'colSysSemana', 'colSysHora',
-];
 const DIMS = ['unidad', 'unidadNombre', 'codigo', 'descripcion', 'categoria', 'udm'];
 const KEY_DIMS = ['unidad', 'codigo'];
 const AGGS = ['value', 'avg', 'sum', 'min', 'max'];
@@ -266,7 +261,7 @@ function ensureEmpty(tableId, span, key) {
 async function loadFile() {
     const e = st.extraction;
     const wrapper = wrapperOf(FILE_TABLE);
-    if (!e) { buildHeader(FILE_TABLE, [{ col: 'colSysEmpresa', group: 'menu.classControlInterno', labelKey: 'main.colSysEmpresa', cls: 'col-system' }]); ensureEmpty(FILE_TABLE, 1, 'main.anFileNone'); return; }
+    if (!e) { buildHeader(FILE_TABLE, [{ col: 'ref_unidad', group: 'main.anGroupRef', labelKey: 'main.regDim_unidad', cls: 'an-ref' }]); ensureEmpty(FILE_TABLE, 1, 'main.anFileNone'); return; }
     try {
         const qs = st.text ? `?text=${encodeURIComponent(st.text)}` : '';
         const res = await fetch(`${API}/${st.id}/extractions/${e.id}/data${qs}`, { credentials: 'include' });
@@ -274,7 +269,6 @@ async function loadFile() {
         st.data = await res.json();
         const cols = st.data.columns;
         const columns = [
-            ...SYSTEM_COLUMN_KEYS.map((k) => ({ col: k, group: 'menu.classControlInterno', labelKey: `main.${k}`, cls: 'col-system' })),
             ...cols.map((c) => (c.group === 'reference' ? { col: colKeyOf(c.key), group: 'main.anGroupRef', labelKey: `main.regDim_${c.dim}`, cls: 'an-ref' } : { col: colKeyOf(c.key), group: 'main.anGroupCons', label: c.label, cls: 'an-cons col-num' })),
         ];
         const first = buildHeader(FILE_TABLE, columns);
@@ -283,7 +277,6 @@ async function loadFile() {
         st.data.rows.forEach((row) => {
             const tr = document.createElement('tr');
             tr.append(
-                ...SYSTEM_COLUMN_KEYS.map((k) => cell(k, st.data.sys[k], 'col-system')),
                 ...cols.map((c, i) => (c.group === 'reference' ? cell(colKeyOf(c.key), row[i], 'an-ref') : cell(colKeyOf(c.key), row[i] === null ? '' : num(row[i]), 'an-cons col-num'))),
             );
             tbody.appendChild(tr);
@@ -306,7 +299,6 @@ async function loadFile() {
 }
 function drawVersions() {
     const columns = [
-        ...SYSTEM_COLUMN_KEYS.map((k) => ({ col: k, group: 'menu.classControlInterno', labelKey: `main.${k}`, cls: 'col-system' })),
         ...['colAnExtVersion', 'colAnExtRenglones', 'colAnExtPeriodos', 'colAnExtEstado'].map((c) => ({ col: c, group: 'menu.cmAnalisisRegistros', labelKey: `main.${c}` })),
         { col: 'actions', labelKey: 'main.colActions' },
     ];
@@ -327,7 +319,7 @@ function drawVersions() {
         actions.appendChild(btn('bx-history', 'main.changeHistoryTitleRecord', 'changeHistory', () => Dashboard.openChangeHistory(VERSIONS_TABLE, e.id)));
         if (st.canAnnul && e.status === 'vigente') actions.appendChild(btn('bx-block', 'main.anAnnul', 'anAnnul', () => openAnnul(e)));
         const used = Object.entries((e.notes && e.notes.periods) || {}).filter(([, list]) => list.length).map(([k, list]) => `${regName(registryByKey(k)) || k}: ${periodsText(list)}`).join(' · ');
-        tr.append(...SYSTEM_COLUMN_KEYS.map((k) => cell(k, e[k], 'col-system')), cell('colAnExtVersion', `v${e.version}`), cell('colAnExtRenglones', num(e.rowsCount), 'col-num'), cell('colAnExtPeriodos', used), status, actions);
+        tr.append(cell('colAnExtVersion', `v${e.version}`), cell('colAnExtRenglones', num(e.rowsCount), 'col-num'), cell('colAnExtPeriodos', used), status, actions);
         tbody.appendChild(tr);
     });
     ensureEmpty(VERSIONS_TABLE, columns.length);

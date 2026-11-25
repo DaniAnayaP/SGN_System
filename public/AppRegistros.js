@@ -133,7 +133,6 @@ async function loadBrandingForTheme() {
 
 // --- Estado ----------------------------------------------------------------------------------------------------------------------------
 const API = '/api/business/manual-registries';
-const SYSTEM_KEYS = ['colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos', 'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto', 'colSysAnio', 'colSysSemana', 'colSysHora'];
 const MAX_ROWS = 40;                           // las tarjetas que se dibujan a la vez: «Mostrar más» y el buscador traen el resto
 const SHOWN_PERIODS = 12;                      // los periodos que salen en la lista del detalle de un código (los demás con «Ver todos»)
 const BAR_PERIODS = { month: 24, day: 30 };    // los periodos que dibujan las barras
@@ -561,13 +560,6 @@ function renderCode() {
         bodyEl.appendChild(toggle);
     }
 
-    // Control Interno (lo que el servidor guarda de cada renglón)
-    const control = el('details', 'aa-app-control');
-    control.appendChild(el('summary', '', t('menu.classControlInterno')));
-    const ctl = el('div', 'pm-app-meta');
-    ctl.innerHTML = SYSTEM_KEYS.map((key) => `<div><span>${esc(t(`main.${key}`))}</span><b>${esc(row[key] === undefined || row[key] === null || row[key] === '' ? '—' : String(row[key]))}</b></div>`).join('');
-    control.appendChild(ctl);
-    bodyEl.appendChild(control);
 }
 
 // --- Pestañas: Datos | Cargas -----------------------------------------------------------------------------------------------------------------
@@ -690,13 +682,6 @@ function renderLoad() {
         if (l.annulNote) metaRow(t('home.regReason'), l.annulNote);
     }
     bodyEl.appendChild(meta);
-    // Control Interno (lo que el servidor guarda de cada carga)
-    const control = el('details', 'aa-app-control');
-    control.appendChild(el('summary', '', t('menu.classControlInterno')));
-    const ctl = el('div', 'pm-app-meta');
-    ctl.innerHTML = SYSTEM_KEYS.map((key) => `<div><span>${esc(t(`main.${key}`))}</span><b>${esc(l[key] === undefined || l[key] === null || l[key] === '' ? '—' : String(l[key]))}</b></div>`).join('');
-    control.appendChild(ctl);
-    bodyEl.appendChild(control);
     // anular: solo una carga vigente, con el botón del árbol y con señal (la decide el servidor, que también lo revisa)
     if (!off && info.canAnnul && info.state === 'online') {
         const btn = el('button', 'home-carga-secondary-btn rg-app-danger');

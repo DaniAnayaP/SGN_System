@@ -6,11 +6,6 @@
 (function () {
 const TABLE_KEY = 'ventas';
 const API = '/api/business/pos-sales';
-const SYSTEM_COLUMN_KEYS = [
-    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
-    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
-    'colSysAnio', 'colSysSemana', 'colSysHora',
-];
 const TICKETS_SHOWN = 200; // la revisión dibuja los primeros tickets y todos los de después se piden con «Mostrar más»
 const t = (key, params) => Dashboard.t(key, params);
 const lang = () => (localStorage.getItem('lang') === 'en' ? 'en' : 'es');
@@ -90,7 +85,6 @@ function buildRow(sale) {
     }
     const num = (col, value) => cell(col, money(value), 'col-num');
     tr.append(
-        ...SYSTEM_COLUMN_KEYS.map((key) => cell(key, sale[key], 'col-system')),
         cell('colVenFolio', sale.folio), when, cell('colVenCentro', sale.centerCode),
         cell('colVenSitio', sale.siteName ? `${sale.siteCode} · ${sale.siteName}` : sale.siteCode), cell('colVenAtendio', sale.servedBy), cell('colVenMesaCaja', sale.place),
         cell('colVenArticulos', qty(sale.items), 'col-num'), num('colVenSubtotal', sale.subtotal), num('colVenIva', sale.tax), num('colVenTotal', sale.total), cell('colVenPago', sale.payment),

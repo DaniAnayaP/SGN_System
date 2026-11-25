@@ -10408,18 +10408,4 @@ body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom[hidden]{
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-search-pill.named,
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-layout-pill.open,
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-layout-pill.named{ grid-column: 1 / -1; justify-self: stretch; width: auto; max-width: none; }
-    /* 5 Control Interno plegado: una barra dentro de la barra de herramientas de cada tabla; sin la clase reg-ci-open sus 13 columnas no se dibujan (solo la vista: el motor de tablas no las oculta) */
-    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom > .reg-ci-bar{ display: flex; grid-column: 1 / -1; align-items: center; gap: 0.5rem; width: 100%; padding: 0.5rem 0.8rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 0.8rem; background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface)); color: inherit; font: inherit; font-size: 0.8rem; text-align: left; cursor: pointer; }
-    body[data-active-page="cat-cargas-manuales-registros"] .reg-ci-bar b{ font-weight: 600; }
-    body[data-active-page="cat-cargas-manuales-registros"] .reg-ci-bar span{ opacity: 0.7; }
-    body[data-active-page="cat-cargas-manuales-registros"] .reg-ci-bar i{ font-size: 1.1rem; transition: transform 0.15s ease; }
-    body[data-active-page="cat-cargas-manuales-registros"] .reg-ci-bar[aria-expanded="true"] i{ transform: rotate(90deg); }
-    body[data-active-page="cat-cargas-manuales-registros"] .data-table-wrapper.reg-ci-fold:not(.reg-ci-open){ scroll-padding-left: 0 !important; }
-    body[data-active-page="cat-cargas-manuales-registros"] .data-table-wrapper.reg-ci-fold:not(.reg-ci-open) table.data-table{ width: 0 !important; min-width: 100% !important; }
-    body[data-active-page="cat-cargas-manuales-registros"] .data-table-wrapper.reg-ci-fold:not(.reg-ci-open) col[data-col^="colSys"]{ width: 0 !important; visibility: collapse; }
-    /* Las celdas NO se esconden con display:none (las demás columnas se correrían a los lugares de las plegadas): se quedan en su columna, que mide 0, y se recortan. */
-    body[data-active-page="cat-cargas-manuales-registros"] .data-table-wrapper.reg-ci-fold:not(.reg-ci-open) th[data-col^="colSys"],
-    body[data-active-page="cat-cargas-manuales-registros"] .data-table-wrapper.reg-ci-fold:not(.reg-ci-open) td[data-col^="colSys"],
-    body[data-active-page="cat-cargas-manuales-registros"] .data-table-wrapper.reg-ci-fold:not(.reg-ci-open) tr.data-table-group-band > th:nth-child(-n+2){ padding: 0 !important; border-width: 0 !important; overflow: hidden !important; font-size: 0 !important; max-width: 0; }
 }
-body[data-active-page="cat-cargas-manuales-registros"] .reg-ci-bar{ display: none; }

@@ -640,24 +640,6 @@
         {
           "id": "cat-analisis-manuales-lista", "labelKey": "menu.cmAnalisisRegistros", "abbrKeys": ["menu.cmAnalisisRegistrosAbbr1", "menu.cmAnalisisRegistrosAbbr2"], "icon": "bx-analyse", "href": "CmAnalisisLista.html",
           "submenu": [
-            {
-              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
-              "submenu": [
-                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
-                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
-                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
-                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
-                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
-                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
-                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
-                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
-                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
-                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
-                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
-                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
-                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
-              ]
-            },
             { "id": "colAnNombre", "labelKey": "main.colAnNombre", "permissionOnly": true },
             { "id": "colAnRegistros", "labelKey": "main.colAnRegistros", "permissionOnly": true },
             { "id": "colAnColumnas", "labelKey": "main.colAnColumnas", "permissionOnly": true },
@@ -3258,24 +3240,6 @@
         {
           "id": "cat-cargas-manuales-ventas", "labelKey": "menu.cmVentasManuales", "abbrKeys": ["menu.cmVentasManualesAbbr1", "menu.cmVentasManualesAbbr2"], "icon": "bx-store-alt", "href": "CmVentasManuales.html",
           "submenu": [
-            {
-              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
-              "submenu": [
-                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
-                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
-                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
-                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
-                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
-                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
-                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
-                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
-                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
-                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
-                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
-                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
-                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
-              ]
-            },
             { "id": "colVenFolio", "labelKey": "main.colVenFolio", "permissionOnly": true },
             { "id": "colVenFechaHora", "labelKey": "main.colVenFechaHora", "permissionOnly": true },
             { "id": "colVenCentro", "labelKey": "main.colVenCentro", "permissionOnly": true },
@@ -3313,24 +3277,6 @@
         {
           "id": "cat-cargas-manuales-registros", "labelKey": "menu.cmRegistrosInformacion", "abbrKeys": ["menu.cmRegistrosInformacionAbbr1", "menu.cmRegistrosInformacionAbbr2"], "icon": "bx-data", "href": "CmRegistrosInformacion.html",
           "submenu": [
-            {
-              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
-              "submenu": [
-                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
-                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
-                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
-                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
-                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
-                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
-                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
-                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
-                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
-                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
-                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
-                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
-                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
-              ]
-            },
             { "id": "colRegUnidad", "labelKey": "main.colRegUnidad", "permissionOnly": true },
             { "id": "colRegUnidadNombre", "labelKey": "main.colRegUnidadNombre", "permissionOnly": true },
             { "id": "colRegCodigo", "labelKey": "main.colRegCodigo", "permissionOnly": true },

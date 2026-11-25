@@ -9,11 +9,6 @@
 const API = '/api/business/manual-registries';
 const DATA_TABLE = 'registros';
 const LOADS_TABLE = 'registros-cargas';
-const SYSTEM_COLUMN_KEYS = [
-    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
-    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
-    'colSysAnio', 'colSysSemana', 'colSysHora',
-];
 const DIM_COLUMNS = [
     { col: 'colRegUnidad', field: 'unidad', dim: 'unidad' }, { col: 'colRegUnidadNombre', field: 'unidadNombre', dim: 'unidadNombre' }, { col: 'colRegCodigo', field: 'codigo', dim: 'codigo' },
     { col: 'colRegDescripcion', field: 'descripcion', dim: 'descripcion' }, { col: 'colRegCategoria', field: 'categoria', dim: 'categoria' }, { col: 'colRegUdm', field: 'udm', dim: 'udm' },
@@ -282,7 +277,6 @@ function ensureEmpty(tableId, span) {
 }
 function dataColumns(periods) {
     return [
-        ...SYSTEM_COLUMN_KEYS.map((k) => ({ col: k, group: 'menu.classControlInterno', labelKey: `main.${k}`, cls: 'col-system' })),
         ...DIM_COLUMNS.map((c) => ({ col: c.col, group: 'menu.cmRegistrosInformacion', labelKey: `main.${c.col}` })),
         ...periods.map((p) => ({ col: periodKey(p), group: 'menu.cmRegistrosInformacion', label: periodLabel(p), cls: 'col-num' })),
     ];
@@ -299,13 +293,12 @@ function drawData() {
         const tr = document.createElement('tr');
         tr.dataset.recordId = row.id;
         tr.append(
-            ...SYSTEM_COLUMN_KEYS.map((k) => cell(k, row[k], 'col-system')),
             ...DIM_COLUMNS.map((c) => cell(c.col, row[c.field])),
             ...body.periods.map((p) => cell(periodKey(p), row.values[p] === undefined ? '' : num(row.values[p]), 'col-num')),
         );
         tbody.appendChild(tr);
     });
-    ensureEmpty(DATA_TABLE, SYSTEM_COLUMN_KEYS.length + DIM_COLUMNS.length + body.periods.length);
+    ensureEmpty(DATA_TABLE, DIM_COLUMNS.length + body.periods.length);
     if (first && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 0);
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(DATA_TABLE);
     wrapper.setAttribute('data-help-key', 'regTable');
@@ -319,14 +312,12 @@ function drawData() {
     } else if (note) note.remove();
     else if (body.total) { /* todo cabe */ }
     renderButtons();
-    foldControlInterno(DATA_TABLE);
 }
 function drawLoads() {
     const body = st.loads;
     if (!body) return;
     const wrapper = wrapperOf(LOADS_TABLE);
     const columns = [
-        ...SYSTEM_COLUMN_KEYS.map((k) => ({ col: k, group: 'menu.classControlInterno', labelKey: `main.${k}`, cls: 'col-system' })),
         ...LOAD_COLUMNS.map((c) => ({ col: c, group: 'menu.cmRegistrosInformacion', labelKey: `main.${c}` })),
         { col: 'actions', labelKey: 'main.colActions' },
     ];
@@ -363,7 +354,6 @@ function drawLoads() {
             actions.appendChild(annul);
         }
         tr.append(
-            ...SYSTEM_COLUMN_KEYS.map((k) => cell(k, l[k], 'col-system')),
             cell('colRegCargaArchivo', l.fileName), cell('colRegCargaOrigen', t(`main.regSource_${l.source}`)),
             cell('colRegCargaPeriodos', l.newPeriods.map(periodLabel).join(', ')), cell('colRegCargaRenglones', num(l.rowsInFile), 'col-num'), cell('colRegCargaNuevos', num(l.newRows), 'col-num'),
             cell('colRegCargaAgregados', num(l.valuesAdded), 'col-num'), cell('colRegCargaYaEstaba', num(l.untouched), 'col-num'), cell('colRegCargaDistintos', num(l.different), 'col-num'), cell('colRegCargaErrores', num(l.errors), 'col-num'),
@@ -371,12 +361,11 @@ function drawLoads() {
         );
         tbody.appendChild(tr);
     });
-    ensureEmpty(LOADS_TABLE, SYSTEM_COLUMN_KEYS.length + LOAD_COLUMNS.length + 1);
+    ensureEmpty(LOADS_TABLE, LOAD_COLUMNS.length + 1);
     if (first && st.tab === 'loads' && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 1);
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(LOADS_TABLE);
     wrapper.setAttribute('data-help-key', 'regLoadsTable');
     if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(LOADS_TABLE, { getTitle: () => `${regName(currentRegistry())}_${t('main.regTabLoads')}_${todayStamp()}` });
-    foldControlInterno(LOADS_TABLE);
 }
 async function refreshData() {
     if (!st.key) return;
@@ -441,26 +430,6 @@ function renderButtons() {
     toolbar.prepend(make('reg-template-btn', 'bx-download', 'main.regTemplate', 'regTemplate', downloadTemplate));
     toolbar.prepend(make('reg-import-btn', 'bx-upload', 'main.regImport', 'regImport', openLoadModal));
 }
-// Celular (Daniel, 2026-11-25, «Si!» a la maqueta «Registros en celular»): las 13 columnas de Control Interno salen plegadas y la barra «› Control Interno · 13 columnas» las abre.
-// El plegado es solo de la vista (CSS de Admin.css, solo hasta 600 px): el motor de tablas no oculta ninguna columna, así que las descargas y los acomodos guardados no cambian.
-// Se pone cuando la tabla ya se inició: el motor mide el ancho natural de las columnas al iniciar y no debe medirlas plegadas.
-function foldControlInterno(tableId) {
-    const wrapper = wrapperOf(tableId);
-    const toolbar = wrapper && wrapper.previousElementSibling;
-    if (!wrapper || !tableOf(tableId)?.dataset.colInit || !toolbar || !toolbar.classList.contains('data-table-zoom')) return;
-    wrapper.classList.add('reg-ci-fold');
-    let bar = toolbar.querySelector('.reg-ci-bar');
-    if (!bar) {
-        bar = document.createElement('button');
-        bar.type = 'button';
-        bar.className = 'reg-ci-bar';
-        bar.setAttribute('data-help-key', 'regCiBar');
-        bar.setAttribute('aria-expanded', 'false');
-        bar.addEventListener('click', () => { const open = wrapper.classList.toggle('reg-ci-open'); bar.setAttribute('aria-expanded', open ? 'true' : 'false'); });
-        toolbar.appendChild(bar);
-    }
-    bar.innerHTML = `<i class="bx bx-chevron-right" aria-hidden="true"></i><b>${esc(t('menu.classControlInterno'))}</b><span>${esc(t('main.regCiColumns', { n: SYSTEM_COLUMN_KEYS.length }))}</span>`;
-}
 function wireStatic() {
     document.querySelectorAll('[data-reg-tab]').forEach((btn) => btn.addEventListener('click', () => showTab(btn.dataset.regTab)));
     const bar = document.getElementById('filter-bar');
@@ -468,7 +437,7 @@ function wireStatic() {
     bar?.addEventListener('data-table:filter-apply', apply);
     bar?.addEventListener('data-table:filter-clear', () => { st.text = ''; refreshData(); });
     showTab('data');
-    document.addEventListener('dashboard:language-changed', () => { renderCards(); renderStamp(); foldControlInterno(DATA_TABLE); foldControlInterno(LOADS_TABLE); });
+    document.addEventListener('dashboard:language-changed', () => { renderCards(); renderStamp(); });
 }
 
 // Lo pegado de Excel (celdas separadas por tabulador) se vuelve un .xlsx de una hoja: el servidor lo lee igual que un archivo elegido.

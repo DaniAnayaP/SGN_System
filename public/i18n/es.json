@@ -5391,7 +5391,6 @@
     "regKindMonth": "Mensual",
     "regKindDay": "Diaria",
     "regCardNone": "Todavía no se ha cargado nada.",
-    "regCiColumns": "{n} columnas",
     "regPastedName": "Datos pegados",
     "regCardMonths": "{n} meses cargados · de {from} a {to}",
     "regCardDays": "{n} días cargados · el último, {last}",
@@ -9746,10 +9745,6 @@
     "regNewDialog": {
       "what": "Nombre del registro, cada cuánto se carga (un mes por columna, o un día por columna) y el nombre de lo que mide. Ese nombre queda como encabezado de la columna de valores en la plantilla y en los análisis.",
       "example": "Nombre: Consumos mensuales · Mensual · Mide: Consumo."
-    },
-    "regCiBar": {
-      "what": "Control Interno son las 13 columnas de control que lleva toda tabla del sistema: empresa, área, módulo, pantalla, centro de costos y la fecha y hora de cada renglón. En el celular salen plegadas para ver primero los datos; tócala para abrirlas. No se quita ninguna: también van en la descarga.",
-      "example": "Tocar «Control Interno · 13 columnas» para ver la Empresa, el Área y la Fecha de cada renglón."
     },
     "regManage": {
       "what": "Solo para los registros que agregaste tú. Cambiar nombre actualiza el menú. Desactivar lo quita del menú y ya no recibe cargas ni se ofrece para análisis nuevos; sus datos y sus cargas se conservan y se puede volver a activar.",

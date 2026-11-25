@@ -7151,12 +7151,11 @@ const POS_SALES_SCREEN = { area: 'C. Distribución', modulo: 'Cadena de Suminist
 const POS_SALES_IMPORT_COL = 'colVenImportAuth';
 const POS_TICKET_COL = 'colVenTicketAuth';
 const posSalesRaw = express.raw({ type: () => true, limit: '5mb' });
-function mapPosSale(row, companyName, timeZone) {
+function mapPosSale(row) {
     return {
         id: row.id, folio: row.folio, soldAt: row.sold_at, siteCode: row.site_code, siteName: row.site_name || '', centerCode: row.center_code || '', centerName: row.center_name || '',
         servedBy: row.served_by, place: row.place, payment: row.payment_method, received: row.received, items: row.items, subtotal: row.subtotal, tax: row.tax, total: row.total,
         linesCount: row.lines_count, loadedBy: row.loaded_by, createdAt: row.created_at,
-        ...getSystemColumnsForRecord({ companyName, ...POS_SALES_SCREEN, centroCostos: row.center_name || '', createdAt: row.created_at, timeZone }),
     };
 }
 function posSalesImportGate(req, res) {
@@ -7172,7 +7171,7 @@ app.get('/api/business/pos-sales', requireAuth, (req, res) => {
     const client = getClientById(req.user.clientId);
     const { rows, total } = listPosSales(req.user.clientId, req.user.isTestAccount);
     res.set('Cache-Control', 'no-store');
-    res.json({ sales: rows.map((r) => mapPosSale(r, client.company_name, client.time_zone)), total, truncated: total > rows.length, lastLoad: getPosSalesLastLoad(req.user.clientId, req.user.isTestAccount), canImport: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_SALES_IMPORT_COL), canTicket: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_TICKET_COL) });
+    res.json({ sales: rows.map((r) => mapPosSale(r)), total, truncated: total > rows.length, lastLoad: getPosSalesLastLoad(req.user.clientId, req.user.isTestAccount), canImport: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_SALES_IMPORT_COL), canTicket: !!req.user.isClientAdmin || canCreateColumn(getUserEffectiveGrants(req.user.sub), 'ventas', POS_TICKET_COL) });
 });
 app.get('/api/business/pos-sales/template', requireAuth, async (req, res) => {
     if (!posSalesImportGate(req, res)) return;
@@ -7267,11 +7266,6 @@ function regRegistry(req, res, { needActive = false } = {}) {
     return registry;
 }
 function regForbidden(res) { res.status(403).json({ code: 'REG_FORBIDDEN', message: 'No tienes permiso para cargar registros.' }); }
-function regSystemColumns(req, createdAt) {
-    const client = getClientById(req.user.clientId);
-    return getSystemColumnsForRecord({ companyName: client.company_name, ...MR_SCREEN, centroCostos: '', createdAt, timeZone: client.time_zone });
-}
-function mapRegistryLoadRow(req, load) { return { ...load, ...regSystemColumns(req, load.createdAt) }; }
 app.get('/api/business/manual-registries', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
@@ -7350,14 +7344,14 @@ app.get('/api/business/manual-registries/:key/data', requireAuth, (req, res) => 
     res.set('Cache-Control', 'no-store');
     res.json({
         registry: { key: registry.key, kind: registry.kind, nameKey: registry.nameKey, name: registry.name, valueName: registry.valueName, custom: registry.custom, status: registry.status }, periods: registryPeriods(clientId, isTestAccount, registry.key), lastLoad: registryLastLoad(clientId, isTestAccount, registry.key),
-        rows: rows.map((r) => ({ ...r, ...regSystemColumns(req, r.createdAt) })), total, truncated: total > rows.length, ...regAbilities(req),
+        rows, total, truncated: total > rows.length, ...regAbilities(req),
     });
 });
 app.get('/api/business/manual-registries/:key/loads', requireAuth, (req, res) => {
     const registry = regRegistry(req, res);
     if (!registry) return;
     res.set('Cache-Control', 'no-store');
-    res.json({ loads: listRegistryLoads(req.user.clientId, req.user.isTestAccount, registry.key).map((l) => mapRegistryLoadRow(req, l)), ...regAbilities(req) });
+    res.json({ loads: listRegistryLoads(req.user.clientId, req.user.isTestAccount, registry.key), ...regAbilities(req) });
 });
 app.get('/api/business/manual-registries/:key/template', requireAuth, async (req, res) => {
     const registry = regRegistry(req, res, { needActive: true });
@@ -7486,7 +7480,7 @@ app.post('/api/business/manual-registries/:key/loads/:id/annul', requireAuth, (r
     if (!annulled) return res.status(409).json({ code: 'LOAD_NOT_ACTIVE', message: 'Esa carga ya no está vigente.' });
     logTableChange({ clientId, tableKey: REG_LOADS_TABLE, recordId: load.id, recordLabel: load.fileName || registry.key, action: 'update', fieldKey: 'main.regCargaEstado', oldValue: 'vigente', newValue: note ? `anulada · ${note}` : 'anulada', changedBy: changedByLabel(req) });
     notifyButtonAction(req, REG_TABLE, 'annul', load.fileName || registry.key);
-    res.json({ load: mapRegistryLoadRow(req, annulled) });
+    res.json({ load: annulled });
 });
 
 // ---- Cargas Manuales › Análisis Registros Manuales (Daniel, 2026-11-25, «Sí, empieza el Análisis») ----
@@ -7509,10 +7503,6 @@ function anAbilities(req) {
     return { canCreate: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.create), canExtract: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.extract), canAnnul: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.annul) };
 }
 const anRegistryKeys = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).map((r) => r.key);
-function anSystemColumns(req, createdAt) {
-    const client = getClientById(req.user.clientId);
-    return getSystemColumnsForRecord({ companyName: client.company_name, ...AN_SCREEN, centroCostos: '', createdAt, timeZone: client.time_zone });
-}
 function anClient(req, res) {
     if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return false; }
     return true;
@@ -7525,7 +7515,6 @@ function anLoad(req, res) {
     if (!analysis) { res.status(404).json({ code: 'AN_NOT_FOUND', message: 'Ese análisis no existe.' }); return null; }
     return analysis;
 }
-const mapExtractionOut = (req, e) => ({ ...e, ...anSystemColumns(req, e.createdAt) });
 const anRegistriesInfo = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, valueNameKey: r.valueNameKey, name: r.name, valueName: r.valueName, custom: r.custom, status: r.status, periods: registryPeriods(req.user.clientId, req.user.isTestAccount, r.key) }));
 // Para el menú lateral: los análisis activos (cualquier persona del cliente; el menú ya decide quién ve la pantalla).
 app.get('/api/business/manual-analyses/menu', requireAuth, (req, res) => {
@@ -7536,7 +7525,7 @@ app.get('/api/business/manual-analyses/menu', requireAuth, (req, res) => {
 app.get('/api/business/manual-analyses', requireAuth, (req, res) => {
     if (!anClient(req, res)) return;
     res.set('Cache-Control', 'no-store');
-    res.json({ analyses: listAnalyses(req.user.clientId, req.user.isTestAccount).map((a) => ({ ...a, ...anSystemColumns(req, a.createdAt) })), registries: anRegistriesInfo(req), ...anAbilities(req) });
+    res.json({ analyses: listAnalyses(req.user.clientId, req.user.isTestAccount), registries: anRegistriesInfo(req), ...anAbilities(req) });
 });
 app.post('/api/business/manual-analyses', requireAuth, (req, res) => {
     if (!anClient(req, res)) return;
@@ -7563,7 +7552,7 @@ app.get('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
     if (!analysis) return;
     res.set('Cache-Control', 'no-store');
-    res.json({ analysis, registries: anRegistriesInfo(req), extractions: listExtractions(analysis.id).map((e) => mapExtractionOut(req, e)), ...anAbilities(req) });
+    res.json({ analysis, registries: anRegistriesInfo(req), extractions: listExtractions(analysis.id), ...anAbilities(req) });
 });
 app.patch('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
@@ -7627,7 +7616,7 @@ app.post('/api/business/manual-analyses/:id/extract', requireAuth, async (req, r
         finishExtraction(record.id, built.rows.length, { periods: needed, lastLoads, truncated: built.truncated });
         logTableChange({ clientId, tableKey: AN_EXT_TABLE, recordId: record.id, recordLabel: `${analysis.name} v${record.version}`, action: 'create', fieldKey: 'main.anExtraccion', newValue: `v${record.version}`, changedBy: changedByLabel(req) });
         notifyButtonAction(req, AN_TABLE, 'extract', `${analysis.name} v${record.version}`);
-        res.status(201).json({ extraction: mapExtractionOut(req, getExtraction(record.id, analysis.id)) });
+        res.status(201).json({ extraction: getExtraction(record.id, analysis.id) });
     } catch (err) {
         console.error('Análisis: la extracción falló:', err);
         if (recordId) failExtraction(recordId, 'ERROR');
@@ -7643,7 +7632,7 @@ app.get('/api/business/manual-analyses/:id/extractions/:eid/data', requireAuth, 
     if (!extraction || extraction.status === 'en_proceso') return res.status(404).json({ code: 'EXTRACTION_NOT_FOUND', message: 'Esa versión no existe.' });
     const { rows, total } = listExtractionRows(extraction.id, { text: req.query.text });
     res.set('Cache-Control', 'no-store');
-    res.json({ extraction: mapExtractionOut(req, extraction), columns: extraction.columns, rows, total, truncated: total > rows.length, sys: anSystemColumns(req, extraction.createdAt) });
+    res.json({ extraction, columns: extraction.columns, rows, total, truncated: total > rows.length });
 });
 app.post('/api/business/manual-analyses/:id/extractions/:eid/annul', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
@@ -7658,7 +7647,7 @@ app.post('/api/business/manual-analyses/:id/extractions/:eid/annul', requireAuth
     if (!annulled) return res.status(409).json({ code: 'EXTRACTION_NOT_ACTIVE', message: 'Esa versión ya no está vigente.' });
     logTableChange({ clientId, tableKey: AN_EXT_TABLE, recordId: extraction.id, recordLabel: `${analysis.name} v${extraction.version}`, action: 'update', fieldKey: 'main.anExtraccionEstado', oldValue: 'vigente', newValue: note ? `anulada · ${note}` : 'anulada', changedBy: changedByLabel(req) });
     notifyButtonAction(req, AN_TABLE, 'annul', `${analysis.name} v${extraction.version}`);
-    res.json({ extraction: mapExtractionOut(req, annulled) });
+    res.json({ extraction: annulled });
 });
 
 // ---- Punto Venta › Ventas: ver e imprimir el ticket con su QR (Daniel, 2026-11-24) ----
