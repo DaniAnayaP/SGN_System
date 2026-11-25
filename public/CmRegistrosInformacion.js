@@ -95,8 +95,8 @@ function renderCards() {
     const host = document.getElementById('reg-cards');
     if (!host) return;
     host.innerHTML = '';
-    // Un solo bloque: el registro que se abrió desde el menú (los demás son pantallas anidadas en «Registros Información»)
-    [currentRegistry()].filter(Boolean).forEach((reg) => {
+    // Un solo bloque: el registro que se abrió desde el menú (los demás son pantallas anidadas en «Registros Información»). Sin ninguna carga no hay nada que resumir y la tarjeta no sale (su nombre ya está en el menú y la ruta).
+    [currentRegistry()].filter((reg) => reg && reg.periods.length).forEach((reg) => {
         const card = document.createElement('div');
         card.className = `reg-card reg-card-on reg-card-static${reg.status === 'active' ? '' : ' reg-card-off'}`;
         card.setAttribute('data-help-key', 'regCard');
