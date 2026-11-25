@@ -1356,7 +1356,8 @@ function getStoredSiteSelection() {
     return 'all';
 }
 let selectedSiteCodes = getStoredSiteSelection();
-let sidebarSites = []; // [{ code, sucursal }] de los centros que esta cuenta puede ver
+let sidebarSites = []; // [{ code, sucursal }] de los centros que esta cuenta puede ver (y, para el administrador del cliente, todos sus sitios activos aunque todavía no tengan centros)
+let sidebarClientSites = []; // los sitios activos del cliente (registros propios de Sitios Contratados), solo para el administrador del cliente
 
 // Every department's section is empty in menu.json — once an area is picked
 // (any area, any department), the selected department's section shows the
@@ -12683,6 +12684,8 @@ function renderSitePicker() {
 // Con los centros que esta cuenta puede ver: arma la lista de sitios y deja la selección guardada solo con sitios que existen (con 0 o 1 sitio no hay nada que elegir: va «todos»).
 function initSitePicker() {
     const byCode = new Map();
+    // El sitio es un registro propio: el administrador del cliente ve TODOS sus sitios activos en la lista (también los que todavía no tienen centros de costos); los demás, solo los de los centros que pueden ver.
+    sidebarClientSites.forEach((site) => { if (!byCode.has(site.code)) byCode.set(site.code, { code: site.code, sucursal: site.sucursal || '' }); });
     sidebarCostCenters.forEach((cc) => { if (cc.siteCode && !byCode.has(cc.siteCode)) byCode.set(cc.siteCode, { code: cc.siteCode, sucursal: cc.sucursal || '' }); });
     sidebarSites = Array.from(byCode.values()).sort((a, b) => a.code.localeCompare(b.code));
     if (sidebarSites.length <= 1) {
@@ -12888,9 +12891,21 @@ function hasCostCenterPermission(ccId) {
     return grants.some((g) => g.sectionId === 'main' && g.itemId === 'cc-list' && g.submenuId === `cc-${ccId}`);
 }
 
+// Los sitios activos del cliente (GET /api/business/sites): sin ellos la lista de Sitios de la barra solo traería los que ya tienen un centro de costos.
+async function fetchClientSitesForPicker() {
+    try {
+        const res = await fetch('/api/business/sites', { credentials: 'include' });
+        if (!res.ok) return [];
+        return ((await res.json()).sites || []).filter((site) => site.status === 'active').map((site) => ({ code: site.code, sucursal: site.sucursal || '' }));
+    } catch {
+        return [];
+    }
+}
+
 async function initCostCenterPicker(prefetchedCostCenters) {
     const allCostCenters = await (prefetchedCostCenters || fetchCostCenters());
     sidebarCostCenters = allCostCenters.filter((cc) => hasCostCenterPermission(cc.id));
+    sidebarClientSites = isUnrestrictedClientAdmin() ? await fetchClientSitesForPicker() : [];
     initSitePicker();
     if (sidebarCostCenters.length === 1) {
         // Nothing to actually choose between — same idea as the department
