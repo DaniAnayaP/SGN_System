@@ -49,6 +49,7 @@ const tableOf = (tableId) => wrapperOf(tableId)?.querySelector('table.data-table
         // cada registro agregado tiene su propia pantalla en el menú (?registry=); sin él, el último que se vio
         const wanted = new URLSearchParams(location.search).get('registry') || sessionStorage.getItem('regCurrent');
         st.key = (st.registries.find((r) => r.key === wanted) || st.registries[0] || {}).key || null;
+        if (st.key) { try { sessionStorage.setItem('regCurrent', st.key); } catch { /* sin almacenamiento */ } }
         renderCards();
         await refreshData();
         wireStatic();
@@ -94,11 +95,10 @@ function renderCards() {
     const host = document.getElementById('reg-cards');
     if (!host) return;
     host.innerHTML = '';
-    st.registries.forEach((reg) => {
-        const card = document.createElement('button');
-        card.type = 'button';
-        card.className = `reg-card${reg.key === st.key ? ' reg-card-on' : ''}${reg.status === 'active' ? '' : ' reg-card-off'}`;
-        card.setAttribute('aria-pressed', reg.key === st.key ? 'true' : 'false');
+    // Un solo bloque: el registro que se abrió desde el menú (los demás son pantallas anidadas en «Registros Información»)
+    [currentRegistry()].filter(Boolean).forEach((reg) => {
+        const card = document.createElement('div');
+        card.className = `reg-card reg-card-on reg-card-static${reg.status === 'active' ? '' : ' reg-card-off'}`;
         card.setAttribute('data-help-key', 'regCard');
         const cells = stripCells(reg);
         const missing = cells.filter((c) => c.state === 'miss').length;
@@ -109,11 +109,6 @@ function renderCards() {
             <span class="reg-card-sum">${esc(summary)}</span>
             ${cells.length ? `<span class="reg-strip" aria-hidden="true">${cells.map((c) => `<i class="reg-strip-${c.state}" title="${esc(c.label)}"></i>`).join('')}</span>` : ''}
             ${missing ? `<span class="reg-card-miss">${esc(t(missing === 1 ? 'main.regCardMissOne' : 'main.regCardMiss', { n: missing }))}</span>` : ''}`;
-        card.addEventListener('click', () => {
-            if (reg.key === st.key) return;
-            sessionStorage.setItem('regCurrent', reg.key);
-            location.href = `CmRegistrosInformacion.html?registry=${encodeURIComponent(reg.key)}`; // las columnas de la tabla (meses o días) cambian: se arma de nuevo
-        });
         host.appendChild(card);
     });
     renderManage();

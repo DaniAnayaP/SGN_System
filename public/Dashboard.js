@@ -1449,6 +1449,8 @@ const SIDEBAR_GROUPS = {
     qrs: { labelKey: 'menu.opCentroDistQrs', icon: 'bx-qr', minItems: 1 },
     // Operaciones > Mtto. de activos (2026-11-13): Preventivo y Correctivo. Sale desde la primera pantalla que se ve.
     mtto: { labelKey: 'menu.opCentroDistMtto', icon: 'bx-wrench', minItems: 1, abbrKeys: ['menu.opCentroDistMttoAbbr1', 'menu.opCentroDistMttoAbbr2'] },
+    // Cargas Manuales > Registros Información (2026-11-25): cada registro (los de siempre y los que agrega el cliente) es una pantalla anidada aquí, con «＋ Agregar nuevo registro» al inicio.
+    registros: { labelKey: 'menu.cmRegistrosInformacion', icon: 'bx-data', minItems: 1, abbrKeys: ['menu.cmRegistrosInformacionAbbr1', 'menu.cmRegistrosInformacionAbbr2'] },
 };
 function groupSidebarScreens(pantallas, categoryId) {
     const counts = {};
@@ -1483,7 +1485,7 @@ function applyScreenGrantFilter(data) {
                 // sale atenuado y sin pantallas (empty), no se esconde.
                 items: s.items
                     .map((cat) => {
-                        const submenu = groupSidebarScreens((cat.submenu || []).filter((pantalla) => (
+                        const submenu = groupSidebarScreens((cat.submenu || []).filter((pantalla) => !pantalla.sidebarHidden && (
                             pantalla.permissionOnly || hasScreenGrant(selectedDepartment, selectedArea, `${cat.id}/${pantalla.grantAs || pantalla.id}`)
                         )), cat.id);
                         return { ...cat, submenu, empty: !submenu.some((p) => !p.permissionOnly) };
@@ -1678,6 +1680,7 @@ function buildSubmenu(items) {
     items.forEach((item) => {
         const li = document.createElement('li');
         if (item.addNew) li.classList.add('sub-menu-add'); // «＋ Agregar nuevo …»: opción con borde punteado dentro del desplegable
+        if (item.dimmed) li.classList.add('sub-menu-off'); // un registro desactivado (solo lo ve quien puede crear): atenuado
         const a = document.createElement('a');
         a.href = item.href || '#';
         a.className = 'sub-menu-link';
@@ -13870,11 +13873,14 @@ async function loadManualAnalysesMenu() {
                 const base = list.filter((n) => !n.dynamicRegistry);
                 const at = base.findIndex((n) => n.id === 'cat-cargas-manuales-registros');
                 if (at >= 0) {
-                    const dynamic = (regBody.registries || []).map((r) => ({ id: `cat-cargas-manuales-reg-${r.key}`, label: r.name, icon: 'bx-data', href: `CmRegistrosInformacion.html?registry=${encodeURIComponent(r.key)}`, grantAs: 'cat-cargas-manuales-registros', dynamicRegistry: true, ...(openRegistry && r.key === openRegistry ? { active: true } : {}) }));
+                    // Cada registro es una pantalla anidada dentro de «Registros Información» (sidebarGroup) y comparte el permiso de esa pantalla (grantAs). Los de siempre llevan su nombre por idioma; los agregados, el que les puso el cliente.
+                    const nested = { grantAs: 'cat-cargas-manuales-registros', sidebarGroup: 'registros', dynamicRegistry: true };
                     // «＋ Agregar nuevo registro»: solo para quien tiene el botón «Crear registro»; abre la pantalla con la ventana de alta
-                    const addNew = regBody.canCreateRegistry ? [{ id: 'cat-cargas-manuales-reg-nuevo', labelKey: 'main.regNew', abbrKeys: ['main.regNewAbbr1', 'main.regNewAbbr2'], icon: 'bx-plus', href: 'CmRegistrosInformacion.html?nuevo=1', grantAs: 'cat-cargas-manuales-registros', dynamicRegistry: true, addNew: true }] : [];
+                    const addNew = regBody.canCreateRegistry ? [{ id: 'cat-cargas-manuales-reg-nuevo', labelKey: 'main.regNew', abbrKeys: ['main.regNewAbbr1', 'main.regNewAbbr2'], icon: 'bx-plus', href: 'CmRegistrosInformacion.html?nuevo=1', addNew: true, ...nested }] : [];
+                    const dynamic = (regBody.registries || []).map((r) => ({ id: `cat-cargas-manuales-reg-${r.key}`, ...(r.custom ? { label: r.name } : { labelKey: r.nameKey }), icon: 'bx-data', href: `CmRegistrosInformacion.html?registry=${encodeURIComponent(r.key)}`, ...(r.status === 'active' ? {} : { dimmed: true }), ...nested }));
                     base.splice(at + 1, 0, ...addNew, ...dynamic);
-                    if (openRegistry && dynamic.some((n) => n.active)) base.forEach((n) => { if (n.id === 'cat-cargas-manuales-registros') n.active = false; }); // en la pantalla de un registro agregado se marca ese, no la del grupo
+                    // la pantalla de lista (CmRegistrosInformacion.html sola) queda para los permisos y Panel; en el menú la reemplaza el grupo
+                    base[at] = { ...base[at], sidebarHidden: true };
                     overrides['supply-chain/sc-area-distribution-center']['cat-cargas-manuales'] = base;
                 }
             }

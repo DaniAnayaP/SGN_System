@@ -4150,3 +4150,6 @@
     color: var(--color-accent);
     font-weight: 600;
 }
+.sub-menu .sub-menu-off .sub-menu-link{
+    opacity: 0.55;
+}

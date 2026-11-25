@@ -7282,11 +7282,13 @@ app.get('/api/business/manual-registries', requireAuth, (req, res) => {
         ...abilities,
     });
 });
-// Para el menú lateral: los registros agregados por el cliente que están activos (cada uno es una pantalla más debajo de «Registros Información»).
+// Para el menú lateral: los registros (los de siempre y los agregados por el cliente), cada uno una pantalla anidada dentro de «Registros Información».
 app.get('/api/business/manual-registries/menu', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     if (!req.user.clientId) return res.json({ registries: [], canCreateRegistry: false });
-    res.json({ registries: regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => r.custom && r.status === 'active').map((r) => ({ key: r.key, name: r.name })), canCreateRegistry: regAbilities(req).canCreateRegistry });
+    const canCreateRegistry = regAbilities(req).canCreateRegistry;
+    // los de siempre llevan su nombre por idioma (nameKey); los agregados, el nombre que les puso el cliente. Un desactivado solo lo ve quien puede crear (para volver a activarlo).
+    res.json({ registries: regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => r.status === 'active' || canCreateRegistry).map((r) => ({ key: r.key, custom: r.custom, status: r.status, ...(r.custom ? { name: r.name } : { nameKey: r.nameKey }) })), canCreateRegistry });
 });
 // Agregar un registro nuevo: nombre, periodicidad (mensual o diaria) y lo que mide. Lleva las mismas columnas de referencia que los demás. Del botón «Crear registro» (colRegCrearAuth).
 function regNameTaken(req, name, exceptKey = '') {

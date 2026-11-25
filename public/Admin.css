@@ -10377,3 +10377,4 @@ td.an-cons, th.an-cons{ background: color-mix(in srgb, #f7d9f5 45%, transparent)
 .reg-card-off{ opacity: 0.6; }
 .reg-manage{ display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0 0 0.8rem; }
 .reg-manage-btn{ display: inline-flex; gap: 0.35rem; align-items: center; padding-block: 0.3rem; font-size: 0.8rem; }
+.reg-card-static{ cursor: default; }
