@@ -46,6 +46,7 @@ const TABLES = {
     manual_registry_loads: { action: WIPE, group: 'captures' },
     manual_registry_rows: { action: WIPE, group: 'captures' },
     manual_registry_values: { action: WIPE, group: 'captures' },
+    manual_registry_defs: { action: WIPE, group: 'captures' },
     manual_analyses: { action: WIPE, group: 'captures' },
     manual_analysis_extractions: { action: WIPE, group: 'captures' },
     manual_analysis_rows: { action: WIPE, group: 'captures' },

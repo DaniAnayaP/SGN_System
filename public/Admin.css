@@ -10371,3 +10371,9 @@ td.an-cons, th.an-cons{ background: color-mix(in srgb, #f7d9f5 45%, transparent)
 .exp-panel > label{ display: block; margin: 0.55rem 0 0.2rem; font-size: 0.78rem; font-weight: 600; }
 .exp-panel > select, .exp-panel > input[type="text"], .exp-panel > textarea{ width: 100%; }
 .an-file-info{ flex-basis: 100%; margin-left: 0; }
+/* Registros agregados por el cliente: tarjeta de «Agregar nuevo registro», registro desactivado y la fila de cambiar nombre / desactivar */
+.reg-card-new{ border-style: dashed; align-content: center; justify-items: start; min-height: 3.2rem; }
+.reg-card-new b{ display: inline-flex; gap: 0.35rem; align-items: center; }
+.reg-card-off{ opacity: 0.6; }
+.reg-manage{ display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0 0 0.8rem; }
+.reg-manage-btn{ display: inline-flex; gap: 0.35rem; align-items: center; padding-block: 0.3rem; font-size: 0.8rem; }

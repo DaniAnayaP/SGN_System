@@ -5498,6 +5498,27 @@
     "colRegCargarPlantillaAuth": "Cargar con plantilla",
     "colRegCargarExcelAuth": "Cargar con mi Excel",
     "colRegAnularAuth": "Anular carga",
+    "colRegCrearAuth": "Crear registro",
+    "regNew": "Agregar nuevo registro",
+    "regNewTitle": "Agregar nuevo registro",
+    "regNewName": "Nombre del registro",
+    "regNewKind": "Cada cuánto se carga",
+    "regNewValue": "Qué mide (nombre de la columna de valores)",
+    "regNewValueDefault": "Valor",
+    "regNewCreate": "Crear registro",
+    "regRename": "Cambiar nombre",
+    "regDeactivate": "Desactivar",
+    "regActivate": "Activar",
+    "regStatus_active": "Activo",
+    "regStatus_inactive": "Desactivado",
+    "regNombre": "Nombre del registro",
+    "regEstado": "Estado del registro",
+    "regErr_REG_NAME_REQUIRED": "Ponle un nombre al registro.",
+    "regErr_REG_NAME_TAKEN": "Ya hay un registro con ese nombre.",
+    "regErr_REG_KIND": "Elige si es mensual o diario.",
+    "regErr_REG_FORBIDDEN": "No tienes permiso para crear ni cambiar registros.",
+    "regErr_REG_STATUS": "Estado no válido.",
+    "regErr_REG_BUILTIN": "Ese registro no se puede cambiar.",
     "venImport": "Cargar ventas",
     "venTemplate": "Descargar plantilla",
     "venLoadError": "No se pudieron leer las ventas.",
@@ -9551,6 +9572,22 @@
     "regTemplate": {
       "what": "Baja la plantilla de Excel de este registro: sus columnas fijas (Unidad, Descripción Unidad, Código, Descripción, Categoría, UDM) y una columna para el mes nuevo (o para la existencia del día).",
       "example": "Plantilla-cargos-sitio-mensuales.xlsx con la columna nov-26 lista."
+    },
+    "regNew": {
+      "what": "Crea un registro nuevo para guardar otro tipo de dato que se carga a mano. Tiene las mismas columnas de referencia que los demás (Unidad, Descripción Unidad, Código, Descripción, Categoría y UDM) y su propia pantalla en el menú, debajo de Registros Información.",
+      "example": "Consumos mensuales: se carga una columna por mes, igual que Cargos por sitio mensuales."
+    },
+    "regNewDialog": {
+      "what": "Nombre del registro, cada cuánto se carga (un mes por columna, o un día por columna) y el nombre de lo que mide. Ese nombre queda como encabezado de la columna de valores en la plantilla y en los análisis.",
+      "example": "Nombre: Consumos mensuales · Mensual · Mide: Consumo."
+    },
+    "regManage": {
+      "what": "Solo para los registros que agregaste tú. Cambiar nombre actualiza el menú. Desactivar lo quita del menú y ya no recibe cargas ni se ofrece para análisis nuevos; sus datos y sus cargas se conservan y se puede volver a activar.",
+      "example": "Desactivar «Consumos mensuales» cuando ya no se use."
+    },
+    "regRenameDialog": {
+      "what": "Cambia el nombre del registro en el menú y en sus tarjetas. Los datos cargados no se tocan.",
+      "example": "Consumos mensuales → Consumo mensual por código."
     },
     "regImport": {
       "what": "Abre la carga de este registro: con la plantilla o con tu propio Excel. Siempre pasa por una revisión antes de guardar, y solo agrega.",

@@ -108,7 +108,7 @@ function showTab(tab) {
 
 // ---- Diseño -------------------------------------------------------------------------------------------------------------------------------------------
 function defaultLabel(reg, agg, periods) {
-    const value = t((reg && reg.valueNameKey) || 'main.regValueColumn');
+    const value = ((reg && reg.valueName) || t((reg && reg.valueNameKey) || 'main.regValueColumn'));
     return agg === 'value' ? `${value} ${periodsText(periods)}` : `${t(`main.anAggShort_${agg}`)} ${value} ${periodsText(periods)}`;
 }
 function renderDesign() {

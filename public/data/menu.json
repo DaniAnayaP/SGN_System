@@ -3228,7 +3228,8 @@
               "submenu": [
                 { "id": "colRegCargarPlantillaAuth", "labelKey": "main.colRegCargarPlantillaAuth", "permissionOnly": true },
                 { "id": "colRegCargarExcelAuth", "labelKey": "main.colRegCargarExcelAuth", "permissionOnly": true },
-                { "id": "colRegAnularAuth", "labelKey": "main.colRegAnularAuth", "permissionOnly": true }
+                { "id": "colRegAnularAuth", "labelKey": "main.colRegAnularAuth", "permissionOnly": true },
+                { "id": "colRegCrearAuth", "labelKey": "main.colRegCrearAuth", "permissionOnly": true }
               ]
             }
           ],

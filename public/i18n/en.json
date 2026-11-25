@@ -5499,6 +5499,27 @@
     "colRegCargarPlantillaAuth": "Load with template",
     "colRegCargarExcelAuth": "Load with my Excel",
     "colRegAnularAuth": "Void load",
+    "colRegCrearAuth": "Create record set",
+    "regNew": "Add new record set",
+    "regNewTitle": "Add new record set",
+    "regNewName": "Record set name",
+    "regNewKind": "How often it is loaded",
+    "regNewValue": "What it measures (name of the values column)",
+    "regNewValueDefault": "Value",
+    "regNewCreate": "Create record set",
+    "regRename": "Rename",
+    "regDeactivate": "Deactivate",
+    "regActivate": "Activate",
+    "regStatus_active": "Active",
+    "regStatus_inactive": "Deactivated",
+    "regNombre": "Record set name",
+    "regEstado": "Record set status",
+    "regErr_REG_NAME_REQUIRED": "Give the record set a name.",
+    "regErr_REG_NAME_TAKEN": "There is already a record set with that name.",
+    "regErr_REG_KIND": "Choose monthly or daily.",
+    "regErr_REG_FORBIDDEN": "You do not have permission to create or change record sets.",
+    "regErr_REG_STATUS": "Invalid status.",
+    "regErr_REG_BUILTIN": "That record set cannot be changed.",
     "venImport": "Load sales",
     "venTemplate": "Download template",
     "venLoadError": "The sales could not be read.",
@@ -9552,6 +9573,22 @@
     "regTemplate": {
       "what": "Downloads this record's Excel template: its fixed columns (Unit, Unit description, Code, Description, Category, UoM) and a column for the new month (or for that day's stock).",
       "example": "Template-cargos-sitio-mensuales.xlsx with the nov-26 column ready."
+    },
+    "regNew": {
+      "what": "Creates a new record set to keep another kind of hand-loaded data. It has the same reference columns as the others (Unit, Unit Description, Code, Description, Category and UOM) and its own screen in the menu, under Information Records.",
+      "example": "Monthly consumption: one column per month, just like Monthly charges by site."
+    },
+    "regNewDialog": {
+      "what": "The record set name, how often it is loaded (one month per column, or one day per column) and the name of what it measures. That name becomes the heading of the values column in the template and in analyses.",
+      "example": "Name: Monthly consumption · Monthly · Measures: Consumption."
+    },
+    "regManage": {
+      "what": "Only for record sets you added. Rename updates the menu. Deactivate removes it from the menu; it stops receiving loads and is no longer offered for new analyses. Its data and loads are kept and it can be activated again.",
+      "example": "Deactivate “Monthly consumption” when it is no longer used."
+    },
+    "regRenameDialog": {
+      "what": "Changes the record set name in the menu and on its cards. Loaded data is not touched.",
+      "example": "Monthly consumption → Monthly consumption by code."
     },
     "regImport": {
       "what": "Opens the load of this record: with the template or with your own Excel. It always goes through a review before saving, and it only adds.",

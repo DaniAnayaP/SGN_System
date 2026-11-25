@@ -83,6 +83,7 @@ const {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
+    listRegistryDefs, createRegistryDef, updateRegistryDef,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, MR_SCREEN,
     getPosSaleByToken,
@@ -7229,7 +7230,7 @@ app.post('/api/business/pos-sales/import', requireAuth, posSalesRaw, async (req,
 const manualRegistries = require('./manualRegistries');
 const REG_TABLE = 'registros';
 const REG_LOADS_TABLE = 'registros-cargas';
-const REG_COLS = { plantilla: 'colRegCargarPlantillaAuth', excel: 'colRegCargarExcelAuth', annul: 'colRegAnularAuth' };
+const REG_COLS = { plantilla: 'colRegCargarPlantillaAuth', excel: 'colRegCargarExcelAuth', annul: 'colRegAnularAuth', create: 'colRegCrearAuth' };
 const regRaw = express.raw({ type: () => true, limit: '60mb' });
 const regLoading = new Set(); // una carga a la vez por registro y por cliente
 const REG_MESSAGES = {
@@ -7239,12 +7240,22 @@ const REG_MESSAGES = {
 function regAbilities(req) {
     const admin = !!req.user.isClientAdmin;
     const grants = admin ? null : getUserEffectiveGrants(req.user.sub);
-    return { canTemplate: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.plantilla), canExcel: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.excel), canAnnul: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.annul) };
+    return { canTemplate: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.plantilla), canExcel: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.excel), canAnnul: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.annul), canCreateRegistry: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.create) };
 }
-function regRegistry(req, res) {
+// Los registros de un cliente: los dos de siempre (nombre por idioma) y los que agregó él (nombre y lo que mide, tal como los escribió). Los desactivados siguen existiendo (sus datos se conservan).
+const regFoldName = (text) => String(text || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const REG_BUILTIN_NAMES = ['cargos por sitio mensuales', 'monthly charges by site', 'existencias actuales diarias', 'current daily stock'];
+function regClientRegistries(clientId, isTestAccount) {
+    const builtIns = Object.values(manualRegistries.REGISTRIES).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, valueNameKey: r.valueNameKey, custom: false, status: 'active' }));
+    const custom = listRegistryDefs(clientId, isTestAccount).map((d) => ({ key: d.key, kind: d.kind, name: d.name, valueName: d.valueName, custom: true, status: d.status, createdBy: d.createdBy, createdAt: d.createdAt, defId: d.id }));
+    return [...builtIns, ...custom];
+}
+// needActive: para cargar o bajar la plantilla (un registro desactivado ya no recibe cargas; sus datos se pueden ver).
+function regRegistry(req, res, { needActive = false } = {}) {
     if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
-    const registry = manualRegistries.registryOf(String(req.params.key || ''));
+    const registry = regClientRegistries(req.user.clientId, req.user.isTestAccount).find((r) => r.key === String(req.params.key || ''));
     if (!registry) { res.status(404).json({ code: 'REGISTRY_NOT_FOUND', message: 'Ese registro no existe.' }); return null; }
+    if (needActive && registry.status !== 'active') { res.status(409).json({ code: 'REG_INACTIVE', message: 'Ese registro está desactivado.' }); return null; }
     return registry;
 }
 function regForbidden(res) { res.status(403).json({ code: 'REG_FORBIDDEN', message: 'No tienes permiso para cargar registros.' }); }
@@ -7257,10 +7268,68 @@ app.get('/api/business/manual-registries', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
     res.set('Cache-Control', 'no-store');
+    const abilities = regAbilities(req);
     res.json({
-        registries: Object.values(manualRegistries.REGISTRIES).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, periods: registryPeriods(clientId, isTestAccount, r.key), lastLoad: registryLastLoad(clientId, isTestAccount, r.key) })),
-        ...regAbilities(req),
+        // un registro desactivado solo lo ve quien puede crearlos (para volver a activarlo)
+        registries: regClientRegistries(clientId, isTestAccount).filter((r) => r.status === 'active' || abilities.canCreateRegistry).map((r) => ({ ...r, periods: registryPeriods(clientId, isTestAccount, r.key), lastLoad: registryLastLoad(clientId, isTestAccount, r.key) })),
+        ...abilities,
     });
+});
+// Para el menú lateral: los registros agregados por el cliente que están activos (cada uno es una pantalla más debajo de «Registros Información»).
+app.get('/api/business/manual-registries/menu', requireAuth, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (!req.user.clientId) return res.json({ registries: [] });
+    res.json({ registries: regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => r.custom && r.status === 'active').map((r) => ({ key: r.key, name: r.name })) });
+});
+// Agregar un registro nuevo: nombre, periodicidad (mensual o diaria) y lo que mide. Lleva las mismas columnas de referencia que los demás. Del botón «Crear registro» (colRegCrearAuth).
+function regNameTaken(req, name, exceptKey = '') {
+    const wanted = regFoldName(name);
+    if (REG_BUILTIN_NAMES.includes(wanted)) return true;
+    return regClientRegistries(req.user.clientId, req.user.isTestAccount).some((r) => r.custom && r.key !== exceptKey && regFoldName(r.name) === wanted);
+}
+app.post('/api/business/manual-registries', requireAuth, (req, res) => {
+    if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
+    if (!regAbilities(req).canCreateRegistry) return regForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const body = req.body || {};
+    const name = manualAnalyses.cleanText(body.name, 80);
+    if (!name) return res.status(400).json({ code: 'REG_NAME_REQUIRED', message: 'Ponle un nombre al registro.' });
+    if (!['month', 'day'].includes(body.kind)) return res.status(400).json({ code: 'REG_KIND', message: 'Elige si es mensual o diario.' });
+    if (regNameTaken(req, name)) return res.status(409).json({ code: 'REG_NAME_TAKEN', message: 'Ya hay un registro con ese nombre.' });
+    const valueName = manualAnalyses.cleanText(body.valueName, 40) || 'Valor';
+    const taken = new Set(regClientRegistries(clientId, isTestAccount).map((r) => r.key));
+    const slug = regFoldName(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'registro';
+    let key = `c-${slug}`;
+    for (let n = 2; taken.has(key); n += 1) key = `c-${slug}-${n}`;
+    const id = createRegistryDef({ clientId, isTestData: isTestAccount, key, name, kind: body.kind, valueName, createdBy: changedByLabel(req), createdByUserId: req.user.sub });
+    logTableChange({ clientId, tableKey: REG_TABLE, recordId: id, recordLabel: name, action: 'create', fieldKey: 'main.regNombre', newValue: name, changedBy: changedByLabel(req) });
+    notifyButtonAction(req, REG_TABLE, 'create', name);
+    res.status(201).json({ registry: regClientRegistries(clientId, isTestAccount).find((r) => r.key === key) });
+});
+// Renombrar o desactivar/activar un registro agregado por el cliente (los dos de siempre no se tocan). Nada se borra.
+app.patch('/api/business/manual-registries/:key', requireAuth, (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    if (!regAbilities(req).canCreateRegistry) return regForbidden(res);
+    if (!registry.custom) return res.status(400).json({ code: 'REG_BUILTIN', message: 'Ese registro no se puede cambiar.' });
+    const { clientId, isTestAccount } = req.user;
+    const body = req.body || {};
+    const patch = {};
+    if (body.name !== undefined) {
+        const name = manualAnalyses.cleanText(body.name, 80);
+        if (!name) return res.status(400).json({ code: 'REG_NAME_REQUIRED', message: 'Ponle un nombre al registro.' });
+        if (regNameTaken(req, name, registry.key)) return res.status(409).json({ code: 'REG_NAME_TAKEN', message: 'Ya hay un registro con ese nombre.' });
+        if (name !== registry.name) patch.name = name;
+    }
+    if (body.status !== undefined) {
+        if (!['active', 'inactive'].includes(body.status)) return res.status(400).json({ code: 'REG_STATUS', message: 'Estado no válido.' });
+        if (body.status !== registry.status) patch.status = body.status;
+    }
+    updateRegistryDef(clientId, isTestAccount, registry.key, patch);
+    const by = changedByLabel(req);
+    if (patch.name) logTableChange({ clientId, tableKey: REG_TABLE, recordId: registry.defId, recordLabel: patch.name, action: 'update', fieldKey: 'main.regNombre', oldValue: registry.name, newValue: patch.name, changedBy: by });
+    if (patch.status) logTableChange({ clientId, tableKey: REG_TABLE, recordId: registry.defId, recordLabel: patch.name || registry.name, action: 'update', fieldKey: 'main.regEstado', oldValue: registry.status, newValue: patch.status, changedBy: by });
+    res.json({ registry: regClientRegistries(clientId, isTestAccount).find((r) => r.key === registry.key) });
 });
 app.get('/api/business/manual-registries/:key/data', requireAuth, (req, res) => {
     const registry = regRegistry(req, res);
@@ -7270,7 +7339,7 @@ app.get('/api/business/manual-registries/:key/data', requireAuth, (req, res) => 
     const { rows, total } = listRegistryData(clientId, isTestAccount, registry.key, { unidad: q.unidad, codigo: q.codigo, descripcion: q.descripcion, categoria: q.categoria, text: q.text });
     res.set('Cache-Control', 'no-store');
     res.json({
-        registry: { key: registry.key, kind: registry.kind, nameKey: registry.nameKey }, periods: registryPeriods(clientId, isTestAccount, registry.key), lastLoad: registryLastLoad(clientId, isTestAccount, registry.key),
+        registry: { key: registry.key, kind: registry.kind, nameKey: registry.nameKey, name: registry.name, valueName: registry.valueName, custom: registry.custom, status: registry.status }, periods: registryPeriods(clientId, isTestAccount, registry.key), lastLoad: registryLastLoad(clientId, isTestAccount, registry.key),
         rows: rows.map((r) => ({ ...r, ...regSystemColumns(req, r.createdAt) })), total, truncated: total > rows.length, ...regAbilities(req),
     });
 });
@@ -7281,7 +7350,7 @@ app.get('/api/business/manual-registries/:key/loads', requireAuth, (req, res) =>
     res.json({ loads: listRegistryLoads(req.user.clientId, req.user.isTestAccount, registry.key).map((l) => mapRegistryLoadRow(req, l)), ...regAbilities(req) });
 });
 app.get('/api/business/manual-registries/:key/template', requireAuth, async (req, res) => {
-    const registry = regRegistry(req, res);
+    const registry = regRegistry(req, res, { needActive: true });
     if (!registry) return;
     const ability = regAbilities(req);
     if (!ability.canTemplate && !ability.canExcel) return regForbidden(res);
@@ -7299,7 +7368,7 @@ app.get('/api/business/manual-registries/:key/template', requireAuth, async (req
 });
 // El archivo a la vista antes de cargar: sus hojas, el renglón de títulos, las columnas y su emparejamiento propuesto, y unos renglones de ejemplo (no escribe nada).
 app.post('/api/business/manual-registries/:key/inspect', requireAuth, regRaw, async (req, res) => {
-    const registry = regRegistry(req, res);
+    const registry = regRegistry(req, res, { needActive: true });
     if (!registry) return;
     const ability = regAbilities(req);
     if (!ability.canTemplate && !ability.canExcel) return regForbidden(res);
@@ -7332,7 +7401,7 @@ function regParseMapping(text, registry) {
     return mapping;
 }
 app.post('/api/business/manual-registries/:key/import', requireAuth, regRaw, async (req, res) => {
-    const registry = regRegistry(req, res);
+    const registry = regRegistry(req, res, { needActive: true });
     if (!registry) return;
     const source = req.query.source === 'excel' ? 'excel' : 'plantilla';
     const ability = regAbilities(req);
@@ -7429,7 +7498,7 @@ function anAbilities(req) {
     const grants = admin ? null : getUserEffectiveGrants(req.user.sub);
     return { canCreate: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.create), canExtract: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.extract), canAnnul: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.annul) };
 }
-const anRegistryKeys = () => Object.keys(manualRegistries.REGISTRIES);
+const anRegistryKeys = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).map((r) => r.key);
 function anSystemColumns(req, createdAt) {
     const client = getClientById(req.user.clientId);
     return getSystemColumnsForRecord({ companyName: client.company_name, ...AN_SCREEN, centroCostos: '', createdAt, timeZone: client.time_zone });
@@ -7447,7 +7516,7 @@ function anLoad(req, res) {
     return analysis;
 }
 const mapExtractionOut = (req, e) => ({ ...e, ...anSystemColumns(req, e.createdAt) });
-const anRegistriesInfo = (req) => Object.values(manualRegistries.REGISTRIES).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, valueNameKey: r.valueNameKey, periods: registryPeriods(req.user.clientId, req.user.isTestAccount, r.key) }));
+const anRegistriesInfo = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, valueNameKey: r.valueNameKey, name: r.name, valueName: r.valueName, custom: r.custom, status: r.status, periods: registryPeriods(req.user.clientId, req.user.isTestAccount, r.key) }));
 // Para el menú lateral: los análisis activos (cualquier persona del cliente; el menú ya decide quién ve la pantalla).
 app.get('/api/business/manual-analyses/menu', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
@@ -7473,7 +7542,7 @@ app.post('/api/business/manual-analyses', requireAuth, (req, res) => {
         if (!from) return res.status(404).json({ code: 'AN_NOT_FOUND', message: 'Ese análisis no existe.' });
         source = from.design;
     }
-    const checked = manualAnalyses.normalizeDesign(source, anRegistryKeys());
+    const checked = manualAnalyses.normalizeDesign(source, anRegistryKeys(req));
     if (checked.error) return anFail(res, checked.error);
     const id = createAnalysis({ clientId, isTestData: isTestAccount, name, design: checked.design, createdBy: changedByLabel(req), createdByUserId: req.user.sub });
     logTableChange({ clientId, tableKey: AN_TABLE, recordId: id, recordLabel: name, action: 'create', fieldKey: 'main.anNombre', newValue: name, changedBy: changedByLabel(req) });
@@ -7500,7 +7569,7 @@ app.patch('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
         if (name !== analysis.name) patch.name = name;
     }
     if (body.design !== undefined) {
-        const checked = manualAnalyses.normalizeDesign(body.design, anRegistryKeys());
+        const checked = manualAnalyses.normalizeDesign(body.design, anRegistryKeys(req));
         if (checked.error) return anFail(res, checked.error);
         patch.design = checked.design;
     }
@@ -7522,7 +7591,7 @@ app.post('/api/business/manual-analyses/:id/extract', requireAuth, async (req, r
     if (!anAbilities(req).canExtract) return anForbidden(res);
     if (analysis.status !== 'active') return anFail(res, 'AN_INACTIVE', 409);
     const { clientId, isTestAccount } = req.user;
-    const checked = manualAnalyses.normalizeDesign(analysis.design, anRegistryKeys());
+    const checked = manualAnalyses.normalizeDesign(analysis.design, anRegistryKeys(req));
     if (checked.error) return anFail(res, checked.error);
     const design = checked.design;
     if (!design.consulted.length) return anFail(res, 'AN_NO_COLUMNS');

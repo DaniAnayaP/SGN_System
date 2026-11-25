@@ -438,7 +438,7 @@ async function buildTemplate(registry, lang = 'es', { nextPeriod } = {}) {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet(text.sheets[0]);
     const headers = DIMS.map((d) => text.headers[d]);
-    const valueHeader = registry.kind === 'month' ? periodLabel(nextPeriod || nextMonth(`${new Date().getUTCFullYear()}-${pad2(new Date().getUTCMonth() + 1)}`) || '', lang) : text.valueDay;
+    const valueHeader = registry.kind === 'month' ? periodLabel(nextPeriod || nextMonth(`${new Date().getUTCFullYear()}-${pad2(new Date().getUTCMonth() + 1)}`) || '', lang) : (registry.valueName || text.valueDay);
     sheet.addRow([...headers, valueHeader]);
     DIMS.slice(0, 3).forEach((_, i) => { sheet.getColumn(i + 1).numFmt = '@'; });
     sheet.getColumn(3).numFmt = '@';

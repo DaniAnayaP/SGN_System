@@ -13841,22 +13841,37 @@ function updateDatabaseMenuLabel(branding) {
     label.textContent = branding?.companyAbbreviation ? `${base} ${branding.companyAbbreviation}` : base;
 }
 
-// Cargas Manuales › Análisis Registros Manuales (Daniel, 2026-11-25): cada análisis que se agrega es una pantalla más del menú, debajo de «Análisis Registros Manuales» (Centro de Distribución). El nombre es dato del cliente, así que va en item.label.
-// Su permiso es el de la pantalla «Análisis Registros Manuales» (grantAs): quien la tiene ve todos los análisis. Se quita lo anterior antes de poner la lista, así que se puede llamar de nuevo.
+// Cargas Manuales (Daniel, 2026-11-25): cada análisis y cada registro que se agrega es una pantalla más del menú, debajo de «Análisis Registros Manuales» y de «Registros Información» (Centro de Distribución). El nombre es dato del cliente, así que va en item.label.
+// El permiso de cada uno es el de su pantalla de grupo (grantAs): quien la tiene ve todos. Se quita lo anterior antes de poner la lista, así que se puede llamar de nuevo.
 async function loadManualAnalysesMenu() {
     try {
-        const res = await fetch('/api/business/manual-analyses/menu', { credentials: 'include' });
-        if (!res.ok) return;
-        const { analyses } = await res.json();
+        const getJson = async (url) => { try { const res = await fetch(url, { credentials: 'include' }); return res.ok ? await res.json() : null; } catch { return null; } };
+        const [anBody, regBody] = await Promise.all([getJson('/api/business/manual-analyses/menu'), getJson('/api/business/manual-registries/menu')]);
         const list = menuData?.areaOverrides?.['supply-chain/sc-area-distribution-center']?.['cat-cargas-manuales'];
         if (!Array.isArray(list)) return;
-        const base = list.filter((n) => !n.dynamicAnalysis);
-        const at = base.findIndex((n) => n.id === 'cat-cargas-manuales-analisis');
-        if (at < 0) return;
-        const openId = window.location.pathname.endsWith('CmAnalisis.html') ? new URLSearchParams(window.location.search).get('id') : null;
-        const dynamic = (analyses || []).map((a) => ({ id: `cat-cargas-manuales-an-${a.id}`, label: a.name, icon: 'bx-line-chart', href: `CmAnalisis.html?id=${a.id}`, grantAs: 'cat-cargas-manuales-analisis', dynamicAnalysis: true, ...(openId && String(a.id) === openId ? { active: true } : {}) }));
-        base.splice(at + 1, 0, ...dynamic);
-        if (openId) base.forEach((n) => { if (n.id === 'cat-cargas-manuales-analisis') n.active = false; }); // en la pantalla de un análisis se marca ese análisis, no la lista
+        // lo que no se pudo leer se deja como estaba
+        let base = list.filter((n) => !(anBody && n.dynamicAnalysis) && !(regBody && n.dynamicRegistry));
+        const page = window.location.pathname;
+        const query = new URLSearchParams(window.location.search);
+        const openAnalysis = page.endsWith('CmAnalisis.html') ? query.get('id') : null;
+        const openRegistry = page.endsWith('CmRegistrosInformacion.html') ? query.get('registry') : null;
+        if (regBody) {
+            const at = base.findIndex((n) => n.id === 'cat-cargas-manuales-registros');
+            if (at >= 0) {
+                const dynamic = (regBody.registries || []).map((r) => ({ id: `cat-cargas-manuales-reg-${r.key}`, label: r.name, icon: 'bx-data', href: `CmRegistrosInformacion.html?registry=${encodeURIComponent(r.key)}`, grantAs: 'cat-cargas-manuales-registros', dynamicRegistry: true, ...(openRegistry && r.key === openRegistry ? { active: true } : {}) }));
+                base.splice(at + 1, 0, ...dynamic);
+            }
+        }
+        if (anBody) {
+            const at = base.findIndex((n) => n.id === 'cat-cargas-manuales-analisis');
+            if (at >= 0) {
+                const dynamic = (anBody.analyses || []).map((a) => ({ id: `cat-cargas-manuales-an-${a.id}`, label: a.name, icon: 'bx-line-chart', href: `CmAnalisis.html?id=${a.id}`, grantAs: 'cat-cargas-manuales-analisis', dynamicAnalysis: true, ...(openAnalysis && String(a.id) === openAnalysis ? { active: true } : {}) }));
+                base.splice(at + 1, 0, ...dynamic);
+            }
+        }
+        // en la pantalla de un análisis o de un registro agregado se marca ese, no la pantalla del grupo
+        if (openAnalysis) base.forEach((n) => { if (n.id === 'cat-cargas-manuales-analisis') n.active = false; });
+        if (openRegistry && base.some((n) => n.dynamicRegistry && n.active)) base.forEach((n) => { if (n.id === 'cat-cargas-manuales-registros') n.active = false; });
         menuData.areaOverrides['supply-chain/sc-area-distribution-center']['cat-cargas-manuales'] = base;
         renderFilteredMenu();
     } catch (err) {

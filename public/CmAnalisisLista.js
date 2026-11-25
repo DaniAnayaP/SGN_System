@@ -146,7 +146,7 @@ function modal(html, onReady) {
     onReady(overlay, close);
 }
 function openCreate() {
-    const regs = st.registries;
+    const regs = st.registries.filter((r) => r.status === 'active'); // un registro desactivado ya no se ofrece para análisis nuevos
     const html = `<h3>${esc(t('main.anNewTitle'))}</h3>
         <label for="an-c-name">${esc(t('main.anName'))}</label><input type="text" id="an-c-name" maxlength="80" autocomplete="off">
         <p class="reg-field-label">${esc(t('main.anRegistriesLabel'))}</p>

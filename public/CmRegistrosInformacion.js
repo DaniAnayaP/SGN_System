@@ -34,7 +34,9 @@ function periodLabel(period) {
 const periodKey = (period) => `p_${String(period).replace(/-/g, '_')}`;
 const todayStamp = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-const st = { registries: [], key: null, tab: 'data', data: null, loads: null, canTemplate: false, canExcel: false, canAnnul: false, text: '', loadsInit: false };
+const st = { registries: [], key: null, tab: 'data', data: null, loads: null, canTemplate: false, canExcel: false, canAnnul: false, canCreateRegistry: false, text: '', loadsInit: false };
+// El nombre de un registro: los dos de siempre se traducen; los que agregó el cliente llevan el nombre que él les puso.
+const regName = (reg) => (reg && (reg.name || (reg.nameKey ? t(reg.nameKey) : ''))) || t('menu.cmRegistrosInformacion');
 const currentRegistry = () => st.registries.find((r) => r.key === st.key) || null;
 const wrapperOf = (tableId) => document.querySelector(`[data-table-id="${tableId}"]`);
 const tableOf = (tableId) => wrapperOf(tableId)?.querySelector('table.data-table');
@@ -44,7 +46,8 @@ const tableOf = (tableId) => wrapperOf(tableId)?.querySelector('table.data-table
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
         await loadRegistries();
-        const wanted = sessionStorage.getItem('regCurrent');
+        // cada registro agregado tiene su propia pantalla en el menú (?registry=); sin él, el último que se vio
+        const wanted = new URLSearchParams(location.search).get('registry') || sessionStorage.getItem('regCurrent');
         st.key = (st.registries.find((r) => r.key === wanted) || st.registries[0] || {}).key || null;
         renderCards();
         await refreshData();
@@ -59,7 +62,7 @@ async function loadRegistries() {
     if (!res.ok) throw new Error('load failed');
     const body = await res.json();
     st.registries = body.registries || [];
-    st.canTemplate = !!body.canTemplate; st.canExcel = !!body.canExcel; st.canAnnul = !!body.canAnnul;
+    st.canTemplate = !!body.canTemplate; st.canExcel = !!body.canExcel; st.canAnnul = !!body.canAnnul; st.canCreateRegistry = !!body.canCreateRegistry;
 }
 
 // ---- las tarjetas de registros: cuántos periodos hay y cuáles faltan ------------------------------------------------------------------------------
@@ -93,7 +96,7 @@ function renderCards() {
     st.registries.forEach((reg) => {
         const card = document.createElement('button');
         card.type = 'button';
-        card.className = `reg-card${reg.key === st.key ? ' reg-card-on' : ''}`;
+        card.className = `reg-card${reg.key === st.key ? ' reg-card-on' : ''}${reg.status === 'active' ? '' : ' reg-card-off'}`;
         card.setAttribute('aria-pressed', reg.key === st.key ? 'true' : 'false');
         card.setAttribute('data-help-key', 'regCard');
         const cells = stripCells(reg);
@@ -101,17 +104,119 @@ function renderCards() {
         const summary = !reg.periods.length ? t('main.regCardNone')
             : reg.kind === 'month' ? t('main.regCardMonths', { n: reg.periods.length, from: periodLabel(reg.periods[0]), to: periodLabel(reg.periods[reg.periods.length - 1]) })
                 : t('main.regCardDays', { n: reg.periods.length, last: periodLabel(reg.periods[reg.periods.length - 1]) });
-        card.innerHTML = `<span class="reg-card-top"><b>${esc(t(reg.nameKey))}</b><span class="reg-card-per">${esc(t(reg.kind === 'month' ? 'main.regKindMonth' : 'main.regKindDay'))}</span></span>
+        card.innerHTML = `<span class="reg-card-top"><b>${esc(regName(reg))}</b><span class="reg-card-per">${esc(t(reg.kind === 'month' ? 'main.regKindMonth' : 'main.regKindDay'))}</span></span>
             <span class="reg-card-sum">${esc(summary)}</span>
             ${cells.length ? `<span class="reg-strip" aria-hidden="true">${cells.map((c) => `<i class="reg-strip-${c.state}" title="${esc(c.label)}"></i>`).join('')}</span>` : ''}
             ${missing ? `<span class="reg-card-miss">${esc(t(missing === 1 ? 'main.regCardMissOne' : 'main.regCardMiss', { n: missing }))}</span>` : ''}`;
         card.addEventListener('click', () => {
             if (reg.key === st.key) return;
             sessionStorage.setItem('regCurrent', reg.key);
-            location.reload(); // las columnas de la tabla (meses o días) cambian: se arma de nuevo
+            location.href = `CmRegistrosInformacion.html?registry=${encodeURIComponent(reg.key)}`; // las columnas de la tabla (meses o días) cambian: se arma de nuevo
         });
         host.appendChild(card);
     });
+    if (st.canCreateRegistry) {
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'reg-card reg-card-new';
+        add.id = 'reg-new-btn';
+        add.setAttribute('data-help-key', 'regNew');
+        add.innerHTML = `<span class="reg-card-top"><b><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.regNew'))}</b></span>`;
+        add.addEventListener('click', openCreateRegistry);
+        host.appendChild(add);
+    }
+    renderManage();
+}
+// Cambiar nombre y desactivar/activar: solo para los registros que agregó el cliente (los dos de siempre no se tocan) y para quien tiene el botón «Crear registro».
+function renderManage() {
+    let bar = document.getElementById('reg-manage');
+    const reg = currentRegistry();
+    const show = !!(reg && reg.custom && st.canCreateRegistry);
+    if (!show) { if (bar) bar.remove(); return; }
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'reg-manage';
+        bar.className = 'reg-manage';
+        bar.setAttribute('data-help-key', 'regManage');
+        const cards = document.getElementById('reg-cards');
+        (document.getElementById('cm-stamp') || cards).after(bar);
+    }
+    bar.textContent = '';
+    if (reg.status !== 'active') { const off = document.createElement('span'); off.className = 'reg-pill reg-pill-off'; off.textContent = t('main.regStatus_inactive'); bar.appendChild(off); }
+    const make = (icon, key, onClick) => {
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'btn btn-secondary reg-manage-btn';
+        btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i> <span>${esc(t(key))}</span>`;
+        btn.addEventListener('click', onClick);
+        bar.appendChild(btn);
+    };
+    make('bx-edit', 'main.regRename', () => openRenameRegistry(reg));
+    make(reg.status === 'active' ? 'bx-hide' : 'bx-show', reg.status === 'active' ? 'main.regDeactivate' : 'main.regActivate', () => toggleRegistry(reg));
+}
+function regErrorText(body) {
+    const code = body && body.code;
+    return ['REG_NAME_REQUIRED', 'REG_NAME_TAKEN', 'REG_KIND', 'REG_FORBIDDEN', 'REG_STATUS', 'REG_BUILTIN'].includes(code) ? t(`main.regErr_${code}`) : t('admin.saveError');
+}
+function openModal(html, helpKey, onReady) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    overlay.innerHTML = `<div class="modal-panel exp-panel" role="dialog" aria-modal="true" data-help-key="${helpKey}">${html}</div>`;
+    document.body.appendChild(overlay);
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) close(); });
+    overlay.querySelectorAll('[data-reg-close]').forEach((b) => b.addEventListener('click', close));
+    onReady(overlay, close);
+}
+async function sendRegistry(method, url, body) {
+    const res = await fetch(url, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error('failed'), { body: out });
+    return out;
+}
+// Registro nuevo: nombre, cada cuánto se carga y qué mide. Siempre lleva las mismas columnas de referencia (Unidad, Descripción Unidad, Código, Descripción, Categoría y UDM); al crearlo se abre su pantalla.
+function openCreateRegistry() {
+    openModal(`<h3>${esc(t('main.regNewTitle'))}</h3>
+        <label for="reg-n-name">${esc(t('main.regNewName'))}</label><input type="text" id="reg-n-name" maxlength="80" autocomplete="off">
+        <p class="reg-field-label">${esc(t('main.regNewKind'))}</p>
+        <div class="an-checks"><label><input type="radio" name="reg-n-kind" value="month" checked> <span>${esc(t('main.regKindMonth'))}</span></label>
+        <label><input type="radio" name="reg-n-kind" value="day"> <span>${esc(t('main.regKindDay'))}</span></label></div>
+        <label for="reg-n-value">${esc(t('main.regNewValue'))}</label><input type="text" id="reg-n-value" maxlength="40" autocomplete="off" placeholder="${esc(t('main.regNewValueDefault'))}">
+        <p class="admin-error" id="reg-n-error" role="alert" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" data-reg-go>${esc(t('main.regNewCreate'))}</button><button type="button" class="btn btn-secondary" data-reg-close>${esc(t('main.regCancel'))}</button></div>`, 'regNewDialog', (overlay) => {
+        overlay.querySelector('#reg-n-name').focus();
+        overlay.querySelector('[data-reg-go]').addEventListener('click', async (event) => {
+            const btn = event.currentTarget;
+            const el = overlay.querySelector('#reg-n-error');
+            btn.disabled = true; el.hidden = true;
+            try {
+                const out = await sendRegistry('POST', API, { name: overlay.querySelector('#reg-n-name').value, kind: overlay.querySelector('input[name="reg-n-kind"]:checked').value, valueName: overlay.querySelector('#reg-n-value').value });
+                sessionStorage.setItem('regCurrent', out.registry.key);
+                location.href = `CmRegistrosInformacion.html?registry=${encodeURIComponent(out.registry.key)}`; // el menú ya la trae como pantalla nueva
+            } catch (e) { btn.disabled = false; el.textContent = regErrorText(e.body); el.hidden = false; }
+        });
+    });
+}
+function openRenameRegistry(reg) {
+    openModal(`<h3>${esc(t('main.regRename'))}</h3><label for="reg-r-name">${esc(t('main.regNewName'))}</label><input type="text" id="reg-r-name" maxlength="80" value="${esc(reg.name)}" autocomplete="off">
+        <p class="admin-error" id="reg-r-error" role="alert" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" data-reg-go>${esc(t('main.regRename'))}</button><button type="button" class="btn btn-secondary" data-reg-close>${esc(t('main.regCancel'))}</button></div>`, 'regRenameDialog', (overlay) => {
+        overlay.querySelector('#reg-r-name').focus();
+        overlay.querySelector('[data-reg-go]').addEventListener('click', async (event) => {
+            const btn = event.currentTarget; btn.disabled = true;
+            try {
+                await sendRegistry('PATCH', `${API}/${encodeURIComponent(reg.key)}`, { name: overlay.querySelector('#reg-r-name').value });
+                location.reload(); // el menú trae el nombre nuevo
+            } catch (e) { btn.disabled = false; const el = overlay.querySelector('#reg-r-error'); el.textContent = regErrorText(e.body); el.hidden = false; }
+        });
+    });
+}
+async function toggleRegistry(reg) {
+    try {
+        await sendRegistry('PATCH', `${API}/${encodeURIComponent(reg.key)}`, { status: reg.status === 'active' ? 'inactive' : 'active' });
+        location.reload(); // sale del menú (o vuelve a salir)
+    } catch (e) { Dashboard.showToast(regErrorText(e.body), 'error'); }
 }
 
 // ---- la franja de «última carga» -----------------------------------------------------------------------------------------------------------------
@@ -209,8 +314,7 @@ function drawData() {
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(DATA_TABLE);
     wrapper.setAttribute('data-help-key', 'regTable');
     if (Dashboard.attachTableDownloadButton) {
-        const regName = () => t((currentRegistry() || {}).nameKey || 'menu.cmRegistrosInformacion');
-        Dashboard.attachTableDownloadButton(DATA_TABLE, { getTitle: () => `${regName()}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : '') });
+        Dashboard.attachTableDownloadButton(DATA_TABLE, { getTitle: () => `${regName(currentRegistry())}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : '') });
     }
     let note = document.getElementById('reg-truncated');
     if (body.truncated) {
@@ -274,7 +378,7 @@ function drawLoads() {
     if (first && st.tab === 'loads' && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 1);
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(LOADS_TABLE);
     wrapper.setAttribute('data-help-key', 'regLoadsTable');
-    if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(LOADS_TABLE, { getTitle: () => `${t((currentRegistry() || {}).nameKey || 'menu.cmRegistrosInformacion')}_${t('main.regTabLoads')}_${todayStamp()}` });
+    if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(LOADS_TABLE, { getTitle: () => `${regName(currentRegistry())}_${t('main.regTabLoads')}_${todayStamp()}` });
 }
 async function refreshData() {
     if (!st.key) return;
@@ -323,7 +427,8 @@ function showTab(tab) {
 function renderButtons() {
     const toolbar = wrapperOf(DATA_TABLE)?.previousElementSibling;
     if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;
-    if (toolbar.querySelector('#reg-import-btn') || !(st.canTemplate || st.canExcel)) return;
+    const reg = currentRegistry();
+    if (toolbar.querySelector('#reg-import-btn') || !(st.canTemplate || st.canExcel) || (reg && reg.status !== 'active')) return;
     const make = (id, icon, key, helpKey, onClick) => {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -424,7 +529,7 @@ function openLoadModal() {
     const errBox = () => `<p class="admin-error" id="reg-i-error" role="alert"${s.error ? '' : ' hidden'}>${esc(s.error)}</p>`;
     const dayField = () => `<div class="reg-day"><label for="reg-i-day">${esc(t('main.regDayLabel'))}</label><input type="date" id="reg-i-day" value="${esc(s.day)}" max="${esc(todayText)}"></div>`;
     const wayCard = (id, titleKey, steps, on, enabled) => `<label class="reg-way${on ? ' reg-way-on' : ''}${enabled ? '' : ' reg-way-off'}"><input type="radio" name="reg-way" value="${id}"${on ? ' checked' : ''}${enabled ? '' : ' disabled'}><b>${esc(t(titleKey))}</b><ol>${steps.map((k) => `<li>${esc(t(k))}</li>`).join('')}</ol></label>`;
-    const startHtml = () => `<h3 id="reg-i-title">${esc(t('main.regImpTitle', { name: t(reg.nameKey) }))}</h3>
+    const startHtml = () => `<h3 id="reg-i-title">${esc(t('main.regImpTitle', { name: regName(reg) }))}</h3>
         <p class="admin-hint">${esc(t('main.regImpHint'))}</p>
         <div class="reg-ways" data-help-key="regWays">${wayCard('plantilla', 'main.regWayTemplate', ['main.regWayTemplate1', reg.kind === 'month' ? 'main.regWayTemplate2' : 'main.regWayTemplate2Day', 'main.regWayTemplate3'], s.source === 'plantilla', st.canTemplate)}${wayCard('excel', 'main.regWayExcel', ['main.regWayExcel1', 'main.regWayExcel2', 'main.regWayExcel3'], s.source === 'excel', st.canExcel)}</div>
         ${s.source === 'plantilla' ? `<p><button type="button" class="btn btn-secondary" data-reg-i="template"${s.busy ? ' disabled' : ''}><i class="bx bx-download" aria-hidden="true"></i> ${esc(t('main.regTemplate'))}</button></p>` : ''}
@@ -468,7 +573,7 @@ function openLoadModal() {
         ].join('');
         const periodRows = sum.periods.map((p) => `<tr><td>${esc(periodLabel(p.period))}</td><td>${esc(t(p.status === 'new' ? 'main.regPeriodNew' : 'main.regPeriodExisting'))}</td><td class="wp-imp-num">${num(p.added)}</td><td class="wp-imp-num">${num(p.untouched)}</td><td class="wp-imp-num">${num(p.different)}</td></tr>`).join('');
         const issueRows = shown.map((i) => `<tr class="wp-imp-row wp-imp-row-${i.kind === 'error' ? 'error' : 'warn'}"><td class="wp-imp-num">${i.line}</td><td>${esc(i.unidad)}</td><td>${esc(i.codigo)}</td><td>${esc(i.period ? periodLabel(i.period) : '')}</td><td class="wp-imp-num">${i.file === undefined ? '' : esc(typeof i.file === 'number' ? num(i.file) : i.file)}</td><td class="wp-imp-num">${i.saved === undefined ? '' : esc(num(i.saved))}</td><td>${esc(problemText(i))}</td></tr>`).join('');
-        return `<h3 id="reg-i-title">${esc(s.file ? s.file.name : t('main.regImpTitle', { name: t(reg.nameKey) }))}</h3>
+        return `<h3 id="reg-i-title">${esc(s.file ? s.file.name : t('main.regImpTitle', { name: regName(reg) }))}</h3>
             <p class="admin-hint">${esc(t('main.regRowsRead', { rows: num(sum.rowsInFile), sheet: sum.sheet }))}</p>
             <div class="wp-imp-sum" data-help-key="regPreview">${pills}</div>
             ${periodRows ? `<div class="wp-imp-table-wrap reg-periods"><table class="wp-imp-table"><thead><tr><th>${esc(t('main.regPeriodCol'))}</th><th>${esc(t('main.regPeriodState'))}</th><th>${esc(t('main.regPeriodAdded'))}</th><th>${esc(t('main.regPeriodUntouched'))}</th><th>${esc(t('main.regPeriodDifferent'))}</th></tr></thead><tbody>${periodRows}</tbody></table></div>` : ''}

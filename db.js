@@ -1148,6 +1148,25 @@ db.exec(`
     ) WITHOUT ROWID;
     CREATE INDEX IF NOT EXISTS idx_mr_values_load ON manual_registry_values(load_id);
 `);
+// Los registros que cada cliente agrega él mismo («＋ Agregar nuevo registro»); los dos de siempre viven en manualRegistries.js y son de todos. Un registro nuevo lleva las mismas columnas de referencia (Unidad, Código, Descripción, Categoría y UDM)
+// y su periodicidad (mensual o diaria); value_name es lo que mide («Consumo», «Existencia»…). Nunca se borra: se desactiva (deja de salir en el menú y de cargarse; sus datos y sus cargas se conservan).
+db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_registry_defs (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id          INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data       INTEGER NOT NULL DEFAULT 0,
+        key                TEXT NOT NULL,
+        name               TEXT NOT NULL,
+        kind               TEXT NOT NULL,
+        value_name         TEXT NOT NULL DEFAULT '',
+        status             TEXT NOT NULL DEFAULT 'active',
+        created_by         TEXT NOT NULL DEFAULT '',
+        created_by_user_id INTEGER,
+        created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at         TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (client_id, is_test_data, key)
+    );
+`);
 
 // Cargas Manuales › Análisis Registros Manuales (Daniel, 2026-11-25): un análisis junta uno o dos registros por unidad + código; «Extraer» saca un ARCHIVO propio (una versión con su fecha) que es una COPIA: no cambia aunque después cambie un registro.
 // Los análisis y las versiones nunca se borran: un análisis se desactiva y una versión se anula.
@@ -4264,7 +4283,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'mtto-preventivo': { create: 'colMpCreateAuth', delete: 'colMpDeleteAuth' },
     'mtto-correctivo': { create: 'colMcCreateAuth' },
     'ventas': { import: 'colVenImportAuth' },
-    'registros': { import: 'colRegCargarPlantillaAuth', importExcel: 'colRegCargarExcelAuth', annul: 'colRegAnularAuth' },
+    'registros': { import: 'colRegCargarPlantillaAuth', importExcel: 'colRegCargarExcelAuth', annul: 'colRegAnularAuth', create: 'colRegCrearAuth' },
     'analisis': { create: 'colAnCrearAuth', extract: 'colAnExtraerAuth', annul: 'colAnAnularAuth' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
@@ -4788,6 +4807,12 @@ function moveVentasManualesToAdditionalOnce() {
     })();
     console.log(`[db] Ventas Manuales como adicional (una vez): ${JSON.stringify(stats)}.`);
 }
+// El botón «Crear registro» (colRegCrearAuth) es nuevo: quien ya tiene la pantalla Registros Información lo recibe en lo contratado (Solo ver + Ver y operar); quien lo use en su puesto o usuario lo decide el administrador desde el árbol.
+const REG_CREATE_BUTTON_SEED_KEY = 'seed-registros-crear-boton-v1';
+function seedRegistrosCreateButton() {
+    const path = TABLE_GRANT_PATHS.registros;
+    seedLeavesForScreenHolders(REG_CREATE_BUTTON_SEED_KEY, path, ['solo-ver', 'ver-y-operar'].map((level) => `${path.submenuPrefix}/class-botones/colRegCrearAuth/${level}`), 'the Crear registro button', { contractOnly: true });
+}
 // La franja de «última carga» de las pantallas de Cargas Manuales: cuándo se cargó lo último, quién y de qué archivo, y hasta qué día llegan los datos (la venta más reciente cargada).
 function getPosSalesLastLoad(clientId, forTestAccount = false) {
     const lane = forTestAccount ? 1 : 0;
@@ -4919,6 +4944,29 @@ function listRegistryData(clientId, forTestAccount, registryKey, filters = {}, l
     const valuesStmt = db.prepare("SELECT v.row_id, v.period, v.value FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE l.status = 'vigente' AND v.row_id = ?");
     ids.forEach((id) => { valuesStmt.all(id).forEach((v) => { byId.get(id).values[v.period] = v.value; }); });
     return { rows: [...byId.values()], total };
+}
+
+// ---- Registros que el cliente agrega (manual_registry_defs) ----
+function mapRegistryDef(row) {
+    return { id: row.id, key: row.key, name: row.name, kind: row.kind, valueName: row.value_name, status: row.status, createdBy: row.created_by, createdAt: row.created_at };
+}
+function listRegistryDefs(clientId, forTestAccount = false) {
+    return db.prepare('SELECT * FROM manual_registry_defs WHERE client_id = ? AND is_test_data = ? ORDER BY id').all(clientId, forTestAccount ? 1 : 0).map(mapRegistryDef);
+}
+function createRegistryDef({ clientId, isTestData = false, key, name, kind, valueName, createdBy, createdByUserId }) {
+    return db.prepare('INSERT INTO manual_registry_defs (client_id, is_test_data, key, name, kind, value_name, created_by, created_by_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(clientId, isTestData ? 1 : 0, key, name, kind, valueName || '', createdBy || '', createdByUserId || null).lastInsertRowid;
+}
+function updateRegistryDef(clientId, forTestAccount, key, patch) {
+    const sets = []; const params = [];
+    if (patch.name !== undefined) { sets.push('name = ?'); params.push(patch.name); }
+    if (patch.status !== undefined) { sets.push('status = ?'); params.push(patch.status); }
+    if (sets.length) {
+        sets.push("updated_at = datetime('now')");
+        db.prepare(`UPDATE manual_registry_defs SET ${sets.join(', ')} WHERE client_id = ? AND is_test_data = ? AND key = ?`).run(...params, clientId, forTestAccount ? 1 : 0, key);
+    }
+    const row = db.prepare('SELECT * FROM manual_registry_defs WHERE client_id = ? AND is_test_data = ? AND key = ?').get(clientId, forTestAccount ? 1 : 0, key);
+    return row ? mapRegistryDef(row) : null;
 }
 
 // ---- Cargas Manuales › Análisis Registros Manuales (la lógica de juntar registros vive en manualAnalyses.js) ----
@@ -22191,6 +22239,7 @@ moveScreensToGestionOnce();
 try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos desde TI: no se pudieron mover los permisos de las pantallas (se reintentará al arrancar):', err.message); }
 try { moveVentasToCargasManualesOnce(); } catch (err) { console.error('[db] Ventas Manuales: no se pudo mover Ventas a Cargas Manuales (se reintentará al arrancar):', err.message); }
 try { moveVentasManualesToAdditionalOnce(); } catch (err) { console.error('[db] Ventas Manuales: no se pudo pasar a adicional (se reintentará al arrancar):', err.message); }
+try { seedRegistrosCreateButton(); } catch (err) { console.error('[db] Registros: no se pudo sembrar el botón Crear registro (se reintentará al arrancar):', err.message); }
 try { backfillPosSalePublic(); } catch (err) { console.error('[db] Ventas: no se pudo rellenar el código de los tickets (se reintentará al arrancar):', err.message); }
 try { seedSitesFromCostCentersOnce(); } catch (err) { console.error('[db] Sitios propios: no se pudo crear desde los centros (se reintentará al arrancar):', err.message); }
 try { seedTiMinimumOnce(); } catch (err) { console.error('[db] TI por defecto: no se pudo abrir el mínimo (se reintentará al arrancar):', err.message); }
@@ -22604,6 +22653,7 @@ module.exports = {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
+    listRegistryDefs, createRegistryDef, updateRegistryDef,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, MR_SCREEN,
     getPosSaleByToken,
