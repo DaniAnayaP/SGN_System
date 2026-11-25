@@ -10304,6 +10304,7 @@ td.col-num{ text-align: right; font-variant-numeric: tabular-nums; white-space: 
 
 /* Cargas Manuales: la franja de «última carga» que va arriba de cada pantalla del apartado */
 .cm-stamp{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.9rem; padding: 0.55rem 0.9rem; margin: 0 0 0.8rem; border-radius: 0.7rem; background: color-mix(in srgb, var(--color-accent) 12%, transparent); font-size: 0.78rem; line-height: 1.35; }
+.cm-stamp[hidden]{ display: none; }
 .cm-stamp-part{ display: inline-flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
 .cm-stamp-pill{ background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 1rem; padding: 0.1rem 0.7rem; font-weight: 600; }
 
@@ -10378,3 +10379,43 @@ td.an-cons, th.an-cons{ background: color-mix(in srgb, #f7d9f5 45%, transparent)
 .reg-manage{ display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0 0 0.8rem; }
 .reg-manage-btn{ display: inline-flex; gap: 0.35rem; align-items: center; padding-block: 0.3rem; font-size: 0.8rem; }
 .reg-card-static{ cursor: default; }
+
+/* Registros Información en el celular (Daniel, 2026-11-25, «Si!» a la maqueta «Registros en celular»): solo esta pantalla.
+   1 márgenes de los lados de 56 a 12 px · 2 tarjeta y franja de «última carga» como un solo bloque · 3 «Cargar registro» y «Descargar plantilla» a mitad de ancho en su renglón
+   4 iconos de la barra grandes para el dedo y en renglones. La «copia» de la barra que se veía abajo de la tabla era la barra oculta de la pestaña Cargas (el display ganaba al hidden): ya no se ve, en ningún ancho. */
+body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom[hidden]{ display: none; }
+@media (max-width: 600px){
+    body.sgn-scroll-shell[data-active-page="cat-cargas-manuales-registros"] > main > .page-scroll{ margin-right: -0.75rem; padding-right: 0.75rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] > main{ padding-left: 0.75rem; padding-right: 0.75rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .page-content{ padding-left: 0; padding-right: 0; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-cards{ margin-bottom: 0.7rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-cards:has(+ .cm-stamp:not([hidden])){ margin-bottom: 0; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-cards:has(+ .cm-stamp:not([hidden])) .reg-card{ border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent; }
+    body[data-active-page="cat-cargas-manuales-registros"] .cm-stamp{ margin: 0 0 0.7rem; border: 1px solid var(--color-accent); border-top: 0; border-radius: 0 0 0.9rem 0.9rem; background: color-mix(in srgb, var(--color-accent) 9%, var(--color-surface)); padding: 0.1rem 0.95rem 0.7rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-tabs{ gap: 0; padding: 3px; border-radius: 999px; background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface)); flex-wrap: nowrap; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-tab{ flex: 1; text-align: center; border: 0; background: transparent; padding-block: 0.4rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-tab-on{ background: var(--color-surface); box-shadow: 0 1px 3px rgba(21, 24, 43, 0.18); }
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom{ display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.5rem 0.35rem; justify-content: stretch; justify-items: center; align-items: center; }
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom > .data-table-new-record-btn{ grid-column: span 3; justify-self: stretch; width: 100%; justify-content: center; min-height: 2.6rem; height: auto; line-height: 1.2; text-align: center; padding-inline: 0.5rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-zoom-btn{ width: 2.6rem; height: 2.6rem; font-size: 1.15rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-search-pill,
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-layout-pill{ height: 2.6rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-search-pill.open,
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-search-pill.named,
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-layout-pill.open,
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-layout-pill.named{ grid-column: 1 / -1; justify-self: stretch; width: auto; max-width: none; }
+    /* 5 Control Interno plegado: una barra dentro de la barra de herramientas de cada tabla; sin la clase reg-ci-open sus 13 columnas no se dibujan (solo la vista: el motor de tablas no las oculta) */
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom > .reg-ci-bar{ display: flex; grid-column: 1 / -1; align-items: center; gap: 0.5rem; width: 100%; padding: 0.5rem 0.8rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 0.8rem; background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface)); color: inherit; font: inherit; font-size: 0.8rem; text-align: left; cursor: pointer; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-ci-bar b{ font-weight: 600; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-ci-bar span{ opacity: 0.7; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-ci-bar i{ font-size: 1.1rem; transition: transform 0.15s ease; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-ci-bar[aria-expanded="true"] i{ transform: rotate(90deg); }
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-wrapper.reg-ci-fold:not(.reg-ci-open){ scroll-padding-left: 0 !important; }
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-wrapper.reg-ci-fold:not(.reg-ci-open) table.data-table{ width: 0 !important; min-width: 100% !important; }
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-wrapper.reg-ci-fold:not(.reg-ci-open) col[data-col^="colSys"]{ width: 0 !important; visibility: collapse; }
+    /* Las celdas NO se esconden con display:none (las demás columnas se correrían a los lugares de las plegadas): se quedan en su columna, que mide 0, y se recortan. */
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-wrapper.reg-ci-fold:not(.reg-ci-open) th[data-col^="colSys"],
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-wrapper.reg-ci-fold:not(.reg-ci-open) td[data-col^="colSys"],
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-wrapper.reg-ci-fold:not(.reg-ci-open) tr.data-table-group-band > th:nth-child(-n+2){ padding: 0 !important; border-width: 0 !important; overflow: hidden !important; font-size: 0 !important; max-width: 0; }
+}
+body[data-active-page="cat-cargas-manuales-registros"] .reg-ci-bar{ display: none; }

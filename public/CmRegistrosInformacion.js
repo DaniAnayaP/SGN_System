@@ -229,7 +229,9 @@ function renderStamp() {
     bar.textContent = '';
     const reg = currentRegistry();
     const load = reg && reg.lastLoad;
-    if (!load) { const none = document.createElement('span'); none.textContent = t('main.cmStampNone'); bar.appendChild(none); return; }
+    // sin ninguna carga la tarjeta de arriba ya dice «Todavía no se ha cargado nada»: la franja no lo repite (Daniel, 2026-11-25)
+    bar.hidden = !load;
+    if (!load) return;
     const part = (node) => { const span = document.createElement('span'); span.className = 'cm-stamp-part'; span.append(...(Array.isArray(node) ? node : [node])); bar.appendChild(span); return span; };
     const strong = (text) => { const b = document.createElement('b'); b.textContent = text; return b; };
     const when = document.createElement('span');
@@ -317,6 +319,7 @@ function drawData() {
     } else if (note) note.remove();
     else if (body.total) { /* todo cabe */ }
     renderButtons();
+    foldControlInterno(DATA_TABLE);
 }
 function drawLoads() {
     const body = st.loads;
@@ -373,6 +376,7 @@ function drawLoads() {
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(LOADS_TABLE);
     wrapper.setAttribute('data-help-key', 'regLoadsTable');
     if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(LOADS_TABLE, { getTitle: () => `${regName(currentRegistry())}_${t('main.regTabLoads')}_${todayStamp()}` });
+    foldControlInterno(LOADS_TABLE);
 }
 async function refreshData() {
     if (!st.key) return;
@@ -437,6 +441,26 @@ function renderButtons() {
     toolbar.prepend(make('reg-template-btn', 'bx-download', 'main.regTemplate', 'regTemplate', downloadTemplate));
     toolbar.prepend(make('reg-import-btn', 'bx-upload', 'main.regImport', 'regImport', openLoadModal));
 }
+// Celular (Daniel, 2026-11-25, «Si!» a la maqueta «Registros en celular»): las 13 columnas de Control Interno salen plegadas y la barra «› Control Interno · 13 columnas» las abre.
+// El plegado es solo de la vista (CSS de Admin.css, solo hasta 600 px): el motor de tablas no oculta ninguna columna, así que las descargas y los acomodos guardados no cambian.
+// Se pone cuando la tabla ya se inició: el motor mide el ancho natural de las columnas al iniciar y no debe medirlas plegadas.
+function foldControlInterno(tableId) {
+    const wrapper = wrapperOf(tableId);
+    const toolbar = wrapper && wrapper.previousElementSibling;
+    if (!wrapper || !tableOf(tableId)?.dataset.colInit || !toolbar || !toolbar.classList.contains('data-table-zoom')) return;
+    wrapper.classList.add('reg-ci-fold');
+    let bar = toolbar.querySelector('.reg-ci-bar');
+    if (!bar) {
+        bar = document.createElement('button');
+        bar.type = 'button';
+        bar.className = 'reg-ci-bar';
+        bar.setAttribute('data-help-key', 'regCiBar');
+        bar.setAttribute('aria-expanded', 'false');
+        bar.addEventListener('click', () => { const open = wrapper.classList.toggle('reg-ci-open'); bar.setAttribute('aria-expanded', open ? 'true' : 'false'); });
+        toolbar.appendChild(bar);
+    }
+    bar.innerHTML = `<i class="bx bx-chevron-right" aria-hidden="true"></i><b>${esc(t('menu.classControlInterno'))}</b><span>${esc(t('main.regCiColumns', { n: SYSTEM_COLUMN_KEYS.length }))}</span>`;
+}
 function wireStatic() {
     document.querySelectorAll('[data-reg-tab]').forEach((btn) => btn.addEventListener('click', () => showTab(btn.dataset.regTab)));
     const bar = document.getElementById('filter-bar');
@@ -444,7 +468,7 @@ function wireStatic() {
     bar?.addEventListener('data-table:filter-apply', apply);
     bar?.addEventListener('data-table:filter-clear', () => { st.text = ''; refreshData(); });
     showTab('data');
-    document.addEventListener('dashboard:language-changed', () => { renderCards(); renderStamp(); });
+    document.addEventListener('dashboard:language-changed', () => { renderCards(); renderStamp(); foldControlInterno(DATA_TABLE); foldControlInterno(LOADS_TABLE); });
 }
 
 function saveFile(blob, filename) {

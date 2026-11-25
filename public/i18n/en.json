@@ -5392,6 +5392,7 @@
     "regKindMonth": "Monthly",
     "regKindDay": "Daily",
     "regCardNone": "Nothing has been loaded yet.",
+    "regCiColumns": "{n} columns",
     "regCardMonths": "{n} months loaded · from {from} to {to}",
     "regCardDays": "{n} days loaded · the last one, {last}",
     "regCardMissOne": "1 period is missing in between",
@@ -9615,6 +9616,10 @@
     "regNewDialog": {
       "what": "The record set name, how often it is loaded (one month per column, or one day per column) and the name of what it measures. That name becomes the heading of the values column in the template and in analyses.",
       "example": "Name: Monthly consumption · Monthly · Measures: Consumption."
+    },
+    "regCiBar": {
+      "what": "Internal Control is the set of 13 control columns every table in the system carries: company, area, module, screen, cost center and the date and time of each row. On a phone they start folded so the data shows first; tap it to open them. None is removed: they are also in the download.",
+      "example": "Tap «Internal Control · 13 columns» to see each row's Company, Area and Date."
     },
     "regManage": {
       "what": "Only for record sets you added. Rename updates the menu. Deactivate removes it from the menu; it stops receiving loads and is no longer offered for new analyses. Its data and loads are kept and it can be activated again.",
