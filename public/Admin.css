@@ -10570,3 +10570,86 @@ body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom[hidden]{
     outline: none;
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
 }
+
+/* ---------- Análisis sin Diseño (Daniel, 2026-11-26, «constrúyelo todo de una vez»): «Nuevo análisis», «De un archivo», «Columnas base» y la pantalla ---------- */
+.an-start{ display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center; margin: 0.5rem 0; font-size: 0.85rem; }
+.an-start label{ display: inline-flex; gap: 0.35rem; align-items: center; }
+.an-basecols{ display: flex; flex-wrap: wrap; gap: 0.35rem 0.4rem; align-items: center; margin: 0.3rem 0 0.6rem; }
+.an-bchip{ display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.1rem 0.25rem 0.1rem 0.65rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 999px; font-size: 0.78rem; background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); }
+.an-bchip-key{ border-style: solid; background: var(--color-accent); color: var(--color-accent-text); font-weight: 600; }
+.an-bname{ display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer; }
+.an-bname input{ position: absolute; opacity: 0; width: 0; height: 0; }
+.an-bkey{ border: 1px dashed currentColor; background: transparent; color: inherit; border-radius: 999px; padding: 0 0.5rem; font: inherit; font-size: 0.66rem; font-weight: 600; cursor: pointer; opacity: 0.75; }
+.an-bkey.on{ background: color-mix(in srgb, var(--color-accent-text) 22%, transparent); border-style: solid; opacity: 1; }
+.an-bchip-add{ padding: 0.15rem 0.7rem; cursor: pointer; font: inherit; font-size: 0.78rem; color: inherit; }
+.an-bmenu{ max-height: 16rem; overflow: auto; }
+.an-opts{ display: flex; flex-direction: column; gap: 0.4rem; margin: 0.3rem 0 0.4rem; }
+.an-opt{ display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.45rem 0.7rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 0.7rem; background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); font-size: 0.82rem; cursor: pointer; }
+.an-opt span{ display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.an-opt small{ opacity: 0.7; font-size: 0.74rem; }
+.an-opt em{ font-style: normal; font-size: 0.68rem; font-weight: 600; background: color-mix(in srgb, #2a7a48 18%, var(--color-surface)); color: #2a7a48; border-radius: 999px; padding: 0.05rem 0.55rem; align-self: center; white-space: nowrap; }
+.an-opt:has(input:checked){ border-style: solid; border-color: var(--color-accent); }
+.an-prev{ margin: 0.4rem 0; }
+.an-prev-nums{ display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 0.4rem; }
+.an-prev-nums > div{ display: flex; flex-direction: column; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 0.8rem; padding: 0.3rem 0.9rem; min-width: 9rem; }
+.an-prev-nums b{ font-size: 1.2rem; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.an-prev-nums span{ font-size: 0.74rem; opacity: 0.7; }
+/* selector múltiple tipo Excel */
+.an-ms{ position: relative; min-width: 0; }
+.an-ms-sum{ display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem; width: 100%; min-height: 2.1rem; padding: 0.25rem 2rem 0.25rem 0.7rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); border-radius: 0.55rem; font: inherit; font-size: 0.85rem; color: inherit; text-align: left; cursor: pointer; position: relative; }
+.an-ms-sum::after{ content: ""; position: absolute; right: 0.8rem; top: 50%; width: 0.45rem; height: 0.45rem; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; opacity: 0.55; transform: translateY(-70%) rotate(45deg); }
+.an-ms-pill{ background: color-mix(in srgb, var(--color-accent) 20%, var(--color-surface)); border-radius: 999px; padding: 0 0.6rem; font-weight: 600; font-size: 0.76rem; }
+.an-ms-n{ font-style: normal; font-size: 0.74rem; opacity: 0.7; font-weight: 600; }
+.an-ms-ph{ opacity: 0.6; }
+.an-ms-panel{ position: absolute; z-index: 60; top: 100%; left: 0; right: 0; min-width: 15rem; margin-top: 0.25rem; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 0.8rem; box-shadow: 0 10px 28px rgba(60, 20, 70, 0.22); padding: 0.5rem; }
+.an-ms-panel[hidden]{ display: none; }
+.an-ms-search{ width: 100%; margin-bottom: 0.35rem; }
+.an-ms-op{ display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.4rem; border-radius: 0.4rem; font-size: 0.8rem; cursor: pointer; }
+.an-ms-op:hover{ background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface)); }
+.an-ms-all{ border-bottom: 1px solid var(--color-border); margin-bottom: 0.2rem; }
+.an-ms-list{ max-height: 11rem; overflow: auto; }
+.an-ms-more{ margin: 0.3rem 0 0; font-size: 0.74rem; opacity: 0.7; }
+/* la ventana «De un archivo» */
+.exp-panel.an-fd-panel{ width: min(46rem, 96vw); }
+.an-fd{ display: block; }
+.an-fd .reg-field-label small, .an-fd label small{ font-weight: 400; opacity: 0.7; margin-left: 0.3rem; }
+.an-valcols{ display: flex; flex-wrap: wrap; gap: 0.3rem 0.4rem; margin: 0.3rem 0 0.5rem; max-height: 8rem; overflow: auto; }
+.an-vchip{ position: relative; display: inline-flex; cursor: pointer; }
+.an-vchip input{ position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.an-vchip span, .an-vchip-btn{ display: inline-flex; align-items: center; padding: 0.12rem 0.7rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 999px; font: inherit; font-size: 0.78rem; color: var(--color-text-secondary); background: transparent; cursor: pointer; }
+.an-vchip input:checked + span, .an-vchip-btn.on{ border-style: solid; background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface)); color: var(--color-text-primary); font-weight: 500; }
+.an-vchip input:focus-visible + span{ outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.an-keymap{ display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 0.4rem 0.6rem; align-items: center; font-size: 0.82rem; margin: 0.3rem 0; }
+.an-kb{ font-weight: 600; }
+.an-kept{ margin: 0.2rem 0; padding: 0.3rem 0.7rem; border-radius: 0.6rem; background: color-mix(in srgb, #2a7a48 16%, var(--color-surface)); color: #2a7a48; font-size: 0.78rem; font-weight: 500; }
+.an-conds{ display: flex; flex-direction: column; gap: 0.35rem; margin: 0.3rem 0; }
+.an-cond2{ display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 2fr) auto; gap: 0.4rem 0.6rem; align-items: start; font-size: 0.82rem; }
+.an-cond2 > span{ padding-top: 0.4rem; }
+.an-conn{ display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; }
+.an-conn-btn{ border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 999px; padding: 0.1rem 0.8rem; background: transparent; font: inherit; font-size: 0.78rem; color: inherit; cursor: pointer; }
+.an-conn-btn.on{ border-style: solid; background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface)); font-weight: 600; }
+.an-swrow{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.45rem; margin: 0.3rem 0; }
+.an-swlab{ min-width: 5.5rem; }
+.an-dim{ font-size: 0.76rem; opacity: 0.7; }
+.an-swatches{ display: inline-flex; gap: 0.35rem; }
+.an-sw{ position: relative; display: inline-block; width: 1.45rem; height: 1.45rem; padding: 0; border-radius: 50%; border: 2px solid transparent; flex: 0 0 auto; cursor: pointer; }
+.an-sw.on{ border-color: var(--color-text-primary); box-shadow: 0 0 0 2px var(--color-surface) inset; }
+.an-sw.none{ background: repeating-linear-gradient(45deg, var(--color-surface) 0 4px, var(--color-border) 4px 6px); border-color: color-mix(in srgb, var(--color-accent) 55%, transparent); }
+.an-sw.none.on{ border-color: var(--color-text-primary); }
+.an-sw.custom{ background: conic-gradient(#3f78ad, #b23fb8, #b57a05, #2b8456, #3f78ad); overflow: hidden; }
+.an-sw.custom input{ position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.an-fmtrow{ display: flex; flex-wrap: wrap; gap: 0.35rem 0.4rem; align-items: center; margin: 0.3rem 0; }
+.an-pers{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.3rem 0; }
+.an-pers input{ max-width: 14rem; }
+.an-fxbar{ display: flex; gap: 0.35rem; }
+.an-fxb{ width: 1.9rem; height: 1.9rem; display: inline-flex; align-items: center; justify-content: center; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 0.5rem; background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); font: inherit; font-size: 0.85rem; color: inherit; cursor: pointer; }
+.an-fxb.on{ border-style: solid; border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface)); }
+.an-fdprev{ border: 1px dashed color-mix(in srgb, var(--color-accent) 40%, transparent); border-radius: 0.8rem; padding: 0.5rem 0.8rem; font-size: 0.82rem; min-height: 2.4rem; }
+.an-fdprev p{ margin: 0 0 0.4rem; }
+.btn-small{ padding: 0.2rem 0.8rem; font-size: 0.78rem; }
+.an-viewsel{ width: auto; max-width: 11rem; padding-block: 0.15rem; font-size: 0.78rem; }
+.an-filechip small{ opacity: 0.6; }
+th.an-ref-key::after{ content: " ·"; opacity: 0.55; }
+.an-fd > label[for], #an-c-blank > label[for]{ display: block; margin: 0.55rem 0 0.2rem; font-size: 0.78rem; font-weight: 600; }
+.an-fd > select, .an-fd > input[type="text"], #an-c-blank > select{ width: 100%; }
+.an-fd .reg-field-label, #an-c-blank .reg-field-label{ margin: 0.6rem 0 0.2rem; font-size: 0.78rem; font-weight: 600; opacity: 1; }

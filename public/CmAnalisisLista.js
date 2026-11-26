@@ -98,7 +98,7 @@ function draw() {
         tr.append(
             name,
             cell('colAnRegistros', (a.design.registries || []).map((k) => { const r = st.registries.find((x) => x.key === k); return r ? regName(r) : k; }).join(' · ')),
-            cell('colAnColumnas', (a.design.consulted || []).length, 'col-num'), lastCell, cell('colAnVersiones', a.extractionsCount, 'col-num'), status, actions,
+            cell('colAnColumnas', ((a.design.legacy === false || !(a.design.consulted || []).length) && a.design.columns ? a.design.columns : (a.design.consulted || [])).length, 'col-num'), lastCell, cell('colAnVersiones', a.extractionsCount, 'col-num'), status, actions,
         );
         tbody.appendChild(tr);
     });
@@ -122,7 +122,7 @@ function openNewFromMenu() {
 }
 function errorText(body) {
     const code = body && body.code;
-    return ['AN_NAME_REQUIRED', 'AN_NAME_TAKEN', 'DESIGN_REGISTRIES', 'AN_FORBIDDEN'].includes(code) ? t(`main.anErr_${code}`) : t('admin.saveError');
+    return ['AN_NAME_REQUIRED', 'AN_NAME_TAKEN', 'DESIGN_REGISTRIES', 'AN_FORBIDDEN', 'BASE_KEY', 'COL_NOT_FOUND'].includes(code) ? t(`main.anErr_${code}`) : t('admin.saveError');
 }
 function modal(html, onReady) {
     const overlay = document.createElement('div');
@@ -136,34 +136,106 @@ function modal(html, onReady) {
     overlay.querySelectorAll('[data-an-close]').forEach((b) => b.addEventListener('click', close));
     onReady(overlay, close);
 }
-function openCreate() {
-    const regs = st.registries.filter((r) => r.status === 'active'); // un registro desactivado ya no se ofrece para análisis nuevos
+// «Nuevo análisis» (Daniel, 2026-11-26): solo se eligen el archivo base, las columnas base (cada una puede ser llave) y si la llave lleva duplicados. Todo lo demás se arma en el Análisis.
+// Las columnas que se ofrecen salen del archivo base (los registros mensuales/diarios traen sus 6 columnas fijas; los de tabla libre, las suyas). Unidad/Sitio y Código vienen como llave si el archivo es mensual o diario;
+// en una tabla libre vienen como llave las que se cargaron como llave.
+function suggestBase(source) {
+    const cols = source ? source.columns : [];
+    const isPeriodic = cols.some((c) => c.kind === 'dim');
+    let picked;
+    if (isPeriodic) picked = [['unidad', true], ['codigo', true], ['descripcion', false], ['categoria', false]];
+    else {
+        const keys = cols.filter((c) => c.group === 'key');
+        const data = cols.filter((c) => c.group === 'data');
+        const loose = cols.filter((c) => c.kind === 'text');
+        picked = keys.length ? [...keys.map((c) => [c.key, true]), ...data.slice(0, 2).map((c) => [c.key, false])] : loose.slice(0, 3).map((c, i) => [c.key, i === 0]);
+    }
+    return picked.filter(([key]) => cols.some((c) => c.key === key));
+}
+async function openCreate() {
+    const kit = window.AnalysisKit;
+    const sources = (await kit.loadSources()).registries || [];
+    const regs = sources.filter((r) => r.status === 'active' && !r.obsolete); // un registro desactivado u obsoleto ya no se ofrece para análisis nuevos
     const html = `<h3>${esc(t('main.anNewTitle'))}</h3>
         <label for="an-c-name">${esc(t('main.anName'))}</label><input type="text" id="an-c-name" maxlength="80" autocomplete="off">
-        <p class="reg-field-label">${esc(t('main.anRegistriesLabel'))}</p>
-        <div class="an-checks" id="an-c-regs">${regs.map((r) => `<label><input type="checkbox" value="${esc(r.key)}" checked> <span>${esc(regName(r))}</span> <small>${esc(t(r.kind === 'month' ? 'main.regKindMonth' : 'main.regKindDay'))}</small></label>`).join('')}</div>
-        <p class="reg-field-label">${esc(t('main.anStart'))}</p>
-        <div class="an-checks"><label><input type="radio" name="an-c-start" value="blank" checked> <span>${esc(t('main.anStartBlank'))}</span></label>
+        <div class="an-start"><label><input type="radio" name="an-c-start" value="blank" checked> <span>${esc(t('main.anStartBlank'))}</span></label>
         <label><input type="radio" name="an-c-start" value="copy"${st.analyses.length ? '' : ' disabled'}> <span>${esc(t('main.anStartCopy'))}</span></label>
         <select id="an-c-copy"${st.analyses.length ? '' : ' disabled'}>${st.analyses.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></div>
+        <div id="an-c-blank">
+        <label for="an-c-base" data-help-key="anBaseFile">${esc(t('main.an2BaseFile'))} <small>${esc(t('main.an2BaseFileHint'))}</small></label>
+        <select id="an-c-base">${regs.map((r) => `<option value="${esc(r.key)}">${esc(kit.regName(r))}</option>`).join('')}</select>
+        <p class="reg-field-label" data-help-key="anBaseCols">${esc(t('main.an2BaseCols'))}</p>
+        <div class="an-basecols" id="an-c-cols"></div>
+        <p class="reg-field-label" data-help-key="anDedupe">${esc(t('main.an2RowsOfKey'))}</p>
+        <div class="an-opts" id="an-c-dedupe">
+            <label class="an-opt"><input type="radio" name="an-c-dedupe" value="sin" checked><span><b>${esc(t('main.an2NoDup'))}</b><small id="an-c-nodup-hint"></small></span><em>${esc(t('main.an2Default'))}</em></label>
+            <label class="an-opt"><input type="radio" name="an-c-dedupe" value="con"><span><b>${esc(t('main.an2Dup'))}</b><small>${esc(t('main.an2DupHint'))}</small></span></label>
+        </div>
+        <div class="an-prev" id="an-c-prev"></div>
+        </div>
         <p class="admin-error" id="an-c-error" role="alert" hidden></p>
         <div class="admin-form-actions"><button type="button" class="btn" data-an-go>${esc(t('main.anCreate'))}</button><button type="button" class="btn btn-secondary" data-an-close>${esc(t('main.regCancel'))}</button></div>`;
     modal(html, (overlay) => {
-        const err = (text) => { const el = overlay.querySelector('#an-c-error'); el.textContent = text; el.hidden = !text; };
-        overlay.querySelector('#an-c-name').focus();
-        overlay.querySelector('[data-an-go]').addEventListener('click', async (event) => {
+        const $ = (sel) => overlay.querySelector(sel);
+        const err = (text) => { const el = $('#an-c-error'); el.textContent = text; el.hidden = !text; };
+        let base = []; // [{ col, key }]
+        const sourceOf = () => sources.find((r) => r.key === $('#an-c-base').value);
+        const labelOf = (key) => { const c = (sourceOf() ? sourceOf().columns : []).find((x) => x.key === key); return c ? c.label : key; };
+        let previewTimer = null;
+        const drawPreview = () => {
+            clearTimeout(previewTimer);
+            const keys = base.filter((b) => b.key);
+            $('#an-c-nodup-hint').textContent = keys.length ? t('main.an2NoDupHint', { keys: keys.map((b) => labelOf(b.col)).join(' + ') }) : t('main.an2NeedKey');
+            const box = $('#an-c-prev');
+            if (!keys.length) { box.innerHTML = `<p class="admin-error">${esc(t('main.an2NeedKey'))}</p>`; return; }
+            box.innerHTML = `<span class="an-prev-n">…</span>`;
+            previewTimer = setTimeout(async () => {
+                try {
+                    const res = await fetch(`${API}/base-preview`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ baseRegistry: $('#an-c-base').value, base }) });
+                    const out = await res.json().catch(() => ({}));
+                    if (!res.ok) { box.innerHTML = ''; return; }
+                    const num = (n) => Number(n).toLocaleString(kit.lang() === 'en' ? 'en-US' : 'es-MX');
+                    const sample = (out.sample || []).slice(0, 4);
+                    box.innerHTML = `<div class="an-prev-nums"><div><b>${esc(num(out.distinct))}</b><span>${esc(t('main.an2PrevDistinct'))}</span></div><div><b>${esc(num(out.total))}</b><span>${esc(t('main.an2PrevTotal'))}</span></div></div>${sample.length ? `<div class="wp-imp-table-wrap"><table class="wp-imp-table"><thead><tr>${(out.columns || []).map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr></thead><tbody>${sample.map((r) => `<tr>${r.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : ''}`;
+                } catch { box.innerHTML = ''; }
+            }, 250);
+        };
+        const drawCols = () => {
+            const src = sourceOf();
+            const all = src ? src.columns.filter((c) => c.kind !== 'load') : [];
+            const chosen = new Set(base.map((b) => b.col));
+            const rest = all.filter((c) => !chosen.has(c.key));
+            $('#an-c-cols').innerHTML = `${base.map((b) => `<span class="an-bchip${b.key ? ' an-bchip-key' : ''}"><label class="an-bname"><input type="checkbox" data-an-bcol="${esc(b.col)}" checked><span>${esc(labelOf(b.col))}</span></label><button type="button" class="an-bkey${b.key ? ' on' : ''}" data-an-bkey="${esc(b.col)}" aria-pressed="${b.key ? 'true' : 'false'}">${esc(t('main.an2Key'))}</button></span>`).join('')}${rest.length ? `<span class="an-addwrap"><button type="button" class="an-bchip an-bchip-add" data-an-bmore aria-haspopup="true">${esc(t('main.an2AddCol'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu an-bmenu" hidden>${rest.map((c) => `<button type="button" data-an-bpick="${esc(c.key)}">${esc(c.label)}</button>`).join('')}</span></span>` : ''}`;
+            drawPreview();
+        };
+        const resetBase = () => { base = suggestBase(sourceOf()).map(([col, key]) => ({ col, key })); drawCols(); };
+        $('#an-c-base').addEventListener('change', resetBase);
+        overlay.addEventListener('click', (event) => {
+            const keyBtn = event.target.closest('[data-an-bkey]'); const pick = event.target.closest('[data-an-bpick]'); const more = event.target.closest('[data-an-bmore]'); const box = event.target.closest('[data-an-bcol]');
+            const menu = overlay.querySelector('.an-bmenu');
+            if (menu && !more) menu.hidden = true;
+            if (keyBtn) { const b = base.find((x) => x.col === keyBtn.dataset.anBkey); if (b) { b.key = !b.key; drawCols(); } }
+            else if (pick) { base.push({ col: pick.dataset.anBpick, key: false }); drawCols(); }
+            else if (more && menu) { menu.hidden = !menu.hidden; event.stopPropagation(); }
+            else if (box) { event.preventDefault(); base = base.filter((x) => x.col !== box.dataset.anBcol); drawCols(); }
+        });
+        overlay.querySelectorAll('input[name="an-c-start"]').forEach((r) => r.addEventListener('change', () => { $('#an-c-blank').hidden = $('input[name="an-c-start"]:checked').value === 'copy'; }));
+        overlay.querySelector('#an-c-dedupe').addEventListener('change', () => {});
+        resetBase();
+        $('#an-c-name').focus();
+        $('[data-an-go]').addEventListener('click', async (event) => {
             const btn = event.currentTarget;
-            const registries = [...overlay.querySelectorAll('#an-c-regs input:checked')].map((i) => i.value);
-            const copy = overlay.querySelector('input[name="an-c-start"]:checked').value === 'copy';
-            if (!copy && !registries.length) { err(t('main.anErr_DESIGN_REGISTRIES')); return; }
+            const copy = $('input[name="an-c-start"]:checked').value === 'copy';
+            if (!copy && !base.some((b) => b.key)) { err(t('main.an2NeedKey')); return; }
             btn.disabled = true; err('');
             try {
-                const body = { name: overlay.querySelector('#an-c-name').value, registries };
-                if (copy) body.copyFrom = Number(overlay.querySelector('#an-c-copy').value);
+                const body = { name: $('#an-c-name').value };
+                if (copy) body.copyFrom = Number($('#an-c-copy').value);
+                else Object.assign(body, { baseRegistry: $('#an-c-base').value, base, dedupe: $('input[name="an-c-dedupe"]:checked').value });
                 const res = await fetch(API, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
                 const out = await res.json().catch(() => ({}));
                 if (!res.ok) throw Object.assign(new Error('failed'), { body: out });
-                location.href = `CmAnalisis.html?id=${out.analysis.id}`; // se abre en su diseño; el menú ya la trae como pantalla nueva
+                location.href = `CmAnalisis.html?id=${out.analysis.id}`; // se abre en su Análisis; el menú ya la trae como pantalla nueva
             } catch (e) { btn.disabled = false; err(errorText(e.body)); }
         });
     });

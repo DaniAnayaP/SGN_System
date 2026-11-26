@@ -7609,16 +7609,62 @@ const AN_MESSAGES = {
     AN_NAME_REQUIRED: 'Ponle un nombre al análisis.', AN_NAME_TAKEN: 'Ya hay un análisis con ese nombre.', DESIGN_REGISTRIES: 'Elige al menos un registro.', DESIGN_COLUMN_REGISTRY: 'Una columna usa un registro que el análisis no tiene.',
     DESIGN_COLUMN_PERIODS: 'Cada columna consultada necesita al menos un periodo.', AN_NO_COLUMNS: 'Agrega al menos una columna consultada antes de extraer.', AN_EMPTY: 'Con este diseño no sale ningún renglón: revisa los periodos y los filtros.',
     ADDED_NAME: 'Ponle un nombre a la columna.', ADDED_STEPS: 'Revisa los pasos de la operación.', ADDED_RULES: 'Revisa las reglas: cada una necesita su condición y su resultado.', ADDED_KIND: 'Ese tipo de columna todavía no se puede agregar.', ADDED_TOO_MANY: 'Un análisis admite hasta 40 columnas agregadas.',
+    BASE_KEY: 'Elige al menos una columna como llave.', BASE_MISSING: 'El archivo base no existe.', COL_REGISTRY: 'Una columna usa un archivo que no existe.', COL_KEY: 'Falta ligar la llave de una columna con una columna del archivo.', COL_VALUE: 'Elige qué columna del archivo se trae.', COL_COND: 'Una condición usa una columna que el archivo no tiene.', COL_NOT_FOUND: 'Esa columna no existe.',
     AN_INACTIVE: 'El análisis está desactivado.', AN_BUSY: 'Ya se está extrayendo este análisis. Espera a que termine.', AN_FORBIDDEN: 'No tienes permiso para esto.',
 };
 const anExtracting = new Set();
 const analysisAdded = require('./analysisAdded');
+const analysisSources = require('./analysisSources');
+const analysisBuild = require('./analysisBuild');
 function anAbilities(req) {
     const admin = !!req.user.isClientAdmin;
     const grants = admin ? null : getUserEffectiveGrants(req.user.sub);
     return { canCreate: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.create), canExtract: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.extract), canAnnul: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.annul) };
 }
-const anRegistryKeys = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => r.kind !== 'tabla').map((r) => r.key);
+// Cualquier registro sirve para un análisis (mensual, diario o de tabla libre); el diseño anterior solo usa los mensuales y diarios.
+const anRegistryKeys = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).map((r) => r.key);
+// Revisa el diseño nuevo contra las columnas que de verdad tienen los archivos: columnas base, columnas de valor, llave y condiciones. Devuelve null si está bien o { error, field }.
+function anCheckDesign(req, design) {
+    if (!manualAnalyses.isV2(design)) return null;
+    const { clientId, isTestAccount } = req.user;
+    const regs = regClientRegistries(clientId, isTestAccount);
+    const colsOf = new Map();
+    const colsFor = (key) => {
+        if (!colsOf.has(key)) { const reg = regs.find((r) => r.key === key); colsOf.set(key, reg ? new Set(analysisSources.describe(clientId, isTestAccount, reg).map((c) => c.key)) : null); }
+        return colsOf.get(key);
+    };
+    const baseCols = colsFor(design.baseRegistry);
+    if (!baseCols) return { error: 'BASE_MISSING', field: 'baseRegistry' };
+    if (design.base.some((b) => !baseCols.has(b.col))) return { error: 'COL_NOT_FOUND', field: 'base' };
+    const keyBase = design.base.filter((b) => b.key);
+    for (const c of design.columns) {
+        const cols = colsFor(c.registry);
+        if (!cols) return { error: 'COL_REGISTRY', field: c.id };
+        if (c.valueCols.some((v) => !cols.has(v))) return { error: 'COL_NOT_FOUND', field: c.id };
+        if (c.conds.some((x) => !cols.has(x.col))) return { error: 'COL_COND', field: c.id };
+        for (const b of keyBase) {
+            const mapped = c.keyMap.find((k) => k.base === b.col);
+            const fileCol = mapped ? mapped.file : (c.registry === design.baseRegistry ? b.col : null);
+            if (!fileCol) return { error: 'COL_KEY', field: c.id };
+            if (!cols.has(fileCol)) return { error: 'COL_NOT_FOUND', field: c.id };
+        }
+    }
+    return null;
+}
+// Las tablas (archivos) que usa un diseño nuevo, listas para armar la versión.
+function anTablesFor(req, design) {
+    const { clientId, isTestAccount } = req.user;
+    const regs = regClientRegistries(clientId, isTestAccount);
+    const tables = {};
+    design.registries.forEach((key) => { const reg = regs.find((r) => r.key === key); if (reg) tables[key] = analysisSources.loadTable(clientId, isTestAccount, reg); });
+    return tables;
+}
+// El análisis con la vista nueva del diseño (archivo base, columnas base, columnas): un análisis anterior se ve como el nuevo sin cambiarse hasta que se edita.
+function anOut(analysis, req) {
+    if (!analysis) return analysis;
+    const checked = manualAnalyses.normalizeDesign(analysis.design, anRegistryKeys(req));
+    return checked.design ? { ...analysis, design: checked.design } : analysis;
+}
 function anClient(req, res) {
     if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return false; }
     return true;
@@ -7631,13 +7677,48 @@ function anLoad(req, res) {
     if (!analysis) { res.status(404).json({ code: 'AN_NOT_FOUND', message: 'Ese análisis no existe.' }); return null; }
     return analysis;
 }
-const anRegistriesInfo = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => r.kind !== 'tabla').map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, valueNameKey: r.valueNameKey, name: r.name, valueName: r.valueName, custom: r.custom, status: r.status, periods: registryPeriods(req.user.clientId, req.user.isTestAccount, r.key) }));
+const anRegistriesInfo = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, valueNameKey: r.valueNameKey, name: r.name, valueName: r.valueName, custom: r.custom, status: r.status, periods: registryPeriods(req.user.clientId, req.user.isTestAccount, r.key) }));
 // Para el menú lateral: los análisis activos (cualquier persona del cliente; el menú ya decide quién ve la pantalla).
 app.get('/api/business/manual-analyses/menu', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     if (!req.user.clientId) return res.json({ analyses: [], canCreate: false });
     res.json({ analyses: listAnalyses(req.user.clientId, req.user.isTestAccount, { onlyActive: true }).map((a) => ({ id: a.id, name: a.name })), canCreate: anAbilities(req).canCreate });
 });
+// ---- Análisis sin Diseño (Daniel, 2026-11-26): los archivos que se pueden usar, sus columnas, los valores de una columna y la vista previa de la llave ----
+function anRegistryOf(req, key) { return regClientRegistries(req.user.clientId, req.user.isTestAccount).find((r) => r.key === String(key || '')); }
+app.get('/api/business/manual-analyses/sources', requireAuth, (req, res) => {
+    if (!anClient(req, res)) return;
+    res.set('Cache-Control', 'no-store');
+    const { clientId, isTestAccount } = req.user;
+    const lang = req.query.lang === 'en' ? 'en' : 'es';
+    res.json({ registries: regClientRegistries(clientId, isTestAccount).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, name: r.name, custom: r.custom, status: r.status, obsolete: !!r.obsolete, columns: analysisSources.describe(clientId, isTestAccount, r, lang) })), ...anAbilities(req) });
+});
+app.get('/api/business/manual-analyses/source-values', requireAuth, (req, res) => {
+    if (!anClient(req, res)) return;
+    const registry = anRegistryOf(req, req.query.registry);
+    if (!registry) return res.status(404).json({ code: 'REGISTRY_NOT_FOUND', message: 'Ese archivo no existe.' });
+    const lang = req.query.lang === 'en' ? 'en' : 'es';
+    const table = analysisSources.loadTable(req.user.clientId, req.user.isTestAccount, registry, lang);
+    const out = analysisSources.distinctValues(table, String(req.query.col || ''), { limit: Math.min(Math.max(Number(req.query.limit) || 500, 1), 1000), query: String(req.query.q || '') });
+    if (!out) return anFail(res, 'COL_NOT_FOUND', 404);
+    res.set('Cache-Control', 'no-store');
+    res.json(out);
+});
+// Cuántos renglones salen del archivo base con las llaves elegidas (sin duplicados y con duplicados) y los primeros renglones.
+app.post('/api/business/manual-analyses/base-preview', requireAuth, (req, res) => {
+    if (!anClient(req, res)) return;
+    const body = req.body || {};
+    const checked = manualAnalyses.normalizeDesign({ baseRegistry: body.baseRegistry, base: body.base, dedupe: 'sin', columns: [] }, anRegistryKeys(req));
+    if (checked.error) return anFail(res, checked.error);
+    const bad = anCheckDesign(req, checked.design);
+    if (bad) return anFail(res, bad.error, 400, { field: bad.field });
+    const tables = anTablesFor(req, checked.design);
+    const counts = analysisBuild.baseCounts(tables[checked.design.baseRegistry], checked.design.base);
+    const built = analysisBuild.buildExtractionV2(checked.design, tables);
+    res.set('Cache-Control', 'no-store');
+    res.json({ ...counts, columns: (built.columns || []).map((c) => ({ key: c.key, label: c.label, isKey: c.isKey })), sample: (built.rows || []).slice(0, 6), truncated: !!built.truncated });
+});
+
 app.get('/api/business/manual-analyses', requireAuth, (req, res) => {
     if (!anClient(req, res)) return;
     res.set('Cache-Control', 'no-store');
@@ -7659,16 +7740,18 @@ app.post('/api/business/manual-analyses', requireAuth, (req, res) => {
     }
     const checked = manualAnalyses.normalizeDesign(source, anRegistryKeys(req));
     if (checked.error) return anFail(res, checked.error);
+    const bad = anCheckDesign(req, checked.design);
+    if (bad) return anFail(res, bad.error, 400, { field: bad.field });
     const id = createAnalysis({ clientId, isTestData: isTestAccount, name, design: checked.design, createdBy: changedByLabel(req), createdByUserId: req.user.sub });
     logTableChange({ clientId, tableKey: AN_TABLE, recordId: id, recordLabel: name, action: 'create', fieldKey: 'main.anNombre', newValue: name, changedBy: changedByLabel(req) });
     notifyButtonAction(req, AN_TABLE, 'create', name);
-    res.status(201).json({ analysis: getAnalysis(id, clientId, isTestAccount) });
+    res.status(201).json({ analysis: anOut(getAnalysis(id, clientId, isTestAccount), req) });
 });
 app.get('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
     if (!analysis) return;
     res.set('Cache-Control', 'no-store');
-    res.json({ analysis, registries: anRegistriesInfo(req), extractions: listExtractions(analysis.id), ...anAbilities(req) });
+    res.json({ analysis: anOut(analysis, req), registries: anRegistriesInfo(req), extractions: listExtractions(analysis.id), ...anAbilities(req) });
 });
 app.patch('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
@@ -7689,6 +7772,8 @@ app.patch('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
         if (sent && typeof sent === 'object' && sent.added === undefined) sent.added = (analysis.design && analysis.design.added) || [];
         const checked = manualAnalyses.normalizeDesign(sent, anRegistryKeys(req));
         if (checked.error) return anFail(res, checked.error);
+        const bad = anCheckDesign(req, checked.design);
+        if (bad) return anFail(res, bad.error, 400, { field: bad.field });
         patch.design = checked.design;
     }
     if (body.status !== undefined) {
@@ -7700,7 +7785,7 @@ app.patch('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
     if (patch.name) logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: patch.name, action: 'update', fieldKey: 'main.anNombre', oldValue: analysis.name, newValue: patch.name, changedBy: by });
     if (patch.design) logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: updated.name, action: 'update', fieldKey: 'main.anDiseno', oldValue: '', newValue: 'actualizado', changedBy: by });
     if (patch.status) logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: updated.name, action: 'update', fieldKey: 'main.anEstado', oldValue: analysis.status, newValue: patch.status, changedBy: by });
-    res.json({ analysis: updated });
+    res.json({ analysis: anOut(updated, req) });
 });
 // Extraer: arma el archivo con el diseño de hoy y lo guarda como una versión nueva (copia de los datos de hoy).
 app.post('/api/business/manual-analyses/:id/extract', requireAuth, async (req, res) => {
@@ -7712,16 +7797,27 @@ app.post('/api/business/manual-analyses/:id/extract', requireAuth, async (req, r
     const checked = manualAnalyses.normalizeDesign(analysis.design, anRegistryKeys(req));
     if (checked.error) return anFail(res, checked.error);
     const design = checked.design;
-    if (!design.consulted.length) return anFail(res, 'AN_NO_COLUMNS');
+    const v2 = manualAnalyses.isV2(design);
+    if (!v2 && !design.consulted.length) return anFail(res, 'AN_NO_COLUMNS');
     const lockKey = String(analysis.id);
     if (anExtracting.has(lockKey)) return anFail(res, 'AN_BUSY', 409);
     anExtracting.add(lockKey);
     let recordId = null;
     try {
-        const needed = manualAnalyses.periodsNeeded(design);
-        const sources = {};
-        design.registries.forEach((key) => { sources[key] = registrySources(clientId, isTestAccount, key, needed[key] || [], design.filters); });
-        const built = manualAnalyses.buildExtraction(design, sources);
+        let needed = {};
+        let built;
+        if (v2) {
+            // el análisis sin Diseño: archivo base + columnas base + columnas de archivos (analysisBuild.js)
+            const bad = anCheckDesign(req, design);
+            if (bad) return anFail(res, bad.error, 400, { field: bad.field });
+            built = analysisBuild.buildExtractionV2(design, anTablesFor(req, design));
+            if (built.error) return anFail(res, built.error, 400, { field: built.field });
+        } else {
+            needed = manualAnalyses.periodsNeeded(design);
+            const sources = {};
+            design.registries.forEach((key) => { sources[key] = registrySources(clientId, isTestAccount, key, needed[key] || [], design.filters); });
+            built = manualAnalyses.buildExtraction(design, sources);
+        }
         if (!built.rows.length) return anFail(res, 'AN_EMPTY');
         const record = createExtractionRecord({ analysisId: analysis.id, design, columns: built.columns, createdBy: changedByLabel(req), createdByUserId: req.user.sub });
         recordId = record.id;
@@ -7744,6 +7840,19 @@ app.post('/api/business/manual-analyses/:id/extract', requireAuth, async (req, r
         anExtracting.delete(lockKey);
     }
 });
+// Lo que se manda al Análisis: las columnas con su nombre, clasificación, formato y aspecto de ahora (valen también para las versiones ya extraídas: es solo presentación) y, al final, las columnas agregadas (Operación, Criterio) calculadas con los datos de ESA versión.
+function anPresent(analysis, extractionColumns, rows) {
+    const added = (analysis.design && Array.isArray(analysis.design.added)) ? analysis.design.added : [];
+    const designNow = analysis.design || {};
+    const lookNow = new Map([...(designNow.consulted || []), ...(designNow.columns || [])].map((c) => [c.id, c]));
+    const baseColumns = extractionColumns.map((c) => {
+        const now = c.group === 'consulted' ? lookNow.get(c.id) : null;
+        if (!now) return c;
+        return { ...c, ...(now.label ? { label: now.label } : {}), ...(now.cls ? { cls: now.cls, ...(Number.isInteger(now.color) ? { color: now.color } : {}) } : {}), ...(now.fmt ? { fmt: now.fmt, ...(now.pat ? { pat: now.pat } : {}) } : {}), ...(now.style ? { style: now.style } : {}) };
+    });
+    const columns = added.length ? [...baseColumns, ...analysisAdded.addedColumnDefs(added, extractionColumns)] : baseColumns;
+    return { columns, rows: added.length ? analysisAdded.applyAdded(added, extractionColumns, rows) : rows, baseColumns: extractionColumns.length };
+}
 app.get('/api/business/manual-analyses/:id/extractions/:eid/data', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
     if (!analysis) return;
@@ -7751,16 +7860,79 @@ app.get('/api/business/manual-analyses/:id/extractions/:eid/data', requireAuth, 
     if (!extraction || extraction.status === 'en_proceso') return res.status(404).json({ code: 'EXTRACTION_NOT_FOUND', message: 'Esa versión no existe.' });
     const { rows, total } = listExtractionRows(extraction.id, { text: req.query.text });
     res.set('Cache-Control', 'no-store');
-    // Las columnas agregadas (Daniel, 2026-11-26) se calculan al leer, con los datos de ESTA versión (que no cambian): quedan al final, con su letra y su fórmula de Excel.
-    const added = (analysis.design && Array.isArray(analysis.design.added)) ? analysis.design.added : [];
-    // La clasificación (nombre y color) y el formato de las columnas consultadas se leen del diseño de ahora (Daniel, 2026-11-26): lo que se cambia vale también para las versiones ya extraídas (es solo presentación; los datos no cambian).
-    const consultedNow = new Map(((analysis.design && analysis.design.consulted) || []).map((c) => [c.id, c]));
-    const baseColumns = extraction.columns.map((c) => {
-        const now = c.group === 'consulted' ? consultedNow.get(c.id) : null;
-        return now ? { ...c, ...(now.cls ? { cls: now.cls, ...(Number.isInteger(now.color) ? { color: now.color } : {}) } : {}), ...(now.fmt ? { fmt: now.fmt } : {}) } : c;
-    });
-    const columns = added.length ? [...baseColumns, ...analysisAdded.addedColumnDefs(added, extraction.columns)] : baseColumns;
-    res.json({ extraction, columns, rows: added.length ? analysisAdded.applyAdded(added, extraction.columns, rows) : rows, total, truncated: total > rows.length, baseColumns: extraction.columns.length });
+    const shown = anPresent(analysis, extraction.columns, rows);
+    res.json({ extraction, columns: shown.columns, rows: shown.rows, total, truncated: total > rows.length, baseColumns: shown.baseColumns });
+});
+// «En vivo» (Daniel, 2026-11-26): el Análisis con el diseño de hoy y los datos de hoy, sin guardar una versión; «Extraer análisis» guarda una copia con fecha.
+const AN_LIVE_LIMIT = 5000;
+// El Análisis armado con el diseño y los datos de hoy: { built, design } o { error, field, status }.
+function anLiveBuilt(req, analysis) {
+    const checked = manualAnalyses.normalizeDesign(analysis.design, anRegistryKeys(req));
+    if (checked.error) return { error: checked.error, status: 400 };
+    const design = checked.design;
+    const { clientId, isTestAccount } = req.user;
+    let built;
+    if (manualAnalyses.isV2(design)) {
+        const bad = anCheckDesign(req, design);
+        if (bad) return { error: bad.error, field: bad.field, status: 400 };
+        built = analysisBuild.buildExtractionV2(design, anTablesFor(req, design));
+        if (built.error) return { error: built.error, field: built.field, status: 400 };
+    } else {
+        if (!design.consulted.length) return { error: 'AN_NO_COLUMNS', status: 400 };
+        const needed = manualAnalyses.periodsNeeded(design);
+        const sources = {};
+        design.registries.forEach((key) => { sources[key] = registrySources(clientId, isTestAccount, key, needed[key] || [], design.filters); });
+        built = manualAnalyses.buildExtraction(design, sources);
+    }
+    return { built, design };
+}
+app.get('/api/business/manual-analyses/:id/live', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    const live = anLiveBuilt(req, analysis);
+    if (live.error) return anFail(res, live.error, live.status, { field: live.field });
+    const { built, design } = live;
+    const refCount = built.columns.filter((c) => c.group === 'reference').length;
+    const text = String(req.query.text || '').trim().toLowerCase().slice(0, 200);
+    const all = text ? built.rows.filter((r) => r.slice(0, refCount).join(' ').toLowerCase().includes(text)) : built.rows;
+    const rows = all.slice(0, AN_LIVE_LIMIT);
+    const shown = anPresent({ ...analysis, design }, built.columns, rows);
+    res.set('Cache-Control', 'no-store');
+    res.json({ extraction: { id: 0, version: 0, live: true, status: 'vigente', createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '), createdBy: '', rowsCount: built.rows.length }, columns: shown.columns, rows: shown.rows, total: all.length, truncated: all.length > rows.length || !!built.truncated, baseColumns: shown.baseColumns });
+});
+// Guardar las columnas que se traen de archivos (la lista completa, en orden) y, si se mandan, las columnas base y los duplicados. Un análisis anterior pasa a ser del tipo nuevo al guardarse aquí.
+app.put('/api/business/manual-analyses/:id/columns', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    if (!anAbilities(req).canCreate) return anForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const body = req.body || {};
+    const current = anOut(analysis, req).design;
+    const next = manualAnalyses.normalizeDesign({ ...current, legacy: false, columns: body.columns, ...(body.base ? { base: body.base } : {}), ...(body.dedupe ? { dedupe: body.dedupe } : {}) }, anRegistryKeys(req));
+    if (next.error) return anFail(res, next.error);
+    const bad = anCheckDesign(req, next.design);
+    if (bad) return anFail(res, bad.error, 400, { field: bad.field });
+    const updated = updateAnalysis(analysis.id, clientId, isTestAccount, { design: next.design });
+    const before = ((current && current.columns) || []).length;
+    logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: updated.name, action: 'update', fieldKey: 'main.anColumnasArchivo', oldValue: String(before), newValue: String(next.design.columns.length), changedBy: changedByLabel(req) });
+    res.json({ analysis: anOut(updated, req) });
+});
+// La vista previa de UNA columna nueva (sin guardar): cuántos renglones del análisis tendrían valor y los primeros.
+app.post('/api/business/manual-analyses/:id/column-preview', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    const current = anOut(analysis, req).design;
+    const next = manualAnalyses.normalizeDesign({ ...current, legacy: false, columns: [{ ...((req.body && req.body.column) || {}), id: 'preview' }] }, anRegistryKeys(req));
+    if (next.error) return anFail(res, next.error);
+    if (!next.design.columns.length) return anFail(res, 'COL_VALUE');
+    const bad = anCheckDesign(req, next.design);
+    if (bad) return anFail(res, bad.error, 400, { field: bad.field });
+    const built = analysisBuild.buildExtractionV2(next.design, anTablesFor(req, next.design));
+    if (built.error) return anFail(res, built.error, 400, { field: built.field });
+    const at = built.columns.length - 1;
+    const withValue = built.rows.filter((r) => r[at] !== null && r[at] !== undefined).length;
+    res.set('Cache-Control', 'no-store');
+    res.json({ total: built.rows.length, withValue, columns: built.columns.slice(0, -1).map((c) => ({ key: c.key, label: c.label })), sample: built.rows.filter((r) => r[at] !== null && r[at] !== undefined).slice(0, 8).map((r) => ({ base: r.slice(0, at), value: r[at] })), truncated: !!built.truncated });
 });
 // Guardar la lista de columnas agregadas (la lista completa, en orden). Es parte del diseño: se repite sola en cada versión.
 app.put('/api/business/manual-analyses/:id/added', requireAuth, (req, res) => {
@@ -7775,13 +7947,20 @@ app.put('/api/business/manual-analyses/:id/added', requireAuth, (req, res) => {
     const updated = updateAnalysis(analysis.id, clientId, isTestAccount, { design: next.design });
     const before = ((analysis.design && analysis.design.added) || []).length;
     logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: updated.name, action: 'update', fieldKey: 'main.anColumnasAgregadas', oldValue: String(before), newValue: String(checked.added.length), changedBy: changedByLabel(req) });
-    res.json({ analysis: updated });
+    res.json({ analysis: anOut(updated, req) });
 });
 // Vista previa de UNA columna agregada (sin guardar): su fórmula de Excel y lo que daría en los primeros renglones de esa versión.
 app.post('/api/business/manual-analyses/:id/extractions/:eid/added-preview', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
     if (!analysis) return;
-    const extraction = getExtraction(Number(req.params.eid) || 0, analysis.id);
+    let extraction = getExtraction(Number(req.params.eid) || 0, analysis.id);
+    let liveRows = null;
+    if (!Number(req.params.eid)) {
+        const live = anLiveBuilt(req, analysis);
+        if (live.error) return anFail(res, live.error, live.status, { field: live.field });
+        extraction = { id: 0, status: 'vigente', columns: live.built.columns };
+        liveRows = live.built.rows.slice(0, 5);
+    }
     if (!extraction || extraction.status === 'en_proceso') return res.status(404).json({ code: 'EXTRACTION_NOT_FOUND', message: 'Esa versión no existe.' });
     const rawDef = { ...((req.body && req.body.def) || {}), id: (req.body && req.body.def && req.body.def.id) || 'preview_tmp' };
     const checked = analysisAdded.normalizeAdded([rawDef]);
@@ -7791,7 +7970,7 @@ app.post('/api/business/manual-analyses/:id/extractions/:eid/added-preview', req
     const current = ((analysis.design && analysis.design.added) || []).filter((c) => c.id !== def.id);
     const before = current.length;
     const all = [...current, def];
-    const { rows } = listExtractionRows(extraction.id, { limit: 5 });
+    const { rows } = liveRows ? { rows: liveRows } : listExtractionRows(extraction.id, { limit: 5 });
     const computed = analysisAdded.applyAdded(all, extraction.columns, rows);
     const defs = analysisAdded.addedColumnDefs(all, extraction.columns);
     const codeAt = extraction.columns.findIndex((c) => c.key === 'ref_codigo');

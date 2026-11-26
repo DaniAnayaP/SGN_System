@@ -28,10 +28,10 @@ const regName = (r) => (r ? (r.name || t(r.nameKey)) : '');
 const colKeyOf = (key) => `an_${key}`;
 
 const params = new URLSearchParams(location.search);
-const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, tab: params.get('tab') || '', extraction: null, data: null, text: '' };
+const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, sources: [], tab: params.get('tab') || '', extraction: null, data: null, text: '' };
 const wrapperOf = (id) => document.querySelector(`[data-table-id="${id}"]`);
 const tableOf = (id) => wrapperOf(id)?.querySelector('table.data-table');
-const registryByKey = (k) => st.registries.find((r) => r.key === k);
+const registryByKey = (k) => st.registries.find((r) => r.key === k) || (st.sources || []).find((r) => r.key === k);
 
 (async function init() {
     try {
@@ -44,11 +44,12 @@ const registryByKey = (k) => st.registries.find((r) => r.key === k);
         const bar = document.getElementById('filter-bar');
         bar?.addEventListener('data-table:filter-apply', () => { st.text = (document.getElementById('filter-search-text')?.value || '').trim(); loadFile(); });
         bar?.addEventListener('data-table:filter-clear', () => { st.text = ''; loadFile(); });
-        document.addEventListener('dashboard:language-changed', () => { renderHead(); if (st.tab === 'design') renderDesign(); });
-        const last = st.extractions.find((e) => e.status === 'vigente');
-        const wanted = Number(params.get('v')) || (last ? last.id : 0);
-        st.extraction = st.extractions.find((e) => e.id === wanted) || last || null;
-        showTab(['design', 'file', 'versions'].includes(st.tab) ? st.tab : (st.extraction ? 'file' : 'design'));
+        document.addEventListener('dashboard:language-changed', () => { renderHead(); });
+        // sin Diseño (Daniel, 2026-11-26): el Análisis se ve «En vivo» (con los datos de hoy) o en una de sus versiones guardadas
+        const wanted = Number(params.get('v')) || 0;
+        st.extraction = st.extractions.find((e) => e.id === wanted) || liveExtraction();
+        renderHead();
+        showTab(['file', 'versions'].includes(st.tab) ? st.tab : 'file');
     } catch (err) {
         console.error('Análisis: failed to initialize', err);
     }
@@ -62,13 +63,19 @@ async function load() {
     st.analysis = body.analysis; st.registries = body.registries || []; st.extractions = body.extractions || [];
     st.canCreate = !!body.canCreate; st.canExtract = !!body.canExtract; st.canAnnul = !!body.canAnnul;
     st.design = JSON.parse(JSON.stringify(st.analysis.design));
+    try { st.sources = (await window.AnalysisKit.loadSources()).registries || []; } catch { st.sources = []; }
     renderHead();
 }
+const liveExtraction = () => ({ id: 0, version: 0, live: true, status: 'vigente', createdAt: '', createdBy: '' });
 function renderHead() {
     const head = document.getElementById('an-head');
     if (!head || !st.analysis) return;
     const regs = (st.analysis.design.registries || []).map((k) => `<span class="an-chip">${esc(regName(registryByKey(k)) || k)}</span>`).join('');
-    head.innerHTML = `<h2 class="an-title">${esc(st.analysis.name)}</h2><span class="reg-pill reg-pill-${st.analysis.status === 'active' ? 'ok' : 'off'}">${esc(t(`main.anStatus_${st.analysis.status}`))}</span><span class="an-chips">${regs}</span><span class="an-file-info" id="an-file-info"></span>`;
+    const viewOpts = [`<option value="0"${!st.extraction || st.extraction.live ? ' selected' : ''}>${esc(t('main.an2Live'))}</option>`, ...st.extractions.filter((e) => e.status === 'vigente').map((e) => `<option value="${e.id}"${st.extraction && st.extraction.id === e.id ? ' selected' : ''}>v${e.version}</option>`)].join('');
+    head.innerHTML = `<h2 class="an-title">${esc(st.analysis.name)}</h2><span class="reg-pill reg-pill-${st.analysis.status === 'active' ? 'ok' : 'off'}">${esc(t(`main.anStatus_${st.analysis.status}`))}</span><span class="an-chips">${regs}</span>
+        <select id="an-view" class="an-viewsel" aria-label="${esc(t('main.an2View'))}" title="${esc(t('main.an2View'))}" data-help-key="anView">${viewOpts}</select>${st.canCreate ? `<button type="button" class="admin-icon-btn" data-an-editbase aria-label="${esc(t('main.an2EditBase'))}" title="${esc(t('main.an2EditBase'))}" data-help-key="anBaseCols"><i class="bx bx-cog" aria-hidden="true"></i></button>` : ''}<span class="an-file-info" id="an-file-info"></span>`;
+    const sel = head.querySelector('#an-view');
+    if (sel) sel.addEventListener('change', () => { location.href = `CmAnalisis.html?id=${st.id}&v=${sel.value}&tab=file`; });
     renderFileInfo();
 }
 function renderFileInfo() {
@@ -76,6 +83,7 @@ function renderFileInfo() {
     if (!el) return;
     const e = st.extraction;
     if (!e || st.tab !== 'file') { el.textContent = ''; return; }
+    if (e.live) { el.textContent = t('main.an2LiveInfo'); return; }
     const used = Object.entries((e.notes && e.notes.periods) || {}).filter(([, list]) => list.length).map(([k, list]) => `${regName(registryByKey(k)) || k}: ${periodsText(list)}`).join(' · ');
     el.textContent = '';
     const when = document.createElement('span');
@@ -140,7 +148,7 @@ function setDirty() {
 function showError(text) { const el = document.getElementById('an-d-error'); if (el) { el.textContent = text; el.hidden = !text; } }
 function errorText(body) {
     const code = body && body.code;
-    return ['AN_NAME_REQUIRED', 'AN_NAME_TAKEN', 'DESIGN_REGISTRIES', 'DESIGN_COLUMN_REGISTRY', 'DESIGN_COLUMN_PERIODS', 'ADDED_NAME', 'ADDED_STEPS', 'ADDED_RULES', 'ADDED_KIND', 'ADDED_TOO_MANY', 'AN_NO_COLUMNS', 'AN_EMPTY', 'AN_INACTIVE', 'AN_BUSY', 'AN_FORBIDDEN', 'AN_ERROR'].includes(code) ? t(`main.anErr_${code}`) : t('admin.saveError');
+    return ['AN_NAME_REQUIRED', 'AN_NAME_TAKEN', 'DESIGN_REGISTRIES', 'DESIGN_COLUMN_REGISTRY', 'DESIGN_COLUMN_PERIODS', 'ADDED_NAME', 'ADDED_STEPS', 'ADDED_RULES', 'ADDED_KIND', 'ADDED_TOO_MANY', 'BASE_KEY', 'BASE_MISSING', 'COL_REGISTRY', 'COL_KEY', 'COL_VALUE', 'COL_COND', 'COL_NOT_FOUND', 'AN_NO_COLUMNS', 'AN_EMPTY', 'AN_INACTIVE', 'AN_BUSY', 'AN_FORBIDDEN', 'AN_ERROR'].includes(code) ? t(`main.anErr_${code}`) : t('admin.saveError');
 }
 function readFilters() {
     document.querySelectorAll('[data-an-filter]').forEach((input) => {
@@ -159,7 +167,6 @@ async function extract() {
     const btn = document.querySelector('[data-an-extract]');
     if (btn) { btn.disabled = true; btn.lastChild.textContent = ` ${t('main.anExtracting')}`; }
     try {
-        if (st.canCreate && (st.dirty || document.querySelector('[data-an-filter]'))) await saveDesign();
         const res = await fetch(`${API}/${st.id}/extract`, { method: 'POST', credentials: 'include' });
         const out = await res.json().catch(() => ({}));
         if (!res.ok) throw Object.assign(new Error('failed'), { body: out });
@@ -307,7 +314,12 @@ document.addEventListener('click', (event) => {
     const addCol = event.target.closest('[data-an-addcol]'); const addKind = event.target.closest('[data-an-addkind]'); const editCol = event.target.closest('[data-an-editcol]'); const delCol = event.target.closest('[data-an-delcol]');
     const menu = document.querySelector('.an-addmenu');
     if (menu) menu.hidden = addCol ? !menu.hidden : true; // «＋ Agregar columna» abre o cierra el menú; cualquier otro clic lo cierra
-    if (addKind) { if (addKind.dataset.anAddkind === 'criterion') openCriterionDialog(null); else openAddedDialog(null); }
+    const editFile = event.target.closest('[data-an-editfile]'); const delFile = event.target.closest('[data-an-delfile]'); const editBase = event.target.closest('[data-an-editbase]');
+    if (editBase) window.AnalysisPage.openBase();
+    else if (editFile) window.AnalysisPage.openFileColumn(editFile.dataset.anEditfile);
+    else if (delFile) window.AnalysisPage.removeFileColumn(delFile.dataset.anDelfile);
+    else if (addKind && addKind.dataset.anAddkind === 'file') window.AnalysisPage.openFileColumn(null);
+    else if (addKind) { if (addKind.dataset.anAddkind === 'criterion') openCriterionDialog(null); else openAddedDialog(null); }
     else if (editCol) openAddedDialog(editCol.dataset.anEditcol);
     else if (delCol) removeAdded(delCol.dataset.anDelcol);
 });
@@ -346,7 +358,7 @@ const OPS_VALUE_ONLY = new Set(['logbase', 'round']);
 const foldCls = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
 // Clasificación de columnas (Daniel, 2026-11-26): el nombre lo escribe la persona y cada nombre lleva un color; columnas con el mismo nombre comparten color y banda en el Archivo.
 const FORMATS = ['general', 'int', 'dec1', 'dec2', 'money'];
-const classedList = () => [...((st.design && st.design.consulted) || []), ...((st.analysis && st.analysis.design && st.analysis.design.added) || [])];
+const classedList = () => [...((st.design && st.design.consulted) || []), ...((st.design && st.design.columns) || []), ...((st.analysis && st.analysis.design && st.analysis.design.added) || [])];
 const classKnown = () => [...new Set(classedList().map((x) => x.cls).filter(Boolean))];
 const colorOfClass = (cls, skip) => {
     if (!cls) return null;
@@ -357,7 +369,7 @@ const colorOfClass = (cls, skip) => {
     for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i;
     return others.length % CLASS_COLORS.length;
 };
-const paintClass = (cls, color) => { (st.design.consulted || []).forEach((x) => { if (x.cls && foldCls(x.cls) === foldCls(cls)) x.color = color; }); };
+const paintClass = (cls, color) => { [...(st.design.consulted || []), ...(st.design.columns || [])].forEach((x) => { if (x.cls && foldCls(x.cls) === foldCls(cls)) x.color = color; }); };
 const fmtByKind = (v, fmt) => {
     if (v === null || v === undefined) return '';
     const dec = (d) => Number(v).toLocaleString(lang() === 'en' ? 'en-US' : 'es-MX', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -386,11 +398,14 @@ function renderAddedBar() {
     const bar = document.getElementById('an-added-bar');
     if (!bar) return;
     const added = (st.analysis && st.analysis.design && st.analysis.design.added) || [];
-    if (st.tab !== 'file' || !st.extraction || !st.data || (!st.canCreate && !added.length)) { bar.hidden = true; return; }
+    if (st.tab !== 'file' || !st.extraction || !st.data) { bar.hidden = true; return; }
     const cols = st.data.columns || [];
+    const fileCols = st.analysis.design.columns || [];
     const letterOfKey = (key) => { const i = cols.findIndex((c) => c.key === key); return i < 0 ? '' : columnLetter(i); };
-    bar.innerHTML = `${st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden><button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button></span></span>` : ''}`
+    bar.innerHTML = `${st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden>${st.extraction && st.extraction.live ? `<button type="button" data-an-addkind="file">${esc(t('main.an2KindFile'))}</button>` : ''}<button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button></span></span>` : ''}`
+        + fileCols.map((c) => `<span class="an-addedchip an-filechip"><button type="button" data-an-editfile="${esc(c.id)}" title="${esc(t('main.an2EditFileCol'))}"${st.canCreate && st.extraction.live ? '' : ' disabled'}>⊞ ${esc(c.label)} <small>${esc(letterOfKey(`c_${c.id}`))}</small></button>${st.canCreate && st.extraction.live ? `<button type="button" data-an-delfile="${esc(c.id)}" aria-label="${esc(t('main.an2RemoveFileCol'))}" title="${esc(t('main.an2RemoveFileCol'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</span>`).join('')
         + added.map((a) => `<span class="an-addedchip"><button type="button" data-an-editcol="${esc(a.id)}" title="${esc(t('main.anAddedEditTitle'))}"${st.canCreate ? '' : ' disabled'}>${a.kind === 'criterion' ? '?' : 'ƒ'} ${esc(a.name)} <small>${esc(letterOfKey(`a_${a.id}`))}</small></button>${st.canCreate ? `<button type="button" data-an-delcol="${esc(a.id)}" aria-label="${esc(t('main.anAddedRemove'))}" title="${esc(t('main.anAddedRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</span>`).join('');
+    if (st.canExtract && st.analysis.status === 'active') bar.insertAdjacentHTML('beforeend', `<button type="button" class="btn" data-an-extract data-help-key="anExtract"><i class="bx bx-export" aria-hidden="true"></i> ${esc(t('main.anExtract'))}</button>`);
     bar.hidden = false;
 }
 async function saveAdded(list) {
@@ -399,7 +414,7 @@ async function saveAdded(list) {
     if (!res.ok) throw Object.assign(new Error('failed'), { body: out });
     st.analysis = out.analysis; st.design = JSON.parse(JSON.stringify(st.analysis.design));
     // el motor de tablas no cambia las columnas de una tabla ya iniciada: se vuelve a abrir el Archivo con las columnas nuevas
-    location.href = `CmAnalisis.html?id=${st.id}&v=${st.extraction ? st.extraction.id : ''}&tab=file`;
+    location.href = `CmAnalisis.html?id=${st.id}&v=${st.extraction && !st.extraction.live ? st.extraction.id : 0}&tab=file`;
 }
 async function removeAdded(id) {
     const added = (st.analysis.design.added || []);
@@ -733,13 +748,13 @@ async function loadFile() {
     if (!e) { buildHeader(FILE_TABLE, [{ col: 'ref_unidad', group: 'main.anGroupRef', labelKey: 'main.regDim_unidad', cls: 'an-ref' }]); ensureEmpty(FILE_TABLE, 1, 'main.anFileNone'); return; }
     try {
         const qs = st.text ? `?text=${encodeURIComponent(st.text)}` : '';
-        const res = await fetch(`${API}/${st.id}/extractions/${e.id}/data${qs}`, { credentials: 'include' });
+        const res = await fetch(e.live ? `${API}/${st.id}/live${qs}` : `${API}/${st.id}/extractions/${e.id}/data${qs}`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         st.data = await res.json();
         const cols = st.data.columns;
         const columns = [
             ...cols.map((c) => {
-                if (c.group === 'reference') return { col: colKeyOf(c.key), group: 'main.anGroupRef', labelKey: `main.regDim_${c.dim}`, cls: 'an-ref' };
+                if (c.group === 'reference') return c.label ? { col: colKeyOf(c.key), group: 'main.anGroupRef', label: c.label, cls: c.isKey ? 'an-ref an-ref-key' : 'an-ref' } : { col: colKeyOf(c.key), group: 'main.anGroupRef', labelKey: `main.regDim_${c.dim}`, cls: 'an-ref' };
                 if (c.group === 'added') {
                     let groupTable;
                     if (c.cls) { groupTable = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(groupTable, c.cls, CLASS_COLORS[c.color] || CLASS_COLORS[0]); }
@@ -760,16 +775,18 @@ async function loadFile() {
                 ...cols.map((c, i) => {
                     if (c.group === 'reference') return cell(colKeyOf(c.key), row[i], 'an-ref');
                     if (c.group === 'added') return cell(colKeyOf(c.key), row[i] === null ? '' : fmtCell(row[i], c.decimals), c.kind === 'criterion' ? 'an-added' : 'an-added col-num');
-                    return cell(colKeyOf(c.key), row[i] === null ? '' : fmtByKind(row[i], c.fmt), 'an-cons col-num');
+                    return cell(colKeyOf(c.key), row[i] === null ? '' : window.AnalysisKit.fmtValue(row[i], c.fmt, c.pat), 'an-cons col-num');
                 }),
             );
             tbody.appendChild(tr);
         });
         ensureEmpty(FILE_TABLE, columns.length);
         if (first && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 1);
+        // el aspecto de cada columna (negrita, colores, bordes…) se pone después de armar la tabla
+        cols.forEach((c) => { if (c.group === 'consulted' && c.style) window.AnalysisKit.applyLook(tableOf(FILE_TABLE), colKeyOf(c.key), c.style); });
         if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(FILE_TABLE);
         wrapper.setAttribute('data-help-key', 'anFile');
-        if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(FILE_TABLE, { getTitle: () => `${st.analysis.name}_v${e.version}`, getNotice: () => (st.data && st.data.truncated ? t('main.anDownloadTruncated', { shown: st.data.rows.length, total: num(st.data.total) }) : '') });
+        if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(FILE_TABLE, { getTitle: () => `${st.analysis.name}_${e.live ? t('main.an2Live') : `v${e.version}`}`, getNotice: () => (st.data && st.data.truncated ? t('main.anDownloadTruncated', { shown: st.data.rows.length, total: num(st.data.total) }) : '') });
         let note = document.getElementById('an-truncated');
         if (st.data.truncated) {
             if (!note) { note = document.createElement('p'); note.id = 'an-truncated'; note.className = 'admin-hint'; wrapper.after(note); }
@@ -827,4 +844,18 @@ function openAnnul(e) {
         });
     });
 }
+
+// ---- lo que las ventanas «De un archivo» y «Columnas base» (AnArchivoDialog.js) usan de esta pantalla ----
+async function saveColumns(columns, extra = {}) {
+    const res = await fetch(`${API}/${st.id}/columns`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ columns, ...extra }) });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error('failed'), { body: out });
+    st.analysis = out.analysis; st.design = JSON.parse(JSON.stringify(st.analysis.design));
+    location.href = `CmAnalisis.html?id=${st.id}&v=0&tab=file`; // el motor de tablas no cambia las columnas de una tabla ya iniciada: se vuelve a abrir «En vivo» con las columnas nuevas
+}
+async function removeFileColumn(id) {
+    const cols = ((st.analysis.design && st.analysis.design.columns) || []).filter((c) => c.id !== id);
+    try { await saveColumns(cols); } catch (err) { Dashboard.showToast(errorText(err.body), 'error'); }
+}
+window.AnalysisPage = { st, t, esc, modal, regName, registryByKey, colorOfClass, classKnown, CLASS_COLORS, errorText, saveColumns, removeFileColumn, paintClass, kit: window.AnalysisKit };
 })();
