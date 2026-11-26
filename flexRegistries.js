@@ -204,6 +204,50 @@ async function readRows(buffer, { sheet, headerRow }, cfg) {
 
 const periodNameKey = (name) => `n:${foldText(name)}`;
 
+// ---- valores empaquetados ----------------------------------------------------------------------------------------------------------------------------------------
+// Los valores de UN renglón en UNA carga van en un solo bloque (3 millones de valores como renglones sueltos de base pesaban ~175 MB; empaquetados pesan unas 6 veces menos). Formato 1:
+//   [1][K: uint16 LE][mapa de presencia: ceil(K/8) bytes, el bit i dice si hay valor en la posición i][un float64 LE por cada valor presente, en orden de posición]
+// La posición i es la i-ésima columna de valor de la carga (en el orden de su elección); valueSlotKeys dice qué columna de la tabla es cada posición.
+function packValues(values) {
+    const k = values.length;
+    const mapBytes = Math.ceil(k / 8);
+    let present = 0;
+    for (const v of values) if (v !== null && v !== undefined) present += 1;
+    const buf = Buffer.alloc(3 + mapBytes + present * 8);
+    buf[0] = 1;
+    buf.writeUInt16LE(k, 1);
+    let at = 3 + mapBytes;
+    values.forEach((v, i) => {
+        if (v === null || v === undefined) return;
+        buf[3 + (i >> 3)] |= 1 << (i & 7);
+        buf.writeDoubleLE(v, at);
+        at += 8;
+    });
+    return buf;
+}
+function unpackValues(buf) {
+    if (!buf || buf[0] !== 1) return [];
+    const k = buf.readUInt16LE(1);
+    const out = new Array(k).fill(null);
+    let at = 3 + Math.ceil(k / 8);
+    for (let i = 0; i < k; i += 1) if (buf[3 + (i >> 3)] & (1 << (i & 7))) { out[i] = buf.readDoubleLE(at); at += 8; }
+    return out;
+}
+// El valor de UNA posición sin abrir las demás (para filtrar por una columna).
+function unpackSlot(buf, idx) {
+    if (!buf || buf[0] !== 1) return null;
+    const k = buf.readUInt16LE(1);
+    if (idx < 0 || idx >= k || !(buf[3 + (idx >> 3)] & (1 << (idx & 7)))) return null;
+    let before = 0;
+    for (let i = 0; i < idx; i += 1) if (buf[3 + (i >> 3)] & (1 << (i & 7))) before += 1;
+    return buf.readDoubleLE(3 + Math.ceil(k / 8) + before * 8);
+}
+// La columna de la tabla que es cada posición de una carga: «m:<carga>:<posición>» (columna nueva con día y hora) o «n:<nombre>» (de nombre fijo, p. ej. un mes). Sale de la elección guardada con la carga.
+function valueSlotKeys(loadId, config) {
+    const cols = (config && Array.isArray(config.columns) ? config.columns : []).filter((c) => c.role === 'value');
+    return cols.map((c, k) => (c.stampName ? `m:${loadId}:${k}` : periodNameKey(c.name)));
+}
+
 // El cuadro de columnas ya llenado: cada título del Excel nuevo se empareja (sin importar mayúsculas, acentos ni el orden) con el que traía en la última carga del registro y toma lo que se eligió ahí
 // (papel, sumar o tomar uno, nombre, clasificación y color). Un título que no estaba antes no lleva nada (lo sugiere el sistema y se marca «Nueva»); uno que antes era «no se carga» sigue sin cargarse.
 // prev = { mode, columns: [{ src?, name, role, agg, stampName, cls, color }], skipped: [título] } (la elección guardada con la carga). Pone h.prefill en cada título que se reconoce.
@@ -222,7 +266,7 @@ function prefillHeaders(headers, prev) {
 
 // Corre (o ensaya) una carga. `store` pone la base:
 //   store.existingKeys(): Map(keyText → rowId) de los renglones del registro      store.namedValues(colKey): Map(rowId → valor) de lo vigente en una columna de nombre fijo
-//   store.addRows(array de { keyText, cells }) → array de rowIds                    store.addValues(array de [rowId, colKey, valor])
+//   store.addRows(array de { keyText, cells }) → array de rowIds                    store.addPacked(array de [rowId, bloque]) (los valores de un renglón en una fila) o, si no la trae, store.addValues(array de [rowId, colKey, valor])
 //   store.saveBlock(rows, columns) (tal cual)
 // loadId (de la carga que se está haciendo) sirve para el nombre de las columnas nuevas por carga: «m:<loadId>:<índice>».
 async function run(buffer, options, cfg, store, loadId, { dryRun = false } = {}) {
@@ -242,7 +286,8 @@ async function run(buffer, options, cfg, store, loadId, { dryRun = false } = {})
     let issuesTotal = read.issuesTotal;
     const colKeyOf = (c, k) => (c.stampName ? `m:${loadId}:${k}` : periodNameKey(c.name));
     const pendingRows = [];
-    const valueOps = [];
+    const packedOps = []; // [rowId, bloque] (la base empaqueta los valores de un renglón en una sola fila)
+    const valueOps = []; // solo para una base que no empaqueta
     const flushRows = () => {
         if (!pendingRows.length) return;
         if (!dryRun) {
@@ -260,6 +305,8 @@ async function run(buffer, options, cfg, store, loadId, { dryRun = false } = {})
         });
         flushRows();
         slice.forEach(([, g]) => {
+            const mine = new Array(read.valueCols.length).fill(null); // lo que ESTA carga agrega a este renglón, por posición
+            let any = false;
             read.valueCols.forEach((c, k) => {
                 const v = g.values[k];
                 if (v === null) return;
@@ -272,10 +319,15 @@ async function run(buffer, options, cfg, store, loadId, { dryRun = false } = {})
                     }
                 }
                 valuesAdded += 1;
-                if (!dryRun) valueOps.push([g.rowId, colKeyOf(c, k), v]);
+                mine[k] = v;
+                any = true;
             });
+            if (dryRun || !any) return;
+            if (typeof store.addPacked === 'function') packedOps.push([g.rowId, packValues(mine)]);
+            else mine.forEach((v, k) => { if (v !== null) valueOps.push([g.rowId, colKeyOf(read.valueCols[k], k), v]); });
         });
-        if (!dryRun && valueOps.length) { store.addValues(valueOps.splice(0, valueOps.length)); }
+        if (!dryRun && packedOps.length) store.addPacked(packedOps.splice(0, packedOps.length));
+        if (!dryRun && valueOps.length) store.addValues(valueOps.splice(0, valueOps.length));
     }
     Object.assign(summary, { newRows, valuesAdded, added: newRows + valuesAdded, untouched, different, errors: read.errors, merged: read.merged, groups: groups.length, columns: read.cellCols.map((c) => c.name), valueColumns: read.valueCols.map((c) => c.name), issuesTotal });
     return { summary, issues };
@@ -406,4 +458,4 @@ function parseFilter(raw, columns) {
 }
 
 const foldName = (name) => foldText(name);
-module.exports = { prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };
+module.exports = { packValues, unpackValues, unpackSlot, valueSlotKeys, prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };

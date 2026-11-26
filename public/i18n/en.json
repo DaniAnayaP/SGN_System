@@ -5556,6 +5556,7 @@
     "regErr_COST_CENTER_REQUIRED": "First create a complete cost center in Our Cost Centers: every operation is tied to one.",
     "regErr_IMPORT_ERROR": "The load could not be completed. Nothing was added.",
     "regErr_DISK_FULL": "The server ran out of space to save this load. Nothing was added: tell support.",
+    "regErr_DISK_FULL_N": "The server ran out of space to save this load: the disk has {free} MB free (and {reusable} MB reusable inside the database). Nothing was added: grow the server volume or tell support.",
     "regErr_IMPORT_HEADERS": "There are columns left to match: {missing}.",
     "regProb_ROW_KEY_MISSING": "The unit or the code is missing: not loaded",
     "regProb_ROW_REPEATED": "Row repeated in the file (same unit and code): not loaded",

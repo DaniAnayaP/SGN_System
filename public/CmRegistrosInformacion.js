@@ -581,6 +581,7 @@ function problemText(issue) { return t(`main.regProb_${issue.problem}`); }
 function errorTextOf(err) {
     const body = (err && err.body) || {};
     if (body.code === 'IMPORT_HEADERS') return t('main.regErr_IMPORT_HEADERS', { missing: (body.missing || []).map((k) => (k === 'value' ? t('main.regValueColumn') : t(`main.regDim_${k}`))).join(', ') });
+    if (body.code === 'DISK_FULL' && Number.isFinite(body.freeMb)) return t('main.regErr_DISK_FULL_N', { free: body.freeMb, reusable: body.reusableMb || 0 });
     return ['IMPORT_FILE', 'IMPORT_EMPTY', 'IMPORT_TOO_BIG', 'IMPORT_DAY', 'IMPORT_DAY_FUTURE', 'REG_FORBIDDEN', 'REG_BUSY', 'COST_CENTER_REQUIRED', 'IMPORT_ERROR', 'DISK_FULL', 'FLEX_CONFIG', 'FLEX_DUP_NAME', 'FLEX_NO_KEY', 'IMPORT_STAMP', 'IMPORT_TOO_MANY_COLUMNS'].includes(body.code) ? t(`main.regErr_${body.code}`) : t('admin.saveError');
 }
 // ---- Registros de TABLA LIBRE: cada carga lleva su propia elección de columnas (no se recuerda de una carga a otra) ------------------------------------------------------------------------------

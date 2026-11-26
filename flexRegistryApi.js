@@ -241,7 +241,11 @@ module.exports = function createFlexApi(deps) {
             if (loadId) { try { await db.discardFlexLoadData(loadId); } catch (cleanErr) { console.error('Registros (tabla libre): no se pudo limpiar la carga fallida:', cleanErr); } }
             const full = /SQLITE_FULL|database or disk is full/i.test(`${err && err.code} ${err && err.message}`);
             if (loadId) db.failRegistryLoad(loadId, full ? 'DISK_FULL' : 'ERROR');
-            if (full) return res.status(507).json({ code: 'DISK_FULL', message: 'El servidor se quedó sin espacio para guardar esta carga. No se agregó nada.' });
+            if (full) {
+                const space = db.diskSpace();
+                const mb = (b) => Math.max(0, Math.round(b / 1048576));
+                return res.status(507).json({ code: 'DISK_FULL', message: 'El servidor se quedó sin espacio para guardar esta carga. No se agregó nada.', ...(space ? { freeMb: mb(space.freeBytes), reusableMb: mb(space.reusableBytes), totalMb: mb(space.totalBytes), dbMb: mb(space.dbBytes) } : {}) });
+            }
             return res.status(500).json({ code: 'IMPORT_ERROR', message: 'La carga no se pudo completar. No se agregó nada.' });
         } finally {
             regLoading.delete(lockKey);

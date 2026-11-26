@@ -5555,6 +5555,7 @@
     "regErr_COST_CENTER_REQUIRED": "Primero crea un centro de costos completo en Nuestros Centros Costos: toda operación va ligada a uno.",
     "regErr_IMPORT_ERROR": "La carga no se pudo completar. No se agregó nada.",
     "regErr_DISK_FULL": "El servidor se quedó sin espacio para guardar esta carga. No se agregó nada: avisa a soporte.",
+    "regErr_DISK_FULL_N": "El servidor se quedó sin espacio para guardar esta carga: al disco le quedan {free} MB libres (y {reusable} MB reutilizables dentro de la base). No se agregó nada: agranda el volumen del servidor o avisa a soporte.",
     "regErr_IMPORT_HEADERS": "Faltan columnas por emparejar: {missing}.",
     "regProb_ROW_KEY_MISSING": "Falta la unidad o el código: no se carga",
     "regProb_ROW_REPEATED": "Renglón repetido en el archivo (misma unidad y código): no se carga",
