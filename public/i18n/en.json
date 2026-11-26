@@ -5351,7 +5351,7 @@
     "anErr_AN_FORBIDDEN": "You do not have permission for this.",
     "anErr_AN_ERROR": "The extraction could not be completed. Nothing was saved.",
     "anTabDesign": "Design",
-    "anTabFile": "File",
+    "anTabFile": "Analysis",
     "anTabVersions": "Extractions",
     "anGroupRef": "Reference",
     "anGroupCons": "Queried from records",
