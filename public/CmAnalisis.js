@@ -742,6 +742,76 @@ function ensureEmpty(tableId, span, key) {
     const inner = document.createElement('div'); inner.className = 'data-table-empty-inner'; inner.textContent = t(key || 'main.emptyStateText');
     td.appendChild(inner); tr.appendChild(td); tbody.appendChild(tr);
 }
+// Los renglones del Análisis se dibujan por partes (como en Registros Información): cada parte se arma como UN bloque de HTML. Ordenar, filtrar por columna y descargar piden primero el resto (registerPartialTable).
+const FIRST_ROWS = 100; // los renglones que se dibujan al entrar
+const NEXT_ROWS = 200; // los que se agregan al bajar o con «Mostrar más»
+// Cómo se dibuja cada columna (la llave de la celda, su clase, cómo se escribe el valor y su aspecto), calculado una sola vez por carga.
+function fileCellPlan(cols) {
+    return cols.map((c, i) => {
+        const key = esc(colKeyOf(c.key));
+        let cls = 'an-ref'; let fmt = (v) => v;
+        if (c.group === 'added') { cls = c.kind === 'criterion' ? 'an-added' : 'an-added col-num'; fmt = (v) => (v === null ? '' : fmtCell(v, c.decimals)); }
+        else if (c.group !== 'reference') { cls = 'an-cons col-num'; fmt = (v) => (v === null ? '' : window.AnalysisKit.fmtValue(v, c.fmt, c.pat)); }
+        const look = c.group === 'consulted' && c.style ? window.AnalysisKit.lookCss(c.style).cell : null; // el aspecto va en cada celda: los renglones que se dibujan después también lo traen
+        const style = look && Object.keys(look).length ? ` style="${esc(Object.entries(look).map(([k, v]) => `${k}:${v}`).join(';'))}"` : '';
+        return { i, key, cls, fmt, style };
+    });
+}
+function fileRowsHtml(from, to) {
+    const rows = st.data.rows; const plan = st.filePlan; const html = [];
+    for (let r = from; r < to; r += 1) {
+        const row = rows[r];
+        let tr = '<tr>';
+        for (let k = 0; k < plan.length; k += 1) {
+            const p = plan[k]; const v = p.fmt(row[p.i]);
+            tr += `<td data-col="${p.key}" class="${p.cls}"${p.style}>${v === null || v === undefined || v === '' ? '—' : esc(String(v))}</td>`;
+        }
+        html.push(`${tr}</tr>`);
+    }
+    return html.join('');
+}
+function drawFileRows(count) {
+    const table = tableOf(FILE_TABLE);
+    if (!st.data || !st.filePlan || !table) return 0;
+    const to = Math.min(st.data.rows.length, st.drawn + count);
+    if (to <= st.drawn) return 0;
+    table.tBodies[0].insertAdjacentHTML('beforeend', fileRowsHtml(st.drawn, to));
+    const added = to - st.drawn;
+    st.drawn = to;
+    updateFileNote();
+    return added;
+}
+function drawAllFileRows() { drawFileRows(Infinity); return Promise.resolve(true); }
+function watchFileScroll(wrapper) {
+    if (!wrapper || wrapper.dataset.anScroll) return;
+    wrapper.dataset.anScroll = '1';
+    wrapper.addEventListener('scroll', () => {
+        if (st.data && st.drawn < st.data.rows.length && wrapper.scrollTop + wrapper.clientHeight >= wrapper.scrollHeight - 800) drawFileRows(NEXT_ROWS);
+    }, { passive: true });
+}
+// El aviso de abajo: «Mostrando X de Y» con los botones para dibujar más mientras falten renglones; si ya están todos los que llegaron pero el análisis tiene más, avisa que son los primeros.
+function updateFileNote() {
+    const body = st.data;
+    const wrapper = wrapperOf(FILE_TABLE);
+    let note = document.getElementById('an-truncated');
+    const partial = !!body && st.drawn < body.rows.length;
+    if (!body || !wrapper || (!partial && !body.truncated)) { if (note) note.remove(); return; }
+    if (!note) { note = document.createElement('p'); note.id = 'an-truncated'; note.className = 'admin-hint reg-more'; wrapper.after(note); }
+    note.textContent = '';
+    const text = document.createElement('span');
+    text.textContent = partial ? t('main.regShowing', { shown: num(st.drawn), total: num(body.total) }) : t('main.anTruncated', { shown: body.rows.length, total: num(body.total) });
+    note.appendChild(text);
+    if (partial) {
+        [['main.regShowMore', () => drawFileRows(NEXT_ROWS)], ['main.regShowAll', () => drawAllFileRows()]].forEach(([key, action]) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-secondary reg-more-btn';
+            btn.textContent = t(key);
+            btn.addEventListener('click', action);
+            note.appendChild(btn);
+        });
+    }
+}
 async function loadFile() {
     const e = st.extraction;
     const wrapper = wrapperOf(FILE_TABLE);
@@ -769,29 +839,19 @@ async function loadFile() {
         const first = buildHeader(FILE_TABLE, columns);
         const tbody = tableOf(FILE_TABLE).tBodies[0];
         tbody.innerHTML = '';
-        st.data.rows.forEach((row) => {
-            const tr = document.createElement('tr');
-            tr.append(
-                ...cols.map((c, i) => {
-                    if (c.group === 'reference') return cell(colKeyOf(c.key), row[i], 'an-ref');
-                    if (c.group === 'added') return cell(colKeyOf(c.key), row[i] === null ? '' : fmtCell(row[i], c.decimals), c.kind === 'criterion' ? 'an-added' : 'an-added col-num');
-                    return cell(colKeyOf(c.key), row[i] === null ? '' : window.AnalysisKit.fmtValue(row[i], c.fmt, c.pat), 'an-cons col-num');
-                }),
-            );
-            tbody.appendChild(tr);
-        });
+        st.filePlan = fileCellPlan(cols);
+        st.drawn = 0;
+        drawFileRows(FIRST_ROWS); // el resto se dibuja por partes: dibujar los 5,000 renglones de golpe tardaba más de 5 segundos en el navegador
         ensureEmpty(FILE_TABLE, columns.length);
         if (first && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 1);
+        if (first && Dashboard.registerPartialTable) Dashboard.registerPartialTable(FILE_TABLE, { isComplete: () => !st.data || st.drawn >= st.data.rows.length, loadAll: drawAllFileRows });
+        watchFileScroll(wrapper);
         // el aspecto de cada columna (negrita, colores, bordes…) se pone después de armar la tabla
         cols.forEach((c) => { if (c.group === 'consulted' && c.style) window.AnalysisKit.applyLook(tableOf(FILE_TABLE), colKeyOf(c.key), c.style); });
         if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(FILE_TABLE);
         wrapper.setAttribute('data-help-key', 'anFile');
         if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(FILE_TABLE, { getTitle: () => `${st.analysis.name}_${e.live ? t('main.an2Live') : `v${e.version}`}`, getNotice: () => (st.data && st.data.truncated ? t('main.anDownloadTruncated', { shown: st.data.rows.length, total: num(st.data.total) }) : '') });
-        let note = document.getElementById('an-truncated');
-        if (st.data.truncated) {
-            if (!note) { note = document.createElement('p'); note.id = 'an-truncated'; note.className = 'admin-hint'; wrapper.after(note); }
-            note.textContent = t('main.anTruncated', { shown: st.data.rows.length, total: num(st.data.total) });
-        } else if (note) note.remove();
+        updateFileNote();
         renderAddedBar();
         window.dispatchEvent(new Event('resize'));
     } catch (err) {
