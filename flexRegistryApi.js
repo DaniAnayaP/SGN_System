@@ -193,8 +193,19 @@ module.exports = function createFlexApi(deps) {
         if (info.error && !info.sheets) return fail(res, 400, info.error);
         if (info.error) return res.status(400).json({ code: info.error, message: MESSAGES[info.error] || REG_MESSAGES[info.error] || REG_MESSAGES.IMPORT_FILE, sheets: info.sheets, sheet: info.sheet });
         // el cuadro de columnas viene ya llenado con la elección de la última carga de este registro (si la hay)
-        const prev = registry ? db.flexLastConfig(req.user.clientId, req.user.isTestAccount, registry.key) : null;
-        if (prev && Array.isArray(prev.columns)) { flex.prefillHeaders(info.headers, prev); info.prevMode = prev.mode === 'roles' ? 'roles' : 'asis'; }
+        const history = registry ? db.flexConfigHistory(req.user.clientId, req.user.isTestAccount, registry.key) : [];
+        if (history.length) {
+            // con papeles: se reconoce por el título que traía la columna en CUALQUIER carga (la más reciente manda) y se listan las columnas que el registro ya tiene; a los títulos que no se reconocen se les sugiere la que se parece
+            flex.prefillHeaders(info.headers, { mode: 'roles', columns: history.flatMap((cfg) => cfg.columns), skipped: history.flatMap((cfg) => (Array.isArray(cfg.skipped) ? cfg.skipped : [])) });
+            info.prevMode = 'roles';
+            const byName = new Map();
+            history.slice().reverse().forEach((cfg) => cfg.columns.forEach((c) => { if (c.role && c.role !== 'skip') byName.set(flex.foldName(c.name), { name: c.name, role: c.role, agg: c.agg === 'one' ? 'one' : 'sum', stampName: c.stampName !== false, cls: c.cls || '', color: Number.isInteger(c.color) ? c.color : null }); }));
+            info.existing = [...byName.values()];
+            flex.suggestLinks(info.headers, info.existing);
+        } else {
+            const prev = registry ? db.flexLastConfig(req.user.clientId, req.user.isTestAccount, registry.key) : null;
+            if (prev && Array.isArray(prev.columns)) { flex.prefillHeaders(info.headers, prev); info.prevMode = prev.mode === 'roles' ? 'roles' : 'asis'; }
+        }
         res.json(info);
     }
     async function importRoute(req, res, registry) {

@@ -204,6 +204,54 @@ async function readRows(buffer, { sheet, headerRow }, cfg) {
 
 const periodNameKey = (name) => `n:${foldText(name)}`;
 
+// ---- qué columna que ya existe se parece a un título nuevo ---------------------------------------------------------------------------------------------------
+// Una columna que trae otro nombre (el Excel dice «UDM DISTRIB» y el registro ya tiene «UDM») no debe crear una columna repetida: se le sugiere a la persona la que ya existe y ella decide.
+// Un mes nunca se sugiere contra otro mes (jun-24 y jun-25 se parecen mucho y son columnas distintas).
+function editDistance(a, b) {
+    const prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i += 1) {
+        let diag = prev[0]; prev[0] = i;
+        for (let j = 1; j <= b.length; j += 1) { const keep = prev[j]; prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (a[i - 1] === b[j - 1] ? 0 : 1)); diag = keep; }
+    }
+    return prev[b.length];
+}
+// a y b ya vienen normalizados (sin acentos ni mayúsculas, palabras separadas por un espacio); ra y rb son los textos tal como se escribieron.
+function nameScore(a, b, ra, rb) {
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    if (manual.parsePeriodHeader(ra) && manual.parsePeriodHeader(rb)) return 0;
+    const ta = a.split(' '); const tb = b.split(' ');
+    const sa = new Set(ta); const sb = new Set(tb);
+    const inter = [...sa].filter((x) => sb.has(x)).length;
+    const union = new Set([...ta, ...tb]).size;
+    let score = inter / union;
+    if (inter > 0 && inter === Math.min(sa.size, sb.size)) score = Math.max(score, 0.8); // uno trae todas las palabras del otro («udm» y «udm distrib»)
+    if (!/\d/.test(a) && !/\d/.test(b)) score = Math.max(score, 0.95 * (1 - editDistance(a, b) / Math.max(a.length, b.length))); // un error de dedo
+    return score;
+}
+// headers: los títulos del archivo (los que ya traen `prefill` ya se reconocieron y no se tocan); existing: [{ name, ... }] las columnas que ya tiene el registro.
+// Pone h.link = { name, score } en cada título sin reconocer que se parece a una columna que ya existe (una a una, la mejor primero).
+function suggestLinks(headers, existing) {
+    const taken = new Set(headers.filter((h) => h.prefill && h.prefill.name).map((h) => foldText(h.prefill.name)));
+    const cands = [];
+    headers.forEach((h, hi) => {
+        if (h.prefill) return;
+        existing.forEach((e) => {
+            const f = foldText(e.name);
+            if (taken.has(f)) return;
+            const sc = nameScore(foldText(h.text), f, h.text, e.name);
+            if (sc >= 0.6) cands.push({ hi, name: e.name, f, sc });
+        });
+    });
+    cands.sort((x, y) => y.sc - x.sc);
+    const usedH = new Set(); const usedE = new Set();
+    cands.forEach((c) => {
+        if (usedH.has(c.hi) || usedE.has(c.f)) return;
+        usedH.add(c.hi); usedE.add(c.f);
+        headers[c.hi].link = { name: c.name, score: Math.round(c.sc * 100) / 100 };
+    });
+}
+
 // ---- valores empaquetados ----------------------------------------------------------------------------------------------------------------------------------------
 // Los valores de UN renglón en UNA carga van en un solo bloque (3 millones de valores como renglones sueltos de base pesaban ~175 MB; empaquetados pesan unas 6 veces menos). Formato 1:
 //   [1][K: uint16 LE][mapa de presencia: ceil(K/8) bytes, el bit i dice si hay valor en la posición i][un float64 LE por cada valor presente, en orden de posición]
@@ -458,4 +506,4 @@ function parseFilter(raw, columns) {
 }
 
 const foldName = (name) => foldText(name);
-module.exports = { packValues, unpackValues, unpackSlot, valueSlotKeys, prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };
+module.exports = { suggestLinks, nameScore, packValues, unpackValues, unpackSlot, valueSlotKeys, prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };

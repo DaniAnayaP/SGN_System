@@ -601,7 +601,7 @@ function openFlexLoadModal() {
     const now = new Date();
     const p2 = (n) => String(n).padStart(2, '0');
     const todayText = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`;
-    const s = { step: 'start', file: null, buffer: null, info: null, sheet: null, mode: 'asis', cols: [], day: todayText, time: `${p2(now.getHours())}:${p2(now.getMinutes())}`, preview: null, result: null, busy: false, error: '', inputMode: 'file', pasteText: '', classColors: {} };
+    const s = { step: 'start', file: null, buffer: null, info: null, sheet: null, mode: 'asis', cols: [], day: todayText, time: `${p2(now.getHours())}:${p2(now.getMinutes())}`, preview: null, result: null, busy: false, error: '', inputMode: 'file', pasteText: '', classColors: {}, view: 'all', open: {} };
     // las clasificaciones que ya tiene el registro (con su color): al escribir una igual se toma el mismo color
     const foldCls = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
     ((st.data && st.data.classes) || []).forEach((x) => { s.classColors[foldCls(x.name)] = x.color; });
@@ -612,40 +612,101 @@ function openFlexLoadModal() {
     const errBox = () => `<p class="admin-error" id="reg-i-error" role="alert"${s.error ? '' : ' hidden'}>${esc(s.error)}</p>`;
     const nextClassColor = () => { const used = new Set(Object.values(s.classColors)); for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i; return Object.keys(s.classColors).length % CLASS_COLORS.length; };
     const ensureClassColor = (c) => { const f = foldCls(c.cls); if (f && s.classColors[f] === undefined) s.classColors[f] = nextClassColor(); };
-    // la clasificación de cada columna: un nombre (el de una que ya existe o uno nuevo) y su color
-    const classCells = (c, roles) => {
-        if (roles && c.role === 'skip') return '<td><span class="reg-fx-dash">—</span></td><td></td>';
-        const color = c.cls ? s.classColors[foldCls(c.cls)] : undefined;
-        const dots = c.cls ? CLASS_COLORS.map((hex, i) => `<button type="button" class="reg-fx-dot" data-fx-color="${i}" data-fx-for="${c.i}" style="background:${hex}" aria-pressed="${color === i ? 'true' : 'false'}" aria-label="${esc(t(`main.flexColor_${i}`))}"></button>`).join('') : '';
-        return `<td><div class="reg-fx-clsbox"><input type="text" class="reg-fx-cls" list="fx-cls-list" data-fx-cls="${c.i}" maxlength="40" value="${esc(c.cls || '')}" placeholder="${esc(t('main.flexClsNone'))}" aria-label="${esc(t('main.flexColClass'))}">${c.cls ? `<button type="button" class="reg-fx-down" data-fx-down="${c.i}" title="${esc(t('main.flexClsDown'))}" aria-label="${esc(t('main.flexClsDown'))}"><i class="bx bx-down-arrow-alt" aria-hidden="true"></i></button>` : ''}</div></td><td><div class="reg-fx-dots">${dots}</div></td>`;
-    };
     const classList = () => {
         const names = new Map();
         ((st.data && st.data.classes) || []).forEach((x) => names.set(foldCls(x.name), x.name));
         s.cols.forEach((c) => { if (c.cls && !names.has(foldCls(c.cls))) names.set(foldCls(c.cls), c.cls); });
         return `<datalist id="fx-cls-list">${[...names.values()].map((n) => `<option value="${esc(n)}"></option>`).join('')}</datalist>`;
     };
-    const roleOptions = (selected) => ['key', 'data', 'value', 'skip'].map((r) => `<option value="${r}"${selected === r ? ' selected' : ''}>${esc(t(`main.flexRole_${r}`))}</option>`).join('');
     const startHtml = () => `<h3 id="reg-i-title">${esc(t('main.flexImpTitle', { name: regName(reg) }))}</h3>
         <div class="tpl-seg" role="group"><button type="button" data-reg-i="mode-file" aria-pressed="${s.inputMode === 'file'}" data-help-key="tplUpload"${s.busy ? ' disabled' : ''}>${esc(t('main.tplModeFile'))}</button><button type="button" data-reg-i="mode-paste" aria-pressed="${s.inputMode === 'paste'}" data-help-key="tplPaste"${s.busy ? ' disabled' : ''}>${esc(t('main.tplModePaste'))}</button></div>
         ${s.inputMode === 'paste' ? `<div class="reg-paste"><textarea id="reg-i-paste" spellcheck="false" placeholder="${esc(t('main.tplPastePlaceholder'))}"${s.busy ? ' disabled' : ''}>${esc(s.pasteText)}</textarea><button type="button" class="btn btn-secondary" data-reg-i="paste-go"${s.busy ? ' disabled' : ''}>${esc(s.busy ? t('main.regReading') : t('main.tplPasteGo'))}</button></div>` : `<label class="wp-imp-drop" id="reg-i-drop" for="reg-i-file" data-help-key="regDrop"><b>${esc(s.busy ? t('main.regReading') : t('main.regDrop'))}</b><span>${esc(t('main.regDropOr'))}</span></label>
         <input type="file" id="reg-i-file" class="wp-imp-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"${s.busy ? ' disabled' : ''}>`}
         ${errBox()}<div class="admin-form-actions"><button type="button" class="btn btn-secondary" data-reg-i="cancel"${s.busy ? ' disabled' : ''}>${esc(t('main.regCancel'))}</button></div>`;
+    // ---- la ventana de columnas (desde 2026-11-26): una tarjeta por columna del Excel con UNA decisión (ya existe / nueva adicional / no se carga); las ya definidas van en grupos cerrados ----
+    const foldName = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const exMap = () => new Map(((s.info && s.info.existing) || []).map((e) => [e.name, e]));
+    const hasExisting = () => !!(s.info && s.info.existing && s.info.existing.length);
+    const colOf = (i) => s.cols.find((c) => String(c.i) === String(i));
+    // lo que de verdad se manda de una columna: lo ya definido si «ya existe», lo que se escribió si es nueva
+    const effective = (c) => {
+        if (s.mode === 'asis') return { name: c.name, role: 'data', agg: 'sum', stampName: true, cls: c.cls || '', color: c.cls ? s.classColors[foldCls(c.cls)] : null };
+        if (c.st === 'skip') return { name: c.text, role: 'skip', agg: 'sum', stampName: true, cls: '', color: null };
+        if (c.st === 'exist') {
+            const e = exMap().get(c.link);
+            if (e) return { name: e.name, role: e.role, agg: e.agg, stampName: e.stampName, cls: e.cls || '', color: Number.isInteger(e.color) ? e.color : null };
+        }
+        return { name: c.name, role: c.role, agg: c.agg, stampName: c.stampName, cls: c.cls || '', color: c.cls ? s.classColors[foldCls(c.cls)] : null };
+    };
+    const classBox = (c) => {
+        const color = c.cls ? s.classColors[foldCls(c.cls)] : undefined;
+        const dots = c.cls ? CLASS_COLORS.map((hex, i) => `<button type="button" class="reg-fx-dot" data-fx-color="${i}" data-fx-for="${c.i}" style="background:${hex}" aria-pressed="${color === i ? 'true' : 'false'}" aria-label="${esc(t(`main.flexColor_${i}`))}"></button>`).join('') : '';
+        return `<div class="reg-fx-clsbox"><input type="text" class="reg-fx-cls" list="fx-cls-list" data-fx-cls="${c.i}" maxlength="40" value="${esc(c.cls || '')}" placeholder="${esc(t('main.flexClsNone'))}" aria-label="${esc(t('main.flexColClass'))}">${c.cls ? `<button type="button" class="reg-fx-down" data-fx-down="${c.i}" title="${esc(t('main.flexClsDown'))}" aria-label="${esc(t('main.flexClsDown'))}"><i class="bx bx-down-arrow-alt" aria-hidden="true"></i></button>` : ''}</div><div class="reg-fx-dots">${dots}</div>`;
+    };
+    const cardHtml = (c) => {
+        const roles = s.mode === 'roles';
+        const ex = exMap();
+        const segBtn = (st, key) => `<button type="button" data-fx-st="${st}" data-fx-for="${c.i}" aria-pressed="${c.st === st ? 'true' : 'false'}">${esc(t(key))}</button>`;
+        let choice = '';
+        if (roles) {
+            choice = `<span class="reg-seg" role="group" aria-label="${esc(c.text)}">${hasExisting() ? segBtn('exist', 'main.flexStExist') : ''}${segBtn('new', 'main.flexStNew')}${segBtn('skip', 'main.flexStSkip')}</span>`;
+            if (c.st === 'exist') {
+                const opts = [...ex.values()].map((e) => `<option value="${esc(e.name)}"${e.name === c.link ? ' selected' : ''}>${esc(e.name)}</option>`).join('');
+                const cur = ex.get(c.link);
+                choice += `<span class="reg-cd-link">${esc(t('main.flexLinkTo'))} <select data-fx-link="${c.i}" aria-label="${esc(t('main.flexLinkTo'))}">${c.link ? '' : `<option value="" selected>${esc(t('main.flexLinkPick'))}</option>`}${opts}</select>${cur ? ` · <b>${esc(t(`main.flexRole_${cur.role}`))}</b>` : ''}</span>`;
+            }
+        }
+        const sug = roles && c.st === 'new' && c.sugState === 'pending'
+            ? `<div class="reg-cd-sug"><span>${esc(t('main.flexSugAsk', { name: c.sug }))}</span><button type="button" class="btn btn-secondary" data-fx-sug="yes" data-fx-for="${c.i}">${esc(t('main.flexSugYes'))}</button><button type="button" class="btn btn-secondary" data-fx-sug="no" data-fx-for="${c.i}">${esc(t('main.flexSugNo'))}</button></div>` : '';
+        let det = '';
+        if (!roles || c.st === 'new') {
+            const isValue = roles && c.role === 'value';
+            const roleRow = roles ? `<div class="reg-cd-row"><b>${esc(t('main.flexColLoadAs'))}</b><span class="reg-seg" role="group">${['key', 'data', 'value'].map((r) => `<button type="button" data-fx-rolebtn="${r}" data-fx-for="${c.i}" aria-pressed="${c.role === r ? 'true' : 'false'}">${esc(t(`main.flexRole_${r}`))}</button>`).join('')}</span></div>` : '';
+            const aggRow = isValue ? `<div class="reg-cd-row"><b>${esc(t('main.flexColJoin'))}</b><span class="reg-seg" role="group">${['sum', 'one'].map((a) => `<button type="button" data-fx-aggbtn="${a}" data-fx-for="${c.i}" aria-pressed="${c.agg === a ? 'true' : 'false'}">${esc(t(`main.flexAgg_${a}`))}</button>`).join('')}</span><label class="reg-fx-stamp"><input type="checkbox" data-fx-stamp="${c.i}"${c.stampName ? ' checked' : ''}> <span>${esc(t('main.flexStampName'))}</span></label></div>` : '';
+            det = `<div class="reg-cd-det">${roleRow}${aggRow}<div class="reg-cd-row"><b>${esc(t('main.flexColName'))}</b><input type="text" class="reg-fx-name" data-fx-name="${c.i}" maxlength="60" value="${esc(c.name)}" aria-label="${esc(t('main.flexColName'))}"></div><div class="reg-cd-row"><b>${esc(t('main.flexColClass'))}</b>${classBox(c)}</div></div>`;
+        }
+        const tag = roles && c.isNew && c.st === 'new' ? `<span class="reg-fx-new">${esc(t('main.flexNewCol'))}</span>` : '';
+        return `<div class="reg-cd${roles && c.st === 'skip' ? ' reg-cd-off' : ''}${roles && c.isNew && c.st === 'new' ? ' reg-cd-new' : ''}"><div class="reg-cd-name"><label class="reg-cd-pick"><input type="checkbox" data-fx-pick="${c.i}"${c.sel ? ' checked' : ''} aria-label="${esc(t('main.flexPick', { name: c.text }))}"></label><div><b>${esc(c.text)}</b>${tag}<small>${c.example === undefined || c.example === null || c.example === '' ? '' : esc(c.example)}</small></div></div><div class="reg-cd-choice">${choice}</div>${sug}${det}</div>`;
+    };
+    const inView = (c) => s.view === 'all' || (s.mode === 'roles' && ((s.view === 'new' && c.st === 'new') || (s.view === 'skip' && c.st === 'skip')));
+    const groupsHtml = () => {
+        const roles = s.mode === 'roles';
+        const list = s.cols.filter(inView);
+        if (!roles) return `<div class="reg-cd-list">${list.map(cardHtml).join('')}</div>`;
+        const ex = exMap();
+        const pending = (c) => (c.st === 'new' && c.sugState === 'pending') || (c.st === 'exist' && !c.link);
+        const isValueLink = (c) => c.st === 'exist' && ex.get(c.link) && ex.get(c.link).role === 'value';
+        const groups = hasExisting() ? [
+            { id: 'pending', title: 'main.flexGrpPending', items: list.filter(pending), open: true },
+            { id: 'new', title: 'main.flexGrpNew', items: list.filter((c) => c.st === 'new' && !pending(c)), open: true },
+            { id: 'existKeys', title: 'main.flexGrpExistKeys', items: list.filter((c) => c.st === 'exist' && !pending(c) && !isValueLink(c)), open: false },
+            { id: 'existValues', title: 'main.flexGrpExistValues', items: list.filter((c) => isValueLink(c) && !pending(c)), open: false },
+            { id: 'skip', title: 'main.flexGrpSkip', items: list.filter((c) => c.st === 'skip'), open: false },
+        ] : [
+            { id: 'all', title: 'main.flexGrpAll', items: list.filter((c) => c.st !== 'skip'), open: true },
+            { id: 'skip', title: 'main.flexGrpSkip', items: list.filter((c) => c.st === 'skip'), open: true },
+        ];
+        return groups.filter((g) => g.items.length).map((g) => {
+            const open = s.view !== 'all' || g.id === 'pending' || (s.open[g.id] === undefined ? g.open : s.open[g.id]);
+            return `<details class="reg-grp" data-grp="${g.id}"${open ? ' open' : ''}><summary>${esc(t(g.title))} <small>${g.items.length}</small></summary><div class="reg-cd-list">${g.items.map(cardHtml).join('')}</div></details>`;
+        }).join('');
+    };
     const mapHtml = () => {
         const info = s.info;
         const roles = s.mode === 'roles';
-        const rows = s.cols.map((c) => {
-            const isValue = roles && c.role === 'value';
-            return `<tr class="${roles && c.role === 'skip' ? 'reg-fx-off' : ''}"><td>${esc(c.text)}${c.isNew ? ` <span class="reg-fx-new">${esc(t('main.flexNewCol'))}</span>` : ''}</td><td class="reg-map-ex">${esc(c.example)}</td>
-                <td>${roles ? `<select data-fx-role="${c.i}" aria-label="${esc(t('main.flexColLoadAs'))}">${roleOptions(c.role)}</select>` : `<span class="reg-fx-asis">${esc(t('main.flexRole_asis'))}</span>`}</td>
-                <td>${isValue ? `<select data-fx-agg="${c.i}" aria-label="${esc(t('main.flexColJoin'))}"><option value="sum"${c.agg === 'sum' ? ' selected' : ''}>${esc(t('main.flexAgg_sum'))}</option><option value="one"${c.agg === 'one' ? ' selected' : ''}>${esc(t('main.flexAgg_one'))}</option></select>` : '<span class="reg-fx-dash">—</span>'}</td>
-                <td>${roles && c.role === 'skip' ? '<span class="reg-fx-dash">—</span>' : `<input type="text" class="reg-fx-name" data-fx-name="${c.i}" maxlength="60" value="${esc(c.name)}" aria-label="${esc(t('main.flexColName'))}">`}${isValue ? `<label class="reg-fx-stamp"><input type="checkbox" data-fx-stamp="${c.i}"${c.stampName ? ' checked' : ''}> <span>${esc(t('main.flexStampName'))}</span></label>` : ''}</td>${classCells(c, roles)}</tr>`;
-        }).join('');
+        const count = (st) => s.cols.filter((c) => c.st === st).length;
+        const pend = s.cols.filter((c) => c.st === 'new' && c.sugState === 'pending').length;
+        const pills = roles ? `<div class="reg-cd-sum" aria-live="polite">${hasExisting() ? `<span class="wp-imp-pv wp-imp-pv-ok">${esc(t('main.flexSumExist', { n: num(count('exist')) }))}</span>` : ''}<span class="wp-imp-pv wp-imp-pv-warn">${esc(t('main.flexSumNew', { n: num(count('new') - pend) }))}</span>${pend ? `<span class="wp-imp-pv wp-imp-pv-error">${esc(t('main.flexSumPending', { n: num(pend) }))}</span>` : ''}<span class="wp-imp-pv wp-imp-pv-keep">${esc(t('main.flexSumSkip', { n: num(count('skip')) }))}</span></div>` : '';
+        const views = roles && hasExisting() ? `<div class="reg-cd-views" role="group">${[['all', 'main.flexViewAll'], ['new', 'main.flexViewNew'], ['skip', 'main.flexViewSkip']].map(([v, k]) => `<button type="button" data-fx-view="${v}" aria-pressed="${s.view === v ? 'true' : 'false'}">${esc(t(k))}</button>`).join('')}</div>` : '';
+        const nSel = s.cols.filter((c) => c.sel).length;
+        const bulkBtn = (v, label) => `<button type="button" data-fx-bulk="${v}">${esc(label)}</button>`;
+        const bulk = `<div class="reg-cd-bulk"><span class="reg-cd-bulk-n">${esc(t('main.flexBulkCount', { n: num(nSel) }))}</span><button type="button" class="reg-cd-link-btn" data-fx-bulk="all">${esc(t('main.flexBulkAll'))}</button><button type="button" class="reg-cd-link-btn" data-fx-bulk="none">${esc(t('main.flexBulkNone'))}</button>${nSel ? `<span class="reg-seg" role="group" aria-label="${esc(t('main.flexBulkTitle'))}">${roles ? `${bulkBtn('new', t('main.flexStNew'))}${bulkBtn('skip', t('main.flexStSkip'))}${['key', 'data', 'value'].map((r) => bulkBtn(`role:${r}`, t(`main.flexRole_${r}`))).join('')}` : ''}</span><span class="reg-cd-bulk-cls"><input type="text" id="fx-bulk-cls" list="fx-cls-list" maxlength="40" placeholder="${esc(t('main.flexClsNone'))}" aria-label="${esc(t('main.flexColClass'))}">${bulkBtn('cls', t('main.flexBulkApply'))}</span>` : ''}</div>`;
         return `<h3 id="reg-i-title">${esc(t('main.flexImpTitle', { name: regName(reg) }))}</h3>
             <div class="reg-fx-modes" role="radiogroup" data-help-key="regFlexMode"><label class="reg-fx-mode${roles ? '' : ' reg-fx-mode-on'}"><input type="radio" name="fx-mode" value="asis"${roles ? '' : ' checked'}> <span>${esc(t('main.flexModeAsis'))}</span></label><label class="reg-fx-mode${roles ? ' reg-fx-mode-on' : ''}"><input type="radio" name="fx-mode" value="roles"${roles ? ' checked' : ''}> <span>${esc(t('main.flexModeRoles'))}</span></label></div>
             <p class="admin-hint">${esc(t('main.flexRead', { cols: info.headers.length, rows: num(info.rowsDeclared) }))}</p>
             ${info.sheets.length > 1 ? `<div class="reg-sheet"><label for="reg-i-sheet">${esc(t('main.regSheet'))}</label><select id="reg-i-sheet">${info.sheets.map((sh) => `<option value="${esc(sh.name)}"${sh.name === s.sheet ? ' selected' : ''}>${esc(sh.name)}</option>`).join('')}</select></div>` : ''}
-            <div class="wp-imp-table-wrap"><table class="wp-imp-table reg-map-table" data-help-key="regFlexMap"><thead><tr><th>${esc(t('main.flexColExcel'))}</th><th>${esc(t('main.flexColExample'))}</th><th>${esc(t('main.flexColLoadAs'))}</th><th>${esc(t('main.flexColJoin'))}</th><th>${esc(t('main.flexColName'))}</th><th>${esc(t('main.flexColClass'))}</th><th>${esc(t('main.flexColColor'))}</th></tr></thead><tbody>${rows}</tbody></table></div>${classList()}
+            ${pills}${views}${bulk}
+            <div class="wp-imp-table-wrap reg-cd-wrap" data-help-key="regFlexMap">${groupsHtml()}</div>${classList()}
             <div class="reg-day" data-help-key="regFlexWhen"><label for="fx-day">${esc(t('main.flexWhen'))}</label><input type="date" id="fx-day" value="${esc(s.day)}" max="${esc(todayText)}"><input type="time" id="fx-time" value="${esc(s.time)}" aria-label="${esc(t('main.flexWhenTime'))}"></div>
             ${errBox()}<div class="admin-form-actions"><button type="button" class="btn" data-reg-i="review"${s.busy ? ' disabled' : ''}>${esc(t('main.regReview'))}</button><button type="button" class="btn btn-secondary" data-reg-i="again"${s.busy ? ' disabled' : ''}>${esc(t('main.regChooseAnother'))}</button><button type="button" class="btn btn-secondary" data-reg-i="cancel"${s.busy ? ' disabled' : ''}>${esc(t('main.regCancel'))}</button></div>`;
     };
@@ -693,8 +754,8 @@ function openFlexLoadModal() {
         const active = same && document.activeElement && overlay.contains(document.activeElement) ? document.activeElement : null;
         let focusSel = '';
         if (active) {
-            const attr = [...active.attributes].find((a) => a.name.startsWith('data-fx-') && a.value !== '');
-            if (attr) focusSel = `[${attr.name}="${attr.value}"]`; else if (active.id) focusSel = `#${active.id}`;
+            const attrs = [...active.attributes].filter((a) => a.name.startsWith('data-fx-') && a.value !== '');
+            if (attrs.length) focusSel = attrs.map((a) => `[${a.name}="${a.value}"]`).join(''); else if (active.id) focusSel = `#${active.id}`;
         }
         overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal wp-imp${wide ? ' wp-imp-wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="reg-i-title" aria-label="${esc(t('main.regImport'))}" data-help-key="regFlexImport">${s.step === 'preview' ? previewHtml() : s.step === 'map' ? mapHtml() : s.step === 'done' ? doneHtml() : startHtml()}</div>`;
         if (same) {
@@ -718,28 +779,45 @@ function openFlexLoadModal() {
         const q = {}; if (sheet) q.sheet = sheet;
         s.info = await post('inspect', q, s.buffer);
         s.sheet = s.info.sheet;
-        // si el registro ya tuvo una carga, cada columna viene con lo que se eligió ahí (se empareja por el título del Excel); las que no estaban llevan la marca «Nueva»
+        // si el registro ya tuvo cargas, cada título se reconoce solo (por el título que traía en una carga anterior) y toma lo ya definido: «ya existe». Uno que trae otro nombre pero se parece a una columna que ya existe
+        // queda «por confirmar» (la persona decide si es esa o una nueva adicional); lo demás es una nueva adicional con la marca «Nueva».
         const prevRoles = s.info.prevMode === 'roles';
+        const known = exMap();
         s.cols = s.info.headers.map((h, k) => {
             const p = h.prefill;
             if (p && p.cls && Number.isInteger(p.color) && s.classColors[foldCls(p.cls)] === undefined) s.classColors[foldCls(p.cls)] = p.color;
-            return { i: h.index, text: h.text, name: (p && p.name) || h.text, example: s.info.sample[0] ? s.info.sample[0].values[k] : '', role: p && prevRoles ? p.role : (prevRoles && h.suggest.role === 'key' ? 'data' : h.suggest.role), agg: p && prevRoles && p.agg ? p.agg : h.suggest.agg, stampName: p && prevRoles ? p.stampName !== false : h.suggest.stampName !== false, cls: (p && p.cls) || '', isNew: !!s.info.prevMode && !p };
+            const c = { i: h.index, text: h.text, example: s.info.sample[0] ? s.info.sample[0].values[k] : '', st: 'new', link: '', sug: '', sugState: '', isNew: !!s.info.prevMode,
+                role: p && prevRoles ? p.role : (prevRoles && h.suggest.role === 'key' ? 'data' : h.suggest.role), agg: p && prevRoles && p.agg ? p.agg : h.suggest.agg, stampName: p && prevRoles ? p.stampName !== false : h.suggest.stampName !== false,
+                name: (p && p.name) || h.text, cls: (p && p.cls) || '' };
+            if (prevRoles && p && p.role === 'skip') { c.st = 'skip'; c.isNew = false; c.role = h.suggest.role; c.name = h.text; }
+            else if (prevRoles && p && known.has(p.name)) { c.st = 'exist'; c.link = p.name; c.isNew = false; }
+            else if (prevRoles && p) c.isNew = false;
+            else if (prevRoles && h.link && known.has(h.link.name)) {
+                if (h.link.score >= 1) { c.st = 'exist'; c.link = h.link.name; c.isNew = false; } else { c.sug = h.link.name; c.sugState = 'pending'; }
+            }
+            return c;
         });
         if (s.info.prevMode && !s.prevApplied) { s.prevApplied = true; s.mode = s.info.prevMode; }
     };
     const stampIso = () => { const d = new Date(`${s.day}T${s.time || '00:00'}`); return Number.isNaN(d.getTime()) ? '' : d.toISOString(); };
     const readWhen = () => { const d = overlay.querySelector('#fx-day'); const tm = overlay.querySelector('#fx-time'); if (d) s.day = d.value; if (tm) s.time = tm.value; };
-    // la elección de esta carga: «tal cual» lleva todas las columnas; con papeles, las que no se cargan van marcadas
-    const config = () => ({ mode: s.mode, columns: s.cols.map((c) => ({ i: c.i, src: c.text, name: c.name, role: s.mode === 'asis' ? 'data' : c.role, agg: c.agg, stampName: c.stampName, cls: c.cls || '', color: c.cls ? s.classColors[foldCls(c.cls)] : null })) });
+    // la elección de esta carga: «tal cual» lleva todas las columnas; con papeles, lo ya definido si «ya existe», lo que se escribió si es nueva, y las que no se cargan van marcadas
+    const config = () => ({ mode: s.mode, columns: s.cols.map((c) => { const e = effective(c); return { i: c.i, src: c.text, name: e.name, role: e.role, agg: e.agg, stampName: e.stampName, cls: e.cls, color: e.color }; }) });
     const importQuery = (mode) => ({ mode, header: String(s.info.headerRow), sheet: s.sheet || '', file: s.file ? s.file.name : '', cfg: JSON.stringify(config()), stamp: stampIso() });
-    // lo que se puede revisar sin ir al servidor: una llave al menos, nombres sin repetir y un día válido
+    // lo que se puede revisar sin ir al servidor: columnas por confirmar, una llave al menos, nombres sin repetir y un día válido
     const problem = () => {
         readWhen();
         if (!stampIso()) return t('main.regErr_IMPORT_STAMP');
-        const used = s.cols.filter((c) => s.mode === 'asis' || c.role !== 'skip');
+        if (s.mode === 'roles') {
+            const pend = s.cols.filter((c) => c.st === 'new' && c.sugState === 'pending');
+            if (pend.length) return t('main.flexErrPending', { list: pend.map((c) => `«${c.text}» → «${c.sug}»`).join(', ') });
+            const noLink = s.cols.find((c) => c.st === 'exist' && !c.link);
+            if (noLink) return t('main.flexErrNoLink', { name: noLink.text });
+        }
+        const used = s.cols.filter((c) => s.mode === 'asis' || c.st !== 'skip').map(effective);
         if (s.mode === 'roles' && !used.some((c) => c.role === 'key')) return t('main.regErr_FLEX_NO_KEY');
         const seen = new Set();
-        for (const c of used) { const f = String(c.name || '').trim().toLowerCase(); if (seen.has(f)) return t('main.regErr_FLEX_DUP_NAME'); seen.add(f); }
+        for (const c of used) { const f = foldName(c.name); if (seen.has(f)) return t('main.regErr_FLEX_DUP_NAME'); seen.add(f); }
         return '';
     };
     const review = async () => {
@@ -789,6 +867,52 @@ function openFlexLoadModal() {
             }
             return;
         }
+        const col = (i) => s.cols.find((x) => String(x.i) === String(i));
+        const pick = event.target.closest('[data-fx-pick]');
+        if (pick && !s.busy) {
+            const at = s.cols.findIndex((x) => String(x.i) === pick.dataset.fxPick);
+            if (at >= 0) {
+                if (event.shiftKey && s.lastPick !== undefined) { const lo = Math.min(s.lastPick, at); const hi = Math.max(s.lastPick, at); for (let k = lo; k <= hi; k += 1) if (inView(s.cols[k])) s.cols[k].sel = pick.checked; } else s.cols[at].sel = pick.checked;
+                s.lastPick = at; readWhen(); paint();
+            }
+            return;
+        }
+        const bulk = event.target.closest('[data-fx-bulk]');
+        if (bulk && !s.busy) {
+            readWhen();
+            const v = bulk.dataset.fxBulk;
+            const chosen = s.cols.filter((c) => c.sel);
+            if (v === 'all') s.cols.filter(inView).forEach((c) => { c.sel = true; });
+            else if (v === 'none') s.cols.forEach((c) => { c.sel = false; });
+            else if (v === 'new' || v === 'skip') chosen.forEach((c) => { if (c.sugState === 'pending') c.sugState = 'rejected'; c.st = v; if (v === 'new' && s.info.prevMode) c.isNew = true; });
+            else if (v.startsWith('role:')) chosen.forEach((c) => { if (c.sugState === 'pending') c.sugState = 'rejected'; c.st = 'new'; c.role = v.slice(5); if (s.info.prevMode) c.isNew = true; });
+            else if (v === 'cls') { const val = String((overlay.querySelector('#fx-bulk-cls') || {}).value || '').replace(/\s+/g, ' ').trim(); chosen.forEach((c) => { if (s.mode === 'asis' || c.st === 'new') { c.cls = val; ensureClassColor(c); } }); }
+            s.error = '';
+            paint(); return;
+        }
+        const stBtn = event.target.closest('[data-fx-st]');
+        if (stBtn && !s.busy) {
+            readWhen();
+            const c = col(stBtn.dataset.fxFor); const to = stBtn.dataset.fxSt;
+            if (c) {
+                if (to === 'exist') { c.st = 'exist'; if (!c.link) c.link = c.sug && exMap().has(c.sug) ? c.sug : ''; if (c.link && c.link === c.sug) c.sugState = 'accepted'; c.isNew = false; }
+                else { if (c.sugState === 'pending') c.sugState = 'rejected'; c.st = to; if (to === 'new' && s.info.prevMode) c.isNew = true; }
+                s.error = '';
+            }
+            paint(); return;
+        }
+        const sugBtn = event.target.closest('[data-fx-sug]');
+        if (sugBtn && !s.busy) {
+            const c = col(sugBtn.dataset.fxFor);
+            if (c) { readWhen(); if (sugBtn.dataset.fxSug === 'yes') { c.st = 'exist'; c.link = c.sug; c.sugState = 'accepted'; c.isNew = false; } else c.sugState = 'rejected'; s.error = ''; paint(); }
+            return;
+        }
+        const roleBtn = event.target.closest('[data-fx-rolebtn]');
+        if (roleBtn && !s.busy) { const c = col(roleBtn.dataset.fxFor); if (c) { readWhen(); c.role = roleBtn.dataset.fxRolebtn; paint(); } return; }
+        const aggBtn = event.target.closest('[data-fx-aggbtn]');
+        if (aggBtn && !s.busy) { const c = col(aggBtn.dataset.fxFor); if (c) { readWhen(); c.agg = aggBtn.dataset.fxAggbtn; paint(); } return; }
+        const viewBtn = event.target.closest('[data-fx-view]');
+        if (viewBtn && !s.busy) { readWhen(); s.view = viewBtn.dataset.fxView; paint(); return; }
         const btn = event.target.closest('[data-reg-i]');
         if (!btn || s.busy) return;
         const op = btn.dataset.regI;
@@ -808,8 +932,7 @@ function openFlexLoadModal() {
         else if (el.name === 'fx-mode') { readWhen(); s.mode = el.value; s.error = ''; paint(); }
         else if (el.id === 'fx-day' || el.id === 'fx-time') readWhen();
         else if (el.id === 'reg-i-sheet') { setBusy(true); try { await inspect(el.value); s.busy = false; paint(); } catch (err) { s.error = errorTextOf(err); s.busy = false; paint(); } }
-        else if (el.dataset.fxRole !== undefined) { const c = col('fxRole'); if (c) { readWhen(); c.role = el.value; paint(); } }
-        else if (el.dataset.fxAgg !== undefined) { const c = col('fxAgg'); if (c) c.agg = el.value; }
+        else if (el.dataset.fxLink !== undefined) { const c = col('fxLink'); if (c) { readWhen(); c.link = el.value; if (c.link && c.link === c.sug) c.sugState = 'accepted'; s.error = ''; paint(); } }
         else if (el.dataset.fxStamp !== undefined) { const c = col('fxStamp'); if (c) c.stampName = el.checked; }
         else if (el.dataset.fxCls !== undefined) { const c = col('fxCls'); if (c) { readWhen(); c.cls = el.value.replace(/\s+/g, ' ').trim(); ensureClassColor(c); paint(); } } // al terminar de escribir: toma el color de la clasificación (el de una que ya existe o el siguiente de la paleta)
     });
@@ -829,6 +952,7 @@ function openFlexLoadModal() {
         zone.classList.remove('wp-imp-drop-over');
         chooseFile(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]);
     });
+    overlay.addEventListener('toggle', (event) => { const d = event.target; if (d && d.dataset && d.dataset.grp) s.open[d.dataset.grp] = d.open; }, true);
     paint();
 }
 function openLoadModal() {
