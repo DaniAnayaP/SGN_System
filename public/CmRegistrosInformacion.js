@@ -93,6 +93,7 @@ function renderManage() {
         bar.appendChild(btn);
     };
     make('bx-edit', 'main.regRename', () => openRenameRegistry(reg));
+    if (reg.kind !== 'tabla' && !reg.lastLoad) make('bx-table', 'main.regToTabla', () => openConvertRegistry(reg)); // solo mientras no tenga cargas
     make(reg.status === 'active' ? 'bx-hide' : 'bx-show', reg.status === 'active' ? 'main.regDeactivate' : 'main.regActivate', () => toggleRegistry(reg));
 }
 // La opción «＋ Agregar nuevo registro» del menú lateral abre esta pantalla con ?nuevo=1: se muestra la ventana de alta (solo con el botón «Crear registro») y se limpia la dirección.
@@ -105,7 +106,7 @@ function openNewFromMenu() {
 }
 function regErrorText(body) {
     const code = body && body.code;
-    return ['REG_NAME_REQUIRED', 'REG_NAME_TAKEN', 'REG_KIND', 'REG_FORBIDDEN', 'REG_STATUS', 'REG_BUILTIN'].includes(code) ? t(`main.regErr_${code}`) : t('admin.saveError');
+    return ['REG_NAME_REQUIRED', 'REG_NAME_TAKEN', 'REG_KIND', 'REG_FORBIDDEN', 'REG_STATUS', 'REG_BUILTIN', 'REG_HAS_DATA'].includes(code) ? t(`main.regErr_${code}`) : t('admin.saveError');
 }
 function openModal(html, helpKey, onReady) {
     const overlay = document.createElement('div');
@@ -131,11 +132,14 @@ function openCreateRegistry() {
         <label for="reg-n-name">${esc(t('main.regNewName'))}</label><input type="text" id="reg-n-name" maxlength="80" autocomplete="off">
         <p class="reg-field-label">${esc(t('main.regNewKind'))}</p>
         <div class="an-checks"><label><input type="radio" name="reg-n-kind" value="month" checked> <span>${esc(t('main.regKindMonth'))}</span></label>
-        <label><input type="radio" name="reg-n-kind" value="day"> <span>${esc(t('main.regKindDay'))}</span></label></div>
-        <label for="reg-n-value">${esc(t('main.regNewValue'))}</label><input type="text" id="reg-n-value" maxlength="40" autocomplete="off" placeholder="${esc(t('main.regNewValueDefault'))}">
+        <label><input type="radio" name="reg-n-kind" value="day"> <span>${esc(t('main.regKindDay'))}</span></label>
+        <label><input type="radio" name="reg-n-kind" value="tabla"> <span>${esc(t('main.regKindTabla'))}</span></label></div>
+        <div id="reg-n-value-wrap"><label for="reg-n-value">${esc(t('main.regNewValue'))}</label><input type="text" id="reg-n-value" maxlength="40" autocomplete="off" placeholder="${esc(t('main.regNewValueDefault'))}"></div>
         <p class="admin-error" id="reg-n-error" role="alert" hidden></p>
         <div class="admin-form-actions"><button type="button" class="btn" data-reg-go>${esc(t('main.regNewCreate'))}</button><button type="button" class="btn btn-secondary" data-reg-close>${esc(t('main.regCancel'))}</button></div>`, 'regNewDialog', (overlay) => {
         overlay.querySelector('#reg-n-name').focus();
+        // una tabla libre no mide un solo valor: lo que mide lo decides al cargar cada archivo
+        overlay.addEventListener('change', (event) => { if (event.target.name === 'reg-n-kind') overlay.querySelector('#reg-n-value-wrap').hidden = event.target.value === 'tabla'; });
         overlay.querySelector('[data-reg-go]').addEventListener('click', async (event) => {
             const btn = event.currentTarget;
             const el = overlay.querySelector('#reg-n-error');
@@ -159,6 +163,20 @@ function openRenameRegistry(reg) {
                 await sendRegistry('PATCH', `${API}/${encodeURIComponent(reg.key)}`, { name: overlay.querySelector('#reg-r-name').value });
                 location.reload(); // el menú trae el nombre nuevo
             } catch (e) { btn.disabled = false; const el = overlay.querySelector('#reg-r-error'); el.textContent = regErrorText(e.body); el.hidden = false; }
+        });
+    });
+}
+// Convertir un registro vacío (mensual o diario) en tabla libre: cualquier Excel, eligiendo el papel de sus columnas en cada carga. Solo se puede mientras no tenga cargas.
+function openConvertRegistry(reg) {
+    openModal(`<h3>${esc(t('main.regToTablaTitle'))}</h3><p>${esc(t('main.regToTablaText', { name: regName(reg) }))}</p>
+        <p class="admin-error" id="reg-c-error" role="alert" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" data-reg-go>${esc(t('main.regToTablaGo'))}</button><button type="button" class="btn btn-secondary" data-reg-close>${esc(t('main.regCancel'))}</button></div>`, 'regToTablaDialog', (overlay) => {
+        overlay.querySelector('[data-reg-go]').addEventListener('click', async (event) => {
+            const btn = event.currentTarget; btn.disabled = true;
+            try {
+                await sendRegistry('PATCH', `${API}/${encodeURIComponent(reg.key)}`, { kind: 'tabla' });
+                location.reload();
+            } catch (e) { btn.disabled = false; const el = overlay.querySelector('#reg-c-error'); el.textContent = regErrorText(e.body); el.hidden = false; }
         });
     });
 }
@@ -228,6 +246,11 @@ function ensureEmpty(tableId, span) {
     inner.textContent = t('main.emptyStateText');
     td.appendChild(inner); tr.appendChild(td); tbody.appendChild(tr);
 }
+// Un registro de tabla libre trae sus columnas del servidor (las de su Excel, en su orden, cada una con su papel); los demás tienen las de siempre.
+const isFlex = (body) => !!(body && Array.isArray(body.columns));
+const FLEX_GROUPS = { key: 'main.regGroupKey', data: 'main.regGroupData', value: 'main.regGroupNew', load: 'main.regGroupLoad' };
+const flexColumns = (body) => body.columns.map((c) => ({ col: c.key, group: FLEX_GROUPS[c.group] || FLEX_GROUPS.data, label: c.label, cls: c.num ? 'col-num' : '' }));
+const tzOffset = () => new Date().getTimezoneOffset(); // minutos que la hora de quien mira va detrás de UTC: las etiquetas de día y hora de las cargas salen en su hora
 function dataColumns(periods) {
     return [
         ...DIM_COLUMNS.map((c) => ({ col: c.col, group: 'menu.cmRegistrosInformacion', labelKey: `main.${c.col}` })),
@@ -238,22 +261,23 @@ function drawData() {
     const body = st.data;
     if (!body) return;
     const wrapper = wrapperOf(DATA_TABLE);
-    const first = buildHeader(DATA_TABLE, dataColumns(body.periods));
+    const flex = isFlex(body);
+    const first = buildHeader(DATA_TABLE, flex ? flexColumns(body) : dataColumns(body.periods));
     const table = tableOf(DATA_TABLE);
     const tbody = table.tBodies[0];
     tbody.innerHTML = '';
     st.drawn = 0;
     drawRows(FIRST_ROWS);
-    ensureEmpty(DATA_TABLE, DIM_COLUMNS.length + body.periods.length);
+    ensureEmpty(DATA_TABLE, flex ? body.columns.length : DIM_COLUMNS.length + body.periods.length);
     if (first && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 0);
     if (first && Dashboard.registerServerFilteredTable) Dashboard.registerServerFilteredTable(DATA_TABLE, { onChange: (spec) => { st.cf = spec; refreshData(); }, getValues: fetchColumnValues });
     if (first && Dashboard.registerPartialTable) Dashboard.registerPartialTable(DATA_TABLE, { isComplete: () => !st.data || st.drawn >= st.data.rows.length, loadAll: drawAllRows });
     watchScroll(wrapper);
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(DATA_TABLE);
-    wrapper.setAttribute('data-help-key', 'regTable');
+    wrapper.setAttribute('data-help-key', flex ? 'regTableLibre' : 'regTable');
     if (Dashboard.attachTableDownloadButton) {
         Dashboard.attachTableDownloadButton(DATA_TABLE, { getTitle: () => `${regName(currentRegistry())}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : ''),
-            getFullDownload: (format) => (st.data && st.data.truncated ? `${API}/${encodeURIComponent(st.key)}/export?format=${format}&lang=${lang()}&text=${encodeURIComponent(st.text || '')}${st.cf ? `&cf=${encodeURIComponent(JSON.stringify(st.cf))}` : ''}&file=${encodeURIComponent(`${regName(currentRegistry())}_${todayStamp()}`)}` : null) });
+            getFullDownload: (format) => (st.data && st.data.truncated ? `${API}/${encodeURIComponent(st.key)}/export?format=${format}&lang=${lang()}&tz=${tzOffset()}&text=${encodeURIComponent(st.text || '')}${st.cf ? `&cf=${encodeURIComponent(JSON.stringify(st.cf))}` : ''}&file=${encodeURIComponent(`${regName(currentRegistry())}_${todayStamp()}`)}` : null) });
     }
     updateNote();
     renderButtons();
@@ -263,6 +287,16 @@ function rowsHtml(body, from, to) {
     const periodKeys = body.periods.map(periodKey);
     const td = (col, value, cls) => `<td data-col="${col}"${cls ? ` class="${cls}"` : ''}>${value === null || value === undefined || value === '' ? '—' : esc(value)}</td>`;
     const html = [];
+    if (isFlex(body)) {
+        // tabla libre: cada renglón es una lista de celdas en el orden de las columnas (texto, número o nada)
+        for (let i = from; i < to; i += 1) {
+            const row = body.rows[i];
+            let tr = '<tr>';
+            body.columns.forEach((c, k) => { tr += td(c.key, row[k], c.num ? 'col-num' : ''); });
+            html.push(`${tr}</tr>`);
+        }
+        return html.join('');
+    }
     for (let i = from; i < to; i += 1) {
         const row = body.rows[i];
         let tr = `<tr data-record-id="${row.id}">`;
@@ -378,7 +412,7 @@ async function refreshData() {
     const wrapper = wrapperOf(DATA_TABLE);
     wrapper?.classList.add('reg-busy');
     try {
-        const params = new URLSearchParams({ lang: lang() });
+        const params = new URLSearchParams({ lang: lang(), tz: String(tzOffset()) });
         if (st.text) params.set('text', st.text);
         if (st.cf) params.set('cf', JSON.stringify(st.cf));
         const res = await fetch(`${API}/${st.key}/data?${params}`, { credentials: 'include' });
@@ -403,7 +437,7 @@ async function refreshData() {
 }
 // La lista de valores de una columna para su filtro: los de TODO el registro (no los dibujados).
 async function fetchColumnValues(col) {
-    const res = await fetch(`${API}/${encodeURIComponent(st.key)}/values?col=${encodeURIComponent(col)}&lang=${lang()}`, { credentials: 'include' });
+    const res = await fetch(`${API}/${encodeURIComponent(st.key)}/values?col=${encodeURIComponent(col)}&lang=${lang()}&tz=${tzOffset()}`, { credentials: 'include' });
     if (!res.ok) throw new Error('values failed');
     return res.json();
 }
@@ -449,7 +483,7 @@ function renderButtons() {
         return btn;
     };
     toolbar.classList.add('ven-toolbar');
-    toolbar.prepend(make('reg-template-btn', 'bx-download', 'main.regTemplate', 'regTemplate', downloadTemplate));
+    if (!reg || reg.kind !== 'tabla') toolbar.prepend(make('reg-template-btn', 'bx-download', 'main.regTemplate', 'regTemplate', downloadTemplate)); // un registro libre no tiene plantilla: se carga tu propio Excel
     toolbar.prepend(make('reg-import-btn', 'bx-upload', 'main.regImport', 'regImport', openLoadModal));
 }
 function wireStatic() {
@@ -529,11 +563,193 @@ function problemText(issue) { return t(`main.regProb_${issue.problem}`); }
 function errorTextOf(err) {
     const body = (err && err.body) || {};
     if (body.code === 'IMPORT_HEADERS') return t('main.regErr_IMPORT_HEADERS', { missing: (body.missing || []).map((k) => (k === 'value' ? t('main.regValueColumn') : t(`main.regDim_${k}`))).join(', ') });
-    return ['IMPORT_FILE', 'IMPORT_EMPTY', 'IMPORT_TOO_BIG', 'IMPORT_DAY', 'IMPORT_DAY_FUTURE', 'REG_FORBIDDEN', 'REG_BUSY', 'COST_CENTER_REQUIRED', 'IMPORT_ERROR'].includes(body.code) ? t(`main.regErr_${body.code}`) : t('admin.saveError');
+    return ['IMPORT_FILE', 'IMPORT_EMPTY', 'IMPORT_TOO_BIG', 'IMPORT_DAY', 'IMPORT_DAY_FUTURE', 'REG_FORBIDDEN', 'REG_BUSY', 'COST_CENTER_REQUIRED', 'IMPORT_ERROR', 'FLEX_CONFIG', 'FLEX_DUP_NAME', 'FLEX_NO_KEY', 'IMPORT_STAMP', 'IMPORT_TOO_MANY_COLUMNS'].includes(body.code) ? t(`main.regErr_${body.code}`) : t('admin.saveError');
+}
+// ---- Registros de TABLA LIBRE: cada carga lleva su propia elección de columnas (no se recuerda de una carga a otra) ------------------------------------------------------------------------------
+// «Guardar tal cual» (todas las columnas del Excel, con su orden y nombres) o «Elegir el papel de cada columna»: llave (va hacia abajo), dato del renglón, columna nueva en cada carga (se suma o se toma uno) o no se carga.
+// Cada columna se puede renombrar. El día y la hora de la carga se eligen aquí (el archivo no los trae); cada carga es su propia columna aunque tenga el mismo día y hora.
+function openFlexLoadModal() {
+    const reg = currentRegistry();
+    if (!reg) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    document.body.appendChild(overlay);
+    const now = new Date();
+    const p2 = (n) => String(n).padStart(2, '0');
+    const todayText = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`;
+    const s = { step: 'start', file: null, buffer: null, info: null, sheet: null, mode: 'asis', cols: [], day: todayText, time: `${p2(now.getHours())}:${p2(now.getMinutes())}`, preview: null, result: null, busy: false, error: '', inputMode: 'file', pasteText: '' };
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (event) => { if (event.key === 'Escape' && !s.busy) close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay && !s.busy) close(); });
+    const errBox = () => `<p class="admin-error" id="reg-i-error" role="alert"${s.error ? '' : ' hidden'}>${esc(s.error)}</p>`;
+    const roleOptions = (selected) => ['key', 'data', 'value', 'skip'].map((r) => `<option value="${r}"${selected === r ? ' selected' : ''}>${esc(t(`main.flexRole_${r}`))}</option>`).join('');
+    const startHtml = () => `<h3 id="reg-i-title">${esc(t('main.flexImpTitle', { name: regName(reg) }))}</h3>
+        <div class="tpl-seg" role="group"><button type="button" data-reg-i="mode-file" aria-pressed="${s.inputMode === 'file'}" data-help-key="tplUpload"${s.busy ? ' disabled' : ''}>${esc(t('main.tplModeFile'))}</button><button type="button" data-reg-i="mode-paste" aria-pressed="${s.inputMode === 'paste'}" data-help-key="tplPaste"${s.busy ? ' disabled' : ''}>${esc(t('main.tplModePaste'))}</button></div>
+        ${s.inputMode === 'paste' ? `<div class="reg-paste"><textarea id="reg-i-paste" spellcheck="false" placeholder="${esc(t('main.tplPastePlaceholder'))}"${s.busy ? ' disabled' : ''}>${esc(s.pasteText)}</textarea><button type="button" class="btn btn-secondary" data-reg-i="paste-go"${s.busy ? ' disabled' : ''}>${esc(s.busy ? t('main.regReading') : t('main.tplPasteGo'))}</button></div>` : `<label class="wp-imp-drop" id="reg-i-drop" for="reg-i-file" data-help-key="regDrop"><b>${esc(s.busy ? t('main.regReading') : t('main.regDrop'))}</b><span>${esc(t('main.regDropOr'))}</span></label>
+        <input type="file" id="reg-i-file" class="wp-imp-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"${s.busy ? ' disabled' : ''}>`}
+        ${errBox()}<div class="admin-form-actions"><button type="button" class="btn btn-secondary" data-reg-i="cancel"${s.busy ? ' disabled' : ''}>${esc(t('main.regCancel'))}</button></div>`;
+    const mapHtml = () => {
+        const info = s.info;
+        const roles = s.mode === 'roles';
+        const rows = s.cols.map((c) => {
+            const isValue = roles && c.role === 'value';
+            return `<tr class="${roles && c.role === 'skip' ? 'reg-fx-off' : ''}"><td>${esc(c.text)}</td><td class="reg-map-ex">${esc(c.example)}</td>
+                <td>${roles ? `<select data-fx-role="${c.i}" aria-label="${esc(t('main.flexColLoadAs'))}">${roleOptions(c.role)}</select>` : `<span class="reg-fx-asis">${esc(t('main.flexRole_asis'))}</span>`}</td>
+                <td>${isValue ? `<select data-fx-agg="${c.i}" aria-label="${esc(t('main.flexColJoin'))}"><option value="sum"${c.agg === 'sum' ? ' selected' : ''}>${esc(t('main.flexAgg_sum'))}</option><option value="one"${c.agg === 'one' ? ' selected' : ''}>${esc(t('main.flexAgg_one'))}</option></select>` : '<span class="reg-fx-dash">—</span>'}</td>
+                <td>${roles && c.role === 'skip' ? '<span class="reg-fx-dash">—</span>' : `<input type="text" class="reg-fx-name" data-fx-name="${c.i}" maxlength="60" value="${esc(c.name)}" aria-label="${esc(t('main.flexColName'))}">`}${isValue ? `<label class="reg-fx-stamp"><input type="checkbox" data-fx-stamp="${c.i}"${c.stampName ? ' checked' : ''}> <span>${esc(t('main.flexStampName'))}</span></label>` : ''}</td></tr>`;
+        }).join('');
+        return `<h3 id="reg-i-title">${esc(t('main.flexImpTitle', { name: regName(reg) }))}</h3>
+            <div class="reg-fx-modes" role="radiogroup" data-help-key="regFlexMode"><label class="reg-fx-mode${roles ? '' : ' reg-fx-mode-on'}"><input type="radio" name="fx-mode" value="asis"${roles ? '' : ' checked'}> <span>${esc(t('main.flexModeAsis'))}</span></label><label class="reg-fx-mode${roles ? ' reg-fx-mode-on' : ''}"><input type="radio" name="fx-mode" value="roles"${roles ? ' checked' : ''}> <span>${esc(t('main.flexModeRoles'))}</span></label></div>
+            <p class="admin-hint">${esc(t('main.flexRead', { cols: info.headers.length, rows: num(info.rowsDeclared) }))}</p>
+            ${info.sheets.length > 1 ? `<div class="reg-sheet"><label for="reg-i-sheet">${esc(t('main.regSheet'))}</label><select id="reg-i-sheet">${info.sheets.map((sh) => `<option value="${esc(sh.name)}"${sh.name === s.sheet ? ' selected' : ''}>${esc(sh.name)}</option>`).join('')}</select></div>` : ''}
+            <div class="wp-imp-table-wrap"><table class="wp-imp-table reg-map-table" data-help-key="regFlexMap"><thead><tr><th>${esc(t('main.flexColExcel'))}</th><th>${esc(t('main.flexColExample'))}</th><th>${esc(t('main.flexColLoadAs'))}</th><th>${esc(t('main.flexColJoin'))}</th><th>${esc(t('main.flexColName'))}</th></tr></thead><tbody>${rows}</tbody></table></div>
+            <div class="reg-day" data-help-key="regFlexWhen"><label for="fx-day">${esc(t('main.flexWhen'))}</label><input type="date" id="fx-day" value="${esc(s.day)}" max="${esc(todayText)}"><input type="time" id="fx-time" value="${esc(s.time)}" aria-label="${esc(t('main.flexWhenTime'))}"></div>
+            ${errBox()}<div class="admin-form-actions"><button type="button" class="btn" data-reg-i="review"${s.busy ? ' disabled' : ''}>${esc(t('main.regReview'))}</button><button type="button" class="btn btn-secondary" data-reg-i="again"${s.busy ? ' disabled' : ''}>${esc(t('main.regChooseAnother'))}</button><button type="button" class="btn btn-secondary" data-reg-i="cancel"${s.busy ? ' disabled' : ''}>${esc(t('main.regCancel'))}</button></div>`;
+    };
+    const pill = (cls, text) => `<span class="wp-imp-pv wp-imp-pv-${cls}">${esc(text)}</span>`;
+    const previewHtml = () => {
+        const sum = s.preview.summary;
+        const issues = s.preview.issues || [];
+        const shown = issues.slice(0, ISSUES_SHOWN);
+        const nothing = !sum.added;
+        const roles = sum.mode === 'roles';
+        const pills = [
+            nothing ? pill('warn', t('main.regSumNothing')) : '',
+            sum.newRows ? pill('ok', t('main.flexSumNewRows', { n: num(sum.newRows) })) : '',
+            roles && sum.valuesAdded ? pill('ok', t('main.regSumAdded', { n: num(sum.valuesAdded) })) : '',
+            roles && sum.merged ? pill('keep', t('main.flexSumMerged', { n: num(sum.merged) })) : '',
+            sum.untouched ? pill('keep', t('main.regSumUntouched', { n: num(sum.untouched) })) : '',
+            sum.different ? pill('warn', t('main.regSumDifferent', { n: num(sum.different) })) : '',
+            sum.errors ? pill('error', t(sum.errors === 1 ? 'main.regSumErrorOne' : 'main.regSumError', { n: num(sum.errors) })) : '',
+            sum.blank ? pill('keep', t('main.flexSumBlank', { n: num(sum.blank) })) : '',
+        ].join('');
+        const issueRows = shown.map((i) => `<tr class="wp-imp-row wp-imp-row-${i.kind === 'error' ? 'error' : 'warn'}"><td class="wp-imp-num">${i.line}</td><td>${esc(i.column)}</td><td class="wp-imp-num">${i.file === undefined ? '' : esc(i.file)}</td><td class="wp-imp-num">${i.saved === undefined ? '' : esc(i.saved)}</td><td>${esc(t(`main.flexProb_${i.problem}`))}</td></tr>`).join('');
+        return `<h3 id="reg-i-title">${esc(s.file ? s.file.name : t('main.flexImpTitle', { name: regName(reg) }))}</h3>
+            <p class="admin-hint">${esc(t('main.regRowsRead', { rows: num(sum.rowsInFile), sheet: sum.sheet || '' }))}</p>
+            <div class="wp-imp-sum" data-help-key="regPreview">${pills}</div>
+            ${shown.length ? `<div class="wp-imp-table-wrap"><table class="wp-imp-table"><thead><tr><th>${esc(t('main.regIssueRow'))}</th><th>${esc(t('main.flexIssueCol'))}</th><th>${esc(t('main.regIssueFile'))}</th><th>${esc(t('main.regIssueSaved'))}</th><th>${esc(t('main.regIssueWhat'))}</th></tr></thead><tbody>${issueRows}</tbody></table></div>
+            ${sum.issuesTotal > shown.length ? `<p class="admin-hint">${esc(t('main.regIssuesMore', { shown: shown.length, total: num(sum.issuesTotal) }))}</p>` : ''}` : ''}
+            ${errBox()}<div class="admin-form-actions"><button type="button" class="btn" data-reg-i="load"${nothing || s.busy ? ' disabled' : ''}><i class="bx bx-upload" aria-hidden="true"></i> ${esc(nothing ? t('main.regLoadNothing') : t('main.regLoadGo'))}</button>
+            <button type="button" class="btn btn-secondary" data-reg-i="back"${s.busy ? ' disabled' : ''}>${esc(t('main.flexBack'))}</button><button type="button" class="btn btn-secondary" data-reg-i="again"${s.busy ? ' disabled' : ''}>${esc(t('main.regChooseAnother'))}</button><button type="button" class="btn btn-secondary" data-reg-i="cancel"${s.busy ? ' disabled' : ''}>${esc(t('main.regCancel'))}</button></div>`;
+    };
+    const doneHtml = () => {
+        const sum = s.result.summary;
+        return `<h3 id="reg-i-title">${esc(t('main.regDoneTitle'))}</h3>
+            <p>${esc(t('main.flexDoneText', { rows: num(sum.newRows), values: num(sum.mode === 'roles' ? sum.valuesAdded : 0) }))}</p>
+            ${sum.different || sum.errors ? `<p class="admin-hint">${esc(t('main.regDoneKept', { n: num(sum.different + sum.errors) }))}</p>` : ''}
+            <div class="admin-form-actions"><button type="button" class="btn" data-reg-i="done">${esc(t('main.regDone'))}</button></div>`;
+    };
+    const paint = () => {
+        const wide = s.step === 'preview' || s.step === 'map';
+        overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal wp-imp${wide ? ' wp-imp-wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="reg-i-title" aria-label="${esc(t('main.regImport'))}" data-help-key="regFlexImport">${s.step === 'preview' ? previewHtml() : s.step === 'map' ? mapHtml() : s.step === 'done' ? doneHtml() : startHtml()}</div>`;
+    };
+    const showError = (text) => { s.error = text; const el = overlay.querySelector('#reg-i-error'); if (el) { el.textContent = text; el.hidden = !text; } };
+    const setBusy = (busy) => { s.busy = busy; paint(); if (s.error) showError(s.error); };
+    const post = async (path, query, body) => {
+        const res = await fetch(`${API}/${st.key}/${path}?${new URLSearchParams(query).toString()}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/octet-stream' }, body });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) { const err = new Error(out.message || 'failed'); err.body = out; err.status = res.status; throw err; }
+        return out;
+    };
+    const inspect = async (sheet) => {
+        const q = {}; if (sheet) q.sheet = sheet;
+        s.info = await post('inspect', q, s.buffer);
+        s.sheet = s.info.sheet;
+        s.cols = s.info.headers.map((h, k) => ({ i: h.index, text: h.text, name: h.text, example: s.info.sample[0] ? s.info.sample[0].values[k] : '', role: h.suggest.role, agg: h.suggest.agg, stampName: h.suggest.stampName !== false }));
+    };
+    const stampIso = () => { const d = new Date(`${s.day}T${s.time || '00:00'}`); return Number.isNaN(d.getTime()) ? '' : d.toISOString(); };
+    const readWhen = () => { const d = overlay.querySelector('#fx-day'); const tm = overlay.querySelector('#fx-time'); if (d) s.day = d.value; if (tm) s.time = tm.value; };
+    // la elección de esta carga: «tal cual» lleva todas las columnas; con papeles, las que no se cargan van marcadas
+    const config = () => ({ mode: s.mode, columns: s.cols.map((c) => ({ i: c.i, name: c.name, role: s.mode === 'asis' ? 'data' : c.role, agg: c.agg, stampName: c.stampName })) });
+    const importQuery = (mode) => ({ mode, header: String(s.info.headerRow), sheet: s.sheet || '', file: s.file ? s.file.name : '', cfg: JSON.stringify(config()), stamp: stampIso() });
+    // lo que se puede revisar sin ir al servidor: una llave al menos, nombres sin repetir y un día válido
+    const problem = () => {
+        readWhen();
+        if (!stampIso()) return t('main.regErr_IMPORT_STAMP');
+        const used = s.cols.filter((c) => s.mode === 'asis' || c.role !== 'skip');
+        if (s.mode === 'roles' && !used.some((c) => c.role === 'key')) return t('main.regErr_FLEX_NO_KEY');
+        const seen = new Set();
+        for (const c of used) { const f = String(c.name || '').trim().toLowerCase(); if (seen.has(f)) return t('main.regErr_FLEX_DUP_NAME'); seen.add(f); }
+        return '';
+    };
+    const review = async () => {
+        const bad = problem();
+        if (bad) { showError(bad); return; }
+        setBusy(true); s.error = '';
+        try {
+            s.preview = await post('import', importQuery('preview'), s.buffer);
+            s.step = 'preview'; s.busy = false; paint();
+        } catch (err) { s.error = errorTextOf(err); s.busy = false; paint(); }
+    };
+    const chooseFile = async (file) => {
+        if (!file) return;
+        s.error = '';
+        if (file.size > 60 * 1024 * 1024) { s.error = t('main.regErr_IMPORT_TOO_BIG'); paint(); return; }
+        s.file = file;
+        setBusy(true);
+        try { s.buffer = await file.arrayBuffer(); } catch { s.busy = false; s.error = t('main.regErr_IMPORT_FILE'); paint(); return; }
+        try { await inspect(null); s.step = 'map'; s.busy = false; paint(); } catch (err) { s.error = errorTextOf(err); s.busy = false; s.step = 'start'; s.file = null; s.buffer = null; paint(); }
+    };
+    const load = async () => {
+        setBusy(true); s.error = '';
+        try {
+            s.result = await post('import', importQuery('commit'), s.buffer);
+            s.step = 'done'; s.busy = false; paint();
+        } catch (err) { s.error = errorTextOf(err); s.busy = false; paint(); }
+    };
+    const pasteGo = () => {
+        const box = overlay.querySelector('#reg-i-paste');
+        if (box) s.pasteText = box.value;
+        const file = pastedFile(s.pasteText);
+        if (!file) { s.error = t('main.tplNoRows'); paint(); return; }
+        chooseFile(file);
+    };
+    overlay.addEventListener('click', (event) => {
+        const btn = event.target.closest('[data-reg-i]');
+        if (!btn || s.busy) return;
+        const op = btn.dataset.regI;
+        if (op === 'cancel') close();
+        else if (op === 'mode-file' || op === 'mode-paste') { s.inputMode = op === 'mode-paste' ? 'paste' : 'file'; s.error = ''; paint(); }
+        else if (op === 'paste-go') pasteGo();
+        else if (op === 'review') review();
+        else if (op === 'back') { s.step = 'map'; s.error = ''; paint(); }
+        else if (op === 'load') load();
+        else if (op === 'again') { s.step = 'start'; s.file = null; s.buffer = null; s.info = null; s.preview = null; s.error = ''; paint(); }
+        else if (op === 'done') { close(); location.reload(); } // un registro libre puede traer columnas nuevas: la tabla se arma de nuevo
+    });
+    overlay.addEventListener('change', async (event) => {
+        const el = event.target;
+        const col = (attr) => s.cols.find((c) => String(c.i) === el.dataset[attr]);
+        if (el.id === 'reg-i-file') chooseFile(el.files && el.files[0]);
+        else if (el.name === 'fx-mode') { readWhen(); s.mode = el.value; s.error = ''; paint(); }
+        else if (el.id === 'fx-day' || el.id === 'fx-time') readWhen();
+        else if (el.id === 'reg-i-sheet') { setBusy(true); try { await inspect(el.value); s.busy = false; paint(); } catch (err) { s.error = errorTextOf(err); s.busy = false; paint(); } }
+        else if (el.dataset.fxRole !== undefined) { const c = col('fxRole'); if (c) { readWhen(); c.role = el.value; paint(); } }
+        else if (el.dataset.fxAgg !== undefined) { const c = col('fxAgg'); if (c) c.agg = el.value; }
+        else if (el.dataset.fxStamp !== undefined) { const c = col('fxStamp'); if (c) c.stampName = el.checked; }
+    });
+    overlay.addEventListener('input', (event) => {
+        const el = event.target;
+        if (el.id === 'reg-i-paste') s.pasteText = el.value;
+        else if (el.dataset && el.dataset.fxName !== undefined) { const c = s.cols.find((x) => String(x.i) === el.dataset.fxName); if (c) c.name = el.value; }
+    });
+    overlay.addEventListener('paste', (event) => { if (event.target.id !== 'reg-i-paste') return; setTimeout(() => { s.pasteText = event.target.value; if (s.pasteText.trim() && !s.busy) pasteGo(); }, 50); });
+    overlay.addEventListener('dragover', (event) => { const zone = event.target.closest && event.target.closest('#reg-i-drop'); if (zone) { event.preventDefault(); zone.classList.add('wp-imp-drop-over'); } });
+    overlay.addEventListener('dragleave', (event) => { const zone = event.target.closest && event.target.closest('#reg-i-drop'); if (zone) zone.classList.remove('wp-imp-drop-over'); });
+    overlay.addEventListener('drop', (event) => {
+        const zone = event.target.closest && event.target.closest('#reg-i-drop');
+        if (!zone) return;
+        event.preventDefault();
+        zone.classList.remove('wp-imp-drop-over');
+        chooseFile(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]);
+    });
+    paint();
 }
 function openLoadModal() {
     const reg = currentRegistry();
     if (!reg) return;
+    if (reg.kind === 'tabla') { openFlexLoadModal(); return; }
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay exp-overlay';
     document.body.appendChild(overlay);

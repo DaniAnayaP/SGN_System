@@ -261,7 +261,7 @@ async function loadRegistries() {
         if (res.status === 401) { window.location.replace('Login.html'); return; }
         if (res.ok) {
             const body = await res.json();
-            registries = body.registries || [];
+            registries = (body.registries || []).filter((r) => r.kind !== 'tabla'); // los de tabla libre todavía no están en la App
             dataState = 'online';
             // los datos que ya estaban guardados siguen sirviendo si luego se pierde la señal dentro de la pantalla
             const saved = await savedForThisClient();
@@ -277,7 +277,7 @@ async function loadRegistries() {
     } catch { /* sin señal: se usa lo guardado */ }
     const saved = await savedForThisClient();
     if (saved) {
-        registries = saved.registries || [];
+        registries = (saved.registries || []).filter((r) => r.kind !== 'tabla');
         dataByKey = saved.data || {};
         loadsByKey = saved.loads || {};
         Object.values(loadsByKey).forEach((v) => { v.state = 'cached'; v.canAnnul = false; });

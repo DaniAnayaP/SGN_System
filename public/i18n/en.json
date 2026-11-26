@@ -5395,6 +5395,50 @@
     "regKindDay": "Daily",
     "regCardNone": "Nothing has been loaded yet.",
     "regPastedName": "Pasted data",
+    "regKindTabla": "Free table (any columns)",
+    "regGroupKey": "Key",
+    "regGroupData": "Data",
+    "regGroupNew": "New column",
+    "regGroupLoad": "Load",
+    "flexImpTitle": "Load into “{name}”",
+    "flexModeAsis": "Save as is",
+    "flexModeRoles": "Choose each column's role",
+    "flexRead": "I read {cols} columns and about {rows} rows.",
+    "flexColExcel": "Column in your Excel",
+    "flexColExample": "Example",
+    "flexColLoadAs": "Loaded as",
+    "flexColJoin": "If several rows land together",
+    "flexColName": "Column name",
+    "flexRole_key": "Key: goes down the list",
+    "flexRole_data": "Row data",
+    "flexRole_value": "New column on every load",
+    "flexRole_skip": "Not loaded",
+    "flexRole_asis": "As is",
+    "flexAgg_sum": "Add up",
+    "flexAgg_one": "Take one",
+    "flexStampName": "With day and time in the name",
+    "flexWhen": "Day and time of this load",
+    "flexWhenTime": "Time",
+    "flexBack": "Back to the columns",
+    "flexSumMerged": "{n} rows were merged into others",
+    "flexSumBlank": "{n} empty or key-less rows were ignored",
+    "flexIssueCol": "Column",
+    "flexProb_bad_number": "Not a number: that value is not loaded.",
+    "flexProb_diff_one": "Another value for the same key: the first one stays.",
+    "flexProb_kept_other": "A different value was already saved: it stays.",
+    "flexDoneText": "Done: {rows} new rows and {values} values were added.",
+    "regErr_FLEX_CONFIG": "The column choice is not valid.",
+    "regErr_FLEX_DUP_NAME": "Two columns have the same name: rename one.",
+    "regErr_FLEX_NO_KEY": "Pick at least one column as key (goes down the list).",
+    "regErr_IMPORT_STAMP": "The day and time are not valid (they can't be in the future).",
+    "regErr_IMPORT_TOO_MANY_COLUMNS": "The file has too many columns.",
+    "flexSumNewRows": "New rows: {n}",
+    "regToTabla": "Convert to free table",
+    "regToTablaTitle": "Convert to free table",
+    "regToTablaText": "“{name}” will become a free table: you will be able to load any Excel and choose the role of its columns on every load. It can only be done while it has no loads.",
+    "regToTablaGo": "Convert",
+    "regErr_REG_HAS_DATA": "That record already has loads: it cannot be converted.",
+    "regTipo": "Type",
     "regUpdated": "Last update:",
     "regShowing": "Showing {shown} of {total} rows",
     "regShowMore": "Show more",
@@ -9759,6 +9803,30 @@
     "regShowMore": {
       "what": "Draws more rows of the table: \"Show more\" adds 200 and \"Show all\" draws every row that arrived (the table is drawn in parts so it opens fast). Scrolling down also adds them by itself.",
       "example": "Showing 100 of 104,007 rows"
+    },
+    "regFlexImport": {
+      "what": "Loads an Excel into this record. Every load carries its own column choice: it is not remembered from one load to the next.",
+      "example": "NOV-26.xlsx"
+    },
+    "regFlexMode": {
+      "what": "\"Save as is\" keeps every column of the Excel with its order and names. \"Choose each column's role\" lets you decide what goes down the list and what becomes a new column.",
+      "example": "Save as is"
+    },
+    "regFlexMap": {
+      "what": "For each column of your Excel you pick its role: Key (identifies the row and goes down the list), Row data, New column on every load (stock, cost…) or Not loaded. If several rows land on the same key, the new column is added up or one is taken (for example, the cost). Every column can be renamed.",
+      "example": "ON_HAND_QTY → New column, Add up, \"Stock\""
+    },
+    "regFlexWhen": {
+      "what": "The day and time this load belongs to (the file doesn't carry them). Every load is its own column, even with the same day and time.",
+      "example": "11/26/2026 06:00"
+    },
+    "regTableLibre": {
+      "what": "The record as you loaded it, with the Excel columns in their order. With \"as is\" you see the latest load; to see another one, filter the \"Load\" column. New columns open one per load.",
+      "example": "Stock 26/Nov 06:00"
+    },
+    "regToTablaDialog": {
+      "what": "Turns this record into a free table (any columns). It can only be done while the record has no loads at all.",
+      "example": "Global Stock"
     },
     "regUpdated": {
       "what": "The date and time of the latest load that counts in this record, in your time. Who did it and from which file is in the Loads tab.",

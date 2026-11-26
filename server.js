@@ -7266,6 +7266,8 @@ function regRegistry(req, res, { needActive = false } = {}) {
     return registry;
 }
 function regForbidden(res) { res.status(403).json({ code: 'REG_FORBIDDEN', message: 'No tienes permiso para cargar registros.' }); }
+// Los registros de TABLA LIBRE (kind 'tabla': cada carga lleva su propia elección de columnas) tienen su propia lógica en flexRegistryApi.js; sus rutas son las mismas de abajo.
+const flexApi = require('./flexRegistryApi')({ regAbilities, regForbidden, hasCompleteCostCenter, changedByLabel, logTableChange, notifyButtonAction, buildContentDisposition, REG_TABLE, REG_LOADS_TABLE, regLoading, REG_MESSAGES });
 app.get('/api/business/manual-registries', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
@@ -7298,7 +7300,7 @@ app.post('/api/business/manual-registries', requireAuth, (req, res) => {
     const body = req.body || {};
     const name = manualAnalyses.cleanText(body.name, 80);
     if (!name) return res.status(400).json({ code: 'REG_NAME_REQUIRED', message: 'Ponle un nombre al registro.' });
-    if (!['month', 'day'].includes(body.kind)) return res.status(400).json({ code: 'REG_KIND', message: 'Elige si es mensual o diario.' });
+    if (!['month', 'day', 'tabla'].includes(body.kind)) return res.status(400).json({ code: 'REG_KIND', message: 'Elige si es mensual, diario o de tabla libre.' });
     if (regNameTaken(req, name)) return res.status(409).json({ code: 'REG_NAME_TAKEN', message: 'Ya hay un registro con ese nombre.' });
     const valueName = manualAnalyses.cleanText(body.valueName, 40) || 'Valor';
     const taken = new Set(regClientRegistries(clientId, isTestAccount).map((r) => r.key));
@@ -7329,8 +7331,15 @@ app.patch('/api/business/manual-registries/:key', requireAuth, (req, res) => {
         if (!['active', 'inactive'].includes(body.status)) return res.status(400).json({ code: 'REG_STATUS', message: 'Estado no válido.' });
         if (body.status !== registry.status) patch.status = body.status;
     }
+    // Convertir a tabla libre: solo un registro agregado y SIN ninguna carga (no hay nada que se pierda ni que cambie de forma)
+    if (body.kind !== undefined) {
+        if (body.kind !== 'tabla' || registry.kind === 'tabla') return res.status(400).json({ code: 'REG_KIND', message: 'Ese cambio no es válido.' });
+        if (listRegistryLoads(clientId, isTestAccount, registry.key, 1).length) return res.status(409).json({ code: 'REG_HAS_DATA', message: 'Ese registro ya tiene cargas: no se puede convertir.' });
+        patch.kind = 'tabla';
+    }
     updateRegistryDef(clientId, isTestAccount, registry.key, patch);
     const by = changedByLabel(req);
+    if (patch.kind) logTableChange({ clientId, tableKey: REG_TABLE, recordId: registry.defId, recordLabel: registry.name, action: 'update', fieldKey: 'main.regTipo', oldValue: registry.kind, newValue: 'tabla', changedBy: by });
     if (patch.name) logTableChange({ clientId, tableKey: REG_TABLE, recordId: registry.defId, recordLabel: patch.name, action: 'update', fieldKey: 'main.regNombre', oldValue: registry.name, newValue: patch.name, changedBy: by });
     if (patch.status) logTableChange({ clientId, tableKey: REG_TABLE, recordId: registry.defId, recordLabel: patch.name || registry.name, action: 'update', fieldKey: 'main.regEstado', oldValue: registry.status, newValue: patch.status, changedBy: by });
     res.json({ registry: regClientRegistries(clientId, isTestAccount).find((r) => r.key === registry.key) });
@@ -7338,6 +7347,7 @@ app.patch('/api/business/manual-registries/:key', requireAuth, (req, res) => {
 app.get('/api/business/manual-registries/:key/data', requireAuth, (req, res) => {
     const registry = regRegistry(req, res);
     if (!registry) return;
+    if (registry.kind === 'tabla') return flexApi.dataRoute(req, res, registry);
     const { clientId, isTestAccount } = req.user;
     const q = req.query || {};
     const lang = q.lang === 'en' ? 'en' : 'es';
@@ -7355,6 +7365,7 @@ app.get('/api/business/manual-registries/:key/data', requireAuth, (req, res) => 
 app.get('/api/business/manual-registries/:key/values', requireAuth, (req, res) => {
     const registry = regRegistry(req, res);
     if (!registry) return;
+    if (registry.kind === 'tabla') return flexApi.valuesRoute(req, res, registry);
     const { clientId, isTestAccount } = req.user;
     const lang = req.query.lang === 'en' ? 'en' : 'es';
     const info = manualRegistries.columnInfo(String(req.query.col || ''));
@@ -7370,6 +7381,7 @@ app.get('/api/business/manual-registries/:key/values', requireAuth, (req, res) =
 app.get('/api/business/manual-registries/:key/export', requireAuth, async (req, res) => {
     const registry = regRegistry(req, res);
     if (!registry) return;
+    if (registry.kind === 'tabla') return flexApi.exportRoute(req, res, registry);
     const { clientId, isTestAccount } = req.user;
     const format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
     const lang = req.query.lang === 'en' ? 'en' : 'es';
@@ -7421,6 +7433,7 @@ app.get('/api/business/manual-registries/:key/loads', requireAuth, (req, res) =>
 app.get('/api/business/manual-registries/:key/template', requireAuth, async (req, res) => {
     const registry = regRegistry(req, res, { needActive: true });
     if (!registry) return;
+    if (registry.kind === 'tabla') return res.status(400).json({ code: 'REG_NO_TEMPLATE', message: 'Un registro de tabla libre no tiene plantilla: se carga tu propio Excel.' });
     const ability = regAbilities(req);
     if (!ability.canTemplate && !ability.canExcel) return regForbidden(res);
     const lang = req.query.lang === 'en' ? 'en' : 'es';
@@ -7439,6 +7452,7 @@ app.get('/api/business/manual-registries/:key/template', requireAuth, async (req
 app.post('/api/business/manual-registries/:key/inspect', requireAuth, regRaw, async (req, res) => {
     const registry = regRegistry(req, res, { needActive: true });
     if (!registry) return;
+    if (registry.kind === 'tabla') return flexApi.inspectRoute(req, res);
     const ability = regAbilities(req);
     if (!ability.canTemplate && !ability.canExcel) return regForbidden(res);
     if (!Buffer.isBuffer(req.body)) return res.status(400).json({ code: 'IMPORT_FILE', message: REG_MESSAGES.IMPORT_FILE });
@@ -7472,6 +7486,7 @@ function regParseMapping(text, registry) {
 app.post('/api/business/manual-registries/:key/import', requireAuth, regRaw, async (req, res) => {
     const registry = regRegistry(req, res, { needActive: true });
     if (!registry) return;
+    if (registry.kind === 'tabla') return flexApi.importRoute(req, res, registry);
     const source = req.query.source === 'excel' ? 'excel' : 'plantilla';
     const ability = regAbilities(req);
     if (!(source === 'excel' ? ability.canExcel : ability.canTemplate)) return regForbidden(res);
@@ -7567,7 +7582,7 @@ function anAbilities(req) {
     const grants = admin ? null : getUserEffectiveGrants(req.user.sub);
     return { canCreate: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.create), canExtract: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.extract), canAnnul: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.annul) };
 }
-const anRegistryKeys = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).map((r) => r.key);
+const anRegistryKeys = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => r.kind !== 'tabla').map((r) => r.key);
 function anClient(req, res) {
     if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return false; }
     return true;
@@ -7580,7 +7595,7 @@ function anLoad(req, res) {
     if (!analysis) { res.status(404).json({ code: 'AN_NOT_FOUND', message: 'Ese análisis no existe.' }); return null; }
     return analysis;
 }
-const anRegistriesInfo = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, valueNameKey: r.valueNameKey, name: r.name, valueName: r.valueName, custom: r.custom, status: r.status, periods: registryPeriods(req.user.clientId, req.user.isTestAccount, r.key) }));
+const anRegistriesInfo = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => r.kind !== 'tabla').map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, valueNameKey: r.valueNameKey, name: r.name, valueName: r.valueName, custom: r.custom, status: r.status, periods: registryPeriods(req.user.clientId, req.user.isTestAccount, r.key) }));
 // Para el menú lateral: los análisis activos (cualquier persona del cliente; el menú ya decide quién ve la pantalla).
 app.get('/api/business/manual-analyses/menu', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');

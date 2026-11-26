@@ -5394,6 +5394,50 @@
     "regKindDay": "Diaria",
     "regCardNone": "Todavía no se ha cargado nada.",
     "regPastedName": "Datos pegados",
+    "regKindTabla": "Tabla libre (cualquier columna)",
+    "regGroupKey": "Llave",
+    "regGroupData": "Dato",
+    "regGroupNew": "Columna nueva",
+    "regGroupLoad": "Carga",
+    "flexImpTitle": "Cargar a «{name}»",
+    "flexModeAsis": "Guardar tal cual",
+    "flexModeRoles": "Elegir el papel de cada columna",
+    "flexRead": "Leí {cols} columnas y unos {rows} renglones.",
+    "flexColExcel": "Columna de tu Excel",
+    "flexColExample": "Ejemplo",
+    "flexColLoadAs": "Se carga como",
+    "flexColJoin": "Si varios renglones caen juntos",
+    "flexColName": "Nombre de la columna",
+    "flexRole_key": "Llave: va hacia abajo",
+    "flexRole_data": "Dato del renglón",
+    "flexRole_value": "Columna nueva en cada carga",
+    "flexRole_skip": "No se carga",
+    "flexRole_asis": "Tal cual",
+    "flexAgg_sum": "Sumar",
+    "flexAgg_one": "Tomar uno",
+    "flexStampName": "Con día y hora en el nombre",
+    "flexWhen": "Día y hora de esta carga",
+    "flexWhenTime": "Hora",
+    "flexBack": "Volver a las columnas",
+    "flexSumMerged": "{n} renglones se juntaron con otros",
+    "flexSumBlank": "{n} renglones vacíos o sin llave se ignoraron",
+    "flexIssueCol": "Columna",
+    "flexProb_bad_number": "No es un número: ese valor no se carga.",
+    "flexProb_diff_one": "Otro valor para la misma llave: se quedó el primero.",
+    "flexProb_kept_other": "Ya había otro valor guardado: se queda el que ya estaba.",
+    "flexDoneText": "Listo: se agregaron {rows} renglones nuevos y {values} valores.",
+    "regErr_FLEX_CONFIG": "La elección de columnas no es válida.",
+    "regErr_FLEX_DUP_NAME": "Dos columnas se llaman igual: cambia el nombre de una.",
+    "regErr_FLEX_NO_KEY": "Elige al menos una columna como llave (va hacia abajo).",
+    "regErr_IMPORT_STAMP": "El día y la hora no son válidos (no pueden ser futuros).",
+    "regErr_IMPORT_TOO_MANY_COLUMNS": "El archivo trae demasiadas columnas.",
+    "flexSumNewRows": "Renglones nuevos: {n}",
+    "regToTabla": "Convertir a tabla libre",
+    "regToTablaTitle": "Convertir a tabla libre",
+    "regToTablaText": "«{name}» pasará a ser una tabla libre: podrás cargar cualquier Excel y elegir el papel de sus columnas en cada carga. Solo se puede mientras no tenga cargas.",
+    "regToTablaGo": "Convertir",
+    "regErr_REG_HAS_DATA": "Ese registro ya tiene cargas: no se puede convertir.",
+    "regTipo": "Tipo",
     "regUpdated": "Última actualización:",
     "regShowing": "Mostrando {shown} de {total} renglones",
     "regShowMore": "Mostrar más",
@@ -9758,6 +9802,30 @@
     "regShowMore": {
       "what": "Dibuja más renglones de la tabla: «Mostrar más» agrega 200 y «Mostrar todos» dibuja todos los que llegaron (la tabla se dibuja por partes para abrir rápido). Al bajar con el scroll también se agregan solos.",
       "example": "Mostrando 100 de 104,007 renglones"
+    },
+    "regFlexImport": {
+      "what": "Carga un Excel a este registro. Cada carga lleva su propia elección de columnas: no se recuerda de una carga a otra.",
+      "example": "NOV-26.xlsx"
+    },
+    "regFlexMode": {
+      "what": "«Guardar tal cual» guarda todas las columnas del Excel con su orden y sus nombres. «Elegir el papel de cada columna» te deja decidir qué va hacia abajo y qué se vuelve una columna nueva.",
+      "example": "Guardar tal cual"
+    },
+    "regFlexMap": {
+      "what": "Para cada columna de tu Excel eliges su papel: Llave (identifica el renglón y va hacia abajo), Dato del renglón, Columna nueva en cada carga (existencia, costo…) o No se carga. Si varios renglones caen en la misma llave, la columna nueva se suma o se toma uno (por ejemplo, el costo). Todas las columnas se pueden renombrar.",
+      "example": "ON_HAND_QTY → Columna nueva, Sumar, «Existencia»"
+    },
+    "regFlexWhen": {
+      "what": "El día y la hora a los que corresponde esta carga (el archivo no los trae). Cada carga es su propia columna, aunque tenga el mismo día y hora.",
+      "example": "26/11/2026 06:00"
+    },
+    "regTableLibre": {
+      "what": "El registro tal como lo cargaste, con las columnas del Excel en su orden. Con «tal cual» se ve la última carga; para ver otra, filtra la columna «Carga». Las columnas nuevas se abren una por carga.",
+      "example": "Existencia 26/nov 06:00"
+    },
+    "regToTablaDialog": {
+      "what": "Vuelve este registro una tabla libre (cualquier columna). Solo se puede mientras el registro no tenga ninguna carga.",
+      "example": "Existencias Globales"
     },
     "regUpdated": {
       "what": "La fecha y hora de la última carga que cuenta en este registro, en tu hora. Quién la hizo y de qué archivo está en la pestaña Cargas.",

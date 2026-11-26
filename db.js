@@ -1168,6 +1168,42 @@ db.exec(`
     );
 `);
 
+// Registros de TABLA LIBRE (flexRegistries.js): cada carga lleva su propia elección de columnas. La carga guarda su día y hora (stamp, UTC) y su elección (config_json).
+// «Tal cual»: los renglones de la carga se guardan como UN bloque comprimido (140 mil renglones x 14 columnas diarios no caben como renglones sueltos). Con papeles: un renglón por llave (manual_flex_rows) y un valor por columna nueva
+// (manual_flex_values; col = 'm:<carga>:<n>' para las columnas nuevas por carga o 'n:<nombre>' para las de nombre fijo).
+{
+    const cols = db.prepare('PRAGMA table_info(manual_registry_loads)').all().map((c) => c.name);
+    if (!cols.includes('stamp')) db.exec("ALTER TABLE manual_registry_loads ADD COLUMN stamp TEXT NOT NULL DEFAULT ''");
+    if (!cols.includes('config_json')) db.exec("ALTER TABLE manual_registry_loads ADD COLUMN config_json TEXT NOT NULL DEFAULT ''");
+}
+db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_flex_rows (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data INTEGER NOT NULL DEFAULT 0,
+        registry_key TEXT NOT NULL,
+        load_id      INTEGER NOT NULL,
+        key_text     TEXT NOT NULL,
+        cells        TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_mf_rows_key ON manual_flex_rows(client_id, is_test_data, registry_key, key_text);
+    CREATE INDEX IF NOT EXISTS idx_mf_rows_load ON manual_flex_rows(load_id);
+    CREATE INDEX IF NOT EXISTS idx_mf_rows_reg ON manual_flex_rows(client_id, is_test_data, registry_key, id);
+    CREATE TABLE IF NOT EXISTS manual_flex_values (
+        row_id  INTEGER NOT NULL REFERENCES manual_flex_rows(id) ON DELETE CASCADE,
+        load_id INTEGER NOT NULL,
+        col     TEXT NOT NULL,
+        value   REAL NOT NULL,
+        PRIMARY KEY (row_id, col, load_id)
+    ) WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS idx_mf_values_load ON manual_flex_values(load_id, col);
+    CREATE TABLE IF NOT EXISTS manual_flex_blocks (
+        load_id INTEGER PRIMARY KEY,
+        n       INTEGER NOT NULL DEFAULT 0,
+        data    BLOB NOT NULL
+    );
+`);
+
 // Cargas Manuales › Análisis Registros Manuales (Daniel, 2026-11-25): un análisis junta uno o dos registros por unidad + código; «Extraer» saca un ARCHIVO propio (una versión con su fecha) que es una COPIA: no cambia aunque después cambie un registro.
 // Los análisis y las versiones nunca se borran: un análisis se desactiva y una versión se anula.
 db.exec(`
@@ -4919,7 +4955,7 @@ function mapRegistryLoad(row) {
     return {
         id: row.id, registryKey: row.registry_key, source: row.source, fileName: row.file_name, sheet: row.sheet, day: row.day, rowsInFile: row.rows_in_file, newRows: row.new_rows, valuesAdded: row.values_added,
         untouched: row.untouched, different: row.different, errors: row.errors, periods: parseJsonList(row.periods_json), newPeriods: parseJsonList(row.new_periods_json), status: row.status,
-        loadedBy: row.loaded_by, createdAt: row.created_at, annulledAt: row.annulled_at, annulledBy: row.annulled_by, annulNote: row.annul_note,
+        loadedBy: row.loaded_by, createdAt: row.created_at, annulledAt: row.annulled_at, annulledBy: row.annulled_by, annulNote: row.annul_note, stamp: row.stamp || '', flexMode: row.config_json ? (parseJsonObject(row.config_json).mode || '') : '',
     };
 }
 function createRegistryLoad({ clientId, isTestData = false, registryKey, source, fileName, sheet, day, loadedBy, loadedByUserId }) {
@@ -5100,6 +5136,92 @@ function registryColumnValues(clientId, forTestAccount, registryKey, info, limit
     return { raw: raw.slice(0, limit), complete: raw.length <= limit };
 }
 
+// ---- Registros de tabla libre: guardar una carga y leer lo que se ve ----
+const zlib = require('zlib');
+function setFlexLoadInfo(id, stamp, config) {
+    db.prepare('UPDATE manual_registry_loads SET stamp = ?, config_json = ? WHERE id = ?').run(String(stamp || ''), JSON.stringify(config || {}), id);
+}
+// La «base» que usa flexRegistries.run: lee lo vigente y escribe en lotes (cada lote en UNA transacción).
+function flexStore({ clientId, isTestData = false, registryKey, loadId }) {
+    const lane = isTestData ? 1 : 0;
+    const insRow = db.prepare('INSERT INTO manual_flex_rows (client_id, is_test_data, registry_key, load_id, key_text, cells) VALUES (?, ?, ?, ?, ?, ?)');
+    const insVal = db.prepare('INSERT OR IGNORE INTO manual_flex_values (row_id, load_id, col, value) VALUES (?, ?, ?, ?)');
+    return {
+        existingKeys: () => {
+            const m = new Map();
+            db.prepare('SELECT id, key_text FROM manual_flex_rows WHERE client_id = ? AND is_test_data = ? AND registry_key = ?').all(clientId, lane, registryKey).forEach((r) => m.set(r.key_text, r.id));
+            return m;
+        },
+        namedValues: (col) => {
+            const m = new Map();
+            db.prepare("SELECT v.row_id, v.value FROM manual_flex_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE l.client_id = ? AND l.is_test_data = ? AND l.registry_key = ? AND l.status = 'vigente' AND v.col = ?")
+                .all(clientId, lane, registryKey, col).forEach((r) => m.set(r.row_id, r.value));
+            return m;
+        },
+        addRows: (list) => db.transaction((items) => items.map((it) => Number(insRow.run(clientId, lane, registryKey, loadId, it.keyText, JSON.stringify(it.cells)).lastInsertRowid)))(list),
+        addValues: (ops) => { db.transaction((items) => { items.forEach(([rowId, col, value]) => insVal.run(rowId, loadId, col, value)); })(ops); },
+        saveBlock: (rows, columns) => {
+            const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ c: columns, r: rows })), { level: 6 });
+            db.prepare('INSERT OR REPLACE INTO manual_flex_blocks (load_id, n, data) VALUES (?, ?, ?)').run(loadId, rows.length, gz);
+        },
+        rollback: () => {},
+    };
+}
+// Las cargas vigentes de un registro libre, en orden, con su día y hora y su elección.
+function flexVigenteLoads(clientId, forTestAccount, registryKey) {
+    return db.prepare("SELECT id, stamp, created_at, file_name, config_json FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND status = 'vigente' AND config_json <> '' ORDER BY id")
+        .all(clientId, forTestAccount ? 1 : 0, registryKey).map((r) => ({ id: r.id, stamp: r.stamp || String(r.created_at || '').slice(0, 19), createdAt: r.created_at, fileName: r.file_name, config: parseJsonObject(r.config_json) }));
+}
+// Un bloque «tal cual»: { columns: [nombres], rows: [[celdas…]] }
+function flexBlock(loadId) {
+    const row = db.prepare('SELECT data FROM manual_flex_blocks WHERE load_id = ?').get(loadId);
+    if (!row) return null;
+    const parsed = JSON.parse(zlib.gunzipSync(row.data).toString('utf8'));
+    return { columns: parsed.c || [], rows: parsed.r || [] };
+}
+const flexIn = (ids) => (ids.length ? ids.map(() => '?').join(',') : 'NULL');
+// Un renglón con llave cuenta si lo creó una carga vigente o si tiene algún valor de una carga vigente.
+function flexAliveSql(loadIds) {
+    const marks = flexIn(loadIds);
+    return { sql: `(r.load_id IN (${marks}) OR EXISTS (SELECT 1 FROM manual_flex_values v WHERE v.row_id = r.id AND v.load_id IN (${marks})))`, params: [...loadIds, ...loadIds] };
+}
+function flexCountRows(clientId, forTestAccount, registryKey, loadIds) {
+    const alive = flexAliveSql(loadIds);
+    return db.prepare(`SELECT COUNT(*) AS n FROM manual_flex_rows r WHERE r.client_id = ? AND r.is_test_data = ? AND r.registry_key = ? AND ${alive.sql}`).get(clientId, forTestAccount ? 1 : 0, registryKey, ...alive.params).n;
+}
+// Los renglones con llave (en el orden en que se fueron agregando), desde afterId, hasta limit.
+function flexListRows(clientId, forTestAccount, registryKey, loadIds, { afterId = 0, limit = 2000 } = {}) {
+    const alive = flexAliveSql(loadIds);
+    return db.prepare(`SELECT r.id, r.cells FROM manual_flex_rows r WHERE r.client_id = ? AND r.is_test_data = ? AND r.registry_key = ? AND r.id > ? AND ${alive.sql} ORDER BY r.id LIMIT ?`)
+        .all(clientId, forTestAccount ? 1 : 0, registryKey, afterId, ...alive.params, limit).map((r) => ({ id: r.id, cells: parseJsonObject(r.cells) }));
+}
+// Los valores de algunos renglones: Map(rowId → Map(col → valor)), solo de cargas vigentes.
+function flexValuesFor(rowIds, loadIds) {
+    const out = new Map();
+    const alive = new Set(loadIds);
+    for (let at = 0; at < rowIds.length; at += 500) {
+        const part = rowIds.slice(at, at + 500);
+        // se va por la llave primaria (renglón); las cargas vigentes se filtran aquí: con «load_id IN (…)» en la consulta la base prefería recorrer todos los valores de las cargas
+        db.prepare(`SELECT row_id, col, value, load_id FROM manual_flex_values WHERE row_id IN (${flexIn(part)})`).all(...part).forEach((v) => {
+            if (!alive.has(v.load_id)) return;
+            if (!out.has(v.row_id)) out.set(v.row_id, new Map());
+            out.get(v.row_id).set(v.col, v.value);
+        });
+    }
+    return out;
+}
+// Cuántos renglones traen las cargas «tal cual» dadas (sin abrir sus bloques).
+function flexBlockCount(loadIds) {
+    if (!loadIds.length) return 0;
+    return db.prepare(`SELECT COALESCE(SUM(n), 0) AS n FROM manual_flex_blocks WHERE load_id IN (${flexIn(loadIds)})`).get(...loadIds).n;
+}
+// Todos los valores de UNA columna nueva: Map(rowId → valor) (para filtrar por ella).
+function flexColumnMap(col, loadIds) {
+    const map = new Map();
+    db.prepare(`SELECT row_id, value FROM manual_flex_values WHERE col = ? AND load_id IN (${flexIn(loadIds)})`).all(col, ...loadIds).forEach((v) => map.set(v.row_id, v.value));
+    return map;
+}
+
 // Todos los renglones de un registro, por tandas, para bajarlos completos sin tenerlos todos en memoria (la tabla de la pantalla solo trae los primeros 2,000). Mismo filtro de texto y mismo orden que listRegistryData;
 // cada tanda trae hasta batchSize renglones con sus valores vigentes por periodo.
 function* registryDataBatches(clientId, forTestAccount, registryKey, filters = {}, batchSize = 2000, columnFilter = null) {
@@ -5145,6 +5267,7 @@ function updateRegistryDef(clientId, forTestAccount, key, patch) {
     const sets = []; const params = [];
     if (patch.name !== undefined) { sets.push('name = ?'); params.push(patch.name); }
     if (patch.status !== undefined) { sets.push('status = ?'); params.push(patch.status); }
+    if (patch.kind !== undefined) { sets.push('kind = ?'); params.push(patch.kind); }
     if (sets.length) {
         sets.push("updated_at = datetime('now')");
         db.prepare(`UPDATE manual_registry_defs SET ${sets.join(', ')} WHERE client_id = ? AND is_test_data = ? AND key = ?`).run(...params, clientId, forTestAccount ? 1 : 0, key);
@@ -22892,7 +23015,7 @@ module.exports = {
     listRegistryDefs, createRegistryDef, updateRegistryDef,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
-    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, MR_SCREEN,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, flexVigenteLoads, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,
