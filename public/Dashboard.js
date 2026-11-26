@@ -4903,13 +4903,26 @@ function placeColumnFilterMenu(menu, th, fit) {
         const room = menu.dataset.side === 'below' ? below : above;
         if (list && natural > room) {
             const listHeight = list.offsetHeight;
-            list.style.maxHeight = `${Math.max(96, listHeight - (natural - room))}px`;
+            list.style.maxHeight = `${Math.max(64, listHeight - (natural - room))}px`;
         }
+        // si ni así cabe (poca ventana), el menú mismo se desplaza
+        if (menu.offsetHeight > room) { menu.style.maxHeight = `${Math.max(120, room)}px`; menu.style.overflowY = 'auto'; }
     }
     const width = menu.offsetWidth;
     const left = Math.min(rect.left, vw - width - margin);
     menu.style.left = `${Math.max(margin, left) + window.scrollX}px`;
-    menu.style.top = menu.dataset.side === 'above' ? `${rect.top - gap - menu.offsetHeight + window.scrollY}px` : `${rect.bottom + gap + window.scrollY}px`;
+    if (menu.dataset.side === 'above') {
+        // anclado por abajo: si la lista se acorta o se alarga al buscar, el borde de abajo sigue pegado al encabezado
+        const parent = menu.offsetParent;
+        const positioned = parent && parent !== document.body && parent !== document.documentElement;
+        // borde de abajo del bloque contenedor, en coordenadas de la ventana: el del padre posicionado o, si no hay, el de la ventana inicial (que arranca arriba del documento)
+        const cbBottom = positioned ? parent.getBoundingClientRect().top + parent.clientTop - parent.scrollTop + parent.clientHeight : vh - window.scrollY;
+        menu.style.top = 'auto';
+        menu.style.bottom = `${cbBottom - (rect.top - gap)}px`;
+    } else {
+        menu.style.bottom = 'auto';
+        menu.style.top = `${rect.bottom + gap + window.scrollY}px`;
+    }
 }
 function handleColumnFilterScroll(event) {
     if (!dataTableFilterMenuEl) return;
