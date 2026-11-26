@@ -761,7 +761,7 @@
                         const tag = document.createElement('span');
                         tag.className = 'perm-tree-limit-tag';
                         tag.textContent = reason === 'assignment' ? t('main.limitAssignmentTag') : (reason === 'status' ? t('main.limitStatusTag') : (typeof reason === 'string' && reason.indexOf('service:') === 0 ? t('main.limitServiceTag') : t('main.limitContractTag')));
-                        row.appendChild(tag);
+                        label.appendChild(tag); // dentro del nombre: si falta lugar baja de renglón en vez de encimarse
                     }
                     if (colorSlot && colorSlot.limitReason) {
                         row.classList.add('perm-tree-row-limit-locked');

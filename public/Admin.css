@@ -6915,10 +6915,11 @@ body.dark-mode .system-reset-banner-bad{ border-color: #f08a82; color: #f08a82; 
 }
 /* El motivo a la vista en un centro de costos fuera de la asignación de la persona (Usuarios > Permisos Adicionales). */
 .perm-tree-limit-tag{
-    flex: 0 1 auto;
+    display: inline-block;
+    vertical-align: middle;
     margin-left: 0.5rem;
-    padding: 0.05rem 0.55rem;
-    max-width: 8rem;
+    padding: 0.1rem 0.55rem;
+    white-space: nowrap;
     border: 1px dashed var(--color-text-secondary);
     border-radius: 999px;
     font-size: 0.66rem;
