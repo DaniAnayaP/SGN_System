@@ -328,6 +328,10 @@ function renderUsersTable() {
         const tdEmail = document.createElement('td');
         tdEmail.dataset.col = 'accEmail';
         tdEmail.textContent = user.email;
+        // Nombre del Puesto: la columna existe desde el principio pero la fila nunca llevaba su celda, y todo lo demás se recorría una columna a la izquierda (bajo «Nombre del Puesto» salía la fecha de creación).
+        const tdJobPosition = document.createElement('td');
+        tdJobPosition.dataset.col = 'accJobPosition';
+        tdJobPosition.textContent = user.jobPositionLabel || '';
         const tdCreated = document.createElement('td');
         tdCreated.dataset.col = 'accCreated';
         Dashboard.renderLocalDate(tdCreated, user.created_at);
@@ -421,7 +425,7 @@ function renderUsersTable() {
         tdActions.appendChild(resetRoleBtn);
         tdActions.appendChild(buildUserLayoutButton(user));
 
-        tr.append(tdUsername, tdName, tdEmail, tdCreated, tdHrStatus, tdOperationalStatus, tdActivePerms, tdActions);
+        tr.append(tdUsername, tdName, tdEmail, tdJobPosition, tdCreated, tdHrStatus, tdOperationalStatus, tdActivePerms, tdActions);
         tableBody.appendChild(tr);
     });
     applyUsersFilters();
