@@ -9,6 +9,7 @@
 const JSZip = require('jszip');
 const { SaxesParser } = require('saxes');
 const ExcelJS = require('exceljs');
+const SearchSyntax = require('./public/SearchSyntax.js');
 
 const MAX_DATA_ROWS = 400000;
 const MAX_ISSUES = 2000;
@@ -458,7 +459,83 @@ async function buildTemplate(registry, lang = 'es', { nextPeriod } = {}) {
     return workbook;
 }
 
+// ---- Filtros por columna que resuelve el servidor (Daniel, 2026-11-25: «al buscar tiene que buscar en todo») ----------------------------------------------------------------------
+// La tabla de datos solo dibuja los primeros 2,000 de miles de renglones: un filtro por columna que leyera lo dibujado dejaba fuera casi todo. La pantalla manda el filtro como cf = { f: { columna: [valores] }, r: { columna: regla } }
+// y el servidor lo aplica a TODOS los renglones con la misma regla de la pantalla (SearchSyntax: Contiene / Inicia con / Igual que, con coma, $ y @; y el rango «Desde–Hasta» de los números). Una columna es una de las de
+// referencia (colRegUnidad…) o un periodo (p_2026_06); lo que se compara es lo que se ve: «—» si está vacío y el número con el formato del idioma.
+const COLUMN_DB_FIELD = { colRegUnidad: 'unidad', colRegUnidadNombre: 'unidad_nombre', colRegCodigo: 'codigo', colRegDescripcion: 'descripcion', colRegCategoria: 'categoria', colRegUdm: 'udm' };
+const MAX_FILTER_COLUMNS = 40;
+const MAX_FILTER_VALUES = 400;
+const MAX_FILTER_TEXT = 200;
+const MAX_FILTER_JSON = 60000;
+const periodOfColumn = (key) => { const m = /^p_(\d{4})_(\d{2})(?:_(\d{2}))?$/.exec(String(key || '')); return m ? `${m[1]}-${m[2]}${m[3] ? `-${m[3]}` : ''}` : null; };
+// { column: 'unidad_nombre' } (una de referencia) o { period: '2026-06' } (un periodo); null si no es una columna de la tabla de datos
+function columnInfo(key) {
+    if (Object.prototype.hasOwnProperty.call(COLUMN_DB_FIELD, key)) return { key, column: COLUMN_DB_FIELD[key] };
+    const period = periodOfColumn(key);
+    return period ? { key, period } : null;
+}
+const NUMBER_FORMATS = {};
+const formatNumber = (n, lang) => { const l = lang === 'en' ? 'en-US' : 'es-MX'; return (NUMBER_FORMATS[l] || (NUMBER_FORMATS[l] = new Intl.NumberFormat(l, { maximumFractionDigits: 3 }))).format(Number(n || 0)); };
+const shownDim = (v) => (v === null || v === undefined || v === '' ? '—' : String(v));
+const shownPeriod = (v, lang) => (v === null || v === undefined ? '—' : formatNumber(v, lang));
+// "$1,250.00" -> 1250 (igual que la pantalla): solo números
+const ruleNumber = (value) => { const s = String(value ?? '').trim().replace(/[$,\s%]/g, ''); return s === '' || !/^-?\d+(\.\d+)?$/.test(s) ? null : Number(s); };
+// Lee el cf que manda la pantalla. { filter: null } = sin filtro; { error } = no es válido; { filter } trae periods (los periodos que hay que leer) y matches(renglón de la base, valoresPorPeriodo).
+function parseColumnFilter(raw, lang = 'es') {
+    if (raw === undefined || raw === null || raw === '') return { filter: null };
+    if (typeof raw !== 'string' || raw.length > MAX_FILTER_JSON) return { error: 'BAD_FILTER' };
+    let spec;
+    try { spec = JSON.parse(raw); } catch (err) { return { error: 'BAD_FILTER' }; }
+    if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return { error: 'BAD_FILTER' };
+    const sets = spec.f && typeof spec.f === 'object' && !Array.isArray(spec.f) ? spec.f : {};
+    const rules = spec.r && typeof spec.r === 'object' && !Array.isArray(spec.r) ? spec.r : {};
+    const keys = [...new Set([...Object.keys(sets), ...Object.keys(rules)])];
+    if (keys.length > MAX_FILTER_COLUMNS) return { error: 'BAD_FILTER' };
+    const conditions = [];
+    for (const key of keys) {
+        const info = columnInfo(key);
+        if (!info) continue; // una columna que no es de esta tabla no filtra nada
+        const cond = { ...info };
+        if (Array.isArray(sets[key])) {
+            if (sets[key].length > MAX_FILTER_VALUES) return { error: 'BAD_FILTER' };
+            cond.set = new Set(sets[key].map((v) => String(v).slice(0, MAX_FILTER_TEXT)));
+        }
+        const rule = rules[key];
+        if (rule && typeof rule === 'object') {
+            if (rule.kind === 'text') {
+                const text = String(rule.text || '').slice(0, MAX_FILTER_TEXT);
+                if (SearchSyntax.split(text).length) cond.test = SearchSyntax.compile(['startsWith', 'equals'].includes(rule.mode) ? rule.mode : 'contains', text);
+            } else if (rule.kind === 'range' && info.period) {
+                const lo = ruleNumber(rule.from);
+                const hi = ruleNumber(rule.to);
+                if (lo !== null || hi !== null) cond.range = { lo, hi };
+            }
+        }
+        if (cond.set || cond.test || cond.range) conditions.push(cond);
+    }
+    if (!conditions.length) return { filter: null };
+    const periods = [...new Set(conditions.filter((c) => c.period).map((c) => c.period))];
+    const matches = (row, periodValues) => {
+        for (const c of conditions) {
+            let shown;
+            let raw;
+            if (c.column) { raw = row[c.column]; shown = shownDim(raw); } else { raw = (periodValues[c.period] || new Map()).get(row.id); shown = shownPeriod(raw, lang); }
+            if (c.set && !c.set.has(shown)) return false;
+            if (c.test && !c.test(shown)) return false;
+            if (c.range) {
+                if (raw === undefined || raw === null) return false; // sin valor en ese periodo no entra a un rango
+                const k = Math.round(Number(raw) * 1000) / 1000;
+                if ((c.range.lo !== null && k < c.range.lo) || (c.range.hi !== null && k > c.range.hi)) return false;
+            }
+        }
+        return true;
+    };
+    return { filter: { conditions, periods, lang, matches } };
+}
+
 module.exports = {
+    parseColumnFilter, columnInfo, shownDim, shownPeriod,
     REGISTRIES, registryOf, DIMS, KEY_DIMS, MAX_DATA_ROWS, MAX_ISSUES, BATCH_ROWS,
     fold, parsePeriodHeader, parseDayText, nextMonth, periodLabel,
     openWorkbook, streamSheet, inspectWorkbook, suggestMapping, mappingProblems, runImport, buildTemplate, exportDimHeaders, parseNumber, scoreHeader,

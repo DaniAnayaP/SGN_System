@@ -15,10 +15,17 @@ const DIM_COLUMNS = [
 ];
 const LOAD_COLUMNS = ['colRegCargaArchivo', 'colRegCargaOrigen', 'colRegCargaFechaHora', 'colRegCargaPor', 'colRegCargaPeriodos', 'colRegCargaRenglones', 'colRegCargaNuevos', 'colRegCargaAgregados', 'colRegCargaYaEstaba', 'colRegCargaDistintos', 'colRegCargaErrores', 'colRegCargaEstado'];
 const ISSUES_SHOWN = 200;
+const FIRST_ROWS = 100; // los renglones que se dibujan al entrar
+const NEXT_ROWS = 200; // los que se agregan al bajar o con «Mostrar más»
 const t = (key, params) => Dashboard.t(key, params);
 const lang = () => (localStorage.getItem('lang') === 'en' ? 'en' : 'es');
 const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const num = (n) => Number(n || 0).toLocaleString(lang() === 'en' ? 'en-US' : 'es-MX', { maximumFractionDigits: 3 });
+// un solo formateador por idioma: toLocaleString con opciones arma uno nuevo en cada llamada, y la tabla de datos formatea decenas de miles de celdas
+const NUM_FORMATS = {};
+const num = (n) => {
+    const l = lang() === 'en' ? 'en-US' : 'es-MX';
+    return (NUM_FORMATS[l] || (NUM_FORMATS[l] = new Intl.NumberFormat(l, { maximumFractionDigits: 3 }))).format(Number(n || 0));
+};
 const MONTH_ABBR = { es: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'], en: ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] };
 function periodLabel(period) {
     const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(period || '');
@@ -29,7 +36,7 @@ function periodLabel(period) {
 const periodKey = (period) => `p_${String(period).replace(/-/g, '_')}`;
 const todayStamp = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-const st = { registries: [], key: null, tab: 'data', data: null, loads: null, canTemplate: false, canExcel: false, canAnnul: false, canCreateRegistry: false, text: '', loadsInit: false };
+const st = { drawn: 0, cf: null, seq: 0, lastLoadId: null, registries: [], key: null, tab: 'data', data: null, loads: null, canTemplate: false, canExcel: false, canAnnul: false, canCreateRegistry: false, text: '', loadsInit: false };
 // El nombre de un registro: los dos de siempre se traducen; los que agregó el cliente llevan el nombre que él les puso.
 const regName = (reg) => (reg && (reg.name || (reg.nameKey ? t(reg.nameKey) : ''))) || t('menu.cmRegistrosInformacion');
 const currentRegistry = () => st.registries.find((r) => r.key === st.key) || null;
@@ -235,30 +242,80 @@ function drawData() {
     const table = tableOf(DATA_TABLE);
     const tbody = table.tBodies[0];
     tbody.innerHTML = '';
-    body.rows.forEach((row) => {
-        const tr = document.createElement('tr');
-        tr.dataset.recordId = row.id;
-        tr.append(
-            ...DIM_COLUMNS.map((c) => cell(c.col, row[c.field])),
-            ...body.periods.map((p) => cell(periodKey(p), row.values[p] === undefined ? '' : num(row.values[p]), 'col-num')),
-        );
-        tbody.appendChild(tr);
-    });
+    st.drawn = 0;
+    drawRows(FIRST_ROWS);
     ensureEmpty(DATA_TABLE, DIM_COLUMNS.length + body.periods.length);
     if (first && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 0);
+    if (first && Dashboard.registerServerFilteredTable) Dashboard.registerServerFilteredTable(DATA_TABLE, { onChange: (spec) => { st.cf = spec; refreshData(); }, getValues: fetchColumnValues });
+    if (first && Dashboard.registerPartialTable) Dashboard.registerPartialTable(DATA_TABLE, { isComplete: () => !st.data || st.drawn >= st.data.rows.length, loadAll: drawAllRows });
+    watchScroll(wrapper);
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(DATA_TABLE);
     wrapper.setAttribute('data-help-key', 'regTable');
     if (Dashboard.attachTableDownloadButton) {
         Dashboard.attachTableDownloadButton(DATA_TABLE, { getTitle: () => `${regName(currentRegistry())}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : ''),
-            getFullDownload: (format) => (st.data && st.data.truncated ? `${API}/${encodeURIComponent(st.key)}/export?format=${format}&lang=${lang()}&text=${encodeURIComponent(st.text || '')}&file=${encodeURIComponent(`${regName(currentRegistry())}_${todayStamp()}`)}` : null) });
+            getFullDownload: (format) => (st.data && st.data.truncated ? `${API}/${encodeURIComponent(st.key)}/export?format=${format}&lang=${lang()}&text=${encodeURIComponent(st.text || '')}${st.cf ? `&cf=${encodeURIComponent(JSON.stringify(st.cf))}` : ''}&file=${encodeURIComponent(`${regName(currentRegistry())}_${todayStamp()}`)}` : null) });
     }
-    let note = document.getElementById('reg-truncated');
-    if (body.truncated) {
-        if (!note) { note = document.createElement('p'); note.id = 'reg-truncated'; note.className = 'admin-hint'; wrapper.after(note); }
-        note.textContent = t('main.regTruncated', { shown: body.rows.length, total: body.total });
-    } else if (note) note.remove();
-    else if (body.total) { /* todo cabe */ }
+    updateNote();
     renderButtons();
+}
+// Los renglones de la tabla de datos se dibujan por partes: dibujarlos todos de un golpe (hasta 2,000 x 36 columnas) congelaba el navegador varios segundos. Cada parte se arma como UN bloque de HTML.
+function rowsHtml(body, from, to) {
+    const periodKeys = body.periods.map(periodKey);
+    const td = (col, value, cls) => `<td data-col="${col}"${cls ? ` class="${cls}"` : ''}>${value === null || value === undefined || value === '' ? '—' : esc(value)}</td>`;
+    const html = [];
+    for (let i = from; i < to; i += 1) {
+        const row = body.rows[i];
+        let tr = `<tr data-record-id="${row.id}">`;
+        DIM_COLUMNS.forEach((c) => { tr += td(c.col, row[c.field]); });
+        body.periods.forEach((p, k) => { tr += td(periodKeys[k], row.values[p] === undefined ? '' : num(row.values[p]), 'col-num'); });
+        html.push(`${tr}</tr>`);
+    }
+    return html.join('');
+}
+function drawRows(count) {
+    const body = st.data;
+    const table = tableOf(DATA_TABLE);
+    if (!body || !table) return 0;
+    const to = Math.min(body.rows.length, st.drawn + count);
+    if (to <= st.drawn) return 0;
+    table.tBodies[0].insertAdjacentHTML('beforeend', rowsHtml(body, st.drawn, to));
+    const added = to - st.drawn;
+    st.drawn = to;
+    updateNote();
+    return added;
+}
+// Dibuja todo lo que falta (para ordenar, filtrar por columna o descargar lo que se ve).
+function drawAllRows() { drawRows(Infinity); return Promise.resolve(true); }
+function watchScroll(wrapper) {
+    if (!wrapper || wrapper.dataset.regScroll) return;
+    wrapper.dataset.regScroll = '1';
+    wrapper.addEventListener('scroll', () => {
+        if (st.data && st.drawn < st.data.rows.length && wrapper.scrollTop + wrapper.clientHeight >= wrapper.scrollHeight - 800) drawRows(NEXT_ROWS);
+    }, { passive: true });
+}
+// El aviso de abajo: «Mostrando X de Y» con los botones para dibujar más mientras falten renglones por dibujar; si ya están todos los que llegaron pero el registro tiene más, avisa que se acote con el Filtro.
+function updateNote() {
+    const body = st.data;
+    const wrapper = wrapperOf(DATA_TABLE);
+    let note = document.getElementById('reg-truncated');
+    const partial = !!body && st.drawn < body.rows.length;
+    if (!body || !wrapper || (!partial && !body.truncated)) { if (note) note.remove(); return; }
+    if (!note) { note = document.createElement('p'); note.id = 'reg-truncated'; note.className = 'admin-hint reg-more'; note.hidden = st.tab !== 'data'; wrapper.after(note); }
+    note.textContent = '';
+    const text = document.createElement('span');
+    text.textContent = partial ? t('main.regShowing', { shown: num(st.drawn), total: num(body.total) }) : t('main.regTruncated', { shown: num(body.rows.length), total: num(body.total) });
+    note.appendChild(text);
+    if (partial) {
+        [['main.regShowMore', () => drawRows(NEXT_ROWS)], ['main.regShowAll', () => drawAllRows()]].forEach(([key, action]) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-secondary reg-more-btn';
+            btn.setAttribute('data-help-key', 'regShowMore');
+            btn.textContent = t(key);
+            btn.addEventListener('click', action);
+            note.appendChild(btn);
+        });
+    }
 }
 function drawLoads() {
     const body = st.loads;
@@ -314,13 +371,23 @@ function drawLoads() {
     wrapper.setAttribute('data-help-key', 'regLoadsTable');
     if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(LOADS_TABLE, { getTitle: () => `${regName(currentRegistry())}_${t('main.regTabLoads')}_${todayStamp()}` });
 }
+// Los filtros por columna (st.cf) los resuelve el servidor sobre TODOS los renglones: la tabla solo dibuja los primeros. Cada petición lleva un número: si llega una más nueva, la vieja se descarta.
 async function refreshData() {
     if (!st.key) return;
+    const seq = ++st.seq;
+    const wrapper = wrapperOf(DATA_TABLE);
+    wrapper?.classList.add('reg-busy');
     try {
-        const qs = st.text ? `?text=${encodeURIComponent(st.text)}` : '';
-        const res = await fetch(`${API}/${st.key}/data${qs}`, { credentials: 'include' });
+        const params = new URLSearchParams({ lang: lang() });
+        if (st.text) params.set('text', st.text);
+        if (st.cf) params.set('cf', JSON.stringify(st.cf));
+        const res = await fetch(`${API}/${st.key}/data?${params}`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
-        st.data = await res.json();
+        const body = await res.json();
+        if (seq !== st.seq) return; // llegó una búsqueda más nueva
+        st.data = body;
+        const lastId = body.lastLoad ? body.lastLoad.id : null;
+        if (lastId !== st.lastLoadId) { st.lastLoadId = lastId; if (Dashboard.resetServerFilterValues) Dashboard.resetServerFilterValues(DATA_TABLE); } // llegaron datos nuevos: las listas de valores ya no valen
         const reg = currentRegistry();
         if (reg) { reg.periods = st.data.periods; reg.lastLoad = st.data.lastLoad; }
         st.canTemplate = st.data.canTemplate; st.canExcel = st.data.canExcel; st.canAnnul = st.data.canAnnul;
@@ -330,7 +397,15 @@ async function refreshData() {
     } catch (err) {
         console.error('Registros: failed to load data', err);
         Dashboard.showToast(t('main.regLoadError'), 'error');
+    } finally {
+        if (seq === st.seq) wrapper?.classList.remove('reg-busy');
     }
+}
+// La lista de valores de una columna para su filtro: los de TODO el registro (no los dibujados).
+async function fetchColumnValues(col) {
+    const res = await fetch(`${API}/${encodeURIComponent(st.key)}/values?col=${encodeURIComponent(col)}&lang=${lang()}`, { credentials: 'include' });
+    if (!res.ok) throw new Error('values failed');
+    return res.json();
 }
 async function refreshLoads() {
     if (!st.key) return;

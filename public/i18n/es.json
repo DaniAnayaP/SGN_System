@@ -5395,6 +5395,9 @@
     "regCardNone": "Todavía no se ha cargado nada.",
     "regPastedName": "Datos pegados",
     "regUpdated": "Última actualización:",
+    "regShowing": "Mostrando {shown} de {total} renglones",
+    "regShowMore": "Mostrar más",
+    "regShowAll": "Mostrar todos",
     "downloadFullPreparing": "Preparando el archivo completo (todos los renglones, no solo los que se ven). Puede tardar unos segundos…",
     "regCardMonths": "{n} meses cargados · de {from} a {to}",
     "regCardDays": "{n} días cargados · el último, {last}",
@@ -9751,6 +9754,10 @@
     "regNewDialog": {
       "what": "Nombre del registro, cada cuánto se carga (un mes por columna, o un día por columna) y el nombre de lo que mide. Ese nombre queda como encabezado de la columna de valores en la plantilla y en los análisis.",
       "example": "Nombre: Consumos mensuales · Mensual · Mide: Consumo."
+    },
+    "regShowMore": {
+      "what": "Dibuja más renglones de la tabla: «Mostrar más» agrega 200 y «Mostrar todos» dibuja todos los que llegaron (la tabla se dibuja por partes para abrir rápido). Al bajar con el scroll también se agregan solos.",
+      "example": "Mostrando 100 de 104,007 renglones"
     },
     "regUpdated": {
       "what": "La fecha y hora de la última carga que cuenta en este registro, en tu hora. Quién la hizo y de qué archivo está en la pestaña Cargas.",

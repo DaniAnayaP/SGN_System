@@ -5014,7 +5014,7 @@ function registryStore({ clientId, isTestData = false, registryKey, loadId }) {
     };
 }
 // Los renglones (con sus valores por periodo) que pasan los filtros, hasta un tope. filters: { unidad, codigo, descripcion, categoria, text } con «contiene» sin importar mayúsculas.
-function listRegistryData(clientId, forTestAccount, registryKey, filters = {}, limit = 2000) {
+function listRegistryData(clientId, forTestAccount, registryKey, filters = {}, limit = 2000, columnFilter = null) {
     const lane = forTestAccount ? 1 : 0;
     const where = ['r.client_id = ?', 'r.is_test_data = ?', 'r.registry_key = ?'];
     const params = [clientId, lane, registryKey];
@@ -5027,8 +5027,22 @@ function listRegistryData(clientId, forTestAccount, registryKey, filters = {}, l
         for (let i = 0; i < 6; i += 1) params.push(pattern);
     }
     const alive = "EXISTS (SELECT 1 FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE v.row_id = r.id AND l.status = 'vigente')";
-    const total = db.prepare(`SELECT COUNT(*) AS n FROM manual_registry_rows r WHERE ${where.join(' AND ')} AND ${alive}`).get(...params).n;
-    const rows = db.prepare(`SELECT r.* FROM manual_registry_rows r WHERE ${where.join(' AND ')} AND ${alive} ORDER BY r.unidad, r.codigo LIMIT ?`).all(...params, limit);
+    let total;
+    let rows;
+    if (columnFilter) {
+        // con un filtro por columna se revisan TODOS los renglones (la tabla de la pantalla solo dibuja los primeros): los que cumplen el texto de arriba se leen en orden y el filtro se aplica a cada uno
+        // sin el texto de arriba ni otros filtros de la base, los renglones salen de la copia en memoria (ver registryRowsCached); con ellos se leen de la base ya acotados
+        const entry = where.length === 3 ? registryRowsCached(clientId, forTestAccount, registryKey) : null;
+        const candidates = entry ? entry.rows : db.prepare(`SELECT r.* FROM manual_registry_rows r WHERE ${where.join(' AND ')} AND ${alive} ORDER BY r.unidad, r.codigo`).all(...params);
+        const periodValues = {};
+        columnFilter.periods.forEach((p) => { periodValues[p] = registryPeriodValues(clientId, forTestAccount, registryKey, p, entry); });
+        const matched = candidates.filter((r) => columnFilter.matches(r, periodValues));
+        total = matched.length;
+        rows = matched.slice(0, limit);
+    } else {
+        total = db.prepare(`SELECT COUNT(*) AS n FROM manual_registry_rows r WHERE ${where.join(' AND ')} AND ${alive}`).get(...params).n;
+        rows = db.prepare(`SELECT r.* FROM manual_registry_rows r WHERE ${where.join(' AND ')} AND ${alive} ORDER BY r.unidad, r.codigo LIMIT ?`).all(...params, limit);
+    }
     const byId = new Map(rows.map((r) => [r.id, { id: r.id, unidad: r.unidad, unidadNombre: r.unidad_nombre, codigo: r.codigo, descripcion: r.descripcion, categoria: r.categoria, udm: r.udm, createdAt: r.created_at, values: {} }]));
     const ids = [...byId.keys()];
     const valuesStmt = db.prepare("SELECT v.row_id, v.period, v.value FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE l.status = 'vigente' AND v.row_id = ?");
@@ -5036,9 +5050,59 @@ function listRegistryData(clientId, forTestAccount, registryKey, filters = {}, l
     return { rows: [...byId.values()], total };
 }
 
+// Los valores vigentes de UN periodo, por renglón (Map row_id -> valor): para filtrar por la columna de un mes.
+function registryPeriodValues(clientId, forTestAccount, registryKey, period, entry = null) {
+    if (entry && entry.periods.has(period)) { const hit = entry.periods.get(period); entry.periods.delete(period); entry.periods.set(period, hit); return hit; }
+    const map = new Map();
+    db.prepare("SELECT v.row_id, v.value FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE l.client_id = ? AND l.is_test_data = ? AND l.registry_key = ? AND l.status = 'vigente' AND v.period = ?")
+        .all(clientId, forTestAccount ? 1 : 0, registryKey, period).forEach((v) => map.set(v.row_id, v.value));
+    if (entry) { entry.periods.set(period, map); while (entry.periods.size > REG_CACHE_PERIODS) entry.periods.delete(entry.periods.keys().next().value); }
+    return map;
+}
+// La copia en memoria de los renglones de un registro (los que tienen algo vigente, en el orden de la tabla): con 100 mil renglones leerlos de la base en cada búsqueda por columna tardaba varios segundos. Se guarda por cliente y
+// registro (máximo 3 a la vez, y se suelta tras 15 minutos sin usar) y se invalida sola: su firma son las cargas del registro (número, estado y cuántos valores trajo), que cambian al terminar, anular o descartar una carga.
+const REG_CACHE_MAX = 3;
+const REG_CACHE_PERIODS = 6;
+const REG_CACHE_TTL_MS = 15 * 60 * 1000;
+const registryCache = new Map();
+function registrySignature(clientId, lane, registryKey) {
+    return db.prepare("SELECT group_concat(id || ':' || status || ':' || values_added || ':' || new_rows, ',') AS s FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ?").get(clientId, lane, registryKey).s || '';
+}
+function registryRowsCached(clientId, forTestAccount, registryKey) {
+    const lane = forTestAccount ? 1 : 0;
+    const cacheKey = `${clientId}:${lane}:${registryKey}`;
+    const sig = registrySignature(clientId, lane, registryKey);
+    const now = Date.now();
+    let entry = registryCache.get(cacheKey);
+    if (!entry || entry.sig !== sig || now - entry.used > REG_CACHE_TTL_MS) {
+        const alive = "EXISTS (SELECT 1 FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE v.row_id = r.id AND l.status = 'vigente')";
+        const rows = db.prepare(`SELECT r.id, r.unidad, r.unidad_nombre, r.codigo, r.descripcion, r.categoria, r.udm, r.created_at FROM manual_registry_rows r WHERE r.client_id = ? AND r.is_test_data = ? AND r.registry_key = ? AND ${alive} ORDER BY r.unidad, r.codigo`).all(clientId, lane, registryKey);
+        entry = { sig, rows, periods: new Map(), used: now };
+    }
+    entry.used = now;
+    registryCache.delete(cacheKey);
+    registryCache.set(cacheKey, entry); // el más reciente al final
+    while (registryCache.size > REG_CACHE_MAX) registryCache.delete(registryCache.keys().next().value);
+    return entry;
+}
+// Los valores distintos de UNA columna de la tabla de datos (los de TODO el registro, no los 2,000 dibujados), para la lista del filtro de esa columna. info = { column } o { period } (de manualRegistries.columnInfo, nunca de lo que
+// escribe el usuario). Si hay más de `limit` valores no se manda la lista (complete: false): ahí solo se ofrece escribir lo buscado.
+function registryColumnValues(clientId, forTestAccount, registryKey, info, limit = 150) {
+    const entry = registryRowsCached(clientId, forTestAccount, registryKey);
+    const seen = new Set();
+    if (info.period) {
+        for (const v of registryPeriodValues(clientId, forTestAccount, registryKey, info.period, entry).values()) { seen.add(v); if (seen.size > limit) break; }
+    } else {
+        const col = info.column; // viene de una lista fija: nunca de lo que escribe el usuario
+        for (const r of entry.rows) { seen.add(r[col]); if (seen.size > limit) break; }
+    }
+    const raw = [...seen];
+    return { raw: raw.slice(0, limit), complete: raw.length <= limit };
+}
+
 // Todos los renglones de un registro, por tandas, para bajarlos completos sin tenerlos todos en memoria (la tabla de la pantalla solo trae los primeros 2,000). Mismo filtro de texto y mismo orden que listRegistryData;
 // cada tanda trae hasta batchSize renglones con sus valores vigentes por periodo.
-function* registryDataBatches(clientId, forTestAccount, registryKey, filters = {}, batchSize = 2000) {
+function* registryDataBatches(clientId, forTestAccount, registryKey, filters = {}, batchSize = 2000, columnFilter = null) {
     const lane = forTestAccount ? 1 : 0;
     const where = ['r.client_id = ?', 'r.is_test_data = ?', 'r.registry_key = ?'];
     const params = [clientId, lane, registryKey];
@@ -5050,15 +5114,19 @@ function* registryDataBatches(clientId, forTestAccount, registryKey, filters = {
     }
     const alive = "EXISTS (SELECT 1 FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE v.row_id = r.id AND l.status = 'vigente')";
     const rowsStmt = db.prepare(`SELECT r.* FROM manual_registry_rows r WHERE ${where.join(' AND ')} AND ${alive} ORDER BY r.unidad, r.codigo LIMIT ? OFFSET ?`);
+    const periodValues = {};
+    if (columnFilter) columnFilter.periods.forEach((p) => { periodValues[p] = registryPeriodValues(clientId, forTestAccount, registryKey, p); });
     for (let offset = 0; ; offset += batchSize) {
-        const rows = rowsStmt.all(...params, batchSize, offset);
-        if (!rows.length) return;
+        const raw = rowsStmt.all(...params, batchSize, offset);
+        if (!raw.length) return;
+        const rows = columnFilter ? raw.filter((r) => columnFilter.matches(r, periodValues)) : raw;
+        if (!rows.length) { if (raw.length < batchSize) return; continue; }
         const ids = rows.map((r) => r.id);
         const byRow = new Map();
         db.prepare(`SELECT v.row_id, v.period, v.value FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE l.status = 'vigente' AND v.row_id IN (${ids.map(() => '?').join(',')})`)
             .all(...ids).forEach((v) => { if (!byRow.has(v.row_id)) byRow.set(v.row_id, {}); byRow.get(v.row_id)[v.period] = v.value; });
         yield rows.map((r) => ({ unidad: r.unidad, unidadNombre: r.unidad_nombre, codigo: r.codigo, descripcion: r.descripcion, categoria: r.categoria, udm: r.udm, values: byRow.get(r.id) || {} }));
-        if (rows.length < batchSize) return;
+        if (raw.length < batchSize) return;
     }
 }
 
@@ -22824,7 +22892,7 @@ module.exports = {
     listRegistryDefs, createRegistryDef, updateRegistryDef,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
-    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, MR_SCREEN,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,

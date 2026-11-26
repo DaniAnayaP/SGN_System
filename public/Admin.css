@@ -10309,6 +10309,11 @@ td.col-num{ text-align: right; font-variant-numeric: tabular-nums; white-space: 
 .cm-stamp-pill{ background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 1rem; padding: 0.1rem 0.7rem; font-weight: 600; }
 
 /* Registros Información: las tarjetas de registros, las pestañas y la ventana de carga */
+.data-table-wrapper.reg-busy{ opacity: 0.55; cursor: progress; transition: opacity 0.15s; }
+th.data-table-col-filter-loading{ cursor: progress; opacity: 0.6; }
+.reg-more{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.reg-more-btn{ padding: 0.25rem 0.8rem; font-size: 0.78rem; }
+.reg-more[hidden]{ display: none; }
 .reg-row{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem 1rem; margin: 0 0 0.7rem; }
 .reg-tabs{ display: flex; gap: 0.4rem; margin: 0; flex-wrap: wrap; }
 .reg-updated{ font-size: 0.78rem; color: var(--color-text-secondary); white-space: nowrap; }

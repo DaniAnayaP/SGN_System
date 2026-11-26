@@ -5396,6 +5396,9 @@
     "regCardNone": "Nothing has been loaded yet.",
     "regPastedName": "Pasted data",
     "regUpdated": "Last update:",
+    "regShowing": "Showing {shown} of {total} rows",
+    "regShowMore": "Show more",
+    "regShowAll": "Show all",
     "downloadFullPreparing": "Preparing the full file (every row, not only the ones shown). It can take a few seconds…",
     "regCardMonths": "{n} months loaded · from {from} to {to}",
     "regCardDays": "{n} days loaded · the last one, {last}",
@@ -9752,6 +9755,10 @@
     "regNewDialog": {
       "what": "The record set name, how often it is loaded (one month per column, or one day per column) and the name of what it measures. That name becomes the heading of the values column in the template and in analyses.",
       "example": "Name: Monthly consumption · Monthly · Measures: Consumption."
+    },
+    "regShowMore": {
+      "what": "Draws more rows of the table: \"Show more\" adds 200 and \"Show all\" draws every row that arrived (the table is drawn in parts so it opens fast). Scrolling down also adds them by itself.",
+      "example": "Showing 100 of 104,007 rows"
     },
     "regUpdated": {
       "what": "The date and time of the latest load that counts in this record, in your time. Who did it and from which file is in the Loads tab.",

@@ -86,7 +86,7 @@ const {
     listRegistryDefs, createRegistryDef, updateRegistryDef,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
-    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, MR_SCREEN,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,
@@ -7340,12 +7340,30 @@ app.get('/api/business/manual-registries/:key/data', requireAuth, (req, res) => 
     if (!registry) return;
     const { clientId, isTestAccount } = req.user;
     const q = req.query || {};
-    const { rows, total } = listRegistryData(clientId, isTestAccount, registry.key, { unidad: q.unidad, codigo: q.codigo, descripcion: q.descripcion, categoria: q.categoria, text: q.text });
+    const lang = q.lang === 'en' ? 'en' : 'es';
+    // cf = los filtros por columna de la pantalla (ver manualRegistries.parseColumnFilter): se aplican a TODOS los renglones, no solo a los 2,000 que se dibujan
+    const parsedCf = manualRegistries.parseColumnFilter(q.cf, lang);
+    if (parsedCf.error) return res.status(400).json({ code: parsedCf.error, message: 'El filtro no es válido.' });
+    const { rows, total } = listRegistryData(clientId, isTestAccount, registry.key, { unidad: q.unidad, codigo: q.codigo, descripcion: q.descripcion, categoria: q.categoria, text: q.text }, 2000, parsedCf.filter);
     res.set('Cache-Control', 'no-store');
     res.json({
         registry: { key: registry.key, kind: registry.kind, nameKey: registry.nameKey, name: registry.name, valueName: registry.valueName, custom: registry.custom, status: registry.status }, periods: registryPeriods(clientId, isTestAccount, registry.key), lastLoad: registryLastLoad(clientId, isTestAccount, registry.key),
         rows, total, truncated: total > rows.length, ...regAbilities(req),
     });
+});
+// Los valores distintos de una columna de la tabla de datos (los de TODO el registro) para la lista de su filtro; con demasiados valores solo se avisa (complete: false) y el filtro ofrece escribir.
+app.get('/api/business/manual-registries/:key/values', requireAuth, (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    const { clientId, isTestAccount } = req.user;
+    const lang = req.query.lang === 'en' ? 'en' : 'es';
+    const info = manualRegistries.columnInfo(String(req.query.col || ''));
+    if (!info) return res.status(400).json({ code: 'BAD_COLUMN', message: 'Esa columna no existe.' });
+    const { raw, complete } = registryColumnValues(clientId, isTestAccount, registry.key, info);
+    const shown = [...new Set(raw.map((v) => (info.period ? manualRegistries.shownPeriod(v, lang) : manualRegistries.shownDim(v))))];
+    shown.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+    res.set('Cache-Control', 'no-store');
+    res.json({ col: info.key, values: shown, complete });
 });
 // La descarga COMPLETA de los datos de un registro (Excel o CSV): todos los renglones, no solo los que muestra la tabla (los primeros 2,000), con las columnas de referencia y un periodo por columna. Se arma por tandas y se va mandando
 // (así un registro de más de cien mil renglones no se carga entero en memoria). text = el mismo texto del filtro de arriba; no lleva los filtros de columna ni las columnas ocultas de la pantalla. Quien ve la tabla puede bajarla.
@@ -7359,6 +7377,8 @@ app.get('/api/business/manual-registries/:key/export', requireAuth, async (req, 
     const headers = [...manualRegistries.exportDimHeaders(lang), ...periods.map((p) => manualRegistries.periodLabel(p, lang))];
     const base = String(req.query.file || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) || `Registro-${registry.key}`;
     const filters = { text: String(req.query.text || '').slice(0, 200) };
+    const parsedCf = manualRegistries.parseColumnFilter(req.query.cf, lang);
+    if (parsedCf.error) return res.status(400).json({ code: parsedCf.error, message: 'El filtro no es válido.' });
     res.set('Cache-Control', 'no-store');
     res.setHeader('Content-Type', format === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', buildContentDisposition(`${base}.${format}`));
@@ -7369,7 +7389,7 @@ app.get('/api/business/manual-registries/:key/export', requireAuth, async (req, 
             const csv = (v) => { const text = String(v ?? ''); return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; };
             const send = (chunk) => (res.write(chunk) ? Promise.resolve() : new Promise((resolve) => res.once('drain', resolve)));
             await send('\ufeff' + headers.map(csv).join(',') + '\r\n'); // con BOM: Excel adivina mal los acentos sin él
-            for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters)) {
+            for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters, 2000, parsedCf.filter)) {
                 if (res.destroyed) return;
                 await send(batch.map((row) => cells(row).map(csv).join(',')).join('\r\n') + '\r\n');
                 await yieldToOthers();
@@ -7379,7 +7399,7 @@ app.get('/api/business/manual-registries/:key/export', requireAuth, async (req, 
             const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: false, useSharedStrings: false });
             const sheet = workbook.addWorksheet(String(registry.name || 'Datos').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Datos', { views: [{ state: 'frozen', ySplit: 1 }] });
             sheet.addRow(headers).commit();
-            for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters)) {
+            for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters, 2000, parsedCf.filter)) {
                 if (res.destroyed) return;
                 batch.forEach((row) => sheet.addRow(cells(row)).commit());
                 await yieldToOthers();

@@ -4412,6 +4412,8 @@ function cellFilterValue(td) {
 function getColumnDistinctValues(tableId, key) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return [];
+    const served = state.serverFilter?.values.get(key); // una tabla con filtros del servidor trae los valores de TODO lo que hay, no solo de lo dibujado
+    if (served) return served.values;
     const values = new Set();
     Array.from(state.table.tBodies[0]?.rows || []).forEach((tr) => {
         if (tr.querySelector('td.data-table-empty-cell')) return;
@@ -4842,9 +4844,42 @@ function countRuleRows(tableId, key, rule, selected) {
 // mechanisms stay independent this way (a row shows only if BOTH leave it
 // visible), so this file never has to know anything about any specific
 // page's filter fields, and no page has to know this feature exists.
+// Tablas cuyo filtro por columna lo resuelve el servidor (Daniel, 2026-11-25: «al buscar tiene que buscar en todo»): la tabla solo dibuja una parte de los renglones (los primeros de miles), así que filtrar lo dibujado dejaba
+// fuera casi todo. La pantalla se registra con registerServerFilteredTable(tableId, { onChange(spec | null), getValues(key) → Promise<{ values, complete }> }). Cada cambio de filtro llega a onChange (con una pausa al escribir)
+// y la pantalla pide los renglones de nuevo; el motor no esconde filas por su cuenta. La lista de casillas de cada columna sale del servidor (todos los valores del registro); si una columna tiene demasiados (complete: false)
+// no se ofrece la lista y solo se puede escribir lo buscado.
+function serverFilterSpec(state) {
+    const f = {};
+    state.columnFilters.forEach((set, key) => { f[key] = [...set]; });
+    const r = {};
+    state.columnRules.forEach((rule, key) => { if (isColumnRuleActive(rule)) r[key] = rule; });
+    return { f, r };
+}
+function registerServerFilteredTable(tableId, opts) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    state.serverFilter = { onChange: opts.onChange, getValues: opts.getValues, lastKey: JSON.stringify(serverFilterSpec(state)), values: new Map(), pending: new Set(), timer: null };
+}
+// Las listas de valores guardadas ya no valen (llegaron datos nuevos): la próxima vez que se abra un filtro se vuelven a pedir.
+function resetServerFilterValues(tableId) { dataTableColumnState.get(tableId)?.serverFilter?.values.clear(); }
+function applyServerColumnFilters(tableId, state) {
+    const sf = state.serverFilter;
+    state.table.tBodies[0]?.querySelectorAll('tr.data-table-row-col-filtered').forEach((tr) => tr.classList.remove('data-table-row-col-filtered'));
+    const spec = serverFilterSpec(state);
+    const key = JSON.stringify(spec);
+    if (key !== sf.lastKey) {
+        sf.lastKey = key;
+        const empty = !Object.keys(spec.f).length && !Object.keys(spec.r).length;
+        clearTimeout(sf.timer);
+        sf.timer = setTimeout(() => sf.onChange(empty ? null : spec), empty ? 0 : 300); // quitar los filtros es de un toque; al escribir se espera a que termine
+    }
+    refreshSavedSearchPillForTable(tableId);
+    refreshPanelColumnFilters(tableId);
+}
 function applyColumnValueFilters(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
+    if (state.serverFilter) { applyServerColumnFilters(tableId, state); return; }
     // una tabla que dibuja solo una parte de sus filas (ver registerPartialTable) dibuja primero el resto: el filtro por columna lee las filas dibujadas
     if (state.columnFilters.size || state.columnRules.size) {
         const pending = needAllTableRows(tableId);
@@ -5115,7 +5150,20 @@ function openColumnFilterMenu(th, tableId, key) {
 
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
+    const sf = state.serverFilter;
+    if (sf && !sf.values.has(key)) {
+        // los valores de esta columna salen del servidor (los de todo el registro, no los de las filas dibujadas): se piden antes de abrir el menú
+        if (sf.pending.has(key)) return;
+        sf.pending.add(key);
+        th.classList.add('data-table-col-filter-loading');
+        Promise.resolve().then(() => sf.getValues(key))
+            .then((info) => { sf.values.set(key, { values: Array.isArray(info?.values) ? info.values : [], complete: info?.complete !== false }); })
+            .catch(() => { sf.values.set(key, { values: [], complete: false }); })
+            .finally(() => { sf.pending.delete(key); th.classList.remove('data-table-col-filter-loading'); if (th.isConnected) openColumnFilterMenu(th, tableId, key); });
+        return;
+    }
     const distinctValues = getColumnDistinctValues(tableId, key);
+    const listHidden = !!(sf && sf.values.get(key)?.complete === false); // demasiados valores: sin casillas, solo se escribe lo buscado
     // Una regla de Búsqueda Guardada ("contiene GRUPO") se ve aquí como los
     // valores que la cumplen hoy; al tocar cualquier casilla pasa a ser esa
     // selección (ver más abajo, columnRules.delete).
@@ -5326,8 +5374,8 @@ function openColumnFilterMenu(th, tableId, key) {
         const isRange = searchMode === 'range';
         searchInput.hidden = isRange;
         rangeBox.hidden = !isRange;
-        allRow.hidden = isRange;
-        list.hidden = isRange;
+        allRow.hidden = isRange || listHidden;
+        list.hidden = isRange || listHidden;
     }
     // Aplica en el momento lo escrito en Desde–Hasta como regla de rango de la
     // columna; la regla reemplaza a las casillas. Sin nada escrito, se quita.
@@ -5381,12 +5429,16 @@ function openColumnFilterMenu(th, tableId, key) {
         if (textActive) {
             ruleText.textContent = t('main.filterRuleLine', { rule: describeRuleLine(rule) });
             // "Todos los que coinciden" apagado = una selección vacía: ninguna fila.
-            const picked = state.columnFilters.get(key);
-            const counted = countRuleRows(tableId, key, rule, picked || new Set());
-            const matching = picked && !picked.size ? 0 : counted.matching;
-            const total = counted.total;
-            ruleCount.textContent = t('main.filterRuleCount', { count: String(matching), total: String(total) });
-            ruleCount.classList.toggle('zero', matching === 0);
+            if (sf) {
+                ruleCount.textContent = ''; // el servidor filtra: cuántos renglones coinciden lo dice el aviso de abajo de la tabla
+            } else {
+                const picked = state.columnFilters.get(key);
+                const counted = countRuleRows(tableId, key, rule, picked || new Set());
+                const matching = picked && !picked.size ? 0 : counted.matching;
+                const total = counted.total;
+                ruleCount.textContent = t('main.filterRuleCount', { count: String(matching), total: String(total) });
+                ruleCount.classList.toggle('zero', matching === 0);
+            }
         }
     }
     function textInputChanged() {
@@ -5406,7 +5458,7 @@ function openColumnFilterMenu(th, tableId, key) {
             else setRuleHighlightedText(row.lastElementChild, row._value, searchMode, searchInput.value);
         });
         const searching = searchMode !== 'range' && splitRuleTerms(searchInput.value).length > 0;
-        hiddenNote.hidden = !searching || hiddenCount === 0;
+        hiddenNote.hidden = !searching || hiddenCount === 0 || listHidden;
         if (!hiddenNote.hidden) {
             hiddenNote.textContent = hiddenCount === 1
                 ? t('main.filterOthersHiddenOne')
@@ -5774,6 +5826,8 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownlo
             document.body.appendChild(link); link.click(); link.remove();
             return;
         }
+        const pendingRows = needAllTableRows(tableId); // una tabla que dibuja por partes dibuja primero el resto: se baja todo lo que tiene, no solo lo dibujado
+        if (pendingRows) await pendingRows;
         const { columns, rows } = getVisibleTableSnapshot(tableId);
         if (!columns.length) return;
         const title = String((getTitle && getTitle()) || tableId).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
@@ -15629,6 +15683,8 @@ window.Dashboard = {
     initDashboard,
     renderTableRowsInChunks,
     registerPartialTable,
+    registerServerFilteredTable,
+    resetServerFilterValues,
     reapplyColumnFilters,
     getSingleSelectedCostCenterId,
     setBreadcrumbSuffix,
