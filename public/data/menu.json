@@ -589,24 +589,6 @@
         {
           "id": "cat-analisis-fijos-pedidos-sitio", "labelKey": "menu.anPedidosPorSitio", "abbrKeys": ["menu.anPedidosPorSitioAbbr1", "menu.anPedidosPorSitioAbbr2"], "icon": "bx-cart-alt", "href": "AnPedidosPorSitio.html", "sidebarGroup": "anDistribucion",
           "submenu": [
-            {
-              "id": "class-control-interno", "labelKey": "menu.classControlInterno", "isClassification": true,
-              "submenu": [
-                { "id": "colSysEmpresa", "labelKey": "main.colSysEmpresa", "permissionOnly": true },
-                { "id": "colSysArea", "labelKey": "main.colSysArea", "permissionOnly": true },
-                { "id": "colSysModulo", "labelKey": "main.colSysModulo", "permissionOnly": true },
-                { "id": "colSysPantalla", "labelKey": "main.colSysPantalla", "permissionOnly": true },
-                { "id": "colSysCentroCostos", "labelKey": "main.colSysCentroCostos", "permissionOnly": true },
-                { "id": "colSysFecha", "labelKey": "main.colSysFecha", "permissionOnly": true },
-                { "id": "colSysDiaNum", "labelKey": "main.colSysDiaNum", "permissionOnly": true },
-                { "id": "colSysDiaTexto", "labelKey": "main.colSysDiaTexto", "permissionOnly": true },
-                { "id": "colSysMesNum", "labelKey": "main.colSysMesNum", "permissionOnly": true },
-                { "id": "colSysMesTexto", "labelKey": "main.colSysMesTexto", "permissionOnly": true },
-                { "id": "colSysAnio", "labelKey": "main.colSysAnio", "permissionOnly": true },
-                { "id": "colSysSemana", "labelKey": "main.colSysSemana", "permissionOnly": true },
-                { "id": "colSysHora", "labelKey": "main.colSysHora", "permissionOnly": true }
-              ]
-            },
             { "id": "colAnpSitio", "labelKey": "main.colAnpSitio", "permissionOnly": true },
             { "id": "colAnpPedidos", "labelKey": "main.colAnpPedidos", "permissionOnly": true },
             { "id": "colAnpRenglones", "labelKey": "main.colAnpRenglones", "permissionOnly": true },
@@ -647,6 +629,8 @@
             { "id": "colAnVersiones", "labelKey": "main.colAnVersiones", "permissionOnly": true },
             { "id": "colAnEstado", "labelKey": "main.colAnEstado", "permissionOnly": true },
             { "id": "colAnExtVersion", "labelKey": "main.colAnExtVersion", "permissionOnly": true },
+            { "id": "colAnExtFechaHora", "labelKey": "main.colAnExtFechaHora", "permissionOnly": true },
+            { "id": "colAnExtPor", "labelKey": "main.colAnExtPor", "permissionOnly": true },
             { "id": "colAnExtRenglones", "labelKey": "main.colAnExtRenglones", "permissionOnly": true },
             { "id": "colAnExtPeriodos", "labelKey": "main.colAnExtPeriodos", "permissionOnly": true },
             { "id": "colAnExtEstado", "labelKey": "main.colAnExtEstado", "permissionOnly": true },
@@ -3285,6 +3269,8 @@
             { "id": "colRegUdm", "labelKey": "main.colRegUdm", "permissionOnly": true },
             { "id": "colRegCargaArchivo", "labelKey": "main.colRegCargaArchivo", "permissionOnly": true },
             { "id": "colRegCargaOrigen", "labelKey": "main.colRegCargaOrigen", "permissionOnly": true },
+            { "id": "colRegCargaFechaHora", "labelKey": "main.colRegCargaFechaHora", "permissionOnly": true },
+            { "id": "colRegCargaPor", "labelKey": "main.colRegCargaPor", "permissionOnly": true },
             { "id": "colRegCargaPeriodos", "labelKey": "main.colRegCargaPeriodos", "permissionOnly": true },
             { "id": "colRegCargaRenglones", "labelKey": "main.colRegCargaRenglones", "permissionOnly": true },
             { "id": "colRegCargaNuevos", "labelKey": "main.colRegCargaNuevos", "permissionOnly": true },

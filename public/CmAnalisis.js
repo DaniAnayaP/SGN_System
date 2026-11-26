@@ -235,6 +235,12 @@ function cell(col, value, extraClass) {
     if (extraClass) td.className = extraClass;
     return td;
 }
+function stampCell(col, value) {
+    const td = document.createElement('td');
+    td.dataset.col = col;
+    if (value) { const span = document.createElement('span'); Dashboard.renderTimeStamp(span, value); td.appendChild(span); } else td.textContent = '—';
+    return td;
+}
 function buildHeader(tableId, columns) {
     const table = tableOf(tableId);
     if (!table || table.dataset.colInit) return false;
@@ -299,7 +305,7 @@ async function loadFile() {
 }
 function drawVersions() {
     const columns = [
-        ...['colAnExtVersion', 'colAnExtRenglones', 'colAnExtPeriodos', 'colAnExtEstado'].map((c) => ({ col: c, group: 'menu.cmAnalisisRegistros', labelKey: `main.${c}` })),
+        ...['colAnExtVersion', 'colAnExtFechaHora', 'colAnExtPor', 'colAnExtRenglones', 'colAnExtPeriodos', 'colAnExtEstado'].map((c) => ({ col: c, group: 'menu.cmAnalisisRegistros', labelKey: `main.${c}` })),
         { col: 'actions', labelKey: 'main.colActions' },
     ];
     const first = buildHeader(VERSIONS_TABLE, columns);
@@ -319,7 +325,7 @@ function drawVersions() {
         actions.appendChild(btn('bx-history', 'main.changeHistoryTitleRecord', 'changeHistory', () => Dashboard.openChangeHistory(VERSIONS_TABLE, e.id)));
         if (st.canAnnul && e.status === 'vigente') actions.appendChild(btn('bx-block', 'main.anAnnul', 'anAnnul', () => openAnnul(e)));
         const used = Object.entries((e.notes && e.notes.periods) || {}).filter(([, list]) => list.length).map(([k, list]) => `${regName(registryByKey(k)) || k}: ${periodsText(list)}`).join(' · ');
-        tr.append(cell('colAnExtVersion', `v${e.version}`), cell('colAnExtRenglones', num(e.rowsCount), 'col-num'), cell('colAnExtPeriodos', used), status, actions);
+        tr.append(cell('colAnExtVersion', `v${e.version}`), stampCell('colAnExtFechaHora', e.createdAt), cell('colAnExtPor', e.createdBy), cell('colAnExtRenglones', num(e.rowsCount), 'col-num'), cell('colAnExtPeriodos', used), status, actions);
         tbody.appendChild(tr);
     });
     ensureEmpty(VERSIONS_TABLE, columns.length);

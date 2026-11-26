@@ -13,7 +13,7 @@ const DIM_COLUMNS = [
     { col: 'colRegUnidad', field: 'unidad', dim: 'unidad' }, { col: 'colRegUnidadNombre', field: 'unidadNombre', dim: 'unidadNombre' }, { col: 'colRegCodigo', field: 'codigo', dim: 'codigo' },
     { col: 'colRegDescripcion', field: 'descripcion', dim: 'descripcion' }, { col: 'colRegCategoria', field: 'categoria', dim: 'categoria' }, { col: 'colRegUdm', field: 'udm', dim: 'udm' },
 ];
-const LOAD_COLUMNS = ['colRegCargaArchivo', 'colRegCargaOrigen', 'colRegCargaPeriodos', 'colRegCargaRenglones', 'colRegCargaNuevos', 'colRegCargaAgregados', 'colRegCargaYaEstaba', 'colRegCargaDistintos', 'colRegCargaErrores', 'colRegCargaEstado'];
+const LOAD_COLUMNS = ['colRegCargaArchivo', 'colRegCargaOrigen', 'colRegCargaFechaHora', 'colRegCargaPor', 'colRegCargaPeriodos', 'colRegCargaRenglones', 'colRegCargaNuevos', 'colRegCargaAgregados', 'colRegCargaYaEstaba', 'colRegCargaDistintos', 'colRegCargaErrores', 'colRegCargaEstado'];
 const ISSUES_SHOWN = 200;
 const t = (key, params) => Dashboard.t(key, params);
 const lang = () => (localStorage.getItem('lang') === 'en' ? 'en' : 'es');
@@ -246,6 +246,12 @@ function cell(col, value, extraClass) {
     if (extraClass) td.className = extraClass;
     return td;
 }
+function stampCell(col, value) {
+    const td = document.createElement('td');
+    td.dataset.col = col;
+    if (value) { const span = document.createElement('span'); Dashboard.renderTimeStamp(span, value); td.appendChild(span); } else td.textContent = '—';
+    return td;
+}
 function headerCell(col, group, label, labelKey, extraClass) {
     const th = document.createElement('th');
     th.dataset.col = col;
@@ -354,7 +360,7 @@ function drawLoads() {
             actions.appendChild(annul);
         }
         tr.append(
-            cell('colRegCargaArchivo', l.fileName), cell('colRegCargaOrigen', t(`main.regSource_${l.source}`)),
+            cell('colRegCargaArchivo', l.fileName), cell('colRegCargaOrigen', t(`main.regSource_${l.source}`)), stampCell('colRegCargaFechaHora', l.createdAt), cell('colRegCargaPor', l.loadedBy),
             cell('colRegCargaPeriodos', l.newPeriods.map(periodLabel).join(', ')), cell('colRegCargaRenglones', num(l.rowsInFile), 'col-num'), cell('colRegCargaNuevos', num(l.newRows), 'col-num'),
             cell('colRegCargaAgregados', num(l.valuesAdded), 'col-num'), cell('colRegCargaYaEstaba', num(l.untouched), 'col-num'), cell('colRegCargaDistintos', num(l.different), 'col-num'), cell('colRegCargaErrores', num(l.errors), 'col-num'),
             status, actions,

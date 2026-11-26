@@ -11590,7 +11590,6 @@ app.post('/api/business/pedido-manual/:id/status', requireAuth, (req, res) => {
 });
 // ---- Análisis fijo «Pedidos por sitio» (Análisis › Cadena de Suministro › Análisis fijos › Distribución) -------------------------------------------------
 // Un renglón por sitio con lo pedido en Pedido Manual. cc = «all» o «3,5» (los centros de costos marcados arriba, como en las demás pantallas); from / to = días (AAAA-MM-DD) de la zona del cliente.
-const ANP_SCREEN = { area: 'Cadena de Suministro', modulo: 'Análisis', pantalla: 'Pedidos por sitio' };
 app.get('/api/business/analisis-fijos/pedidos-por-sitio', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
@@ -11598,13 +11597,11 @@ app.get('/api/business/analisis-fijos/pedidos-por-sitio', requireAuth, (req, res
     const cc = String(req.query.cc === undefined ? 'all' : req.query.cc);
     const centerIds = cc === 'all' ? null : cc.split(',').map((x) => Number(x)).filter((x) => Number.isInteger(x) && x > 0);
     const day = (value) => (/^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) ? String(value) : '');
-    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const rows = analysisOrdersBySite(clientId, isTestAccount, { centerIds, fromDay: day(req.query.from), toDay: day(req.query.to), timeZone: client.time_zone });
     res.set('Cache-Control', 'no-store');
     res.json({
         rows: rows.map((r) => ({
             ...r, firstAt: r.firstAt ? sqlUtcIso(r.firstAt) : '', lastAt: r.lastAt ? sqlUtcIso(r.lastAt) : '',
-            ...getSystemColumnsForRecord({ companyName: client.company_name, ...ANP_SCREEN, centroCostos: '', createdAt: r.lastAt || now, timeZone: client.time_zone }),
         })),
     });
 });

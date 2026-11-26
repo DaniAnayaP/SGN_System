@@ -4859,17 +4859,11 @@ function moveAnalysisToDepartmentOnce() {
     db.prepare("SELECT DISTINCT plan_id AS id FROM plan_grants WHERE section_id = 'analysis'").all().forEach(({ id }) => { try { syncPlanModulesFromGrants(id); } catch (err) { console.error('[db] Análisis: no se pudo abrir el departamento en el plan', id, err.message); } });
     console.log(`[db] Departamento Análisis (una vez): «Análisis Registros Manuales» pasó de Cargas Manuales (Centro de Distribución) a Análisis › Cadena de Suministro: ${JSON.stringify(stats)}.`);
 }
-// Cargas Manuales sin Control Interno (Daniel, 2026-11-25, «Aquí no vamos a poner lo de Control Interno» y eligió «En todo Cargas Manuales»): las 13 columnas de Control Interno salieron de Ventas Manuales, Registros Información
-// (Datos y Cargas) y Análisis Registros Manuales, y de su árbol de permisos (menu.json). Una sola vez se borran los permisos que colgaban de ellas (de planes, giros, clientes, perfiles, puestos y usuarios, y sus llaves de orden y costo):
-// ya no apuntan a nada y, si se dejaran, quien solo tuviera una de esas columnas seguiría contando como dueño de la pantalla. Lo demás de la pantalla no se toca.
-const CI_CARGAS_KEY = 'seed-quitar-control-interno-cargas-manuales-v1';
-function removeControlInternoFromCargasManualesOnce() {
-    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(CI_CARGAS_KEY)) return;
-    const TARGETS = [
-        { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', prefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas/class-control-interno' },
-        { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', prefix: 'cat-cargas-manuales/cat-cargas-manuales-registros/class-control-interno' },
-        { sectionId: 'analysis', itemId: 'an-area-supply-chain', prefix: 'cat-analisis-manuales/cat-analisis-manuales-lista/class-control-interno' },
-    ];
+// Cargas Manuales sin Control Interno (Daniel, 2026-11-25, «Aquí no vamos a poner lo de Control Interno» y eligió «En todo Cargas Manuales»; después «Sí» también para Pedidos por sitio): las 13 columnas de Control Interno
+// salieron de Ventas Manuales, Registros Información (Datos y Cargas), Análisis Registros Manuales y Pedidos por sitio, y de su árbol de permisos (menu.json). Una sola vez se borran los permisos que colgaban de ellas (de planes, giros,
+// clientes, perfiles, puestos y usuarios, y sus llaves de orden y costo): ya no apuntan a nada y, si se dejaran, quien solo tuviera una de esas columnas seguiría contando como dueño de la pantalla. Lo demás de la pantalla no se toca.
+function dropControlInternoGrantsOnce(migrationKey, label, TARGETS) {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(migrationKey)) return;
     const stats = {};
     const bump = (key, n) => { if (n) stats[key] = (stats[key] || 0) + n; };
     db.transaction(() => {
@@ -4885,9 +4879,23 @@ function removeControlInternoFromCargasManualesOnce() {
                 TARGETS.forEach((T) => bump(`${table}.${col}`, del.run(`%${T.sectionId}::${T.itemId}::${T.prefix}%`).changes));
             });
         });
-        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(CI_CARGAS_KEY);
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(migrationKey);
     })();
-    console.log(`[db] Cargas Manuales sin Control Interno (una vez): permisos y llaves que colgaban de sus columnas, borrados: ${JSON.stringify(stats)}.`);
+    console.log(`[db] ${label} sin Control Interno (una vez): permisos y llaves que colgaban de sus columnas, borrados: ${JSON.stringify(stats)}.`);
+}
+const CI_CARGAS_KEY = 'seed-quitar-control-interno-cargas-manuales-v1';
+const CI_PEDIDOS_KEY = 'seed-quitar-control-interno-pedidos-sitio-v1';
+function removeControlInternoFromCargasManualesOnce() {
+    dropControlInternoGrantsOnce(CI_CARGAS_KEY, 'Cargas Manuales', [
+        { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', prefix: 'cat-cargas-manuales/cat-cargas-manuales-ventas/class-control-interno' },
+        { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', prefix: 'cat-cargas-manuales/cat-cargas-manuales-registros/class-control-interno' },
+        { sectionId: 'analysis', itemId: 'an-area-supply-chain', prefix: 'cat-analisis-manuales/cat-analisis-manuales-lista/class-control-interno' },
+    ]);
+}
+function removeControlInternoFromPedidosSitioOnce() {
+    dropControlInternoGrantsOnce(CI_PEDIDOS_KEY, 'Pedidos por sitio', [
+        { sectionId: 'analysis', itemId: 'an-area-supply-chain', prefix: 'cat-analisis-fijos/cat-analisis-fijos-pedidos-sitio/class-control-interno' },
+    ]);
 }
 // El botón «Crear registro» (colRegCrearAuth) es nuevo: quien ya tiene la pantalla Registros Información lo recibe en lo contratado (Solo ver + Ver y operar); quien lo use en su puesto o usuario lo decide el administrador desde el árbol.
 const REG_CREATE_BUTTON_SEED_KEY = 'seed-registros-crear-boton-v1';
@@ -22372,6 +22380,7 @@ try { moveVentasToCargasManualesOnce(); } catch (err) { console.error('[db] Vent
 try { moveVentasManualesToAdditionalOnce(); } catch (err) { console.error('[db] Ventas Manuales: no se pudo pasar a adicional (se reintentará al arrancar):', err.message); }
 try { moveAnalysisToDepartmentOnce(); } catch (err) { console.error('[db] Análisis: no se pudo pasar al departamento Análisis (se reintentará al arrancar):', err.message); }
 try { removeControlInternoFromCargasManualesOnce(); } catch (err) { console.error('[db] Cargas Manuales: no se pudo limpiar Control Interno (se reintentará al arrancar):', err.message); }
+try { removeControlInternoFromPedidosSitioOnce(); } catch (err) { console.error('[db] Pedidos por sitio: no se pudo limpiar Control Interno (se reintentará al arrancar):', err.message); }
 try { seedRegistrosCreateButton(); } catch (err) { console.error('[db] Registros: no se pudo sembrar el botón Crear registro (se reintentará al arrancar):', err.message); }
 try { backfillPosSalePublic(); } catch (err) { console.error('[db] Ventas: no se pudo rellenar el código de los tickets (se reintentará al arrancar):', err.message); }
 try { seedSitesFromCostCentersOnce(); } catch (err) { console.error('[db] Sitios propios: no se pudo crear desde los centros (se reintentará al arrancar):', err.message); }

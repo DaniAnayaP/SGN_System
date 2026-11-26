@@ -7,11 +7,6 @@
 (function () {
 const API = '/api/business/analisis-fijos/pedidos-por-sitio';
 const TABLE = 'pedidos-por-sitio';
-const SYSTEM_COLUMN_KEYS = [
-    'colSysEmpresa', 'colSysArea', 'colSysModulo', 'colSysPantalla', 'colSysCentroCostos',
-    'colSysFecha', 'colSysDiaNum', 'colSysDiaTexto', 'colSysMesNum', 'colSysMesTexto',
-    'colSysAnio', 'colSysSemana', 'colSysHora',
-];
 const COLUMNS = ['colAnpSitio', 'colAnpPedidos', 'colAnpRenglones', 'colAnpCodigos', 'colAnpPendientes', 'colAnpParciales', 'colAnpSurtidos', 'colAnpPctSurtido', 'colAnpAntesPosible', 'colAnpPrimero', 'colAnpUltimo'];
 const t = (key, params) => Dashboard.t(key, params);
 const lang = () => (localStorage.getItem('lang') === 'en' ? 'en' : 'es');
@@ -99,7 +94,6 @@ function draw() {
             if (cls) el.className = cls;
             return el;
         };
-        SYSTEM_COLUMN_KEYS.forEach((k) => row.appendChild(th(k, 'menu.classControlInterno', `main.${k}`, 'col-system')));
         COLUMNS.forEach((k) => row.appendChild(th(k, 'menu.anPedidosPorSitio', `main.${k}`, k === 'colAnpSitio' ? '' : 'col-num')));
     }
     const tbody = tbl.tBodies[0];
@@ -108,7 +102,6 @@ function draw() {
         const tr = document.createElement('tr');
         tr.dataset.recordId = r.siteCode || 'none';
         tr.append(
-            ...SYSTEM_COLUMN_KEYS.map((k) => cell(k, r[k], 'col-system')),
             cell('colAnpSitio', siteLabel(r)),
             cell('colAnpPedidos', num(r.orders), 'col-num'), cell('colAnpRenglones', num(r.lines), 'col-num'), cell('colAnpCodigos', num(r.codes), 'col-num'),
             cell('colAnpPendientes', num(r.pending), 'col-num'), cell('colAnpParciales', num(r.partial), 'col-num'), cell('colAnpSurtidos', num(r.supplied), 'col-num'),
@@ -121,7 +114,7 @@ function draw() {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
         td.className = 'data-table-empty-cell';
-        td.colSpan = SYSTEM_COLUMN_KEYS.length + COLUMNS.length;
+        td.colSpan = COLUMNS.length;
         const inner = document.createElement('div');
         inner.className = 'data-table-empty-inner';
         inner.textContent = t('main.emptyStateText');
