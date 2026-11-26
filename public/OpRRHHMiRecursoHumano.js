@@ -293,6 +293,25 @@ function buildActionsCell(worker) {
 // Rescisión de Contrato) also revokes the worker's own login (see
 // updateHrWorker's cascade in db.js) — the row refresh after the PATCH
 // picks up the new Estado de Usuario automatically.
+function formatStartDate(iso) {
+    const [year, month, day] = String(iso).split('-').map(Number);
+    return year && month && day ? `${pad(day)}/${pad(month)}/${year}` : String(iso);
+}
+// Puesto: con puesto es texto (no se cambia desde la fila: sus permisos por Puesto dependen de él); si la persona se dio de alta sin puesto, se elige aquí mismo.
+function buildPositionCell(worker) {
+    if (worker.jobPositionId || worker.position) return textCell('colHrPosition', worker.position);
+    const td = document.createElement('td');
+    td.dataset.col = 'colHrPosition';
+    const select = document.createElement('select');
+    select.className = 'editable-cell-select';
+    populateJobPositionSelect(select);
+    select.disabled = isPending(worker, 'position') || !Dashboard.canEditField(TABLE_KEY, 'colHrPosition', '');
+    if (select.disabled) select.title = Dashboard.t(isPending(worker, 'position') ? 'main.changePending' : 'main.fieldLocked');
+    select.addEventListener('change', () => { if (select.value) patchWorker(worker.id, { jobPositionId: Number(select.value) }); });
+    td.appendChild(select);
+    return td;
+}
+
 function buildStatusCell(worker) {
     const td = document.createElement('td');
     td.dataset.col = 'colHrStatus';
@@ -313,7 +332,7 @@ function buildStatusCell(worker) {
 }
 
 // --- Asignación a laborar (clasificación de 3 columnas): dónde va a operar la persona, EN CADENA y de lo que el cliente tiene contratado ------------------
-// Departamentos -> Sitios -> Centros de costos. Cada una se puede dejar sin elegir, elegir uno, varios o TODOS; no hay sitios sin departamentos ni centros sin sitios, y los centros que salen son los de los sitios
+// Sitios -> Centros de costos, y aparte Departamentos -> Áreas. Cada una se puede dejar sin elegir, elegir uno, varios o TODOS; no hay áreas sin departamentos ni centros sin sitios (el sitio es lo mínimo del alta: el departamento se asigna después), y los centros que salen son los de los sitios
 // elegidos. El servidor vuelve a revisar la cadena (resolveHrAssignment en db.js). Valores: null (sin asignar), 'all' o un arreglo (departamentos: claves; sitios: códigos de sitio; centros: ids).
 let assignmentOptions = { departments: [], areas: {}, sites: [], costCenters: [], lockedCostCenters: [] };
 async function loadAssignmentOptions() {
@@ -395,11 +414,11 @@ function buildAssignmentCell(worker, kind) {
     td.appendChild(btn);
     return td;
 }
-// Al cambiar un eslabón los de abajo se ajustan: sin departamentos no hay sitios ni centros; al quitar un sitio se quitan sus centros. Devuelve solo lo que cambia (mismo formato que el PATCH) y si se quitó algo que dependía.
+// Al cambiar un eslabón los de abajo se ajustan: sin departamentos no hay áreas; al quitar un sitio se quitan sus centros. Devuelve solo lo que cambia (mismo formato que el PATCH) y si se quitó algo que dependía.
 function buildAssignmentPatch(worker, kind, value) {
     const current = { departments: worker.assignedDepartments, areas: worker.assignedAreas, sites: worker.assignedSites, costCenters: worker.assignedCostCenters };
     const next = { ...current, [kind]: value };
-    if (kind === 'departments' && !value) { next.areas = null; next.sites = null; next.costCenters = null; }
+    if (kind === 'departments' && !value) next.areas = null;
     // Al quitar un departamento se quitan sus áreas (las que quedan son las de los departamentos que siguen elegidos).
     if (kind === 'departments' && value && Array.isArray(next.areas)) {
         const chosen = value === 'all' ? assignmentOptions.departments : value;
@@ -441,7 +460,7 @@ function ensureAssignModal() {
 }
 function openAssignModal(worker, kind) {
     const meta = ASSIGN_KINDS[kind];
-    if ((kind === 'sites' || kind === 'areas') && !worker.assignedDepartments) { Dashboard.showToast(Dashboard.t('main.hrAssignNeedDepartments'), 'warning'); return; }
+    if (kind === 'areas' && !worker.assignedDepartments) { Dashboard.showToast(Dashboard.t('main.hrAssignNeedDepartments'), 'warning'); return; }
     if (kind === 'costCenters' && !worker.assignedSites) { Dashboard.showToast(Dashboard.t('main.hrAssignNeedSites'), 'warning'); return; }
     const overlay = ensureAssignModal();
     const choices = assignChoicesFor(kind, worker);
@@ -547,7 +566,20 @@ function buildUserStatusCell(worker) {
 // Builds one <tr> from a worker record as returned by the API (GET, POST or
 // freshly created) — the single source of truth for row markup.
 function buildRow(worker) {
-    const [year, month, day] = worker.startDate.split('-').map(Number);
+    // Fecha de ingreso: opcional en el alta. Con fecha es texto (como siempre); sin ella se llena aquí mismo, directo en la celda.
+    const tdStart = worker.startDate
+        ? textCell('colHrStartDate', formatStartDate(worker.startDate))
+        : (() => {
+            const cell = document.createElement('td');
+            cell.dataset.col = 'colHrStartDate';
+            Dashboard.attachInlineEdit(cell, {
+                value: '', inputType: 'date', tableKey: TABLE_KEY, colKey: 'colHrStartDate',
+                pending: isPending(worker, 'startDate'),
+                formatDisplay: formatStartDate,
+                onCommit: (val) => { if (val) patchWorker(worker.id, { startDate: val }); },
+            });
+            return cell;
+        })();
 
     const tdEmail = document.createElement('td');
     tdEmail.dataset.col = 'colHrEmail';
@@ -582,8 +614,8 @@ function buildRow(worker) {
         textCell('colHrDbId', worker.dbId),
         textCell('colHrRecordId', worker.recordCode || String(worker.recordNumber)),
         textCell('colHrFullName', worker.fullName),
-        textCell('colHrPosition', worker.position),
-        textCell('colHrStartDate', `${pad(day)}/${pad(month)}/${year}`),
+        buildPositionCell(worker),
+        tdStart,
         buildAssignmentCell(worker, 'departments'),
         buildAssignmentCell(worker, 'areas'),
         buildAssignmentCell(worker, 'sites'),
@@ -673,6 +705,7 @@ const emailInput = document.getElementById('new-record-email');
 const personalEmailInput = document.getElementById('new-record-personal-email');
 const positionInput = document.getElementById('new-record-position');
 const startDateInput = document.getElementById('new-record-start-date');
+const siteSelect = document.getElementById('new-record-site');
 const costCenterSelect = document.getElementById('new-record-cost-center');
 const departmentsPreview = document.getElementById('new-record-departments');
 const newRecordError = document.getElementById('new-record-error');
@@ -691,12 +724,33 @@ function closeNewRecordModal() {
 // listener never stacks duplicates.
 positionInput.addEventListener('change', () => {
     const jp = jobPositions.find((p) => String(p.id) === positionInput.value);
-    const allowedIds = jobPositionCostCenterIds(jp);
-    const currentValue = costCenterSelect.value ? Number(costCenterSelect.value) : null;
-    const keepValue = currentValue && (!allowedIds || allowedIds.includes(currentValue)) ? currentValue : null;
-    populateCostCenterSelect(costCenterSelect, keepValue, allowedIds);
+    refreshNewRecordCenters();
     renderDepartmentPreview(departmentsPreview, jp);
 });
+siteSelect.addEventListener('change', refreshNewRecordCenters);
+
+// El sitio es lo que se pide primero; el centro de costos es secundario y sale de ese sitio (y, si el Puesto lo limita, solo los centros de ese Puesto). Sin sitio elegido solo sale «Ninguno».
+function populateSiteSelect(select) {
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = Dashboard.t('main.fuelSelectReason');
+    select.appendChild(placeholder);
+    (assignmentOptions.sites || []).forEach((site) => {
+        const opt = document.createElement('option');
+        opt.value = site.code;
+        opt.textContent = assignOptionLabel('sites', site.code);
+        select.appendChild(opt);
+    });
+}
+function refreshNewRecordCenters() {
+    const jp = jobPositions.find((p) => String(p.id) === positionInput.value);
+    const byPosition = jobPositionCostCenterIds(jp);
+    const bySite = siteSelect.value ? (assignmentOptions.costCenters || []).filter((cc) => cc.siteCode === siteSelect.value).map((cc) => cc.id) : [];
+    const allowed = byPosition ? bySite.filter((id) => byPosition.includes(id)) : bySite;
+    const currentValue = costCenterSelect.value ? Number(costCenterSelect.value) : null;
+    populateCostCenterSelect(costCenterSelect, currentValue && allowed.includes(currentValue) ? currentValue : null, allowed);
+}
 
 function openNewRecordModal() {
     givenNamesInput.value = '';
@@ -705,7 +759,8 @@ function openNewRecordModal() {
     personalEmailInput.value = '';
     populateJobPositionSelect(positionInput);
     startDateInput.value = '';
-    populateCostCenterSelect(costCenterSelect, null);
+    populateSiteSelect(siteSelect);
+    refreshNewRecordCenters();
     renderDepartmentPreview(departmentsPreview, null);
     newRecordError.hidden = true;
     newRecordModal.hidden = false;
@@ -713,9 +768,11 @@ function openNewRecordModal() {
 }
 
 async function saveNewRecord() {
-    const missing = [givenNamesInput, surnamesInput, emailInput, positionInput, startDateInput].some((el) => !el.value.trim());
-    if (missing) {
-        newRecordError.textContent = Dashboard.t('login.fieldRequired');
+    // Lo único obligatorio: nombre, apellido y sitio; el mensaje dice cuáles faltan.
+    const missing = [['main.hrGivenNames', givenNamesInput], ['main.hrSurnames', surnamesInput], ['main.hrNewRecordSite', siteSelect]]
+        .filter(([, el]) => !el.value.trim()).map(([key]) => Dashboard.t(key));
+    if (missing.length) {
+        newRecordError.textContent = Dashboard.t('main.hrNewRecordMissing', { fields: missing.join(', ') });
         newRecordError.hidden = false;
         return;
     }
@@ -731,11 +788,12 @@ async function saveNewRecord() {
             body: JSON.stringify({
                 givenNames: givenNamesInput.value.trim(),
                 surnames: surnamesInput.value.trim(),
+                siteCode: siteSelect.value,
                 email: emailInput.value.trim(),
                 personalEmail: personalEmailInput.value.trim(),
                 position: selectedJobPosition?.name || '',
                 jobPositionId,
-                startDate: startDateInput.value,
+                startDate: startDateInput.value || '',
                 costCenterId: costCenterSelect.value ? Number(costCenterSelect.value) : null,
             }),
         });

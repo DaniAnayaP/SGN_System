@@ -8391,7 +8391,9 @@
     "filterCatSearchHint": "Código, nombre, descripción...",
     "filterFleetSearchHint": "Económico, placas, marca/modelo...",
     "newHireRecord": "Nuevo Registro",
-    "hrNewRecordHint": "Teléfono y Estatus se pueden llenar después, directamente desde la fila en la tabla.",
+    "hrNewRecordHint": "Solo se pide nombre, apellido y sitio. Lo demás (correo, puesto, fecha de ingreso, centro de costos, teléfono y estatus) se llena después, directamente desde la fila en la tabla.",
+    "hrNewRecordSite": "Sitio donde va a trabajar",
+    "hrNewRecordMissing": "Falta llenar: {fields}.",
     "hrGivenNames": "Nombre(s)",
     "hrSurnames": "Apellido(s)",
     "hrNoCostCenter": "Ninguno",
@@ -8429,7 +8431,7 @@
     "hrAssignLockHint_siteNotChosen": "Elige primero el sitio de este centro en la columna Sitios.",
     "hrAssignLockHint_noSite": "Ponle su Código del sitio en Nuestros Centros de Costo.",
     "hrAssignLockHint_inactive": "Actívalo en Nuestros Centros de Costo.",
-    "hrAssignCascadeConfirm": "Al cambiar esto también se quita lo que dependía de ello (áreas, sitios y centros de costos). ¿Continuar?",
+    "hrAssignCascadeConfirm": "Al cambiar esto también se quita lo que dependía de ello (áreas o centros de costos). ¿Continuar?",
     "hrNewRecordCostCenter": "Centro de costos que lo da de alta",
     "colHrEmail": "Correo Electrónico",
     "colHrPersonalEmail": "Correo Personal",
@@ -10112,8 +10114,12 @@
       "example": "si eliges Cadena de Suministro, puedes marcar solo C. Distribución y no C. Transporte."
     },
     "hrAssignSites": {
-      "what": "Eliges en qué sitios va a trabajar esta persona: uno, varios o todos. Solo se puede después de elegir los departamentos.",
+      "what": "Eliges en qué sitios va a trabajar esta persona: uno, varios o todos. El sitio es lo primero que se pide al darla de alta: de él salen sus centros de costos y sus accesos. No hace falta elegir antes el departamento.",
       "example": "marcas el sitio de Chihuahua y no el de Puebla."
+    },
+    "hrNewRecordSite": {
+      "what": "El sitio donde va a trabajar la persona. Es lo mínimo, junto con nombre y apellido, para darla de alta: con él empieza su cadena de acceso (sus centros de costos salen de este sitio). El centro de costos, el correo, el puesto y la fecha de ingreso se llenan después, y el departamento se asigna cuando se sepa el motivo de la vacante.",
+      "example": "CDCHI (Centro de Distribución Chihuahua)."
     },
     "hrAssignCenters": {
       "what": "Eliges en qué centros de costos va a operar esta persona: uno, varios o todos. Solo salen los centros de los sitios que ya elegiste. Es lo que la habilita: no puede usar un centro que no tenga aquí, aunque su Puesto se lo dé.",

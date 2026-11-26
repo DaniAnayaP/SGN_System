@@ -508,9 +508,11 @@
     <!-- Nombre(s)/Apellidos are separate fields (not one "Nombre Completo")
          because the auto-generated username needs to know exactly which
          words are given names vs. apellidos — see computeHrUsername in
-         db.js. Correo is required up front too, unlike the rest of this
-         form's "fill in later" fields, since the linked login account
-         (created in this same save, see createHrWorker) needs one. -->
+         db.js. Lo único obligatorio es Nombre(s), Apellido(s) y el SITIO donde
+         va a trabajar (Daniel, 2026-11-26); el correo, el puesto, la fecha de
+         ingreso y el centro de costos se llenan después, desde la fila. La
+         cuenta de acceso que nace con la persona usa un correo de relleno
+         mientras no tenga el suyo (ver createHrWorker). -->
     <div class="modal-overlay" id="new-record-modal" hidden>
         <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="new-record-modal-title">
             <h3 id="new-record-modal-title" data-i18n="main.newHireRecord">New Hire</h3>
@@ -524,9 +526,15 @@
                     <label for="new-record-surnames" data-i18n="main.hrSurnames">Surname(s)</label>
                     <input type="text" id="new-record-surnames" required>
                 </div>
+                <div class="admin-field" data-help-key="hrNewRecordSite">
+                    <label for="new-record-site" data-i18n="main.hrNewRecordSite">Site where they will work</label>
+                    <select id="new-record-site" required>
+                        <option value="" data-i18n="main.fuelSelectReason">Select...</option>
+                    </select>
+                </div>
                 <div class="admin-field">
                     <label for="new-record-email" data-i18n="main.colHrEmail">Email</label>
-                    <input type="email" id="new-record-email" required>
+                    <input type="email" id="new-record-email">
                 </div>
                 <div class="admin-field">
                     <label for="new-record-personal-email" data-i18n="main.colHrPersonalEmail">Personal email</label>
@@ -535,13 +543,13 @@
                 </div>
                 <div class="admin-field">
                     <label for="new-record-position" data-i18n="main.colHrPosition">Position</label>
-                    <select id="new-record-position" required>
+                    <select id="new-record-position">
                         <option value="" data-i18n="main.fuelSelectReason">Select...</option>
                     </select>
                 </div>
                 <div class="admin-field">
                     <label for="new-record-start-date" data-i18n="main.colHrStartDate">Start Date</label>
-                    <input type="date" id="new-record-start-date" required>
+                    <input type="date" id="new-record-start-date">
                 </div>
                 <div class="admin-field">
                     <label for="new-record-cost-center" data-i18n="main.hrNewRecordCostCenter">Cost center that registers them</label>

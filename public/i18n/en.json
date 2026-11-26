@@ -8392,7 +8392,9 @@
     "filterCatSearchHint": "Code, name, description...",
     "filterFleetSearchHint": "Eco unit, plates, brand/model...",
     "newHireRecord": "New Record",
-    "hrNewRecordHint": "Phone and Status can be filled in later, directly from the table row.",
+    "hrNewRecordHint": "Only first name, surname and site are asked for. The rest (email, position, start date, cost center, phone and status) is filled in later, directly from the table row.",
+    "hrNewRecordSite": "Site where they will work",
+    "hrNewRecordMissing": "Missing: {fields}.",
     "hrGivenNames": "Given name(s)",
     "hrSurnames": "Surname(s)",
     "hrNoCostCenter": "None",
@@ -8430,7 +8432,7 @@
     "hrAssignLockHint_siteNotChosen": "First choose this center's site in the Sites column.",
     "hrAssignLockHint_noSite": "Give it its Site code in Our Cost Centers.",
     "hrAssignLockHint_inactive": "Activate it in Our Cost Centers.",
-    "hrAssignCascadeConfirm": "Changing this also removes what depended on it (areas, sites and cost centers). Continue?",
+    "hrAssignCascadeConfirm": "Changing this also removes what depended on it (areas or cost centers). Continue?",
     "hrNewRecordCostCenter": "Cost center that registers them",
     "colHrEmail": "Email",
     "colHrPersonalEmail": "Personal Email",
@@ -10113,8 +10115,12 @@
       "example": "if you choose Supply Chain, you can tick only Distribution Center and not Transport."
     },
     "hrAssignSites": {
-      "what": "You choose which sites this person will work at: one, several or all. It can only be done after choosing the departments.",
+      "what": "You choose which sites this person will work at: one, several or all. The site is the first thing asked when registering them: their cost centers and accesses come from it. You do not have to choose the department first.",
       "example": "you tick the Chihuahua site and not the Puebla one."
+    },
+    "hrNewRecordSite": {
+      "what": "The site where the person will work. Together with first name and surname it is the minimum to register them: their chain of access starts with it (their cost centers come from this site). The cost center, email, position and start date are filled in later, and the department is assigned once the reason for the vacancy is known.",
+      "example": "CDCHI (Chihuahua Distribution Center)."
     },
     "hrAssignCenters": {
       "what": "You choose which cost centers this person will operate in: one, several or all. Only the centers of the sites you already chose appear. It is what enables them: they cannot use a center that is not here, even if their Position grants it.",

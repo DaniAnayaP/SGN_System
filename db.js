@@ -10255,6 +10255,9 @@ async function createHrWorker({ clientId, givenNames, surnames, position, jobPos
     const fullName = `${givenNames} ${surnames}`.replace(/\s+/g, ' ').trim();
     const username = generateUniqueUsername(computeHrUsername(givenNames, surnames));
     const passwordHash = await hashPassword(generateRandomPassword());
+    // El correo, el puesto y la fecha de ingreso se pueden llenar después (en el alta solo piden nombre, apellido y sitio). La cuenta de acceso (users.email es obligatorio y único) nace con un correo de relleno que nunca existe (.invalid)
+    // mientras la persona no tenga el suyo; hr_workers.email queda vacío hasta que se capture en la fila.
+    const accountEmail = email || `sin-correo-${username.toLowerCase()}@sgn.invalid`;
 
     const recordNumber = db
         .prepare('SELECT COALESCE(MAX(record_number), 0) + 1 AS n FROM hr_workers WHERE client_id = ? AND is_test_data = ?')
@@ -10266,7 +10269,7 @@ async function createHrWorker({ clientId, givenNames, surnames, position, jobPos
 
     const create = db.transaction(() => {
         const user = createUser({
-            username, email, passwordHash, name: fullName,
+            username, email: accountEmail, passwordHash, name: fullName,
             clientId, isClientAdmin: false, active: false,
         });
         const result = db
@@ -10284,7 +10287,7 @@ async function createHrWorker({ clientId, givenNames, surnames, position, jobPos
             `)
             .run({
                 clientId, dbId: generateBigDateId(), recordNumber, recordCode, givenNames, surnames, fullName,
-                position, jobPositionId: jobPositionId || null, startDate, personalEmail: personalEmail || '',
+                position: position || '', jobPositionId: jobPositionId || null, startDate: startDate || '', personalEmail: personalEmail || '',
                 // Both legacy single-value/JSON columns, kept NOT NULL by
                 // their original schema (no default) -- neither is read
                 // anywhere anymore, "Departamento Asignado" is now always
@@ -10293,7 +10296,7 @@ async function createHrWorker({ clientId, givenNames, surnames, position, jobPos
                 // insert doesn't fail its constraint.
                 department: '',
                 departments: '[]',
-                costCenterId: costCenterId || null, email, userId: user.id, hrStatusId: activeHrStatusId,
+                costCenterId: costCenterId || null, email: email || '', userId: user.id, hrStatusId: activeHrStatusId,
                 isTestData: isTestData ? 1 : 0,
                 assignedDepartments: serializeHrAssignment(assignment && assignment.departments),
                 assignedSites: serializeHrAssignment(assignment && assignment.sites),
@@ -10323,7 +10326,7 @@ async function activateHrWorkerUser(workerId, clientId, forTestAccount = false) 
 }
 
 // --- Asignación a laborar ----------------------------------------------------------------------------------------------------------------------------
-// Dónde va a operar una persona, en cadena y de lo que el cliente tiene contratado: Departamentos -> Sitios -> Centros de costos. El orden de llenado manda: no hay sitios sin departamentos ni centros sin sitios, y un centro solo
+// Dónde va a operar una persona, de lo que el cliente tiene contratado: Sitios -> Centros de costos, y aparte Departamentos -> Áreas. El sitio es lo mínimo con lo que se da de alta (el departamento se asigna después): no hay centros sin sitios ni áreas sin departamentos, y un centro solo
 // puede ser de un sitio elegido. Un sitio es el «código del sitio» de un centro de costos (cost_centers.site_code). Cada uno se puede dejar sin elegir, elegir uno, varios o TODOS ('all': todos los que el cliente tenga).
 const HR_DEPARTMENT_KEYS = MODULE_CATALOG.filter((m) => String(m.labelKey).startsWith('menu.')).map((m) => m.key);
 const HR_DEPARTMENT_NAMES_ES = {
@@ -10410,7 +10413,6 @@ function resolveHrAssignment({ clientId, forTestAccount = false, current, patch 
     if (has('departments') && Array.isArray(departments) && departments.some((d) => !options.departments.includes(d))) {
         return { ok: false, message: 'Hay departamentos que el cliente no tiene contratados.' };
     }
-    if (sites && !departments) return { ok: false, message: 'Primero elige los departamentos: sin departamentos no hay sitios.' };
     if (areas && !departments) return { ok: false, message: 'Primero elige los departamentos: sin departamentos no hay áreas.' };
     // Las áreas son las de los departamentos elegidos («departamento/área»).
     if ((has('areas') || has('departments')) && Array.isArray(areas)) {
@@ -10441,6 +10443,9 @@ function describeHrAssignment(kind, raw, clientId, forTestAccount = false) {
 
 const HR_WORKER_PATCHABLE_FIELDS = {
     email: { column: 'email', fieldKey: 'main.colHrEmail' },
+    // Puesto y fecha de ingreso: opcionales en el alta, se llenan después desde la fila (el puesto, además, enlaza job_position_id: ver setHrWorkerJobPosition y el PATCH).
+    position: { column: 'position', fieldKey: 'main.colHrPosition' },
+    startDate: { column: 'start_date', fieldKey: 'main.colHrStartDate' },
     personalEmail: { column: 'personal_email', fieldKey: 'main.colHrPersonalEmail' },
     phone: { column: 'phone', fieldKey: 'main.colHrPhone' },
     hrStatusId: { column: 'hr_status_id', fieldKey: 'main.colHrStatus' },
@@ -10451,6 +10456,11 @@ const HR_WORKER_PATCHABLE_FIELDS = {
     assignedSites: { column: 'assigned_sites', fieldKey: 'main.colHrAsigSitios' },
     assignedCostCenters: { column: 'assigned_cost_centers', fieldKey: 'main.colHrAsigCentros' },
 };
+
+// El Puesto de una persona que se dio de alta sin él: enlaza job_position_id (lo que sus permisos por Puesto leen); el texto `position` lo guarda el PATCH normal.
+function setHrWorkerJobPosition(id, clientId, jobPositionId) {
+    db.prepare('UPDATE hr_workers SET job_position_id = ? WHERE id = ? AND client_id = ?').run(jobPositionId, id, clientId);
+}
 
 function updateHrWorker(id, clientId, patch, forTestAccount = false) {
     const sets = [];
@@ -23325,6 +23335,7 @@ module.exports = {
     listHrWorkers,
     getHrWorkerById,
     createHrWorker,
+    setHrWorkerJobPosition,
     computeHrUsername,
     activateHrWorkerUser,
     updateHrWorker,

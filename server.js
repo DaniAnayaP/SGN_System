@@ -337,6 +337,7 @@ const {
     listHrWorkers,
     getHrWorkerById,
     createHrWorker,
+    setHrWorkerJobPosition,
     activateHrWorkerUser,
     updateHrWorker,
     parseHrAssignment,
@@ -21165,6 +21166,7 @@ function mapHrWorker(row, pendingByRecord, companyName) {
         // in Roles -- never the stored/manually-picked value anymore (see
         // getJobPositionDepartments), so it can't drift from the real tree.
         departments: getJobPositionDepartments(row.job_position_id),
+        jobPositionId: row.job_position_id || null,
         // Asignación a laborar: null (sin asignar), 'all' o un arreglo (departamentos y sitios: sus claves; centros: sus ids).
         assignedDepartments: parseHrAssignment(row.assigned_departments),
         assignedAreas: parseHrAssignment(row.assigned_areas),
@@ -21222,49 +21224,59 @@ app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
     if (!req.user.isClientAdmin && !canCreateColumn(getUserEffectiveGrants(req.user.sub), 'mi-recurso-humano', 'colHrWorkerCreateAuth')) {
         return res.status(403).json({ message: 'No tienes permiso para crear registros aquí.' });
     }
-    const { givenNames, surnames, position, jobPositionId, startDate, costCenterId, email, personalEmail } = req.body || {};
-    if (!givenNames?.trim() || !surnames?.trim() || !position?.trim() || !jobPositionId || !startDate || !email?.trim()) {
-        return res.status(400).json({ message: 'givenNames, surnames, position, jobPositionId, startDate, and email are required.' });
+    const { givenNames, surnames, siteCode, position, jobPositionId, startDate, costCenterId, email, personalEmail } = req.body || {};
+    // Lo mínimo para dar de alta (Daniel, 2026-11-26): nombre, apellido y el SITIO donde va a trabajar (de él sale la cadena de acceso). El correo, el puesto, la fecha de ingreso y el centro de costos son opcionales y se llenan después; el departamento se asigna después.
+    if (!givenNames?.trim() || !surnames?.trim() || typeof siteCode !== 'string' || !siteCode.trim()) {
+        return res.status(400).json({ message: 'givenNames, surnames, and siteCode are required.' });
     }
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+    const cleanEmail = typeof email === 'string' ? email.trim() : '';
+    if (cleanEmail && !/^\S+@\S+\.\S+$/.test(cleanEmail)) {
         return res.status(400).json({ message: 'email must be a valid email address.' });
     }
     if (personalEmail?.trim() && !/^\S+@\S+\.\S+$/.test(personalEmail.trim())) {
         return res.status(400).json({ message: 'personalEmail must be a valid email address.' });
     }
-    if (usernameOrEmailExists(null, email.trim())) {
+    if (cleanEmail && usernameOrEmailExists(null, cleanEmail)) {
         return res.status(409).json({ message: 'That email is already in use by another account.' });
     }
-    if (!getJobPositionById(jobPositionId, req.user.clientId, req.user.isTestAccount)) {
+    const cleanStart = typeof startDate === 'string' ? startDate.trim() : '';
+    if (cleanStart && (!/^\d{4}-\d{2}-\d{2}$/.test(cleanStart) || Number.isNaN(new Date(`${cleanStart}T00:00:00Z`).getTime()))) {
+        return res.status(400).json({ message: 'startDate must be a valid date (YYYY-MM-DD).' });
+    }
+    const options = hrAssignmentOptions(req.user.clientId, req.user.isTestAccount);
+    if (!options.sites.includes(siteCode.trim())) {
+        return res.status(400).json({ message: 'siteCode does not belong to this client.' });
+    }
+    const jobPosition = jobPositionId ? getJobPositionById(jobPositionId, req.user.clientId, req.user.isTestAccount) : null;
+    if (jobPositionId && !jobPosition) {
         return res.status(400).json({ message: 'jobPositionId does not belong to this client.' });
     }
-    if (costCenterId != null && !getCostCenterById(costCenterId, req.user.clientId, req.user.isTestAccount)) {
+    const center = costCenterId ? getCostCenterById(costCenterId, req.user.clientId, req.user.isTestAccount) : null;
+    if (costCenterId && !center) {
         return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
     }
-    // Arranque de «Asignación a laborar»: el centro de costos que la da de alta, con su sitio y los departamentos de su Puesto que el cliente tiene contratados (si el Puesto no trae departamentos, todos los contratados). Si la cadena no cuadra se queda sin asignar.
-    let assignment = null;
-    if (costCenterId) {
-        const options = hrAssignmentOptions(req.user.clientId, req.user.isTestAccount);
-        const positionDepartments = getJobPositionDepartments(jobPositionId).filter((key) => options.departments.includes(key));
-        const center = getCostCenterById(costCenterId, req.user.clientId, req.user.isTestAccount);
-        if (center && center.site_code) {
-            const resolved = resolveHrAssignment({
-                clientId: req.user.clientId, forTestAccount: req.user.isTestAccount, current: { departments: null, sites: null, costCenters: null },
-                patch: { departments: positionDepartments.length ? positionDepartments : 'all', sites: [center.site_code], costCenters: [center.id] },
-            });
-            if (resolved.ok) assignment = resolved.value;
-        }
+    if (center && center.site_code !== siteCode.trim()) {
+        return res.status(400).json({ message: 'costCenterId does not belong to the chosen site.' });
     }
+    // Arranque de «Asignación a laborar»: el sitio elegido y, si se eligió, su centro de costos; los departamentos son los de su Puesto que el cliente tiene contratados (si hay Puesto y centro pero el Puesto no trae departamentos, todos los contratados, como antes);
+    // sin Puesto el departamento se asigna después.
+    const positionDepartments = jobPosition ? getJobPositionDepartments(jobPosition.id).filter((key) => options.departments.includes(key)) : [];
+    const resolved = resolveHrAssignment({
+        clientId: req.user.clientId, forTestAccount: req.user.isTestAccount, current: { departments: null, sites: null, costCenters: null },
+        patch: { departments: positionDepartments.length ? positionDepartments : (jobPosition && center ? 'all' : null), sites: [siteCode.trim()], costCenters: center ? [center.id] : null },
+    });
+    if (!resolved.ok) return res.status(400).json({ message: resolved.message });
+    const assignment = resolved.value;
     const worker = await createHrWorker({
         clientId: req.user.clientId,
         assignment,
         givenNames: givenNames.trim(),
         surnames: surnames.trim(),
-        position: position.trim(),
-        jobPositionId,
-        startDate,
-        costCenterId: costCenterId || null,
-        email: email.trim(),
+        position: ((typeof position === 'string' ? position.trim() : '') || (jobPosition ? jobPosition.name : '')),
+        jobPositionId: jobPosition ? jobPosition.id : null,
+        startDate: cleanStart,
+        costCenterId: center ? center.id : null,
+        email: cleanEmail,
         personalEmail: (personalEmail || '').trim(),
         isTestData: req.user.isTestAccount,
     });
@@ -21281,6 +21293,23 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     const existing = getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount);
     if (!existing) return res.status(404).json({ message: 'Worker not found.' });
     const patch = { ...req.body };
+    // Puesto: se llena desde la fila SOLO cuando la persona se dio de alta sin él (después ya no se cambia desde aquí: sus permisos por Puesto dependen de él).
+    let linkedJobPositionId = null;
+    if (Object.prototype.hasOwnProperty.call(patch, 'jobPositionId')) {
+        if (existing.job_position_id) return res.status(409).json({ message: 'This worker already has a Puesto.' });
+        const jobPosition = getJobPositionById(patch.jobPositionId, req.user.clientId, req.user.isTestAccount);
+        if (!jobPosition) return res.status(400).json({ message: 'jobPositionId does not belong to this client.' });
+        linkedJobPositionId = jobPosition.id;
+        patch.position = jobPosition.name;
+        delete patch.jobPositionId;
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, 'startDate')) {
+        const value = typeof patch.startDate === 'string' ? patch.startDate.trim() : '';
+        if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(new Date(`${value}T00:00:00Z`).getTime())) {
+            return res.status(400).json({ message: 'startDate must be a valid date (YYYY-MM-DD).' });
+        }
+        patch.startDate = value;
+    }
     if (Object.prototype.hasOwnProperty.call(patch, 'costCenterId') && patch.costCenterId != null
         && !getCostCenterById(patch.costCenterId, req.user.clientId, req.user.isTestAccount)) {
         return res.status(400).json({ message: 'costCenterId does not belong to this client.' });
@@ -21310,7 +21339,8 @@ app.patch('/api/business/hr-workers/:id', requireAuth, (req, res) => {
     };
     const { appliedPatch, pendingFields, rejectedFields } = checkAndLogFieldChanges(req, existing, patch, HR_WORKER_PATCHABLE_FIELDS, 'mi-recurso-humano', existing.full_name, assignmentLog);
     const worker = updateHrWorker(req.params.id, req.user.clientId, appliedPatch, req.user.isTestAccount);
-    res.json({ worker: mapHrWorker(worker, null, getClientById(req.user.clientId)?.company_name), pendingFields, rejectedFields });
+    if (linkedJobPositionId && appliedPatch.position !== undefined) setHrWorkerJobPosition(existing.id, req.user.clientId, linkedJobPositionId);
+    res.json({ worker: mapHrWorker(getHrWorkerById(req.params.id, req.user.clientId, req.user.isTestAccount), null, getClientById(req.user.clientId)?.company_name), pendingFields, rejectedFields });
 });
 
 // Issues this worker's login for the first time (or resets it later, e.g.
