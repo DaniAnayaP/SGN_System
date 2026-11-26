@@ -4394,6 +4394,7 @@ function attachSortHandler(th, tableId) {
 // Excel's "only show values still reachable" behavior.
 let dataTableFilterMenuEl = null;
 let dataTableFilterMenuTableId = null;
+let dataTableFilterMenuAnchor = null; // el encabezado del que cuelga el menú abierto
 
 // El valor de una celda al filtrar: su texto. Una celda con data-filter-from dice de dónde sale en vez de eso: "control" = lo que tiene escrito o elegido el
 // campo (input o select) de adentro, o un selector = el texto de ese elemento de adentro. Así una tabla de captura (como la del Layout) filtra por lo que muestra.
@@ -4880,9 +4881,47 @@ function closeColumnFilterMenu() {
     dataTableFilterMenuEl?.remove();
     dataTableFilterMenuEl = null;
     dataTableFilterMenuTableId = null;
+    dataTableFilterMenuAnchor = null;
     document.removeEventListener('click', handleColumnFilterOutsideClick, true);
-    window.removeEventListener('scroll', closeColumnFilterMenu, true);
-    window.removeEventListener('resize', closeColumnFilterMenu);
+    window.removeEventListener('scroll', handleColumnFilterScroll, true);
+    window.removeEventListener('resize', handleColumnFilterResize);
+}
+// El filtro de una columna cuelga de su encabezado y siempre cabe en la ventana (Daniel, 2026-11-25: «se oculta» por abajo y «se quita» al dar scroll): si abajo no hay lugar sale hacia arriba, y si en ninguno cabe entero
+// se achica la lista de valores (que se desplaza por dentro). Al dar scroll fuera del menú se vuelve a pegar al encabezado en vez de cerrarse (solo se cierra si el encabezado se sale de la vista); el scroll de la lista del propio menú no lo toca.
+function placeColumnFilterMenu(menu, th, fit) {
+    const rect = th.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    const gap = 4;
+    const margin = 8;
+    const list = menu.querySelector('.data-table-col-filter-list');
+    if (fit) {
+        const natural = menu.offsetHeight;
+        const below = vh - rect.bottom - gap - margin;
+        const above = rect.top - gap - margin;
+        menu.dataset.side = natural <= below || below >= above ? 'below' : 'above';
+        const room = menu.dataset.side === 'below' ? below : above;
+        if (list && natural > room) {
+            const listHeight = list.offsetHeight;
+            list.style.maxHeight = `${Math.max(96, listHeight - (natural - room))}px`;
+        }
+    }
+    const width = menu.offsetWidth;
+    const left = Math.min(rect.left, vw - width - margin);
+    menu.style.left = `${Math.max(margin, left) + window.scrollX}px`;
+    menu.style.top = menu.dataset.side === 'above' ? `${rect.top - gap - menu.offsetHeight + window.scrollY}px` : `${rect.bottom + gap + window.scrollY}px`;
+}
+function handleColumnFilterScroll(event) {
+    if (!dataTableFilterMenuEl) return;
+    if (event.target instanceof Node && dataTableFilterMenuEl.contains(event.target)) return; // la lista de valores del propio menú
+    const th = dataTableFilterMenuAnchor;
+    const rect = th && th.isConnected ? th.getBoundingClientRect() : null;
+    if (!rect || rect.bottom < 0 || rect.top > document.documentElement.clientHeight) { closeColumnFilterMenu(); return; }
+    placeColumnFilterMenu(dataTableFilterMenuEl, th, false);
+}
+function handleColumnFilterResize() {
+    if (!dataTableFilterMenuEl || !dataTableFilterMenuAnchor || !dataTableFilterMenuAnchor.isConnected) { closeColumnFilterMenu(); return; }
+    placeColumnFilterMenu(dataTableFilterMenuEl, dataTableFilterMenuAnchor, false);
 }
 function handleColumnFilterOutsideClick(event) {
     if (dataTableFilterMenuEl && !dataTableFilterMenuEl.contains(event.target) && !event.target.closest('.data-table-col-filter-trigger')) {
@@ -5384,19 +5423,17 @@ function openColumnFilterMenu(th, tableId, key) {
     searchInputChanged();
 
     document.body.appendChild(menu);
-    const rect = th.getBoundingClientRect();
-    const menuWidth = menu.offsetWidth;
-    const left = Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - menuWidth - 8);
-    menu.style.top = `${rect.bottom + window.scrollY + 4}px`;
-    menu.style.left = `${Math.max(8, left)}px`;
+    menu.classList.add('has-resize-grip'); // su relleno de abajo (la esquina de ampliar) cuenta para saber si cabe
+    placeColumnFilterMenu(menu, th, true);
     addMenuResizeGrip(menu, { lists: ['.data-table-col-filter-list'], keepInView: true });
     dataTableFilterMenuEl = menu;
     dataTableFilterMenuTableId = tableId;
+    dataTableFilterMenuAnchor = th;
     (searchMode === 'range' ? rangeBox : searchRow).querySelector('input, select')?.focus();
     setTimeout(() => {
         document.addEventListener('click', handleColumnFilterOutsideClick, true);
-        window.addEventListener('scroll', closeColumnFilterMenu, true);
-        window.addEventListener('resize', closeColumnFilterMenu);
+        window.addEventListener('scroll', handleColumnFilterScroll, true);
+        window.addEventListener('resize', handleColumnFilterResize);
     }, 0);
 }
 document.addEventListener('keydown', (event) => {
@@ -5701,7 +5738,7 @@ function getVisibleTableSnapshot(tableId) {
 // El icono Descargar de una tabla (Daniel, 2026-11-25): baja SIEMPRE lo que se ve, o sea los renglones que pasan los filtros y las columnas que no están ocultas o difuminadas, en Excel, CSV o PDF.
 // Es del icono iconDownload del árbol (el administrador del cliente lo ve siempre). getTitle() da el nombre del archivo; getNotice() puede devolver un aviso (p. ej. la tabla solo trae una parte de los renglones).
 // Va en la misma barra .data-table-zoom que los demás iconos; se llama una vez por tabla, cuando ya se armó.
-function attachTableDownloadButton(tableId, { getTitle, getNotice } = {}) {
+function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownload } = {}) {
     const wrapper = document.querySelector(`.data-table-wrapper[data-table-id="${CSS.escape(tableId)}"]`);
     const zoom = wrapper?.previousElementSibling;
     if (!zoom?.classList?.contains('data-table-zoom') || zoom.querySelector('[data-download-btn]')) return;
@@ -5715,6 +5752,15 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice } = {}) {
         setTimeout(() => URL.revokeObjectURL(url), 4000);
     };
     const run = async (format) => {
+        // getFullDownload(format) da la dirección de la descarga COMPLETA (del servidor) cuando la tabla solo trae una parte de los renglones; vale para Excel y CSV (el PDF baja lo que se ve, con su aviso)
+        const fullUrl = getFullDownload && (format === 'xlsx' || format === 'csv') ? getFullDownload(format) : null;
+        if (fullUrl) {
+            showToast(t('main.downloadFullPreparing'), 'info');
+            const link = document.createElement('a');
+            link.href = fullUrl;
+            document.body.appendChild(link); link.click(); link.remove();
+            return;
+        }
         const { columns, rows } = getVisibleTableSnapshot(tableId);
         if (!columns.length) return;
         const title = String((getTitle && getTitle()) || tableId).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
@@ -5747,6 +5793,8 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice } = {}) {
     const menu = document.createElement('div');
     menu.className = 'data-table-col-filter-mode-menu';
     menu.hidden = true;
+    // el icono es el último de la barra, pegado al borde derecho: el menú se alinea a su borde derecho y crece hacia la izquierda (antes salía hacia la derecha y la ventana lo cortaba)
+    Object.assign(menu.style, { left: 'auto', right: '0', width: 'max-content', maxWidth: 'min(22rem, calc(100vw - 2rem))' });
     [['xlsx', 'main.downloadAsExcel', 'main.downloadAsExcelHint'], ['csv', 'main.downloadAsCsv', 'main.downloadAsCsvHint'], ['pdf', 'main.downloadAsPdf', 'main.downloadAsPdfHint']].forEach(([format, labelKey, hintKey]) => {
         const option = document.createElement('button');
         option.type = 'button';

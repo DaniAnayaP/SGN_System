@@ -10309,19 +10309,12 @@ td.col-num{ text-align: right; font-variant-numeric: tabular-nums; white-space: 
 .cm-stamp-pill{ background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 1rem; padding: 0.1rem 0.7rem; font-weight: 600; }
 
 /* Registros Información: las tarjetas de registros, las pestañas y la ventana de carga */
-.reg-cards{ display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 0.8rem; margin: 0 0 0.8rem; }
-.reg-cards:empty{ display: none; }
-.reg-card{ text-align: left; display: grid; gap: 0.35rem; align-content: start; padding: 0.75rem 0.95rem; border-radius: 0.9rem; border: 1px solid var(--color-border); background: var(--color-surface); color: inherit; font: inherit; cursor: pointer; }
-.reg-card-on{ border-color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 9%, var(--color-surface)); }
-.reg-card-top{ display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; }
-.reg-card-per{ font-size: 0.7rem; font-weight: 600; border-radius: 1rem; padding: 0.05rem 0.6rem; background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
-.reg-card-sum{ font-size: 0.78rem; opacity: 0.8; }
-.reg-card-miss{ font-size: 0.75rem; font-weight: 600; color: #8a5a00; }
-.reg-strip{ display: flex; flex-wrap: wrap; gap: 3px; }
-.reg-strip i{ width: 0.85rem; height: 0.85rem; border-radius: 0.25rem; display: block; }
-.reg-strip-ok{ background: color-mix(in srgb, #2f7d4f 28%, transparent); }
-.reg-strip-miss{ background: #fdecc8; border: 1px dashed #8a5a00; }
-.reg-tabs{ display: flex; gap: 0.4rem; margin: 0 0 0.7rem; flex-wrap: wrap; }
+.reg-row{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem 1rem; margin: 0 0 0.7rem; }
+.reg-tabs{ display: flex; gap: 0.4rem; margin: 0; flex-wrap: wrap; }
+.reg-updated{ font-size: 0.78rem; color: var(--color-text-secondary); white-space: nowrap; }
+.reg-updated[hidden]{ display: none; }
+.reg-updated .time-local{ display: inline; }
+.reg-updated .time-utc{ display: none; }
 .reg-tab{ border: 1px solid var(--color-border); border-radius: 1rem; padding: 0.25rem 0.95rem; background: var(--color-surface); color: inherit; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
 .reg-tab-on{ background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface)); border-color: transparent; }
 .reg-pill{ display: inline-block; border-radius: 1rem; padding: 0 0.6rem; font-size: 0.72rem; font-weight: 600; }
@@ -10374,12 +10367,8 @@ td.an-cons, th.an-cons{ background: color-mix(in srgb, #f7d9f5 45%, transparent)
 .exp-panel > select, .exp-panel > input[type="text"], .exp-panel > textarea{ width: 100%; }
 .an-file-info{ flex-basis: 100%; margin-left: 0; }
 /* Registros agregados por el cliente: tarjeta de «Agregar nuevo registro», registro desactivado y la fila de cambiar nombre / desactivar */
-.reg-card-new{ border-style: dashed; align-content: center; justify-items: start; min-height: 3.2rem; }
-.reg-card-new b{ display: inline-flex; gap: 0.35rem; align-items: center; }
-.reg-card-off{ opacity: 0.6; }
 .reg-manage{ display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0 0 0.8rem; }
 .reg-manage-btn{ display: inline-flex; gap: 0.35rem; align-items: center; padding-block: 0.3rem; font-size: 0.8rem; }
-.reg-card-static{ cursor: default; }
 /* Cargar registro › Pegar desde Excel: el cuadro donde se pegan las celdas copiadas (igual que el de Alta de artículos por plantilla) */
 .reg-paste{ display: grid; gap: 0.5rem; margin: 0.5rem 0; justify-items: start; }
 #reg-i-paste{ font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; width: 100%; min-height: 8rem; resize: vertical; padding: 0.5rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-surface); color: var(--color-text-primary); white-space: pre; }
@@ -10392,10 +10381,8 @@ body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom[hidden]{
     body.sgn-scroll-shell[data-active-page="cat-cargas-manuales-registros"] > main > .page-scroll{ margin-right: -0.75rem; padding-right: 0.75rem; }
     body[data-active-page="cat-cargas-manuales-registros"] > main{ padding-left: 0.75rem; padding-right: 0.75rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .page-content{ padding-left: 0; padding-right: 0; }
-    body[data-active-page="cat-cargas-manuales-registros"] .reg-cards{ margin-bottom: 0.7rem; }
-    body[data-active-page="cat-cargas-manuales-registros"] .reg-cards:has(+ .cm-stamp:not([hidden])){ margin-bottom: 0; }
-    body[data-active-page="cat-cargas-manuales-registros"] .reg-cards:has(+ .cm-stamp:not([hidden])) .reg-card{ border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent; }
-    body[data-active-page="cat-cargas-manuales-registros"] .cm-stamp{ margin: 0 0 0.7rem; border: 1px solid var(--color-accent); border-top: 0; border-radius: 0 0 0.9rem 0.9rem; background: color-mix(in srgb, var(--color-accent) 9%, var(--color-surface)); padding: 0.1rem 0.95rem 0.7rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-row{ flex-direction: column; align-items: stretch; gap: 0.35rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-updated{ text-align: center; }
     body[data-active-page="cat-cargas-manuales-registros"] .reg-tabs{ gap: 0; padding: 3px; border-radius: 999px; background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface)); flex-wrap: nowrap; }
     body[data-active-page="cat-cargas-manuales-registros"] .reg-tab{ flex: 1; text-align: center; border: 0; background: transparent; padding-block: 0.4rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .reg-tab-on{ background: var(--color-surface); box-shadow: 0 1px 3px rgba(21, 24, 43, 0.18); }

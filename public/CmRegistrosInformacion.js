@@ -45,7 +45,7 @@ const tableOf = (tableId) => wrapperOf(tableId)?.querySelector('table.data-table
         const wanted = new URLSearchParams(location.search).get('registry') || sessionStorage.getItem('regCurrent');
         st.key = (st.registries.find((r) => r.key === wanted) || st.registries[0] || {}).key || null;
         if (st.key) { try { sessionStorage.setItem('regCurrent', st.key); } catch { /* sin almacenamiento */ } }
-        renderCards();
+        renderManage();
         await refreshData();
         wireStatic();
         openNewFromMenu();
@@ -62,52 +62,6 @@ async function loadRegistries() {
     st.canTemplate = !!body.canTemplate; st.canExcel = !!body.canExcel; st.canAnnul = !!body.canAnnul; st.canCreateRegistry = !!body.canCreateRegistry;
 }
 
-// ---- las tarjetas de registros: cuántos periodos hay y cuáles faltan ------------------------------------------------------------------------------
-function monthsBetween(from, to) {
-    const out = [];
-    let [y, m] = from.split('-').map(Number);
-    const [ty, tm] = to.split('-').map(Number);
-    while (y < ty || (y === ty && m <= tm)) { out.push(`${y}-${String(m).padStart(2, '0')}`); m += 1; if (m > 12) { m = 1; y += 1; } }
-    return out;
-}
-function stripCells(reg) {
-    const periods = new Set(reg.periods);
-    if (!reg.periods.length) return [];
-    if (reg.kind === 'month') {
-        const all = monthsBetween(reg.periods[0], reg.periods[reg.periods.length - 1]);
-        return all.map((p) => ({ label: periodLabel(p), state: periods.has(p) ? 'ok' : 'miss' }));
-    }
-    // diaria: del primer al último día cargado (hasta los últimos 45 días); solo cuenta como «falta» lo que queda en medio
-    const dayMs = 86400000;
-    const toMs = (p) => Date.parse(`${p}T00:00:00Z`);
-    const last = toMs(reg.periods[reg.periods.length - 1]);
-    const first = Math.max(toMs(reg.periods[0]), last - 44 * dayMs);
-    const out = [];
-    for (let ms = first; ms <= last; ms += dayMs) { const d = new Date(ms).toISOString().slice(0, 10); out.push({ label: periodLabel(d), state: periods.has(d) ? 'ok' : 'miss' }); }
-    return out;
-}
-function renderCards() {
-    const host = document.getElementById('reg-cards');
-    if (!host) return;
-    host.innerHTML = '';
-    // Un solo bloque: el registro que se abrió desde el menú (los demás son pantallas anidadas en «Registros Información»). Sin ninguna carga no hay nada que resumir y la tarjeta no sale (su nombre ya está en el menú y la ruta).
-    [currentRegistry()].filter((reg) => reg && reg.periods.length).forEach((reg) => {
-        const card = document.createElement('div');
-        card.className = `reg-card reg-card-on reg-card-static${reg.status === 'active' ? '' : ' reg-card-off'}`;
-        card.setAttribute('data-help-key', 'regCard');
-        const cells = stripCells(reg);
-        const missing = cells.filter((c) => c.state === 'miss').length;
-        const summary = !reg.periods.length ? t('main.regCardNone')
-            : reg.kind === 'month' ? t('main.regCardMonths', { n: reg.periods.length, from: periodLabel(reg.periods[0]), to: periodLabel(reg.periods[reg.periods.length - 1]) })
-                : t('main.regCardDays', { n: reg.periods.length, last: periodLabel(reg.periods[reg.periods.length - 1]) });
-        card.innerHTML = `<span class="reg-card-top"><b>${esc(regName(reg))}</b><span class="reg-card-per">${esc(t(reg.kind === 'month' ? 'main.regKindMonth' : 'main.regKindDay'))}</span></span>
-            <span class="reg-card-sum">${esc(summary)}</span>
-            ${cells.length ? `<span class="reg-strip" aria-hidden="true">${cells.map((c) => `<i class="reg-strip-${c.state}" title="${esc(c.label)}"></i>`).join('')}</span>` : ''}
-            ${missing ? `<span class="reg-card-miss">${esc(t(missing === 1 ? 'main.regCardMissOne' : 'main.regCardMiss', { n: missing }))}</span>` : ''}`;
-        host.appendChild(card);
-    });
-    renderManage();
-}
 // Cambiar nombre y desactivar/activar: solo para los registros que agregó el cliente (los dos de siempre no se tocan) y para quien tiene el botón «Crear registro».
 function renderManage() {
     let bar = document.getElementById('reg-manage');
@@ -119,8 +73,8 @@ function renderManage() {
         bar.id = 'reg-manage';
         bar.className = 'reg-manage';
         bar.setAttribute('data-help-key', 'regManage');
-        const cards = document.getElementById('reg-cards');
-        (document.getElementById('cm-stamp') || cards).after(bar);
+        const row = document.querySelector('.reg-row');
+        if (row) row.before(bar); else document.querySelector('.page-content').prepend(bar);
     }
     bar.textContent = '';
     if (reg.status !== 'active') { const off = document.createElement('span'); off.className = 'reg-pill reg-pill-off'; off.textContent = t('main.regStatus_inactive'); bar.appendChild(off); }
@@ -208,34 +162,20 @@ async function toggleRegistry(reg) {
     } catch (e) { Dashboard.showToast(regErrorText(e.body), 'error'); }
 }
 
-// ---- la franja de «última carga» -----------------------------------------------------------------------------------------------------------------
-function renderStamp() {
-    let bar = document.getElementById('cm-stamp');
-    const content = document.querySelector('.page-content');
-    if (!bar) {
-        if (!content) return;
-        bar = document.createElement('div');
-        bar.id = 'cm-stamp';
-        bar.className = 'cm-stamp';
-        bar.setAttribute('data-help-key', 'cmStamp');
-        const cards = document.getElementById('reg-cards');
-        if (cards) cards.after(bar); else content.prepend(bar);
-    }
-    bar.textContent = '';
+// ---- la fecha de la última actualización: en la fila de las pestañas, a la derecha; el detalle (quién y de qué archivo) está en la pestaña Cargas ---------------------------------------
+function renderUpdated() {
+    const box = document.getElementById('reg-updated');
+    if (!box) return;
+    box.textContent = '';
     const reg = currentRegistry();
     const load = reg && reg.lastLoad;
-    // sin ninguna carga la tarjeta de arriba ya dice «Todavía no se ha cargado nada»: la franja no lo repite (Daniel, 2026-11-25)
-    bar.hidden = !load;
+    box.hidden = !load;
     if (!load) return;
-    const part = (node) => { const span = document.createElement('span'); span.className = 'cm-stamp-part'; span.append(...(Array.isArray(node) ? node : [node])); bar.appendChild(span); return span; };
-    const strong = (text) => { const b = document.createElement('b'); b.textContent = text; return b; };
+    const label = document.createElement('b');
+    label.textContent = `${t('main.regUpdated')} `;
     const when = document.createElement('span');
     Dashboard.renderTimeStamp(when, load.createdAt);
-    part([strong(`${t('main.cmStampLast')} `), when]);
-    if (load.loadedBy) part([document.createTextNode(`${t('main.cmStampBy')} `), strong(load.loadedBy)]);
-    if (load.fileName) part([document.createTextNode(`${t('main.cmStampFile')} `), strong(load.fileName)]);
-    const lastPeriod = reg.periods[reg.periods.length - 1];
-    if (lastPeriod) part(document.createTextNode(t('main.regStampUntil', { period: periodLabel(lastPeriod) }))).classList.add('cm-stamp-pill');
+    box.append(label, when);
 }
 
 // ---- las tablas ----------------------------------------------------------------------------------------------------------------------------------
@@ -309,7 +249,8 @@ function drawData() {
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(DATA_TABLE);
     wrapper.setAttribute('data-help-key', 'regTable');
     if (Dashboard.attachTableDownloadButton) {
-        Dashboard.attachTableDownloadButton(DATA_TABLE, { getTitle: () => `${regName(currentRegistry())}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : '') });
+        Dashboard.attachTableDownloadButton(DATA_TABLE, { getTitle: () => `${regName(currentRegistry())}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : ''),
+            getFullDownload: (format) => (st.data && st.data.truncated ? `${API}/${encodeURIComponent(st.key)}/export?format=${format}&lang=${lang()}&text=${encodeURIComponent(st.text || '')}&file=${encodeURIComponent(`${regName(currentRegistry())}_${todayStamp()}`)}` : null) });
     }
     let note = document.getElementById('reg-truncated');
     if (body.truncated) {
@@ -383,8 +324,8 @@ async function refreshData() {
         const reg = currentRegistry();
         if (reg) { reg.periods = st.data.periods; reg.lastLoad = st.data.lastLoad; }
         st.canTemplate = st.data.canTemplate; st.canExcel = st.data.canExcel; st.canAnnul = st.data.canAnnul;
-        renderCards();
-        renderStamp();
+        renderManage();
+        renderUpdated();
         drawData();
     } catch (err) {
         console.error('Registros: failed to load data', err);
@@ -443,7 +384,7 @@ function wireStatic() {
     bar?.addEventListener('data-table:filter-apply', apply);
     bar?.addEventListener('data-table:filter-clear', () => { st.text = ''; refreshData(); });
     showTab('data');
-    document.addEventListener('dashboard:language-changed', () => { renderCards(); renderStamp(); });
+    document.addEventListener('dashboard:language-changed', () => { renderManage(); renderUpdated(); });
 }
 
 // Lo pegado de Excel (celdas separadas por tabulador) se vuelve un .xlsx de una hoja: el servidor lo lee igual que un archivo elegido.

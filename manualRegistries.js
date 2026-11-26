@@ -433,6 +433,8 @@ const TEMPLATE_TEXT = {
         ],
     },
 };
+// Los títulos de las columnas de referencia (Unidad, Descripción Unidad, Código, …), los mismos de la plantilla, para la descarga completa de los datos.
+const exportDimHeaders = (lang = 'es') => DIMS.map((d) => TEMPLATE_TEXT[lang === 'en' ? 'en' : 'es'].headers[d]);
 async function buildTemplate(registry, lang = 'es', { nextPeriod } = {}) {
     const text = TEMPLATE_TEXT[lang === 'en' ? 'en' : 'es'];
     const workbook = new ExcelJS.Workbook();
@@ -459,5 +461,5 @@ async function buildTemplate(registry, lang = 'es', { nextPeriod } = {}) {
 module.exports = {
     REGISTRIES, registryOf, DIMS, KEY_DIMS, MAX_DATA_ROWS, MAX_ISSUES, BATCH_ROWS,
     fold, parsePeriodHeader, parseDayText, nextMonth, periodLabel,
-    openWorkbook, streamSheet, inspectWorkbook, suggestMapping, mappingProblems, runImport, buildTemplate, parseNumber, scoreHeader,
+    openWorkbook, streamSheet, inspectWorkbook, suggestMapping, mappingProblems, runImport, buildTemplate, exportDimHeaders, parseNumber, scoreHeader,
 };

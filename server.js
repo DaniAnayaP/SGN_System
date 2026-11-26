@@ -86,7 +86,7 @@ const {
     listRegistryDefs, createRegistryDef, updateRegistryDef,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
-    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, MR_SCREEN,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,
@@ -7346,6 +7346,51 @@ app.get('/api/business/manual-registries/:key/data', requireAuth, (req, res) => 
         registry: { key: registry.key, kind: registry.kind, nameKey: registry.nameKey, name: registry.name, valueName: registry.valueName, custom: registry.custom, status: registry.status }, periods: registryPeriods(clientId, isTestAccount, registry.key), lastLoad: registryLastLoad(clientId, isTestAccount, registry.key),
         rows, total, truncated: total > rows.length, ...regAbilities(req),
     });
+});
+// La descarga COMPLETA de los datos de un registro (Excel o CSV): todos los renglones, no solo los que muestra la tabla (los primeros 2,000), con las columnas de referencia y un periodo por columna. Se arma por tandas y se va mandando
+// (así un registro de más de cien mil renglones no se carga entero en memoria). text = el mismo texto del filtro de arriba; no lleva los filtros de columna ni las columnas ocultas de la pantalla. Quien ve la tabla puede bajarla.
+app.get('/api/business/manual-registries/:key/export', requireAuth, async (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    const { clientId, isTestAccount } = req.user;
+    const format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
+    const lang = req.query.lang === 'en' ? 'en' : 'es';
+    const periods = registryPeriods(clientId, isTestAccount, registry.key);
+    const headers = [...manualRegistries.exportDimHeaders(lang), ...periods.map((p) => manualRegistries.periodLabel(p, lang))];
+    const base = String(req.query.file || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) || `Registro-${registry.key}`;
+    const filters = { text: String(req.query.text || '').slice(0, 200) };
+    res.set('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', format === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', buildContentDisposition(`${base}.${format}`));
+    const cells = (row) => [row.unidad, row.unidadNombre, row.codigo, row.descripcion, row.categoria, row.udm, ...periods.map((p) => (row.values[p] === undefined ? '' : row.values[p]))];
+    const yieldToOthers = () => new Promise((resolve) => setImmediate(resolve));
+    try {
+        if (format === 'csv') {
+            const csv = (v) => { const text = String(v ?? ''); return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; };
+            const send = (chunk) => (res.write(chunk) ? Promise.resolve() : new Promise((resolve) => res.once('drain', resolve)));
+            await send('\ufeff' + headers.map(csv).join(',') + '\r\n'); // con BOM: Excel adivina mal los acentos sin él
+            for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters)) {
+                if (res.destroyed) return;
+                await send(batch.map((row) => cells(row).map(csv).join(',')).join('\r\n') + '\r\n');
+                await yieldToOthers();
+            }
+            res.end();
+        } else {
+            const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: false, useSharedStrings: false });
+            const sheet = workbook.addWorksheet(String(registry.name || 'Datos').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Datos', { views: [{ state: 'frozen', ySplit: 1 }] });
+            sheet.addRow(headers).commit();
+            for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters)) {
+                if (res.destroyed) return;
+                batch.forEach((row) => sheet.addRow(cells(row)).commit());
+                await yieldToOthers();
+            }
+            sheet.commit();
+            await workbook.commit();
+        }
+    } catch (err) {
+        console.error('Registros Información: la descarga completa falló:', err);
+        if (!res.headersSent) res.status(500).json({ code: 'EXPORT_ERROR', message: 'No se pudo armar la descarga.' }); else res.destroy();
+    }
 });
 app.get('/api/business/manual-registries/:key/loads', requireAuth, (req, res) => {
     const registry = regRegistry(req, res);

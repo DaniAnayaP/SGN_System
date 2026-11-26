@@ -5036,6 +5036,32 @@ function listRegistryData(clientId, forTestAccount, registryKey, filters = {}, l
     return { rows: [...byId.values()], total };
 }
 
+// Todos los renglones de un registro, por tandas, para bajarlos completos sin tenerlos todos en memoria (la tabla de la pantalla solo trae los primeros 2,000). Mismo filtro de texto y mismo orden que listRegistryData;
+// cada tanda trae hasta batchSize renglones con sus valores vigentes por periodo.
+function* registryDataBatches(clientId, forTestAccount, registryKey, filters = {}, batchSize = 2000) {
+    const lane = forTestAccount ? 1 : 0;
+    const where = ['r.client_id = ?', 'r.is_test_data = ?', 'r.registry_key = ?'];
+    const params = [clientId, lane, registryKey];
+    const text = String(filters.text || '').trim();
+    if (text) {
+        const pattern = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+        where.push("(r.unidad LIKE ? ESCAPE '\\' OR r.unidad_nombre LIKE ? ESCAPE '\\' OR r.codigo LIKE ? ESCAPE '\\' OR r.descripcion LIKE ? ESCAPE '\\' OR r.categoria LIKE ? ESCAPE '\\' OR r.udm LIKE ? ESCAPE '\\')");
+        for (let i = 0; i < 6; i += 1) params.push(pattern);
+    }
+    const alive = "EXISTS (SELECT 1 FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE v.row_id = r.id AND l.status = 'vigente')";
+    const rowsStmt = db.prepare(`SELECT r.* FROM manual_registry_rows r WHERE ${where.join(' AND ')} AND ${alive} ORDER BY r.unidad, r.codigo LIMIT ? OFFSET ?`);
+    for (let offset = 0; ; offset += batchSize) {
+        const rows = rowsStmt.all(...params, batchSize, offset);
+        if (!rows.length) return;
+        const ids = rows.map((r) => r.id);
+        const byRow = new Map();
+        db.prepare(`SELECT v.row_id, v.period, v.value FROM manual_registry_values v JOIN manual_registry_loads l ON l.id = v.load_id WHERE l.status = 'vigente' AND v.row_id IN (${ids.map(() => '?').join(',')})`)
+            .all(...ids).forEach((v) => { if (!byRow.has(v.row_id)) byRow.set(v.row_id, {}); byRow.get(v.row_id)[v.period] = v.value; });
+        yield rows.map((r) => ({ unidad: r.unidad, unidadNombre: r.unidad_nombre, codigo: r.codigo, descripcion: r.descripcion, categoria: r.categoria, udm: r.udm, values: byRow.get(r.id) || {} }));
+        if (rows.length < batchSize) return;
+    }
+}
+
 // ---- Registros que el cliente agrega (manual_registry_defs) ----
 function mapRegistryDef(row) {
     return { id: row.id, key: row.key, name: row.name, kind: row.kind, valueName: row.value_name, status: row.status, createdBy: row.created_by, createdAt: row.created_at };
@@ -22798,7 +22824,7 @@ module.exports = {
     listRegistryDefs, createRegistryDef, updateRegistryDef,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
-    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, MR_SCREEN,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,

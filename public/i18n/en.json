@@ -5395,6 +5395,8 @@
     "regKindDay": "Daily",
     "regCardNone": "Nothing has been loaded yet.",
     "regPastedName": "Pasted data",
+    "regUpdated": "Last update:",
+    "downloadFullPreparing": "Preparing the full file (every row, not only the ones shown). It can take a few seconds…",
     "regCardMonths": "{n} months loaded · from {from} to {to}",
     "regCardDays": "{n} days loaded · the last one, {last}",
     "regCardMissOne": "1 period is missing in between",
@@ -9750,6 +9752,10 @@
     "regNewDialog": {
       "what": "The record set name, how often it is loaded (one month per column, or one day per column) and the name of what it measures. That name becomes the heading of the values column in the template and in analyses.",
       "example": "Name: Monthly consumption · Monthly · Measures: Consumption."
+    },
+    "regUpdated": {
+      "what": "The date and time of the latest load that counts in this record, in your time. Who did it and from which file is in the Loads tab.",
+      "example": "25/Nov/2026 17:35:09"
     },
     "regManage": {
       "what": "Only for record sets you added. Rename updates the menu. Deactivate removes it from the menu; it stops receiving loads and is no longer offered for new analyses. Its data and loads are kept and it can be activated again.",

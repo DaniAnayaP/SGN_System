@@ -5394,6 +5394,8 @@
     "regKindDay": "Diaria",
     "regCardNone": "Todavía no se ha cargado nada.",
     "regPastedName": "Datos pegados",
+    "regUpdated": "Última actualización:",
+    "downloadFullPreparing": "Preparando el archivo completo (todos los renglones, no solo los que se ven). Puede tardar unos segundos…",
     "regCardMonths": "{n} meses cargados · de {from} a {to}",
     "regCardDays": "{n} días cargados · el último, {last}",
     "regCardMissOne": "Falta 1 periodo en medio",
@@ -9749,6 +9751,10 @@
     "regNewDialog": {
       "what": "Nombre del registro, cada cuánto se carga (un mes por columna, o un día por columna) y el nombre de lo que mide. Ese nombre queda como encabezado de la columna de valores en la plantilla y en los análisis.",
       "example": "Nombre: Consumos mensuales · Mensual · Mide: Consumo."
+    },
+    "regUpdated": {
+      "what": "La fecha y hora de la última carga que cuenta en este registro, en tu hora. Quién la hizo y de qué archivo está en la pestaña Cargas.",
+      "example": "25/nov/2026 17:35:09"
     },
     "regManage": {
       "what": "Solo para los registros que agregaste tú. Cambiar nombre actualiza el menú. Desactivar lo quita del menú y ya no recibe cargas ni se ofrece para análisis nuevos; sus datos y sus cargas se conservan y se puede volver a activar.",
