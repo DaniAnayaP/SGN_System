@@ -599,7 +599,7 @@ function openFlexLoadModal() {
     // las clasificaciones que ya tiene el registro (con su color): al escribir una igual se toma el mismo color
     const foldCls = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
     ((st.data && st.data.classes) || []).forEach((x) => { s.classColors[foldCls(x.name)] = x.color; });
-    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); if (s.result) location.reload(); }; // con una carga guardada, la tabla se arma de nuevo (un registro libre puede traer columnas nuevas y uno vacío no tenía ninguna)
     const onKey = (event) => { if (event.key === 'Escape' && !s.busy) close(); };
     document.addEventListener('keydown', onKey);
     overlay.addEventListener('mousedown', (event) => { if (event.target === overlay && !s.busy) close(); });
@@ -766,7 +766,7 @@ function openFlexLoadModal() {
         else if (op === 'back') { s.step = 'map'; s.error = ''; paint(); }
         else if (op === 'load') load();
         else if (op === 'again') { s.step = 'start'; s.file = null; s.buffer = null; s.info = null; s.preview = null; s.error = ''; paint(); }
-        else if (op === 'done') { close(); location.reload(); } // un registro libre puede traer columnas nuevas: la tabla se arma de nuevo
+        else if (op === 'done') close(); // cerrar con una carga guardada recarga la tabla
     });
     overlay.addEventListener('change', async (event) => {
         const el = event.target;
