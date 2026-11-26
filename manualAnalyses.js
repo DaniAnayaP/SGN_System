@@ -48,7 +48,7 @@ function normalizeStyle(raw) {
 // La clasificación (el nombre que quiera la persona, con su color), el formato y el aspecto: se guardan igual en las columnas de las dos formas de diseño.
 function applyLook(entry, c) {
     const cls = cleanText(c.cls, 40);
-    if (cls) { entry.cls = cls; if (Number.isInteger(c.color) && c.color >= 0 && c.color < CLASS_COLOR_COUNT) entry.color = c.color; }
+    if (cls) { entry.cls = cls; const color = analysisAdded.normalizeClassColor(c.color); if (color !== null) entry.color = color; } // un número de la paleta (0 a 5) o un color #rrggbb
     if (FORMATS.includes(c.fmt) && c.fmt !== 'general') { entry.fmt = c.fmt; if (c.fmt === 'pers') { const pat = cleanText(c.pat, 40); if (pat) entry.pat = pat; } }
     const style = normalizeStyle(c.style);
     if (Object.keys(style).length) entry.style = style;

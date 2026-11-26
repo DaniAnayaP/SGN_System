@@ -5409,6 +5409,8 @@
     "an2Agg_first": "El primero",
     "an2File": "Archivo",
     "an2IsBase": "archivo base",
+    "an2NoDataTag": "sin datos",
+    "an2NoDataNotice": "Este archivo todavía no tiene datos cargados.",
     "an2ValueCols": "Valor de qué columna",
     "an2ValueColsHint": "una o varias del archivo; cada una es una columna nueva",
     "an2KeyTitle": "Llave",
@@ -10270,7 +10272,7 @@
       "example": "Existencias actuales diarias."
     },
     "anFdValue": {
-      "what": "La columna del archivo cuyo valor se trae. Si marcas varias, cada una es una columna nueva del Análisis.",
+      "what": "La columna del archivo cuyo valor se trae. Si marcas varias, cada una es una columna nueva del Análisis. En los archivos de formato fijo (como Existencias actuales diarias o Cargos por sitio mensuales) cada fecha o mes cargado es una columna; en una Tabla libre salen todas las columnas del reporte.",
       "example": "Existencia."
     },
     "anFdKey": {

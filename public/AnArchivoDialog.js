@@ -14,6 +14,8 @@ const AGG_LABEL = (a) => t(`main.an2Agg_${a}`);
 const FORMAT_ALL = ['general', ...kit.FORMATS_COMMON];
 const sourceOf = (key) => (st.sources || []).find((r) => r.key === key);
 const colsOf = (reg) => (reg ? reg.columns : []).filter((c) => c.kind !== 'load');
+// Un archivo «sin datos» (Daniel, 2026-11-26): uno de formato fijo (mensual o diario) sin ninguna fecha cargada, o una tabla libre sin cargas vigentes. Solo trae sus columnas de referencia: no hay nada que elegir como valor.
+const noData = (reg) => { if (!reg) return false; const cols = colsOf(reg); return reg.columns.some((c) => c.kind === 'dim') ? !cols.some((c) => c.kind === 'value') : !cols.length; };
 const SYN = { unidad: ['unidad', 'sitio', 'site', 'unit', 'centro de costos', 'clave unidad'], codigo: ['codigo', 'cod', 'code', 'sku', 'item', 'articulo', 'clave articulo'], descripcion: ['descripcion', 'nombre', 'description'], categoria: ['categoria', 'familia', 'category'], udm: ['udm', 'unidad de medida', 'uom'] };
 const synKey = (label) => { const f = kit.fold(label); return Object.keys(SYN).find((k) => SYN[k].some((s) => f === kit.fold(s))) || null; };
 const debounce = (fn, ms) => { let timer = null; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); }; };
@@ -44,7 +46,7 @@ function initialState(design, editId) {
         const keyMap = {};
         (design.base || []).filter((b) => b.key).forEach((b) => { const m = (editing.keyMap || []).find((k) => k.base === b.col); keyMap[b.col] = m ? m.file : (editing.registry === design.baseRegistry ? b.col : ''); });
         return { editing, registry: editing.registry, valueCols: [...editing.valueCols], agg: editing.agg || 'sum', keyMap, kept: false, conds: (editing.conds || []).map((c) => ({ col: c.col, values: [...c.values], join: c.join === 'or' ? 'or' : 'and' })),
-            label: editing.label, labelTouched: true, cls: editing.cls || '', color: Number.isInteger(editing.color) ? editing.color : null, colorTouched: false, fmt: editing.fmt || 'general', pat: editing.pat || '', style: JSON.parse(JSON.stringify(editing.style || {})) };
+            label: editing.label, labelTouched: true, cls: editing.cls || '', color: kit.hasClassColor(editing.color) ? editing.color : null, colorTouched: false, fmt: editing.fmt || 'general', pat: editing.pat || '', style: JSON.parse(JSON.stringify(editing.style || {})) };
     }
     const other = regs.find((r) => r.key !== design.baseRegistry && r.status === 'active') || regs.find((r) => r.key === design.baseRegistry) || regs[0];
     const regKey = other ? other.key : design.baseRegistry;
@@ -58,7 +60,7 @@ function columnFrom(d, id, valueCols) {
     const entry = { id, label: (d.label || '').trim() || (valueCols.length ? labelOfCol(d.registry, valueCols[0]) : t('main.an2ColumnN')), registry: d.registry, valueCols, agg: d.agg,
         keyMap: Object.entries(d.keyMap).filter(([, file]) => file).map(([base, file]) => ({ base, file })),
         conds: d.conds.filter((c) => c.col && c.values.length).map((c, i) => ({ col: c.col, values: c.values, join: i && c.join === 'or' ? 'or' : 'and' })) };
-    if (d.cls.trim()) { entry.cls = d.cls.trim(); if (Number.isInteger(d.color)) entry.color = d.color; }
+    if (d.cls.trim()) { entry.cls = d.cls.trim(); if (kit.hasClassColor(d.color)) entry.color = d.color; }
     if (d.fmt && d.fmt !== 'general') { entry.fmt = d.fmt; if (d.fmt === 'pers' && d.pat) entry.pat = d.pat; }
     if (Object.keys(d.style).length) entry.style = d.style;
     return entry;
@@ -84,9 +86,10 @@ function formHtml(d, design) {
     const isPalette = (c, i) => c === i;
     return `
     <label for="fd-reg" data-help-key="anFdFile">${esc(t('main.an2File'))}</label>
-    <select id="fd-reg">${regs.map((r) => `<option value="${esc(r.key)}"${r.key === d.registry ? ' selected' : ''}>${esc(kit.regName(r))}${r.key === design.baseRegistry ? ` · ${esc(t('main.an2IsBase'))}` : ''}</option>`).join('')}</select>
+    <select id="fd-reg">${regs.map((r) => `<option value="${esc(r.key)}"${r.key === d.registry ? ' selected' : ''}>${esc(kit.regName(r))}${r.key === design.baseRegistry ? ` · ${esc(t('main.an2IsBase'))}` : ''}${noData(r) ? ` · ${esc(t('main.an2NoDataTag'))}` : ''}</option>`).join('')}</select>
     <p class="reg-field-label" data-help-key="anFdValue">${esc(t('main.an2ValueCols'))} <small>${esc(t('main.an2ValueColsHint'))}</small></p>
     <div class="an-valcols">${chipsFor('v', valueFirst.map((c) => ({ value: c.key, label: c.label })), (v) => d.valueCols.includes(v), 'data-fd-val')}</div>
+    ${noData(reg) ? `<p class="admin-hint">${esc(t('main.an2NoDataNotice'))}</p>` : ''}
     <p class="reg-field-label" data-help-key="anFdKey">${esc(t('main.an2KeyTitle'))} <small>${esc(t('main.an2KeyHint'))}</small></p>
     <div class="an-keymap">${keyBase.map((b) => `<span class="an-kb">${esc(baseLabel(b.col))}</span><span class="an-arrow">←</span><select data-fd-key="${esc(b.col)}" aria-label="${esc(baseLabel(b.col))}"><option value="">${esc(t('main.an2PickCol'))}</option>${cols.map((c) => `<option value="${esc(c.key)}"${d.keyMap[b.col] === c.key ? ' selected' : ''}>${esc(c.label)}</option>`).join('')}</select>`).join('')}</div>
     ${d.kept ? `<p class="an-kept">${esc(t('main.an2KeyKept'))}</p>` : ''}
@@ -99,7 +102,7 @@ function formHtml(d, design) {
     <label for="fd-label">${esc(t('main.anColLabel'))}</label><input type="text" id="fd-label" maxlength="80" autocomplete="off" value="${esc(d.label)}" placeholder="${esc(defaultLabel(d))}">
     <label for="fd-cls" data-help-key="anColClass">${esc(t('main.anColClass'))} <small>${esc(t('main.an2ClassHint'))}</small></label>
     <input type="text" id="fd-cls" maxlength="40" autocomplete="off" list="fd-cls-list" value="${esc(d.cls)}" placeholder="${esc(t('main.anColClassNone'))}"><datalist id="fd-cls-list">${known.map((x) => `<option value="${esc(x)}"></option>`).join('')}</datalist>
-    <div class="an-swrow">${known.length ? `<span class="an-dim">${esc(t('main.an2UsedClasses'))}</span>${known.map((x) => `<button type="button" class="an-vchip-btn" data-fd-usedcls="${esc(x)}">${esc(x)}</button>`).join('')}` : ''}<span class="an-swatches">${PALETTE.map((c, i) => swatch('data-fd-clscolor', i, c, d.color === i, `${t('main.anColClassColor')} ${i + 1}`)).join('')}</span></div>
+    <div class="an-swrow">${known.length ? `<span class="an-dim">${esc(t('main.an2UsedClasses'))}</span>${known.map((x) => `<button type="button" class="an-vchip-btn" data-fd-usedcls="${esc(x)}">${esc(x)}</button>`).join('')}` : ''}<span class="an-swatches">${PALETTE.map((c, i) => swatch('data-fd-clscolor', i, c, d.color === i, `${t('main.anColClassColor')} ${i + 1}`)).join('')}<label class="an-sw custom${typeof d.color === 'string' ? ' on' : ''}" data-fd-clscustomwrap${typeof d.color === 'string' ? ` style="background:${esc(d.color)}"` : ''} title="${esc(t('main.an2OtherColor'))}"><input type="color" data-fd-clscustom value="${typeof d.color === 'string' ? esc(d.color) : '#8a3590'}" aria-label="${esc(t('main.an2OtherColor'))}"></label></span></div>
     <p class="reg-field-label" data-help-key="anColFormat">${esc(t('main.anColFormat'))}</p>
     <div class="an-fmtrow">${FORMAT_ALL.map((f) => `<button type="button" class="an-vchip-btn${d.fmt === f ? ' on' : ''}" data-fd-fmt="${f}">${esc(t(`main.anFmt_${f}`))}</button>`).join('')}
         <select id="fd-fmt-more" aria-label="${esc(t('main.an2OtherFormat'))}"><option value="">${esc(t('main.an2OtherFormat'))}</option>${kit.FORMATS_MORE.map(([g, ids]) => `<optgroup label="${esc(t(`main.an2FmtGroup_${g === 'Número' ? 'num' : (g === 'Fecha y hora' ? 'date' : 'other')}`))}">${ids.map((f) => `<option value="${f}"${d.fmt === f ? ' selected' : ''}>${esc(t(`main.anFmt_${f}`))}</option>`).join('')}</optgroup>`).join('')}</select></div>
@@ -163,12 +166,19 @@ function openFileColumn(editId) {
             if (el.dataset.fdCcol !== undefined) { const c = d.conds[Number(el.dataset.fdCcol)]; c.col = el.value; c.values = []; draw(); return; }
             if (el.id === 'fd-agg') { d.agg = el.value; runPreview(); return; }
             if (el.id === 'fd-fmt-more') { if (el.value) { d.fmt = el.value; draw(); } return; }
-            if (el.dataset.fdCustom) { d.style[el.dataset.fdCustom] = el.value.toLowerCase(); draw(); }
+            if (el.dataset.fdCustom) { d.style[el.dataset.fdCustom] = el.value.toLowerCase(); draw(); return; }
+            if (el.dataset.fdClscustom !== undefined) { d.color = el.value.toLowerCase(); d.colorTouched = true; draw(); } // cualquier color para la clasificación
         });
         host.addEventListener('input', (event) => {
             const el = event.target;
             if (el.id === 'fd-label') { d.label = el.value; d.labelTouched = true; return; }
-            if (el.id === 'fd-cls') { d.cls = el.value; if (!d.colorTouched) d.color = el.value.trim() ? P.colorOfClass(el.value.trim(), d.editing) : null; const row = host.querySelectorAll('[data-fd-clscolor]'); row.forEach((b) => { const on = Number(b.dataset.fdClscolor) === d.color; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }); return; }
+            if (el.id === 'fd-cls') {
+                d.cls = el.value; if (!d.colorTouched) d.color = el.value.trim() ? P.colorOfClass(el.value.trim(), d.editing) : null;
+                host.querySelectorAll('[data-fd-clscolor]').forEach((b) => { const on = Number(b.dataset.fdClscolor) === d.color; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+                const custom = host.querySelector('[data-fd-clscustomwrap]'); // el círculo multicolor: con el color elegido cuando la clasificación usa uno propio
+                if (custom) { const hex = typeof d.color === 'string'; custom.classList.toggle('on', hex); custom.style.background = hex ? d.color : ''; const picker = custom.querySelector('input'); if (picker && hex) picker.value = d.color; }
+                return;
+            }
             if (el.id === 'fd-pat') { d.pat = el.value; runPreview(); }
         });
         host.addEventListener('click', (event) => {
@@ -208,8 +218,10 @@ function openFileColumn(editId) {
                     });
                     list = [...(design.columns || []), ...added];
                 }
-                if (d.cls.trim() && d.colorTouched && Number.isInteger(d.color)) P.paintClass(d.cls.trim(), d.color); // el mismo nombre lleva el mismo color
-                await P.saveColumns(list);
+                // el mismo nombre lleva el mismo color: también en las columnas de Operación y Criterio (las agrega el servidor al guardar)
+                const repaint = d.cls.trim() && d.colorTouched && kit.hasClassColor(d.color);
+                if (repaint) P.paintClass(d.cls.trim(), d.color);
+                await P.saveColumns(list, repaint ? { paint: { cls: d.cls.trim(), color: d.color } } : {});
             } catch (e) { btn.disabled = false; err(P.errorText(e.body)); }
         });
     });

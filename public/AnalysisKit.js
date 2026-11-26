@@ -90,6 +90,10 @@ function customFormat(v, n, pat, dec) {
 
 // ---- aspecto de una columna (como en Excel) --------------------------------------------------------------------------------------------------------------
 const colorOf = (c) => (typeof c === 'number' ? CLASS_COLORS[c - 1] : (typeof c === 'string' ? c : null));
+// El color de una clasificación: un número de la paleta (0 a 5) o cualquier color #rrggbb que la persona haya elegido (Daniel, 2026-11-26).
+const HEX_RE = /^#[0-9a-f]{6}$/i;
+const hasClassColor = (v) => (Number.isInteger(v) && v >= 0 && v < CLASS_COLORS.length) || (typeof v === 'string' && HEX_RE.test(v));
+const classColor = (v) => (typeof v === 'string' && HEX_RE.test(v) ? v.toLowerCase() : (Number.isInteger(v) && CLASS_COLORS[v]) || CLASS_COLORS[0]);
 const LINE = { solid: ['solid', '1px'], dotted: ['dotted', '2px'], dashed: ['dashed', '1px'], double: ['double', '3px'], thick: ['solid', '3px'] };
 function lookCss(style) {
     const s = style || {};
@@ -167,5 +171,5 @@ function multiSelect(host, opts) {
     };
 }
 
-window.AnalysisKit = { API, t, lang, esc, fold, CLASS_COLORS, FORMATS_COMMON, FORMATS_MORE, AGGS, loadSources, regName, sourceValues, fmtValue, colorOf, lookCss, applyLook, multiSelect };
+window.AnalysisKit = { API, t, lang, esc, fold, CLASS_COLORS, hasClassColor, classColor, FORMATS_COMMON, FORMATS_MORE, AGGS, loadSources, regName, sourceValues, fmtValue, colorOf, lookCss, applyLook, multiSelect };
 })();

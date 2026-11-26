@@ -363,7 +363,7 @@ const classKnown = () => [...new Set(classedList().map((x) => x.cls).filter(Bool
 const colorOfClass = (cls, skip) => {
     if (!cls) return null;
     const others = classedList().filter((x) => x !== skip);
-    const same = others.find((x) => foldCls(x.cls) === foldCls(cls) && Number.isInteger(x.color));
+    const same = others.find((x) => foldCls(x.cls) === foldCls(cls) && window.AnalysisKit.hasClassColor(x.color)); // el color puede ser de la paleta (número) o uno elegido (#rrggbb)
     if (same) return same.color;
     const used = new Set(others.map((x) => x.color).filter(Number.isInteger));
     for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i;
@@ -757,12 +757,12 @@ async function loadFile() {
                 if (c.group === 'reference') return c.label ? { col: colKeyOf(c.key), group: 'main.anGroupRef', label: c.label, cls: c.isKey ? 'an-ref an-ref-key' : 'an-ref' } : { col: colKeyOf(c.key), group: 'main.anGroupRef', labelKey: `main.regDim_${c.dim}`, cls: 'an-ref' };
                 if (c.group === 'added') {
                     let groupTable;
-                    if (c.cls) { groupTable = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(groupTable, c.cls, CLASS_COLORS[c.color] || CLASS_COLORS[0]); }
+                    if (c.cls) { groupTable = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(groupTable, c.cls, window.AnalysisKit.classColor(c.color)); }
                     return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: `${c.kind === 'criterion' ? '?' : 'ƒ'} ${c.label}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
                 }
                 // una columna consultada con clasificación va bajo su propia banda (nombre y color de la persona); sin clasificación, bajo «Consultadas» como siempre
                 let consBand;
-                if (c.cls) { consBand = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(consBand, c.cls, CLASS_COLORS[c.color] || CLASS_COLORS[0]); }
+                if (c.cls) { consBand = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(consBand, c.cls, window.AnalysisKit.classColor(c.color)); }
                 return { col: colKeyOf(c.key), group: 'main.anGroupCons', groupTable: consBand, label: c.label, cls: 'an-cons col-num' };
             }),
         ];

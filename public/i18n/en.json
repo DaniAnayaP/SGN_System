@@ -5410,6 +5410,8 @@
     "an2Agg_first": "The first one",
     "an2File": "File",
     "an2IsBase": "base file",
+    "an2NoDataTag": "no data",
+    "an2NoDataNotice": "This file has no data loaded yet.",
     "an2ValueCols": "Value of which column",
     "an2ValueColsHint": "one or more from the file; each one is a new column",
     "an2KeyTitle": "Key",
@@ -10271,7 +10273,7 @@
       "example": "Daily current stock."
     },
     "anFdValue": {
-      "what": "The column of the file whose value is taken. If you mark several, each one becomes a new column of the Analysis.",
+      "what": "The column of the file whose value is taken. If you mark several, each one becomes a new column of the Analysis. In fixed-format files (like Daily current stock or Monthly charges by site) each loaded date or month is a column; in a Free table every column of the report appears.",
       "example": "Stock."
     },
     "anFdKey": {

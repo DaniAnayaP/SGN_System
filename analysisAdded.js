@@ -16,6 +16,11 @@ const MAX_STEPS = 20;
 const MAX_NAME = 80;
 const MAX_CLASS = 40;
 const CLASS_COLORS = 6;
+// El color de una clasificación (Daniel, 2026-11-26, «Sí, agrégalo»): un número de la paleta (0 a 5) o cualquier color #rrggbb que la persona elija; lo demás no se guarda (null).
+function normalizeClassColor(v) {
+    if (Number.isInteger(v) && v >= 0 && v < CLASS_COLORS) return v;
+    return /^#[0-9a-fA-F]{6}$/.test(String(v === undefined || v === null ? '' : v)) ? String(v).toLowerCase() : null;
+}
 const COLUMN_KEY = /^(ref_[A-Za-z]+|c_[A-Za-z0-9_]+|a_[A-Za-z0-9_]+)$/;
 const WITH_ARG = new Set(['add', 'sub', 'mul', 'div', 'pow', 'min', 'max', 'logbase', 'round']);
 const NO_ARG = new Set(['sqrt', 'ln', 'log10', 'exp', 'abs']);
@@ -132,7 +137,7 @@ function normalizeAdded(raw) {
         ids.add(id);
         const cls = cleanText(c.cls, MAX_CLASS);
         const decimals = Number.isInteger(c.decimals) && c.decimals >= 0 && c.decimals <= 6 ? c.decimals : null;
-        added.push({ id, kind: c.kind, name, cls, color: cls && Number.isInteger(c.color) && c.color >= 0 && c.color < CLASS_COLORS ? c.color : null, decimals, ...body });
+        added.push({ id, kind: c.kind, name, cls, color: cls ? normalizeClassColor(c.color) : null, decimals, ...body });
     }
     return { added };
 }
@@ -320,4 +325,4 @@ function applyAdded(added, baseColumns, rows) {
     });
 }
 
-module.exports = { MAX_ADDED, MAX_STEPS, MAX_RULES, normalizeAdded, columnLetter, formulaOfSteps, formulaOfCriterion, runSteps, runCriterion, addedColumnDefs, applyAdded, addedKey };
+module.exports = { MAX_ADDED, MAX_STEPS, MAX_RULES, normalizeClassColor, normalizeAdded, columnLetter, formulaOfSteps, formulaOfCriterion, runSteps, runCriterion, addedColumnDefs, applyAdded, addedKey };

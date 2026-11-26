@@ -7848,7 +7848,7 @@ function anPresent(analysis, extractionColumns, rows) {
     const baseColumns = extractionColumns.map((c) => {
         const now = c.group === 'consulted' ? lookNow.get(c.id) : null;
         if (!now) return c;
-        return { ...c, ...(now.label ? { label: now.label } : {}), ...(now.cls ? { cls: now.cls, ...(Number.isInteger(now.color) ? { color: now.color } : {}) } : {}), ...(now.fmt ? { fmt: now.fmt, ...(now.pat ? { pat: now.pat } : {}) } : {}), ...(now.style ? { style: now.style } : {}) };
+        return { ...c, ...(now.label ? { label: now.label } : {}), ...(now.cls ? { cls: now.cls, ...(analysisAdded.normalizeClassColor(now.color) !== null ? { color: now.color } : {}) } : {}), ...(now.fmt ? { fmt: now.fmt, ...(now.pat ? { pat: now.pat } : {}) } : {}), ...(now.style ? { style: now.style } : {}) };
     });
     const columns = added.length ? [...baseColumns, ...analysisAdded.addedColumnDefs(added, extractionColumns)] : baseColumns;
     return { columns, rows: added.length ? analysisAdded.applyAdded(added, extractionColumns, rows) : rows, baseColumns: extractionColumns.length };
@@ -7910,6 +7910,14 @@ app.put('/api/business/manual-analyses/:id/columns', requireAuth, (req, res) => 
     const current = anOut(analysis, req).design;
     const next = manualAnalyses.normalizeDesign({ ...current, legacy: false, columns: body.columns, ...(body.base ? { base: body.base } : {}), ...(body.dedupe ? { dedupe: body.dedupe } : {}) }, anRegistryKeys(req));
     if (next.error) return anFail(res, next.error);
+    // Si la persona cambió el color de una clasificación, las columnas de Operación y Criterio con ese mismo nombre lo toman también (el mismo nombre lleva el mismo color).
+    const paint = body.paint && typeof body.paint === 'object' ? body.paint : null;
+    const paintColor = paint ? analysisAdded.normalizeClassColor(paint.color) : null;
+    if (paint && paintColor !== null && paint.cls) {
+        const foldClass = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+        const wanted = foldClass(paint.cls);
+        (next.design.added || []).forEach((a) => { if (a.cls && foldClass(a.cls) === wanted) a.color = paintColor; });
+    }
     const bad = anCheckDesign(req, next.design);
     if (bad) return anFail(res, bad.error, 400, { field: bad.field });
     const updated = updateAnalysis(analysis.id, clientId, isTestAccount, { design: next.design });
