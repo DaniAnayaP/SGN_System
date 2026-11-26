@@ -295,7 +295,7 @@ function drawData() {
     wrapper.setAttribute('data-help-key', flex ? 'regTableLibre' : 'regTable');
     if (Dashboard.attachTableDownloadButton) {
         Dashboard.attachTableDownloadButton(DATA_TABLE, { getTitle: () => `${regName(currentRegistry())}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : ''),
-            getFullDownload: (format) => (st.data && st.data.truncated ? `${API}/${encodeURIComponent(st.key)}/export?format=${format}&lang=${lang()}&tz=${tzOffset()}&text=${encodeURIComponent(st.text || '')}${st.cf ? `&cf=${encodeURIComponent(JSON.stringify(st.cf))}` : ''}${visibleColsParam()}&file=${encodeURIComponent(`${regName(currentRegistry())}_${todayStamp()}`)}` : null) });
+            getFullDownload: (format) => (st.data && (st.data.truncated || isFlex(st.data)) ? `${API}/${encodeURIComponent(st.key)}/export?format=${format}&lang=${lang()}&tz=${tzOffset()}&text=${encodeURIComponent(st.text || '')}${st.cf ? `&cf=${encodeURIComponent(JSON.stringify(st.cf))}` : ''}${visibleColsParam()}&file=${encodeURIComponent(`${regName(currentRegistry())}_${todayStamp()}`)}` : null) });
     }
     updateNote();
     renderButtons();

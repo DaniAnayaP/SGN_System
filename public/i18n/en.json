@@ -5448,6 +5448,7 @@
     "regStatus_obsolete": "Obsolete",
     "regErr_REG_OBSOLETE": "That record is obsolete: it no longer receives loads.",
     "regObsoleto": "Use",
+    "regFormatoDescarga": "Download format",
     "flexColClass": "Classification",
     "flexColColor": "Color",
     "flexClsNone": "No classification",

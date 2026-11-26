@@ -3,6 +3,7 @@
 // server.js las llama cuando registry.kind === 'tabla'. Todo lo del servidor que hace falta (permisos, bitácora, lock) llega en `deps`.
 const ExcelJS = require('exceljs');
 const flex = require('./flexRegistries');
+const flexExcel = require('./flexExcel');
 const SearchSyntax = require('./public/SearchSyntax.js');
 const db = require('./db');
 
@@ -169,16 +170,14 @@ module.exports = function createFlexApi(deps) {
                 }
                 res.end();
             } else {
-                const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: false, useSharedStrings: false });
-                const sheet = workbook.addWorksheet(String(registry.name || 'Datos').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Datos', { views: [{ state: 'frozen', ySplit: 1 }] });
-                sheet.addRow(headers).commit();
-                while (batches.length) {
-                    if (res.destroyed) return;
-                    batches.shift().forEach((r) => sheet.addRow(r).commit());
-                    await yieldToOthers();
-                }
-                sheet.commit();
-                await workbook.commit();
+                // el Excel lleva el formato del registro (o el de siempre): encabezado, fila de apoyo, formato de cada columna, filtro, paneles fijos y la hoja «Resumen»
+                const saved = db.getRegistryFormat(ctx.clientId, ctx.isTestAccount, registry.key);
+                const columnsOut = (only || ctx.columns.map((c, i) => i)).map((i) => ctx.columns[i]);
+                const lastLoad = ctx.loads.length ? ctx.loads[ctx.loads.length - 1] : null;
+                await flexExcel.writeWorkbook({
+                    stream: res, batches, columns: columnsOut, format: flexExcel.mergeFormat(saved && saved.format),
+                    meta: { lang: ctx.lang, tz: ctx.tz, registryName: registry.name || registry.key, by: changedByLabel(req), lastLoad: lastLoad ? { fileName: lastLoad.fileName, loadedBy: lastLoad.loadedBy, createdAt: lastLoad.createdAt } : null, searchText: String(req.query.text || '').trim().slice(0, 100), hasColumnFilters: !!req.query.cf, totalColumns: ctx.columns.length },
+                });
             }
         } catch (err) {
             console.error('Registros (tabla libre): la descarga completa falló:', err);
@@ -259,5 +258,33 @@ module.exports = function createFlexApi(deps) {
             regLoading.delete(lockKey);
         }
     }
-    return { dataRoute, valuesRoute, exportRoute, inspectRoute, importRoute };
+    // ---- el formato de la descarga de este registro ----------------------------------------------------------------------------------------------------------
+    // GET: lo guardado (o null = el de siempre), lo que se aplica y las columnas de la tabla (para el panel). PUT: guarda (revisado). DELETE: vuelve al formato de siempre.
+    function formatRoute(req, res, registry) {
+        const { clientId, isTestAccount } = req.user;
+        const canEdit = regAbilities(req).canCreateRegistry;
+        res.set('Cache-Control', 'no-store');
+        if (req.method === 'GET') {
+            const saved = db.getRegistryFormat(clientId, isTestAccount, registry.key);
+            const ctx = context(req, registry, { lang: req.query.lang, tz: req.query.tz });
+            return res.json({
+                format: saved ? saved.format : null, effective: flexExcel.mergeFormat(saved && saved.format), updatedAt: saved ? saved.updatedAt : null, updatedBy: saved ? saved.updatedBy : '', canEdit,
+                fonts: flexExcel.FONTS, columns: ctx.columns.filter((c) => c.kind !== 'carga').map((c) => ({ key: c.key, label: c.label, name: c.name, group: c.group, kind: c.kind })),
+            });
+        }
+        if (!canEdit) return regForbidden(res);
+        if (req.method === 'DELETE') {
+            const had = db.clearRegistryFormat(clientId, isTestAccount, registry.key);
+            if (had) logTableChange({ clientId, tableKey: REG_TABLE, recordId: 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.regFormatoDescarga', oldValue: 'personalizado', newValue: 'de siempre', changedBy: changedByLabel(req) });
+            return res.json({ format: null, effective: flexExcel.mergeFormat(null) });
+        }
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        if (!body.format || typeof body.format !== 'object') return res.status(400).json({ code: 'FORMAT_INVALID', message: 'El formato no es válido.' });
+        const clean = flexExcel.cleanFormat(body.format);
+        const before = db.getRegistryFormat(clientId, isTestAccount, registry.key);
+        db.setRegistryFormat(clientId, isTestAccount, registry.key, clean, changedByLabel(req));
+        logTableChange({ clientId, tableKey: REG_TABLE, recordId: 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.regFormatoDescarga', oldValue: before ? 'personalizado' : 'de siempre', newValue: 'personalizado', changedBy: changedByLabel(req) });
+        return res.json({ format: clean, effective: flexExcel.mergeFormat(clean) });
+    }
+    return { dataRoute, valuesRoute, exportRoute, inspectRoute, importRoute, formatRoute };
 };

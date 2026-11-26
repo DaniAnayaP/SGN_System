@@ -1216,6 +1216,19 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_mf_packed_load ON manual_flex_packed(load_id);
 `);
 
+// El FORMATO DE LA DESCARGA de un registro de tabla libre (Daniel, 2026-11-26): un formato por registro (encabezado, fila de apoyo, formato de cada columna, paneles fijos, portada). Sin fila = el formato de siempre.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_registry_formats (
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data INTEGER NOT NULL DEFAULT 0,
+        registry_key TEXT NOT NULL,
+        config_json  TEXT NOT NULL,
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_by   TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (client_id, is_test_data, registry_key)
+    );
+`);
+
 // Registros OBSOLETOS (Daniel, 2026-11-26): un registro (de los de siempre o de los que agregó el cliente) que ya no se usa pasa al apartado «Obsoletos» del menú: sus datos y sus cargas se conservan, ya no recibe cargas y se puede sacar de ahí.
 db.exec(`
     CREATE TABLE IF NOT EXISTS manual_registry_obsolete (
@@ -5271,6 +5284,18 @@ async function cleanupFailedFlexLoads() {
     }
 }
 setTimeout(() => { cleanupFailedFlexLoads(); }, 8000).unref();
+// El formato de descarga guardado de un registro (ya revisado al guardarse) o null si usa el de siempre.
+function getRegistryFormat(clientId, forTestAccount, registryKey) {
+    const row = db.prepare('SELECT config_json, updated_at, updated_by FROM manual_registry_formats WHERE client_id = ? AND is_test_data = ? AND registry_key = ?').get(clientId, forTestAccount ? 1 : 0, registryKey);
+    return row ? { format: parseJsonObject(row.config_json), updatedAt: row.updated_at, updatedBy: row.updated_by } : null;
+}
+function setRegistryFormat(clientId, forTestAccount, registryKey, format, updatedBy) {
+    db.prepare("INSERT INTO manual_registry_formats (client_id, is_test_data, registry_key, config_json, updated_at, updated_by) VALUES (?, ?, ?, ?, datetime('now'), ?) ON CONFLICT (client_id, is_test_data, registry_key) DO UPDATE SET config_json = excluded.config_json, updated_at = excluded.updated_at, updated_by = excluded.updated_by")
+        .run(clientId, forTestAccount ? 1 : 0, registryKey, JSON.stringify(format), String(updatedBy || '').slice(0, 160));
+}
+function clearRegistryFormat(clientId, forTestAccount, registryKey) {
+    return db.prepare('DELETE FROM manual_registry_formats WHERE client_id = ? AND is_test_data = ? AND registry_key = ?').run(clientId, forTestAccount ? 1 : 0, registryKey).changes > 0;
+}
 // La elección de la última carga de un registro libre (para traer el cuadro de columnas ya llenado): la última vigente; si no hay ninguna (todas se cayeron o se anularon), la del último intento.
 function flexLastConfig(clientId, forTestAccount, registryKey) {
     const row = db.prepare("SELECT config_json FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND config_json <> '' AND status IN ('vigente', 'anulada') ORDER BY (status = 'vigente') DESC, id DESC LIMIT 1")
@@ -23153,7 +23178,7 @@ module.exports = {
     listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
-    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, diskSpace, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, diskSpace, getRegistryFormat, setRegistryFormat, clearRegistryFormat, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,

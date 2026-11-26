@@ -5447,6 +5447,7 @@
     "regStatus_obsolete": "Obsoleto",
     "regErr_REG_OBSOLETE": "Ese registro es obsoleto: ya no recibe cargas.",
     "regObsoleto": "Uso",
+    "regFormatoDescarga": "Formato de la descarga",
     "flexColClass": "Clasificación",
     "flexColColor": "Color",
     "flexClsNone": "Sin clasificación",
