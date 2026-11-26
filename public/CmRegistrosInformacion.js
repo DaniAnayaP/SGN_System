@@ -38,7 +38,7 @@ function periodLabel(period) {
 const periodKey = (period) => `p_${String(period).replace(/-/g, '_')}`;
 const todayStamp = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-const st = { drawn: 0, cf: null, seq: 0, lastLoadId: null, registries: [], key: null, tab: 'data', data: null, loads: null, canTemplate: false, canExcel: false, canAnnul: false, canCreateRegistry: false, text: '', loadsInit: false };
+const st = { drawn: 0, cf: null, seq: 0, lastLoadId: null, registries: [], key: null, tab: 'data', data: null, loads: null, canTemplate: false, canExcel: false, canAnnul: false, canCreateRegistry: false, text: '', loadsInit: false, loadPick: new Set() };
 // El nombre de un registro: los dos de siempre se traducen; los que agregó el cliente llevan el nombre que él les puso.
 const regName = (reg) => (reg && (reg.name || (reg.nameKey ? t(reg.nameKey) : ''))) || t('menu.cmRegistrosInformacion');
 const currentRegistry = () => st.registries.find((r) => r.key === st.key) || null;
@@ -374,6 +374,116 @@ function updateNote() {
         });
     }
 }
+// ---- Cargas de una tabla libre: «Sí considerar / No considerar» (la carga que no se considera se ve sombreada), elegir varias a la vez y eliminar los DATOS de las que ya no se ocupan ----
+const isFlexReg = () => !!(currentRegistry() && currentRegistry().kind === 'tabla');
+// on = se considera; off = una persona dejó de considerarla (sus datos siguen ahí); failed = se cayó (no tiene datos); deleted = sus datos se eliminaron (la línea queda en el historial)
+const loadState = (l) => (l.dataDeleted ? 'deleted' : (l.status === 'vigente' ? 'on' : (l.annulledBy === 'sistema' ? 'failed' : 'off')));
+async function postLoadAction(loadId, action, body) {
+    const res = await fetch(`${API}/${st.key}/loads/${loadId}/${action}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) { const err = new Error(out.message || 'failed'); err.body = out; throw err; }
+    return out;
+}
+const loadActionError = (err) => {
+    const code = err && err.body && err.body.code;
+    return ['LOAD_ACTIVE', 'LOAD_DATA_DELETED', 'LOAD_FAILED', 'LOAD_NOT_ACTIVE', 'LOAD_NOT_FOUND', 'REG_BUSY', 'DELETE_ERROR', 'REG_FORBIDDEN'].includes(code) ? t(`main.regLoadErr_${code}`) : t('admin.saveError');
+};
+async function reloadAfterLoadAction() {
+    st.loadPick.clear();
+    await loadRegistries();
+    await Promise.all([refreshData(), refreshLoads()]);
+}
+// «Sí considerar»: no pide nada, se puede deshacer con «No considerar»
+async function considerLoads(loads) {
+    let done = 0;
+    try {
+        for (const l of loads) { await postLoadAction(l.id, 'reconsider'); done += 1; }
+        Dashboard.showToast(t('main.regConsiderDone', { n: num(done) }), 'success');
+    } catch (err) { Dashboard.showToast(loadActionError(err), 'error'); }
+    await reloadAfterLoadAction();
+}
+// «No considerar» y «Eliminar datos»: una ventana que explica lo que pasa y lo hace carga por carga
+function openLoadActionModal({ loads, kind }) {
+    const del = kind === 'delete';
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    const rowsTotal = loads.reduce((n, l) => n + Number(l.newRows || 0), 0);
+    const valuesTotal = loads.reduce((n, l) => n + Number(l.valuesAdded || 0), 0);
+    const title = loads.length === 1 ? t(del ? 'main.regDeleteTitle1' : 'main.regNoConsiderTitle1', { file: loads[0].fileName || '' }) : t(del ? 'main.regDeleteTitleN' : 'main.regNoConsiderTitleN', { n: num(loads.length) });
+    const files = loads.length > 1 ? `<ul class="reg-lam-files">${loads.slice(0, 8).map((l) => `<li>${esc(l.fileName || '')}</li>`).join('')}${loads.length > 8 ? `<li>…</li>` : ''}</ul>` : '';
+    overlay.innerHTML = `<div class="modal-panel exp-panel" role="dialog" aria-modal="true" aria-labelledby="reg-lam-title" data-help-key="${del ? 'regDeleteData' : 'regNoConsider'}">
+        <h3 id="reg-lam-title">${esc(title)}</h3>
+        ${files}
+        <p class="admin-hint">${esc(t(del ? 'main.regDeleteHint' : 'main.regNoConsiderHint'))}</p>
+        ${del ? `<p class="reg-lam-sum">${esc(t('main.regDeleteSummary', { rows: num(rowsTotal), values: num(valuesTotal) }))}</p>` : `<label for="reg-lam-note">${esc(t('main.regAnnulNote'))}</label><textarea id="reg-lam-note" rows="3" maxlength="300"></textarea>`}
+        <p class="admin-error" id="reg-lam-error" role="alert" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn${del ? ' reg-btn-danger' : ''}" data-reg-lam="ok">${esc(t(del ? 'main.regDeleteConfirm' : 'main.regNoConsider'))}</button><button type="button" class="btn btn-secondary" data-reg-lam="cancel">${esc(t('main.regCancel'))}</button></div></div>`;
+    document.body.appendChild(overlay);
+    let busy = false;
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (event) => { if (event.key === 'Escape' && !busy) close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay && !busy) close(); });
+    overlay.addEventListener('click', async (event) => {
+        const btn = event.target.closest('[data-reg-lam]');
+        if (!btn || busy) return;
+        if (btn.dataset.regLam === 'cancel') { close(); return; }
+        busy = true;
+        const ok = overlay.querySelector('[data-reg-lam="ok"]');
+        ok.disabled = true;
+        const err = overlay.querySelector('#reg-lam-error');
+        const note = del ? '' : String((overlay.querySelector('#reg-lam-note') || {}).value || '');
+        let done = 0;
+        try {
+            for (const l of loads) {
+                ok.textContent = t('main.regLoadWorking', { done: num(done + 1), total: num(loads.length) });
+                await postLoadAction(l.id, del ? 'delete-data' : 'annul', del ? {} : { note });
+                done += 1;
+            }
+            close();
+            Dashboard.showToast(t(del ? 'main.regDeleteDone' : 'main.regNoConsiderDone', { n: num(done) }), 'success');
+            await reloadAfterLoadAction();
+        } catch (e) {
+            busy = false; ok.disabled = false; ok.textContent = t(del ? 'main.regDeleteConfirm' : 'main.regNoConsider');
+            err.textContent = loadActionError(e); err.hidden = false;
+            if (done) await reloadAfterLoadAction();
+        }
+    });
+}
+// la barra de las cargas elegidas (arriba de la tabla de Cargas)
+function renderLoadsBulk() {
+    const wrapper = wrapperOf(LOADS_TABLE);
+    if (!wrapper) return;
+    let bar = document.getElementById('reg-loads-bulk');
+    const usable = st.loads ? st.loads.loads.filter((l) => ['on', 'off'].includes(loadState(l))) : [];
+    if (!isFlexReg() || !st.canAnnul || !usable.length) { if (bar) bar.remove(); return; }
+    const chosen = usable.filter((l) => st.loadPick.has(l.id));
+    const on = chosen.filter((l) => loadState(l) === 'on');
+    const off = chosen.filter((l) => loadState(l) === 'off');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'reg-loads-bulk';
+        bar.className = 'reg-loads-bulk';
+        bar.setAttribute('data-help-key', 'regLoadsBulk');
+        const zoom = wrapper.previousElementSibling;
+        (zoom && zoom.classList.contains('data-table-zoom') ? zoom : wrapper).before(bar);
+        bar.addEventListener('click', (event) => {
+            const b = event.target.closest('[data-bulk]');
+            if (!b) return;
+            const usableNow = st.loads ? st.loads.loads.filter((l) => ['on', 'off'].includes(loadState(l))) : [];
+            const pickedNow = usableNow.filter((l) => st.loadPick.has(l.id));
+            const v = b.dataset.bulk;
+            if (v === 'all') { usableNow.forEach((l) => st.loadPick.add(l.id)); drawLoads(); }
+            else if (v === 'none') { st.loadPick.clear(); drawLoads(); }
+            else if (v === 'no') openLoadActionModal({ loads: pickedNow.filter((l) => loadState(l) === 'on'), kind: 'no' });
+            else if (v === 'yes') considerLoads(pickedNow.filter((l) => loadState(l) === 'off'));
+            else if (v === 'delete') openLoadActionModal({ loads: pickedNow.filter((l) => loadState(l) === 'off'), kind: 'delete' });
+        });
+    }
+    bar.hidden = st.tab !== 'loads';
+    const btn = (v, label, n, danger) => `<button type="button" data-bulk="${v}"${n ? '' : ' disabled'}${danger ? ' class="reg-bulk-danger"' : ''}>${esc(label)}${n ? ` (${num(n)})` : ''}</button>`;
+    bar.innerHTML = `<span class="reg-loads-bulk-n">${esc(t('main.regLoadsBulkCount', { n: num(chosen.length) }))}</span><button type="button" class="reg-cd-link-btn" data-bulk="all">${esc(t('main.regLoadsBulkAll'))}</button><button type="button" class="reg-cd-link-btn" data-bulk="none">${esc(t('main.regLoadsBulkNone'))}</button>${chosen.length ? `<span class="reg-seg" role="group">${btn('no', t('main.regNoConsider'), on.length)}${btn('yes', t('main.regConsider'), off.length)}${btn('delete', t('main.regDeleteData'), off.length, true)}</span>` : ''}`;
+}
 function drawLoads() {
     const body = st.loads;
     if (!body) return;
@@ -388,31 +498,47 @@ function drawLoads() {
     body.loads.forEach((l) => {
         const tr = document.createElement('tr');
         tr.dataset.recordId = l.id;
+        // en una tabla libre: «Sí se considera» / «No se considera» (sombreada) / «Falló» / «Datos eliminados»
+        const flexReg = isFlexReg();
+        const state = flexReg ? loadState(l) : null;
+        if (flexReg && state !== 'on') tr.classList.add('reg-load-off');
         const status = document.createElement('td');
         status.dataset.col = 'colRegCargaEstado';
-        status.innerHTML = `<span class="reg-pill reg-pill-${l.status === 'vigente' ? 'ok' : 'off'}">${esc(t(l.status === 'vigente' ? 'main.regStatus_vigente' : 'main.regStatus_anulada'))}</span>${l.annulNote ? ` <small>${esc(l.annulNote)}</small>` : ''}`;
+        if (flexReg) status.innerHTML = `<span class="reg-pill reg-pill-${state === 'on' ? 'ok' : 'off'}">${esc(t(`main.regLoadState_${state}`))}</span>${l.annulNote && state === 'off' ? ` <small>${esc(l.annulNote)}</small>` : ''}`;
+        else status.innerHTML = `<span class="reg-pill reg-pill-${l.status === 'vigente' ? 'ok' : 'off'}">${esc(t(l.status === 'vigente' ? 'main.regStatus_vigente' : 'main.regStatus_anulada'))}</span>${l.annulNote ? ` <small>${esc(l.annulNote)}</small>` : ''}`;
         const actions = document.createElement('td');
         actions.dataset.col = 'actions';
         actions.className = 'admin-table-actions';
-        const history = document.createElement('button');
-        history.type = 'button';
-        history.className = 'admin-icon-btn';
-        history.setAttribute('data-help-key', 'changeHistory');
-        history.setAttribute('aria-label', t('main.changeHistoryTitleRecord'));
-        history.title = t('main.changeHistoryTitleRecord');
-        history.innerHTML = '<i class="bx bx-history" aria-hidden="true"></i>';
-        history.addEventListener('click', () => Dashboard.openChangeHistory(LOADS_TABLE, l.id));
-        actions.appendChild(history);
-        if (st.canAnnul && l.status === 'vigente') {
-            const annul = document.createElement('button');
-            annul.type = 'button';
-            annul.className = 'admin-icon-btn';
-            annul.setAttribute('data-help-key', 'regAnnul');
-            annul.setAttribute('aria-label', t('main.regAnnul'));
-            annul.title = t('main.regAnnul');
-            annul.innerHTML = '<i class="bx bx-block" aria-hidden="true"></i>';
-            annul.addEventListener('click', () => openAnnulModal(l));
-            actions.appendChild(annul);
+        const iconBtn = (icon, helpKey, label, onClick, extra) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = `admin-icon-btn${extra ? ` ${extra}` : ''}`;
+            b.setAttribute('data-help-key', helpKey);
+            b.setAttribute('aria-label', label);
+            b.title = label;
+            b.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
+            b.addEventListener('click', onClick);
+            return b;
+        };
+        if (flexReg && st.canAnnul && (state === 'on' || state === 'off')) {
+            const pick = document.createElement('input');
+            pick.type = 'checkbox';
+            pick.className = 'reg-load-pick';
+            pick.checked = st.loadPick.has(l.id);
+            pick.setAttribute('data-help-key', 'regLoadsBulk');
+            pick.setAttribute('aria-label', t('main.regLoadPick', { file: l.fileName || '' }));
+            pick.addEventListener('change', () => { if (pick.checked) st.loadPick.add(l.id); else st.loadPick.delete(l.id); renderLoadsBulk(); });
+            actions.appendChild(pick);
+        }
+        actions.appendChild(iconBtn('bx-history', 'changeHistory', t('main.changeHistoryTitleRecord'), () => Dashboard.openChangeHistory(LOADS_TABLE, l.id)));
+        if (flexReg && st.canAnnul) {
+            if (state === 'on') actions.appendChild(iconBtn('bx-block', 'regNoConsider', t('main.regNoConsider'), () => openLoadActionModal({ loads: [l], kind: 'no' })));
+            if (state === 'off') {
+                actions.appendChild(iconBtn('bx-check-circle', 'regConsider', t('main.regConsider'), () => considerLoads([l])));
+                actions.appendChild(iconBtn('bx-trash', 'regDeleteData', t('main.regDeleteData'), () => openLoadActionModal({ loads: [l], kind: 'delete' }), 'reg-icon-danger'));
+            }
+        } else if (st.canAnnul && l.status === 'vigente') {
+            actions.appendChild(iconBtn('bx-block', 'regAnnul', t('main.regAnnul'), () => openAnnulModal(l)));
         }
         tr.append(
             cell('colRegCargaArchivo', l.fileName), cell('colRegCargaOrigen', t(`main.regSource_${l.source}`)), stampCell('colRegCargaFechaHora', l.createdAt), cell('colRegCargaPor', l.loadedBy),
@@ -427,6 +553,7 @@ function drawLoads() {
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(LOADS_TABLE);
     wrapper.setAttribute('data-help-key', 'regLoadsTable');
     if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(LOADS_TABLE, { getTitle: () => `${regName(currentRegistry())}_${t('main.regTabLoads')}_${todayStamp()}` });
+    renderLoadsBulk();
 }
 // Los filtros por columna (st.cf) los resuelve el servidor sobre TODOS los renglones: la tabla solo dibuja los primeros. Cada petición lleva un número: si llega una más nueva, la vieja se descarta.
 async function refreshData() {
@@ -485,6 +612,7 @@ function showTab(tab) {
     [dataWrapper, document.getElementById('filter-bar'), document.getElementById('reg-truncated')].forEach((el) => { if (el) el.hidden = tab !== 'data'; });
     if (dataBar && dataBar.classList.contains('data-table-zoom')) dataBar.hidden = tab !== 'data';
     loadsWrapper.hidden = tab !== 'loads';
+    const bulkBar = document.getElementById('reg-loads-bulk'); if (bulkBar) bulkBar.hidden = tab !== 'loads';
     if (loadsBar && loadsBar.classList.contains('data-table-zoom')) loadsBar.hidden = tab !== 'loads';
     if (tab === 'loads') refreshLoads().then(() => window.dispatchEvent(new Event('resize')));
     else window.dispatchEvent(new Event('resize'));

@@ -1175,6 +1175,8 @@ db.exec(`
     const cols = db.prepare('PRAGMA table_info(manual_registry_loads)').all().map((c) => c.name);
     if (!cols.includes('stamp')) db.exec("ALTER TABLE manual_registry_loads ADD COLUMN stamp TEXT NOT NULL DEFAULT ''");
     if (!cols.includes('config_json')) db.exec("ALTER TABLE manual_registry_loads ADD COLUMN config_json TEXT NOT NULL DEFAULT ''");
+    // cuándo se eliminaron los DATOS de una carga (la línea de la carga se queda en el historial)
+    if (!cols.includes('data_deleted_at')) db.exec('ALTER TABLE manual_registry_loads ADD COLUMN data_deleted_at TEXT');
 }
 db.exec(`
     CREATE TABLE IF NOT EXISTS manual_flex_rows (
@@ -4992,7 +4994,7 @@ function mapRegistryLoad(row) {
     return {
         id: row.id, registryKey: row.registry_key, source: row.source, fileName: row.file_name, sheet: row.sheet, day: row.day, rowsInFile: row.rows_in_file, newRows: row.new_rows, valuesAdded: row.values_added,
         untouched: row.untouched, different: row.different, errors: row.errors, periods: parseJsonList(row.periods_json), newPeriods: parseJsonList(row.new_periods_json), status: row.status,
-        loadedBy: row.loaded_by, createdAt: row.created_at, annulledAt: row.annulled_at, annulledBy: row.annulled_by, annulNote: row.annul_note, stamp: row.stamp || '', flexMode: row.config_json ? (parseJsonObject(row.config_json).mode || '') : '',
+        loadedBy: row.loaded_by, createdAt: row.created_at, annulledAt: row.annulled_at, annulledBy: row.annulled_by, annulNote: row.annul_note, dataDeleted: !!row.data_deleted_at, dataDeletedAt: row.data_deleted_at || null, stamp: row.stamp || '', flexMode: row.config_json ? (parseJsonObject(row.config_json).mode || '') : '',
     };
 }
 function createRegistryLoad({ clientId, isTestData = false, registryKey, source, fileName, sheet, day, loadedBy, loadedByUserId }) {
@@ -5026,6 +5028,12 @@ function listRegistryLoads(clientId, forTestAccount = false, registryKey = null,
 function annulRegistryLoad(id, clientId, forTestAccount, byLabel, note) {
     const changed = db.prepare("UPDATE manual_registry_loads SET status = 'anulada', annulled_at = datetime('now'), annulled_by = ?, annul_note = ? WHERE id = ? AND client_id = ? AND is_test_data = ? AND status = 'vigente'")
         .run(byLabel || '', String(note || '').slice(0, 300), id, clientId, forTestAccount ? 1 : 0).changes;
+    return changed ? getRegistryLoad(id, clientId, forTestAccount) : null;
+}
+// «Sí considerar»: una carga de tabla libre que una persona dejó de considerar vuelve a contar (sus datos nunca se borraron). No aplica a una que falló ni a una cuyos datos ya se eliminaron.
+function reconsiderRegistryLoad(id, clientId, forTestAccount) {
+    const changed = db.prepare("UPDATE manual_registry_loads SET status = 'vigente', annulled_at = NULL, annulled_by = '', annul_note = '' WHERE id = ? AND client_id = ? AND is_test_data = ? AND status = 'anulada' AND annulled_by <> 'sistema' AND data_deleted_at IS NULL AND config_json <> ''")
+        .run(id, clientId, forTestAccount ? 1 : 0).changes;
     return changed ? getRegistryLoad(id, clientId, forTestAccount) : null;
 }
 // Los periodos con datos vigentes de un registro (en orden) y la última carga vigente.
@@ -5253,6 +5261,39 @@ function diskSpace() {
         const reusableBytes = Number(db.pragma('freelist_count', { simple: true })) * Number(db.pragma('page_size', { simple: true }));
         return { freeBytes, totalBytes, dbBytes, reusableBytes };
     } catch { return null; }
+}
+// Eliminar los DATOS de una carga de tabla libre que ya no se considera (Daniel, 2026-11-26): se borran los valores que cargó y los renglones con llave que ella creó, para no dejar datos basura.
+// Un renglón que tiene valores de OTRA carga se queda (esa carga lo sigue usando); el registro y la línea de la carga en el historial no se tocan (queda marcada con la fecha de cuando se eliminaron los datos).
+// Se borra por tandas cediendo el turno; si se corta a la mitad, se puede repetir (lo que ya se borró no vuelve). Devuelve cuántos valores y renglones se quitaron.
+async function deleteFlexLoadData(loadId, { maxMs = 900000 } = {}) {
+    const started = Date.now();
+    const yieldTurn = () => new Promise((resolve) => setImmediate(resolve));
+    const out = { values: 0, rows: 0 };
+    const steps = [
+        ['values', db.prepare('DELETE FROM manual_flex_values WHERE (row_id, col, load_id) IN (SELECT row_id, col, load_id FROM manual_flex_values WHERE load_id = ? LIMIT 20000)'), (st) => st.run(loadId).changes],
+        // los valores empaquetados: se cuentan los valores que traía cada bloque antes de quitarlo (para decir cuántos se eliminaron)
+        ['values', db.prepare('SELECT row_id, data FROM manual_flex_packed WHERE load_id = ? LIMIT 5000'), (st) => {
+            const list = st.all(loadId);
+            const del = db.prepare('DELETE FROM manual_flex_packed WHERE row_id = ? AND load_id = ?');
+            let values = 0;
+            db.transaction(() => list.forEach((p) => { values += flexLogic().unpackValues(p.data).filter((v) => v !== null).length; del.run(p.row_id, loadId); }))();
+            out.values += values;
+            return list.length;
+        }, true],
+        ['rows', db.prepare('DELETE FROM manual_flex_rows WHERE id IN (SELECT r.id FROM manual_flex_rows r WHERE r.load_id = ? AND NOT EXISTS (SELECT 1 FROM manual_flex_values v WHERE v.row_id = r.id AND v.load_id <> ?) AND NOT EXISTS (SELECT 1 FROM manual_flex_packed p WHERE p.row_id = r.id AND p.load_id <> ?) LIMIT 2000)'), (st) => st.run(loadId, loadId, loadId).changes],
+    ];
+    for (const [what, stmt, run, counted] of steps) {
+        for (;;) {
+            const n = run(stmt);
+            if (!n) break;
+            if (!counted) out[what] += n;
+            if (Date.now() - started > maxMs) throw new Error('DELETE_TIMEOUT');
+            await yieldTurn();
+        }
+    }
+    db.prepare('DELETE FROM manual_flex_blocks WHERE load_id = ?').run(loadId);
+    db.prepare("UPDATE manual_registry_loads SET data_deleted_at = datetime('now') WHERE id = ?").run(loadId);
+    return out;
 }
 // Una carga de tabla libre que se cayó a la mitad: se quitan los renglones con llave y los valores que alcanzó a escribir (el mensaje dice «no se agregó nada» y así debe ser; un reintento no los toma por renglones «que ya estaban»).
 // Solo toca lo que esa carga misma creó; lo de las demás cargas no se mueve. Se borra por tandas (los valores se van con su renglón).
@@ -23185,7 +23226,7 @@ module.exports = {
     listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
-    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, flexConfigHistory, diskSpace, getRegistryFormat, setRegistryFormat, clearRegistryFormat, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, reconsiderRegistryLoad, deleteFlexLoadData, flexConfigHistory, diskSpace, getRegistryFormat, setRegistryFormat, clearRegistryFormat, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,

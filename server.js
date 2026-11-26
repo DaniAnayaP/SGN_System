@@ -7583,6 +7583,16 @@ app.post('/api/business/manual-registries/:key/loads/:id/annul', requireAuth, (r
     res.json({ load: annulled });
 });
 
+// «Sí considerar» una carga de tabla libre que se dejó de considerar, y «Eliminar los datos» de una carga que no se considera (el registro y la línea del historial se quedan).
+[['reconsider', 'reconsider'], ['delete-data', 'delete-data']].forEach(([path, action]) => {
+    app.post(`/api/business/manual-registries/:key/loads/:id/${path}`, requireAuth, async (req, res) => {
+        const registry = regRegistry(req, res);
+        if (!registry) return;
+        if (registry.kind !== 'tabla') return res.status(400).json({ code: 'LOAD_NOT_FREE', message: 'Esto es de los registros de tabla libre.' });
+        return flexApi.loadActionRoute(req, res, registry, action);
+    });
+});
+
 // ---- Cargas Manuales › Análisis Registros Manuales (Daniel, 2026-11-25, «Sí, empieza el Análisis») ----
 // Un análisis junta uno o dos registros por unidad + código. Se arma con tres grupos de columnas (referencia, consultadas de registros y —en la siguiente pieza— formuladas) y «Extraer» saca un ARCHIVO propio: una versión (v1, v2…) con su fecha que es una COPIA
 // (no cambia aunque después cambie un registro). Nada se borra: un análisis se desactiva y una versión se anula. Los botones son del árbol: «Crear análisis» (colAnCrearAuth: crear, renombrar, armar el diseño, activar/desactivar), «Extraer análisis» (colAnExtraerAuth)

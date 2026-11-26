@@ -5449,6 +5449,37 @@
     "regErr_REG_OBSOLETE": "That record is obsolete: it no longer receives loads.",
     "regObsoleto": "Use",
     "regFormatoDescarga": "Download format",
+    "regLoadState_on": "Counted",
+    "regLoadState_off": "Not counted",
+    "regLoadState_failed": "Failed",
+    "regLoadState_deleted": "Data deleted",
+    "regConsider": "Count it",
+    "regNoConsider": "Do not count",
+    "regDeleteData": "Delete data",
+    "regLoadPick": "Pick the load \"{file}\"",
+    "regLoadsBulkCount": "{n} picked",
+    "regLoadsBulkAll": "Pick all",
+    "regLoadsBulkNone": "None",
+    "regNoConsiderTitle1": "Do not count the load \"{file}\"",
+    "regNoConsiderTitleN": "Do not count {n} loads",
+    "regNoConsiderHint": "The load stays in the history and its data stops counting: the table, the download and the analyses no longer take it. It looks shaded and you can count it again whenever you want.",
+    "regNoConsiderDone": "Done: {n} loads are no longer counted.",
+    "regConsiderDone": "Done: {n} loads are counted again.",
+    "regDeleteTitle1": "Delete the data of the load \"{file}\"",
+    "regDeleteTitleN": "Delete the data of {n} loads",
+    "regDeleteHint": "The data it loaded (rows and values) is erased so no junk data is left. The record and the load line stay in the history. This cannot be undone.",
+    "regDeleteSummary": "Up to {rows} new rows and {values} added values are removed.",
+    "regDeleteConfirm": "Delete data for good",
+    "regDeleteDone": "The data of {n} loads was deleted.",
+    "regLoadWorking": "Working… {done} of {total}",
+    "regLoadErr_LOAD_ACTIVE": "Stop counting the load first.",
+    "regLoadErr_LOAD_DATA_DELETED": "The data of that load was already deleted.",
+    "regLoadErr_LOAD_FAILED": "That load failed: it has no data.",
+    "regLoadErr_LOAD_NOT_ACTIVE": "That load has not finished yet.",
+    "regLoadErr_LOAD_NOT_FOUND": "That load no longer exists.",
+    "regLoadErr_REG_BUSY": "A load is in progress. Wait until it finishes.",
+    "regLoadErr_DELETE_ERROR": "The data could not be deleted. Try again.",
+    "regLoadErr_REG_FORBIDDEN": "You do not have permission to do that.",
     "flexColClass": "Classification",
     "flexColColor": "Color",
     "flexClsNone": "No classification",
@@ -9883,6 +9914,22 @@
     "regFlexMode": {
       "what": "\"Save as is\" keeps every column of the Excel with its order and names. \"Choose each column's role\" lets you decide what goes down the list and what becomes a new column.",
       "example": "Save as is"
+    },
+    "regConsider": {
+      "what": "Counts again a load you had stopped counting: its data returns to the table, the download and the analyses.",
+      "example": "26-NOV-26 0600.xlsx → Counted"
+    },
+    "regNoConsider": {
+      "what": "The load stays in the history but its data stops counting (the table, the download and the analyses do not take it) and it looks shaded. You can undo it with \"Count it\".",
+      "example": "I loaded the wrong file → Do not count"
+    },
+    "regDeleteData": {
+      "what": "Erases for good the data loaded by a load that is no longer counted, so no junk data is left. The record and the load line stay in the history. It is only possible if you stopped counting it first.",
+      "example": "A shaded test load → Delete data"
+    },
+    "regLoadsBulk": {
+      "what": "Pick several loads with their checkbox (or \"Pick all\") and apply \"Do not count\", \"Count it\" or \"Delete data\" to all of them.",
+      "example": "3 old loads → Delete data (3)"
     },
     "regFlexMap": {
       "what": "For each column of your Excel you pick its role: Key (identifies the row and goes down the list), Row data, New column on every load (stock, cost…) or Not loaded. If several rows land on the same key, the new column is added up or one is taken (for example, the cost). Every column can be renamed. Each column is a card with a single decision: \"Already exists\" (it joins a column the record already has), \"New additional\" (you define its role, name, classification and color) or \"Not loaded\". Columns that already exist are recognized by the title they had and sit in closed groups; if one comes with another name but looks like one that already exists, you are asked whether it is that one. This way columns are not duplicated.",

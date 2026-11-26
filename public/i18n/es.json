@@ -5448,6 +5448,37 @@
     "regErr_REG_OBSOLETE": "Ese registro es obsoleto: ya no recibe cargas.",
     "regObsoleto": "Uso",
     "regFormatoDescarga": "Formato de la descarga",
+    "regLoadState_on": "Sí se considera",
+    "regLoadState_off": "No se considera",
+    "regLoadState_failed": "Falló",
+    "regLoadState_deleted": "Datos eliminados",
+    "regConsider": "Sí considerar",
+    "regNoConsider": "No considerar",
+    "regDeleteData": "Eliminar datos",
+    "regLoadPick": "Elegir la carga «{file}»",
+    "regLoadsBulkCount": "{n} elegidas",
+    "regLoadsBulkAll": "Elegir todas",
+    "regLoadsBulkNone": "Ninguna",
+    "regNoConsiderTitle1": "No considerar la carga «{file}»",
+    "regNoConsiderTitleN": "No considerar {n} cargas",
+    "regNoConsiderHint": "La carga se queda en el historial y sus datos dejan de contar: la tabla, la descarga y los análisis ya no los toman. Se ve sombreada y puedes volver a considerarla cuando quieras.",
+    "regNoConsiderDone": "Listo: {n} cargas dejaron de considerarse.",
+    "regConsiderDone": "Listo: {n} cargas se consideran otra vez.",
+    "regDeleteTitle1": "Eliminar los datos de la carga «{file}»",
+    "regDeleteTitleN": "Eliminar los datos de {n} cargas",
+    "regDeleteHint": "Se borran los datos que cargó (renglones y valores) para no dejar datos basura. El registro y la línea de la carga se quedan en el historial. No se puede deshacer.",
+    "regDeleteSummary": "Se quitan hasta {rows} renglones nuevos y {values} valores agregados.",
+    "regDeleteConfirm": "Eliminar datos para siempre",
+    "regDeleteDone": "Se eliminaron los datos de {n} cargas.",
+    "regLoadWorking": "Trabajando… {done} de {total}",
+    "regLoadErr_LOAD_ACTIVE": "Primero deja de considerar la carga.",
+    "regLoadErr_LOAD_DATA_DELETED": "Los datos de esa carga ya se eliminaron.",
+    "regLoadErr_LOAD_FAILED": "Esa carga falló: no tiene datos.",
+    "regLoadErr_LOAD_NOT_ACTIVE": "Esa carga todavía no terminó.",
+    "regLoadErr_LOAD_NOT_FOUND": "Esa carga ya no existe.",
+    "regLoadErr_REG_BUSY": "Hay una carga en curso. Espera a que termine.",
+    "regLoadErr_DELETE_ERROR": "No se pudieron eliminar los datos. Vuelve a intentarlo.",
+    "regLoadErr_REG_FORBIDDEN": "No tienes permiso para hacerlo.",
     "flexColClass": "Clasificación",
     "flexColColor": "Color",
     "flexClsNone": "Sin clasificación",
@@ -9882,6 +9913,22 @@
     "regFlexMode": {
       "what": "«Guardar tal cual» guarda todas las columnas del Excel con su orden y sus nombres. «Elegir el papel de cada columna» te deja decidir qué va hacia abajo y qué se vuelve una columna nueva.",
       "example": "Guardar tal cual"
+    },
+    "regConsider": {
+      "what": "Vuelve a contar una carga que habías dejado de considerar: sus datos regresan a la tabla, a la descarga y a los análisis.",
+      "example": "26-NOV-26 0600.xlsx → Sí se considera"
+    },
+    "regNoConsider": {
+      "what": "La carga se queda en el historial pero sus datos dejan de contar (la tabla, la descarga y los análisis no los toman) y se ve sombreada. Se puede deshacer con «Sí considerar».",
+      "example": "Cargué el archivo equivocado → No considerar"
+    },
+    "regDeleteData": {
+      "what": "Borra para siempre los datos que cargó una carga que ya no se considera, para no dejar datos basura. El registro y la línea de la carga se quedan en el historial. Solo se puede si antes dejaste de considerarla.",
+      "example": "Una carga de prueba sombreada → Eliminar datos"
+    },
+    "regLoadsBulk": {
+      "what": "Elige varias cargas con su casilla (o «Elegir todas») y aplícales juntas «No considerar», «Sí considerar» o «Eliminar datos».",
+      "example": "3 cargas viejas → Eliminar datos (3)"
     },
     "regFlexMap": {
       "what": "Para cada columna de tu Excel eliges su papel: Llave (identifica el renglón y va hacia abajo), Dato del renglón, Columna nueva en cada carga (existencia, costo…) o No se carga. Si varios renglones caen en la misma llave, la columna nueva se suma o se toma uno (por ejemplo, el costo). Todas las columnas se pueden renombrar. Cada columna es una tarjeta con una sola decisión: «Ya existe» (se une a una columna que el registro ya tiene), «Nueva adicional» (se define su papel, nombre, clasificación y color) o «No se carga». Las que ya existen se reconocen solas por el título que traían y van en grupos cerrados; si una trae otro nombre pero se parece a una que ya existe, se te pregunta si es esa. Así no se duplican columnas.",

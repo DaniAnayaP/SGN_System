@@ -297,5 +297,40 @@ module.exports = function createFlexApi(deps) {
         logTableChange({ clientId, tableKey: REG_TABLE, recordId: 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.regFormatoDescarga', oldValue: before ? 'personalizado' : 'de siempre', newValue: 'personalizado', changedBy: changedByLabel(req) });
         return res.json({ format: clean, effective: flexExcel.mergeFormat(clean) });
     }
-    return { dataRoute, valuesRoute, exportRoute, inspectRoute, importRoute, formatRoute };
+    // ---- Cargas: «Sí considerar» y «Eliminar los datos» de una carga (Daniel, 2026-11-26) ---------------------------------------------------------------------------
+    // «No considerar» es la ruta de siempre /annul (la carga queda en el historial y sus datos dejan de contar). Aquí: volver a considerarla, o eliminar sus datos (solo si ya no se considera; el registro y la línea del historial se quedan).
+    async function loadActionRoute(req, res, registry, action) {
+        if (!regAbilities(req).canAnnul) return regForbidden(res);
+        const { clientId, isTestAccount } = req.user;
+        const load = db.getRegistryLoad(Number(req.params.id) || 0, clientId, isTestAccount);
+        if (!load || load.registryKey !== registry.key) return res.status(404).json({ code: 'LOAD_NOT_FOUND', message: 'Esa carga no existe.' });
+        const lockKey = `${clientId}:${isTestAccount ? 1 : 0}:${registry.key}`;
+        if (regLoading.has(lockKey)) return res.status(409).json({ code: 'REG_BUSY', message: 'Ya hay una carga de este registro en curso. Espera a que termine.' });
+        if (load.annulledBy === 'sistema') return res.status(409).json({ code: 'LOAD_FAILED', message: 'Esa carga falló: no tiene datos que considerar ni eliminar.' });
+        if (load.dataDeleted) return res.status(409).json({ code: 'LOAD_DATA_DELETED', message: 'Los datos de esa carga ya se eliminaron.' });
+        if (load.status === 'vigente') return res.status(409).json({ code: 'LOAD_ACTIVE', message: action === 'delete-data' ? 'Primero deja de considerar la carga.' : 'Esa carga ya se considera.' });
+        if (load.status !== 'anulada') return res.status(409).json({ code: 'LOAD_NOT_ACTIVE', message: 'Esa carga todavía no terminó.' });
+        res.set('Cache-Control', 'no-store');
+        const label = load.fileName || registry.key;
+        if (action === 'reconsider') {
+            const done = db.reconsiderRegistryLoad(load.id, clientId, isTestAccount);
+            if (!done) return res.status(409).json({ code: 'LOAD_NOT_ACTIVE', message: 'Esa carga no se puede volver a considerar.' });
+            logTableChange({ clientId, tableKey: REG_LOADS_TABLE, recordId: load.id, recordLabel: label, action: 'update', fieldKey: 'main.regCargaEstado', oldValue: 'no considerada', newValue: 'vigente', changedBy: changedByLabel(req) });
+            notifyButtonAction(req, REG_TABLE, 'annul', label);
+            return res.json({ load: done });
+        }
+        regLoading.add(lockKey);
+        try {
+            const deleted = await db.deleteFlexLoadData(load.id);
+            logTableChange({ clientId, tableKey: REG_LOADS_TABLE, recordId: load.id, recordLabel: label, action: 'update', fieldKey: 'main.regCargaEstado', oldValue: 'no considerada', newValue: `datos eliminados (${deleted.rows} renglones, ${deleted.values} valores)`, changedBy: changedByLabel(req) });
+            notifyButtonAction(req, REG_TABLE, 'annul', label);
+            return res.json({ load: db.getRegistryLoad(load.id, clientId, isTestAccount), deleted });
+        } catch (err) {
+            console.error('Registros (tabla libre): no se pudieron eliminar los datos de la carga:', err);
+            return res.status(500).json({ code: 'DELETE_ERROR', message: 'No se pudieron eliminar los datos. Vuelve a intentarlo.' });
+        } finally {
+            regLoading.delete(lockKey);
+        }
+    }
+    return { dataRoute, valuesRoute, exportRoute, inspectRoute, importRoute, formatRoute, loadActionRoute };
 };
