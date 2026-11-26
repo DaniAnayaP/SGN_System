@@ -425,6 +425,8 @@
     "catAnalisisManualesAbbr": "Aná. manuales",
     "catAnalisisManualesAbbr1": "Aná. manuales",
     "catAnalisisManualesAbbr2": "Manuales",
+    "cmRegistrosObsoletos": "Obsoletos",
+    "cmRegistrosObsoletosAbbr1": "Obsol.",
     "cmRegistrosInformacion": "Registros Información",
     "cmRegistrosInformacionAbbr1": "Registros Info.",
     "cmRegistrosInformacionAbbr2": "Registros",
@@ -5438,6 +5440,13 @@
     "regToTablaGo": "Convertir",
     "regErr_REG_HAS_DATA": "Ese registro ya tiene cargas: no se puede convertir.",
     "regTipo": "Tipo",
+    "regKindTablaPill": "Tabla libre",
+    "flexModeLabel": "Cómo se cargó",
+    "regMakeObsolete": "Pasar a obsoletos",
+    "regRestoreObsolete": "Sacar de obsoletos",
+    "regStatus_obsolete": "Obsoleto",
+    "regErr_REG_OBSOLETE": "Ese registro es obsoleto: ya no recibe cargas.",
+    "regObsoleto": "Uso",
     "regUpdated": "Última actualización:",
     "regShowing": "Mostrando {shown} de {total} renglones",
     "regShowMore": "Mostrar más",
@@ -9089,6 +9098,10 @@
     "regReason": "Motivo",
     "regNeedSignal": "Para anular una carga necesitas señal.",
     "regLoadNotActive": "Esa carga ya no está vigente.",
+    "flexWithRoles": "Con papeles",
+    "flexLoadOf": "Carga del {when}",
+    "flexMerged": "Renglones que se juntaron",
+    "regObsoleteTitle": "Obsoletos",
     "regTemplateShort": "Plantilla",
     "regWizHow": "¿Cómo la quieres cargar?",
     "regWizFile": "Elige el archivo",
@@ -9441,6 +9454,22 @@
     "appRegWizArchivo": {
       "what": "Elige el .xlsx con el selector del teléfono (Archivos, Drive, WhatsApp…). Al elegirlo se revisa solo; no se guarda nada todavía.",
       "example": "cargos-nov.xlsx"
+    },
+    "appRegFlexModo": {
+      "what": "«Guardar tal cual» guarda todas las columnas de tu Excel con su orden y sus nombres. «Elegir el papel de cada columna» te deja decidir qué va hacia abajo y qué se vuelve una columna nueva en cada carga.",
+      "example": "Guardar tal cual"
+    },
+    "appRegFlexMapeo": {
+      "what": "Cada columna de tu archivo: su papel (Llave, Dato del renglón, Columna nueva en cada carga o No se carga), si varios renglones caen juntos se suman o se toma uno (por ejemplo el costo) y el nombre que le quieres poner.",
+      "example": "ON_HAND_QTY → Columna nueva · Sumar · «Existencia»"
+    },
+    "appRegFlexCuando": {
+      "what": "El día y la hora a los que corresponde esta carga (el archivo no los trae). Cada carga es su propia columna, aunque tenga el mismo día y hora.",
+      "example": "26/11/2026 06:00"
+    },
+    "appRegObsoletos": {
+      "what": "Los registros que ya no se usan. Se pueden ver, pero ya no reciben cargas; se sacan de aquí desde la Web.",
+      "example": "Cargos por sitio mensuales"
     },
     "appRegWizMapeo": {
       "what": "Cada columna de tu archivo y cómo se carga: unidad, descripción de la unidad, código, descripción, categoría, UDM (o el valor, en un registro diario) o «No se carga». Los meses se marcan o se quitan. Unidad, código y valor son obligatorios.",

@@ -1204,6 +1204,18 @@ db.exec(`
     );
 `);
 
+// Registros OBSOLETOS (Daniel, 2026-11-26): un registro (de los de siempre o de los que agregó el cliente) que ya no se usa pasa al apartado «Obsoletos» del menú: sus datos y sus cargas se conservan, ya no recibe cargas y se puede sacar de ahí.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_registry_obsolete (
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data INTEGER NOT NULL DEFAULT 0,
+        registry_key TEXT NOT NULL,
+        marked_by    TEXT NOT NULL DEFAULT '',
+        marked_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (client_id, is_test_data, registry_key)
+    );
+`);
+
 // Cargas Manuales › Análisis Registros Manuales (Daniel, 2026-11-25): un análisis junta uno o dos registros por unidad + código; «Extraer» saca un ARCHIVO propio (una versión con su fecha) que es una COPIA: no cambia aunque después cambie un registro.
 // Los análisis y las versiones nunca se borran: un análisis se desactiva y una versión se anula.
 db.exec(`
@@ -5169,8 +5181,8 @@ function flexStore({ clientId, isTestData = false, registryKey, loadId }) {
 }
 // Las cargas vigentes de un registro libre, en orden, con su día y hora y su elección.
 function flexVigenteLoads(clientId, forTestAccount, registryKey) {
-    return db.prepare("SELECT id, stamp, created_at, file_name, config_json FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND status = 'vigente' AND config_json <> '' ORDER BY id")
-        .all(clientId, forTestAccount ? 1 : 0, registryKey).map((r) => ({ id: r.id, stamp: r.stamp || String(r.created_at || '').slice(0, 19), createdAt: r.created_at, fileName: r.file_name, config: parseJsonObject(r.config_json) }));
+    return db.prepare("SELECT id, stamp, created_at, file_name, loaded_by, config_json FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND status = 'vigente' AND config_json <> '' ORDER BY id")
+        .all(clientId, forTestAccount ? 1 : 0, registryKey).map((r) => ({ id: r.id, stamp: r.stamp || String(r.created_at || '').slice(0, 19), createdAt: r.created_at, fileName: r.file_name, loadedBy: r.loaded_by, config: parseJsonObject(r.config_json) }));
 }
 // Un bloque «tal cual»: { columns: [nombres], rows: [[celdas…]] }
 function flexBlock(loadId) {
@@ -5255,6 +5267,14 @@ function* registryDataBatches(clientId, forTestAccount, registryKey, filters = {
 // ---- Registros que el cliente agrega (manual_registry_defs) ----
 function mapRegistryDef(row) {
     return { id: row.id, key: row.key, name: row.name, kind: row.kind, valueName: row.value_name, status: row.status, createdBy: row.created_by, createdAt: row.created_at };
+}
+function listRegistryObsolete(clientId, forTestAccount = false) {
+    return new Set(db.prepare('SELECT registry_key FROM manual_registry_obsolete WHERE client_id = ? AND is_test_data = ?').all(clientId, forTestAccount ? 1 : 0).map((r) => r.registry_key));
+}
+function setRegistryObsolete(clientId, forTestAccount, key, on, byLabel) {
+    const lane = forTestAccount ? 1 : 0;
+    if (on) db.prepare('INSERT OR REPLACE INTO manual_registry_obsolete (client_id, is_test_data, registry_key, marked_by) VALUES (?, ?, ?, ?)').run(clientId, lane, key, byLabel || '');
+    else db.prepare('DELETE FROM manual_registry_obsolete WHERE client_id = ? AND is_test_data = ? AND registry_key = ?').run(clientId, lane, key);
 }
 function listRegistryDefs(clientId, forTestAccount = false) {
     return db.prepare('SELECT * FROM manual_registry_defs WHERE client_id = ? AND is_test_data = ? ORDER BY id').all(clientId, forTestAccount ? 1 : 0).map(mapRegistryDef);
@@ -23012,7 +23032,7 @@ module.exports = {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
-    listRegistryDefs, createRegistryDef, updateRegistryDef,
+    listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, flexVigenteLoads, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,

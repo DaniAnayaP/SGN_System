@@ -119,8 +119,8 @@ module.exports = function createFlexApi(deps) {
         res.set('Cache-Control', 'no-store');
         res.json({
             registry: { key: registry.key, kind: registry.kind, name: registry.name, custom: registry.custom, status: registry.status },
-            periods: [], lastLoad: lastLoad ? { id: lastLoad.id, createdAt: lastLoad.createdAt, stamp: lastLoad.stamp, fileName: lastLoad.fileName } : null,
-            columns: ctx.columns.map((c, i) => ({ key: c.key, label: c.label, group: c.group, kind: c.kind, num: num[i] })),
+            periods: [], lastLoad: lastLoad ? { id: lastLoad.id, createdAt: lastLoad.createdAt, stamp: lastLoad.stamp, fileName: lastLoad.fileName, loadedBy: lastLoad.loadedBy } : null,
+            columns: ctx.columns.map((c, i) => ({ key: c.key, label: c.label, name: c.name, group: c.group, kind: c.kind, num: num[i] })),
             rows, total, truncated: total > rows.length, scope: { asis: ctx.scopeAsis.map((l) => ctx.labels.get(l.id)), hasAsis: ctx.asisLoads.length > 0 }, ...regAbilities(req),
         });
     }

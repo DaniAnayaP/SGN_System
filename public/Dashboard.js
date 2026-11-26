@@ -1457,6 +1457,8 @@ const SIDEBAR_GROUPS = {
     // Análisis › Manuales: el segundo desglose, junto a «Registros Información»: «＋ Nuevo análisis», los análisis y «Todos los análisis».
     analisisReg: { labelKey: 'menu.cmAnalisisRegistros', icon: 'bx-analyse', minItems: 1, abbrKeys: ['menu.cmAnalisisRegistrosAbbr1', 'menu.cmAnalisisRegistrosAbbr2'] },
     registros: { labelKey: 'menu.cmRegistrosInformacion', icon: 'bx-data', minItems: 1, abbrKeys: ['menu.cmRegistrosInformacionAbbr1', 'menu.cmRegistrosInformacionAbbr2'] },
+    // Los registros que ya no se usan (los de siempre y los agregados) pasan aquí: se ven, pero ya no reciben cargas (2026-11-26).
+    registrosObsoletos: { labelKey: 'menu.cmRegistrosObsoletos', icon: 'bx-archive', minItems: 1, abbrKeys: ['menu.cmRegistrosObsoletosAbbr1'] },
 };
 function groupSidebarScreens(pantallas, categoryId) {
     const counts = {};
@@ -14000,7 +14002,8 @@ async function loadManualAnalysesMenu() {
         const registryItems = (idPrefix, gate) => {
             const nested = { sidebarGroup: 'registros', dynamicRegistry: true, ...gate };
             const addNew = reg.canCreateRegistry ? [{ id: `${idPrefix}-nuevo`, labelKey: 'main.regNew', abbrKeys: ['main.regNewAbbr1', 'main.regNewAbbr2'], icon: 'bx-plus', href: 'CmRegistrosInformacion.html?nuevo=1', addNew: true, ...nested }] : [];
-            const registries = (reg.registries || []).map((r) => ({ id: `${idPrefix}-${r.key}`, ...(r.custom ? { label: r.name } : { labelKey: r.nameKey }), icon: 'bx-data', href: `CmRegistrosInformacion.html?registry=${encodeURIComponent(r.key)}`, ...(r.status === 'active' ? {} : { dimmed: true }), ...nested }));
+            // los obsoletos van al final y en su propio grupo «Obsoletos»
+            const registries = (reg.registries || []).slice().sort((a, b) => Number(!!a.obsolete) - Number(!!b.obsolete)).map((r) => ({ id: `${idPrefix}-${r.key}`, ...(r.custom ? { label: r.name } : { labelKey: r.nameKey }), icon: r.obsolete ? 'bx-archive' : 'bx-data', href: `CmRegistrosInformacion.html?registry=${encodeURIComponent(r.key)}`, ...(r.status === 'active' ? {} : { dimmed: true }), ...nested, ...(r.obsolete ? { sidebarGroup: 'registrosObsoletos' } : {}) }));
             return [...addNew, ...registries];
         };
         if (reg) {

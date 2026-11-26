@@ -213,7 +213,7 @@ function missingOf(reg, periods) {
 
 // --- Registros ---------------------------------------------------------------------------------------------------------------------------
 const regName = (reg) => (reg && (reg.name || (reg.nameKey ? t(reg.nameKey) : ''))) || t('menu.cmRegistrosInformacion');
-const kindText = (reg) => t(reg.kind === 'month' ? 'main.regKindMonth' : 'main.regKindDay');
+const kindText = (reg) => t(reg.kind === 'month' ? 'main.regKindMonth' : reg.kind === 'tabla' ? 'main.regKindTablaPill' : 'main.regKindDay');
 const valueLabel = (reg) => (reg && (reg.valueName || (reg.valueNameKey ? t(reg.valueNameKey) : ''))) || '';
 const currentReg = () => registries.find((r) => r.key === regKey) || null;
 const currentData = () => dataByKey[regKey] || null;
@@ -261,7 +261,7 @@ async function loadRegistries() {
         if (res.status === 401) { window.location.replace('Login.html'); return; }
         if (res.ok) {
             const body = await res.json();
-            registries = (body.registries || []).filter((r) => r.kind !== 'tabla'); // los de tabla libre todavía no están en la App
+            registries = body.registries || [];
             dataState = 'online';
             // los datos que ya estaban guardados siguen sirviendo si luego se pierde la señal dentro de la pantalla
             const saved = await savedForThisClient();
@@ -277,7 +277,7 @@ async function loadRegistries() {
     } catch { /* sin señal: se usa lo guardado */ }
     const saved = await savedForThisClient();
     if (saved) {
-        registries = (saved.registries || []).filter((r) => r.kind !== 'tabla');
+        registries = saved.registries || [];
         dataByKey = saved.data || {};
         loadsByKey = saved.loads || {};
         Object.values(loadsByKey).forEach((v) => { v.state = 'cached'; v.canAnnul = false; });
@@ -290,7 +290,7 @@ async function loadRegistries() {
 // Los datos de un registro (sus periodos, su última carga y un renglón por unidad y código); sin señal se usa lo guardado.
 async function loadRegistryData(key) {
     try {
-        const res = await fetch(apiUrl(`${API}/${encodeURIComponent(key)}/data`), { credentials: 'include' });
+        const res = await fetch(apiUrl(`${API}/${encodeURIComponent(key)}/data?lang=${currentLang()}&tz=${new Date().getTimezoneOffset()}`), { credentials: 'include' });
         if (res.status === 401) { window.location.replace('Login.html'); return false; }
         if (res.ok) {
             const body = await res.json();
@@ -362,8 +362,19 @@ function renderList() {
     if (dataState === 'none' || !registries.length) { bodyEl.appendChild(el('p', 'home-carga-empty-note', t(dataState === 'none' ? 'home.regNoData' : 'main.regCardNone'))); return; }
     const list = el('div', 'cal-app-list');
     list.setAttribute('data-help-key', 'appRegLista');
-    registries.forEach((reg) => list.appendChild(registryCard(reg)));
+    registries.filter((reg) => !reg.obsolete).forEach((reg) => list.appendChild(registryCard(reg)));
     bodyEl.appendChild(list);
+    // los registros que ya no se usan, en su apartado «Obsoletos» (cerrado)
+    const old = registries.filter((reg) => reg.obsolete);
+    if (old.length) {
+        const det = el('details', 'aa-app-control rg-app-obsol');
+        det.setAttribute('data-help-key', 'appRegObsoletos');
+        det.appendChild(el('summary', '', `${t('home.regObsoleteTitle')} (${old.length})`));
+        const oldList = el('div', 'cal-app-list');
+        old.forEach((reg) => oldList.appendChild(registryCard(reg)));
+        det.appendChild(oldList);
+        bodyEl.appendChild(det);
+    }
 }
 // Un registro: su nombre, si es mensual o diario, cuándo se cargó por última vez y su tira de periodos; un toque lo abre.
 function registryCard(reg) {
@@ -399,6 +410,7 @@ function renderRegistry() {
     if (!reg || !data) { view = 'list'; render(); return; }
     titleEl.textContent = regName(reg);
     if (dataState === 'cached') bodyEl.appendChild(el('p', 'pm-app-note', t('home.regCached')));
+    if (reg.kind === 'tabla') { renderFlexRegistry(reg, data); return; }
     const periods = data.periods || [];
     const loadsCount = loadsByKey[regKey] ? loadsByKey[regKey].loads.length : 0;
     // sin ninguna carga (ni siquiera una anulada) no hay nada que resumir, que buscar ni que anular
@@ -509,6 +521,7 @@ function openCode(id) {
 
 // --- El detalle de un código: sus valores por mes (o por día) ----------------------------------------------------------------------------
 function renderCode() {
+    if (currentReg() && currentReg().kind === 'tabla') { renderFlexRow(); return; }
     const reg = currentReg();
     const data = currentData();
     const row = data && (data.rows || []).find((r) => r.id === rowId);
@@ -560,6 +573,119 @@ function renderCode() {
         bodyEl.appendChild(toggle);
     }
 
+}
+
+// --- Registros de TABLA LIBRE (Daniel, 2026-11-26): cada carga lleva su propia elección de columnas; la tabla es el Excel en su orden y con sus nombres ---------------------------------------------------
+// Los datos llegan como columnas + renglones (cada renglón es una lista de celdas); la búsqueda se hace en el servidor (busca en TODOS los renglones, no solo en los que llegaron).
+let flexFound = null;   // lo que trajo el servidor para lo que se buscó
+let flexRow = null;     // el renglón abierto: { columns, row }
+const flexText = (v) => (v === null || v === undefined || v === '' ? '' : String(v));
+const flexModeText = (l) => t(l.flexMode === 'roles' ? 'home.flexWithRoles' : 'main.flexRole_asis');
+const flexStampText = (l) => [dayText(l.stamp), timeText(l.stamp)].filter(Boolean).join(' · ');
+function flexSource() { return search.trim() && flexFound ? flexFound : currentData(); }
+// Sin señal solo se puede buscar en los renglones que hay guardados.
+function flexLocal(text) {
+    const data = currentData();
+    const test = window.SearchSyntax ? window.SearchSyntax.compile('contains', text) : (v) => String(v).toLowerCase().includes(text.toLowerCase());
+    const rows = (data.rows || []).filter((r) => test(r.map(flexText).join(' ')));
+    return { ...data, rows, total: rows.length, truncated: false };
+}
+async function flexSearch(text, listEl) {
+    const q = text.trim();
+    if (!q) { flexFound = null; drawFlexRows(listEl); return; }
+    if (dataState !== 'online') { flexFound = flexLocal(q); drawFlexRows(listEl); return; }
+    try {
+        const params = new URLSearchParams({ lang: currentLang(), tz: String(new Date().getTimezoneOffset()), text: q });
+        const res = await fetch(apiUrl(`${API}/${encodeURIComponent(regKey)}/data?${params}`), { credentials: 'include' });
+        if (!res.ok) throw new Error('search failed');
+        const body = await res.json();
+        if (search.trim() !== q) return; // llegó una búsqueda más nueva
+        flexFound = body;
+    } catch { flexFound = flexLocal(q); }
+    drawFlexRows(listEl);
+}
+// El registro: la última carga, las acciones, las pestañas, el buscador y los renglones como tarjetas.
+function renderFlexRegistry(reg, data) {
+    const loadsCount = loadsByKey[regKey] ? loadsByKey[regKey].loads.length : 0;
+    if (!data.lastLoad && !loadsCount) { bodyEl.appendChild(el('p', 'home-carga-empty-note', t('main.regCardNone'))); appendActions(); return; }
+    if (tab === 'loads') { renderLoadsTab(); return; }
+    const load = data.lastLoad;
+    if (load) {
+        const hero = el('div', 'pm-app-card rg-app-hero');
+        hero.setAttribute('data-help-key', 'appRegHero');
+        const heroTop = el('span', 'rg-app-top');
+        heroTop.append(el('span', 'rg-app-lbl', t('home.regLastLoad')), el('i', 'rg-app-pill', kindText(reg)));
+        hero.appendChild(heroTop);
+        hero.appendChild(el('b', 'rg-app-big', dayText(load.createdAt)));
+        hero.appendChild(el('span', 'rg-app-sub', [timeText(load.createdAt), load.loadedBy, load.fileName].filter(Boolean).join(' · ')));
+        bodyEl.appendChild(hero);
+    }
+    appendActions();
+    bodyEl.appendChild(tabsNode(loadsCount));
+    const input = el('input', 'pm-app-input seg-app-search');
+    input.type = 'search';
+    input.placeholder = t('main.filterRegSearchHint');
+    input.setAttribute('aria-label', t('main.aaBuscar'));
+    input.setAttribute('data-help-key', 'appRegBuscar');
+    input.value = search;
+    bodyEl.appendChild(input);
+    const listEl = el('div', 'cal-app-list');
+    listEl.setAttribute('data-help-key', 'appRegLista');
+    bodyEl.appendChild(listEl);
+    let timer = 0;
+    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => { search = input.value; shown = MAX_ROWS; flexSearch(search, listEl); }, 400); });
+    if (search.trim()) flexSearch(search, listEl); else drawFlexRows(listEl);
+}
+function drawFlexRows(listEl) {
+    listEl.innerHTML = '';
+    const body = flexSource();
+    const rows = body.rows || [];
+    if (!rows.length) { listEl.appendChild(el('p', 'home-carga-empty-note', t(search.trim() ? 'home.regNoMatch' : 'main.emptyStateText'))); return; }
+    rows.slice(0, shown).forEach((r) => listEl.appendChild(flexCard(body.columns, r)));
+    if (rows.length > shown) {
+        const more = el('button', 'home-carga-secondary-btn');
+        more.type = 'button';
+        more.textContent = t('home.regShowMore', { n: rows.length - shown });
+        more.addEventListener('click', () => { shown += MAX_ROWS; drawFlexRows(listEl); });
+        listEl.appendChild(more);
+    }
+    if (body.truncated) listEl.appendChild(el('p', 'rg-app-note', t('main.regTruncated', { shown: num(rows.length), total: num(body.total) })));
+}
+// Un renglón: lo primero que trae (la llave), dos datos más y, a la derecha, su último valor con el nombre de su columna; un toque abre todo lo que trae.
+function flexCard(columns, row) {
+    const cellIdx = columns.map((c, i) => i).filter((i) => columns[i].group !== 'value' && columns[i].group !== 'load' && flexText(row[i]) !== '');
+    // el valor de la derecha: el último de la PRIMERA columna con valor (p. ej. la existencia de la carga más reciente), no el de la última (el importe)
+    const firstValue = columns.find((c) => c.group === 'value');
+    const family = firstValue ? columns.map((c, i) => i).filter((i) => columns[i].group === 'value' && columns[i].name === firstValue.name && typeof row[i] === 'number') : [];
+    const valueIdx = family.length ? family : columns.map((c, i) => i).filter((i) => (columns[i].group === 'value' || columns[i].num) && typeof row[i] === 'number');
+    const card = el('button', 'pm-app-card rg-app-row');
+    card.type = 'button';
+    card.setAttribute('data-help-key', 'appRegRow');
+    const main = el('span', 'rg-app-main');
+    main.appendChild(el('b', '', cellIdx.length ? flexText(row[cellIdx[0]]) : '—'));
+    const rest = cellIdx.slice(1, 3).map((i) => flexText(row[i])).filter(Boolean);
+    if (rest.length) main.appendChild(el('span', 'rg-app-sub', rest.join(' · ')));
+    const val = el('span', 'rg-app-val');
+    const last = valueIdx[valueIdx.length - 1];
+    val.append(el('b', '', last === undefined ? '—' : num(row[last])), el('span', '', last === undefined ? '' : columns[last].label));
+    card.append(main, val);
+    card.addEventListener('click', () => { regScroll = getScroll(); flexRow = { columns, row }; view = 'code'; render(); setScroll(0); });
+    return card;
+}
+// El detalle de un renglón: todas sus columnas, en el orden del Excel.
+function renderFlexRow() {
+    if (!flexRow) { view = 'registry'; render(); return; }
+    const { columns, row } = flexRow;
+    const first = columns.findIndex((c, i) => c.group !== 'value' && c.group !== 'load' && flexText(row[i]) !== '');
+    titleEl.textContent = first >= 0 ? flexText(row[first]) : regName(currentReg());
+    const meta = el('div', 'pm-app-meta rg-app-plist');
+    columns.forEach((c, i) => {
+        const v = row[i];
+        const div = el('div', v === null || v === undefined || v === '' ? 'rg-app-none' : '');
+        div.append(el('span', '', c.label), el('b', '', v === null || v === undefined || v === '' ? '—' : (typeof v === 'number' ? String(v) : v)));
+        meta.appendChild(div);
+    });
+    bodyEl.appendChild(meta);
 }
 
 // --- Pestañas: Datos | Cargas -----------------------------------------------------------------------------------------------------------------
@@ -636,8 +762,9 @@ function loadCard(l) {
     card.appendChild(top);
     card.appendChild(el('span', 'rg-app-sub', whenText(l)));
     card.appendChild(el('span', 'rg-app-sub', t(`main.regSource_${l.source}`)));
+    if (reg && reg.kind === 'tabla' && l.stamp) card.appendChild(el('span', 'rg-app-sub', t('home.flexLoadOf', { when: flexStampText(l) })));
     const chips = el('span', 'rg-app-chips');
-    chips.append(el('i', 'rg-app-chip', newPeriodsText(reg, l)), el('i', 'rg-app-chip', newRowsText(l.newRows || 0)), el('i', `rg-app-chip ${l.errors ? 'rg-app-chip-bad' : 'rg-app-chip-ok'}`, errorsText(l.errors || 0)));
+    chips.append(el('i', 'rg-app-chip', reg && reg.kind === 'tabla' ? flexModeText(l) : newPeriodsText(reg, l)), el('i', 'rg-app-chip', newRowsText(l.newRows || 0)), el('i', `rg-app-chip ${l.errors ? 'rg-app-chip-bad' : 'rg-app-chip-ok'}`, errorsText(l.errors || 0)));
     card.appendChild(chips);
     if (off && l.annulNote) card.appendChild(el('span', 'rg-app-note', l.annulNote));
     card.addEventListener('click', () => openLoad(l.id));
@@ -667,13 +794,13 @@ function renderLoad() {
     grid.setAttribute('data-help-key', 'appRegCargaCifras');
     const cnt = (value, labelKey, cls) => { const box = el('div', `rg-app-cnt${cls ? ` rg-app-cnt-${cls}` : ''}`); box.append(el('b', '', num(value)), el('span', '', t(labelKey))); return box; };
     grid.append(
-        cnt((l.newPeriods || []).length, 'main.colRegCargaPeriodos'), cnt(l.newRows, 'main.colRegCargaNuevos'), cnt(l.valuesAdded, 'main.colRegCargaAgregados'),
+        reg.kind === 'tabla' ? cnt(l.rowsInFile, 'main.colRegCargaRenglones') : cnt((l.newPeriods || []).length, 'main.colRegCargaPeriodos'), cnt(l.newRows, 'main.colRegCargaNuevos'), cnt(l.valuesAdded, 'main.colRegCargaAgregados'),
         cnt(l.untouched, 'main.colRegCargaYaEstaba'), cnt(l.different, 'main.colRegCargaDistintos'), cnt(l.errors, 'main.colRegCargaErrores', l.errors ? 'bad' : 'ok'),
     );
     bodyEl.appendChild(grid);
     const meta = el('div', 'pm-app-meta');
     const metaRow = (label, value) => { const div = el('div'); div.append(el('span', '', label), el('b', '', value || '—')); meta.appendChild(div); };
-    metaRow(t('main.colRegCargaPeriodos'), (l.newPeriods || []).map(periodLabel).join(', '));
+    if (reg.kind === 'tabla') { metaRow(t('main.flexWhen'), flexStampText(l)); metaRow(t('main.flexModeLabel'), flexModeText(l)); } else metaRow(t('main.colRegCargaPeriodos'), (l.newPeriods || []).map(periodLabel).join(', '));
     metaRow(t('main.colRegCargaOrigen'), t(`main.regSource_${l.source}`));
     metaRow(t('main.colRegCargaRenglones'), num(l.rowsInFile));
     if (off) {
@@ -753,7 +880,7 @@ const DIM_KEYS = ['unidad', 'unidadNombre', 'codigo', 'descripcion', 'categoria'
 let wiz = null;
 let siteBlocked = false;
 const todayText = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-const abilities = () => { const d = currentData() || {}; const reg = currentReg(); return { template: !!d.canTemplate, excel: !!d.canExcel, active: !!reg && reg.status === 'active' }; };
+const abilities = () => { const d = currentData() || {}; const reg = currentReg(); return { template: !!d.canTemplate, excel: !!d.canExcel, active: !!reg && reg.status === 'active' && !reg.obsolete }; };
 const progTrack = document.getElementById('carga-progress-track');
 const progFill = document.getElementById('carga-progress-fill');
 const progLabel = document.getElementById('carga-progress-label');
@@ -763,7 +890,7 @@ function setProgress(pct, label) {
     progLabel.hidden = !on;
     if (on) { progFill.style.width = `${pct}%`; progLabel.textContent = label; }
 }
-const wizSteps = () => (wiz.source === 'excel' ? ['start', 'file', 'map', 'review'] : ['start', 'file', 'review']);
+const wizSteps = () => (currentReg() && currentReg().kind === 'tabla' ? ['file', 'map', 'review'] : wiz.source === 'excel' ? ['start', 'file', 'map', 'review'] : ['start', 'file', 'review']);
 
 // Un archivo se comparte con la hoja del teléfono (WhatsApp, correo, Drive…); si el sistema no puede compartir archivos se intenta bajar directo.
 async function shareFile(file) {
@@ -812,7 +939,7 @@ function appendActions() {
     tpl.setAttribute('data-help-key', 'appRegPlantilla');
     tpl.innerHTML = `<i class="bx bx-download" aria-hidden="true"></i> <span>${esc(t('home.regTemplateShort'))}</span>`;
     tpl.addEventListener('click', () => shareTemplate(tpl));
-    row.append(load, tpl);
+    if (reg.kind === 'tabla') row.append(load); else row.append(load, tpl); // un registro libre no tiene plantilla: se carga tu propio Excel
     bodyEl.appendChild(row);
 }
 async function startLoad() {
@@ -822,7 +949,9 @@ async function startLoad() {
     regScroll = getScroll();
     // toda operación va ligada a un centro de costos completo (como en las demás pantallas de la App)
     siteBlocked = await window.AppSiteGate.blocked();
-    wiz = { step: 'start', source: a.template ? 'plantilla' : 'excel', file: null, buffer: null, info: null, sheet: null, include: new Set(), picks: {}, day: todayText(), preview: null, result: null, busy: false, error: '', mode: 'file', pasteText: '' };
+    // una tabla libre se carga siempre con tu Excel: no hay paso de «cómo» y se va directo al archivo
+    const flexReg = reg.kind === 'tabla';
+    wiz = { step: flexReg ? 'file' : 'start', source: a.template && !flexReg ? 'plantilla' : 'excel', file: null, buffer: null, info: null, sheet: null, include: new Set(), picks: {}, day: todayText(), preview: null, result: null, busy: false, error: '', mode: 'file', pasteText: '', fmode: 'asis', cols: [], time: nowTime() };
     view = 'wizard';
     render();
     setScroll(0);
@@ -854,7 +983,7 @@ function errorTextOf(err) {
     const body = (err && err.body) || {};
     if (!err || !err.body) return t('home.regLoadNeedSignal');
     if (body.code === 'IMPORT_HEADERS') return t('main.regErr_IMPORT_HEADERS', { missing: (body.missing || []).map((k) => (k === 'value' ? t('main.regValueColumn') : t(`main.regDim_${k}`))).join(', ') });
-    return ['IMPORT_FILE', 'IMPORT_EMPTY', 'IMPORT_TOO_BIG', 'IMPORT_DAY', 'IMPORT_DAY_FUTURE', 'REG_FORBIDDEN', 'REG_BUSY', 'COST_CENTER_REQUIRED', 'IMPORT_ERROR'].includes(body.code) ? t(`main.regErr_${body.code}`) : t('admin.saveError');
+    return ['IMPORT_FILE', 'IMPORT_EMPTY', 'IMPORT_TOO_BIG', 'IMPORT_DAY', 'IMPORT_DAY_FUTURE', 'REG_FORBIDDEN', 'REG_BUSY', 'COST_CENTER_REQUIRED', 'IMPORT_ERROR', 'FLEX_CONFIG', 'FLEX_DUP_NAME', 'FLEX_NO_KEY', 'IMPORT_STAMP', 'IMPORT_TOO_MANY_COLUMNS'].includes(body.code) ? t(`main.regErr_${body.code}`) : t('admin.saveError');
 }
 const problemText = (issue) => t(`main.regProb_${issue.problem}`);
 async function post(path, query, body) {
@@ -879,6 +1008,7 @@ function currentMapping() {
 }
 function importQuery(mode) {
     const reg = currentReg();
+    if (reg.kind === 'tabla') return { mode, header: String(wiz.info.headerRow), sheet: wiz.sheet || '', file: wiz.file ? wiz.file.name : '', cfg: JSON.stringify(flexConfig()), stamp: flexStampIso() };
     const q = { mode, source: wiz.source, file: wiz.file ? wiz.file.name : '' };
     if (wiz.sheet) q.sheet = wiz.sheet;
     if (reg.kind === 'day') q.day = wiz.day;
@@ -891,6 +1021,7 @@ async function inspect(sheet) {
     if (sheet) q.sheet = sheet;
     wiz.info = await post('inspect', q, wiz.buffer);
     wiz.sheet = wiz.info.sheet;
+    if (reg.kind === 'tabla') { wiz.cols = wiz.info.headers.map((h, k) => ({ i: h.index, text: h.text, name: h.text, example: wiz.info.sample[0] ? wiz.info.sample[0].values[k] : '', role: h.suggest.role, agg: h.suggest.agg, stampName: h.suggest.stampName !== false })); return; }
     wiz.include = new Set((wiz.info.mapping.valueCols || []).map((v) => v.col));
     wiz.picks = {};
     Object.entries(wiz.info.mapping.dims || {}).forEach(([dim, col]) => { wiz.picks[col] = dim; });
@@ -923,7 +1054,10 @@ async function chooseFile(file) {
 // La revisión: lo que haría la carga, sin guardar nada.
 async function review() {
     const reg = currentReg();
-    if (wiz.source === 'excel') {
+    if (reg.kind === 'tabla') {
+        const bad = flexProblem();
+        if (bad) { wiz.error = bad; wiz.busy = false; render(); return; }
+    } else if (wiz.source === 'excel') {
         const m = currentMapping();
         const noValue = reg.kind === 'month' ? !m.valueCols.length : m.valueCol === null;
         if (m.dims.unidad === undefined || m.dims.codigo === undefined || noValue) {
@@ -1117,6 +1251,7 @@ function stepFile(body, bar) {
 // Paso 3 de «Con mi Excel»: cada columna del archivo y cómo se carga (la unidad, el código y el valor son obligatorios).
 function stepMap(body, bar) {
     const reg = currentReg();
+    if (reg.kind === 'tabla') { stepMapFlex(body, bar); return; }
     const info = wiz.info;
     body.appendChild(el('h3', '', t('main.regMapTitle')));
     const monthCols = new Map((info.mapping.valueCols || []).map((v) => [v.col, v.period]));
@@ -1166,8 +1301,153 @@ function stepMap(body, bar) {
     body.appendChild(list);
     bar.append(wizBtn('rg-app-btn-pri', t('main.regReview'), review, wiz.busy), wizBtn('rg-app-btn-tx', t('main.regChooseAnother'), () => { wiz.step = 'file'; wiz.file = null; wiz.buffer = null; wiz.info = null; wiz.error = ''; render(); setScroll(0); }, wiz.busy));
 }
+// --- Cargar a una TABLA LIBRE: «tal cual» o el papel de cada columna (llave, dato, columna nueva que se suma o se toma uno, no se carga); cada columna se puede renombrar; el día y la hora de la carga se eligen aquí ----------
+const nowTime = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+// lo que se puede revisar sin ir al servidor: un día y una hora válidos, una llave al menos y nombres sin repetir
+function flexProblem() {
+    const stamp = new Date(`${wiz.day}T${wiz.time || '00:00'}`);
+    if (!wiz.day || Number.isNaN(stamp.getTime())) return t('main.regErr_IMPORT_STAMP');
+    const used = wiz.cols.filter((c) => wiz.fmode === 'asis' || c.role !== 'skip');
+    if (wiz.fmode === 'roles' && !used.some((c) => c.role === 'key')) return t('main.regErr_FLEX_NO_KEY');
+    const seen = new Set();
+    for (const c of used) { const f = String(c.name || '').trim().toLowerCase(); if (seen.has(f)) return t('main.regErr_FLEX_DUP_NAME'); seen.add(f); }
+    return '';
+}
+const flexConfig = () => ({ mode: wiz.fmode, columns: wiz.cols.map((c) => ({ i: c.i, name: c.name, role: wiz.fmode === 'asis' ? 'data' : c.role, agg: c.agg, stampName: c.stampName })) });
+const flexStampIso = () => { const d = new Date(`${wiz.day}T${wiz.time || '00:00'}`); return Number.isNaN(d.getTime()) ? '' : d.toISOString(); };
+function stepMapFlex(body, bar) {
+    const info = wiz.info;
+    const roles = wiz.fmode === 'roles';
+    body.appendChild(el('h3', '', t('main.regMapTitle')));
+    const ways = el('div', 'rg-app-ways');
+    ways.setAttribute('role', 'radiogroup');
+    ways.setAttribute('data-help-key', 'appRegFlexModo');
+    [['asis', 'main.flexModeAsis'], ['roles', 'main.flexModeRoles']].forEach(([id, labelKey]) => {
+        const on = wiz.fmode === id;
+        const btn = el('button', `rg-app-opt${on ? ' rg-app-opt-on' : ''}`);
+        btn.type = 'button';
+        btn.setAttribute('role', 'radio');
+        btn.setAttribute('aria-checked', on ? 'true' : 'false');
+        btn.innerHTML = '<span class="rg-app-optic"><i class="bx bxs-file" aria-hidden="true"></i></span>';
+        btn.appendChild(el('b', '', t(labelKey)));
+        btn.appendChild(el('span', `rg-app-rad${on ? ' rg-app-rad-on' : ''}`)).innerHTML = on ? '<i class="bx bx-check" aria-hidden="true"></i>' : '';
+        btn.addEventListener('click', () => { wiz.fmode = id; wiz.error = ''; const y = getScroll(); render(); setScroll(y); });
+        ways.appendChild(btn);
+    });
+    body.appendChild(ways);
+    body.appendChild(el('p', 'pm-app-note', t('main.flexRead', { cols: info.headers.length, rows: num(info.rowsDeclared) })));
+    if ((info.sheets || []).length > 1) {
+        const field = el('label', 'aa-app-field');
+        const select = el('select', 'pm-app-input');
+        info.sheets.forEach((sh) => { const o = el('option', '', sh.name); o.value = sh.name; select.appendChild(o); });
+        select.value = wiz.sheet;
+        select.addEventListener('change', async () => {
+            wiz.busy = true; wiz.error = ''; render();
+            try { await inspect(select.value); wiz.busy = false; render(); } catch (err) { wiz.error = errorTextOf(err); wiz.busy = false; render(); }
+        });
+        field.append(el('span', '', t('main.regSheet')), select);
+        body.appendChild(field);
+    }
+    const list = el('div', 'rg-app-maplist');
+    list.setAttribute('data-help-key', 'appRegFlexMapeo');
+    wiz.cols.forEach((c) => {
+        const off = roles && c.role === 'skip';
+        const row = el('div', `rg-app-maprow${off ? ' rg-app-fxoff' : ''}`);
+        const name = el('span', 'rg-app-mapname');
+        name.append(el('b', '', c.text), el('small', '', c.example === undefined || c.example === null ? '' : String(c.example)));
+        row.appendChild(name);
+        if (roles) {
+            const select = el('select', 'pm-app-input rg-app-mapsel');
+            select.setAttribute('aria-label', c.text);
+            ['key', 'data', 'value', 'skip'].forEach((r) => { const o = el('option', '', t(`main.flexRole_${r}`)); o.value = r; if (c.role === r) o.selected = true; select.appendChild(o); });
+            select.addEventListener('change', () => { c.role = select.value; const y = getScroll(); render(); setScroll(y); });
+            row.appendChild(select);
+        } else {
+            row.appendChild(el('small', 'rg-app-fxasis', t('main.flexRole_asis')));
+        }
+        const sub = el('div', 'rg-app-fxsub');
+        if (roles && c.role === 'value') {
+            const agg = el('select', 'pm-app-input');
+            agg.setAttribute('aria-label', t('main.flexColJoin'));
+            [['sum', 'main.flexAgg_sum'], ['one', 'main.flexAgg_one']].forEach(([v, k]) => { const o = el('option', '', t(k)); o.value = v; if (c.agg === v) o.selected = true; agg.appendChild(o); });
+            agg.addEventListener('change', () => { c.agg = agg.value; });
+            sub.appendChild(agg);
+        }
+        if (!off) {
+            const input = el('input', 'pm-app-input');
+            input.type = 'text';
+            input.maxLength = 60;
+            input.value = c.name;
+            input.setAttribute('aria-label', t('main.flexColName'));
+            input.addEventListener('input', () => { c.name = input.value; });
+            sub.appendChild(input);
+        }
+        if (roles && c.role === 'value') {
+            const label = el('label', 'rg-app-switch');
+            const box = el('input');
+            box.type = 'checkbox';
+            box.checked = !!c.stampName;
+            box.addEventListener('change', () => { c.stampName = box.checked; });
+            label.append(box, el('span', '', t('main.flexStampName')));
+            sub.appendChild(label);
+        }
+        if (sub.childNodes.length) row.appendChild(sub);
+        list.appendChild(row);
+    });
+    body.appendChild(list);
+    const when = el('div', 'aa-app-field rg-app-fxwhen');
+    when.setAttribute('data-help-key', 'appRegFlexCuando');
+    when.appendChild(el('span', '', t('main.flexWhen')));
+    const dayInput = el('input', 'pm-app-input');
+    dayInput.type = 'date'; dayInput.value = wiz.day; dayInput.max = todayText();
+    dayInput.addEventListener('input', () => { wiz.day = dayInput.value; });
+    dayInput.addEventListener('change', () => { wiz.day = dayInput.value; });
+    const timeInput = el('input', 'pm-app-input');
+    timeInput.type = 'time'; timeInput.value = wiz.time;
+    timeInput.setAttribute('aria-label', t('main.flexWhenTime'));
+    timeInput.addEventListener('input', () => { wiz.time = timeInput.value; });
+    timeInput.addEventListener('change', () => { wiz.time = timeInput.value; });
+    when.append(dayInput, timeInput);
+    body.appendChild(when);
+    bar.append(wizBtn('rg-app-btn-pri', t('main.regReview'), review, wiz.busy), wizBtn('rg-app-btn-tx', t('main.regChooseAnother'), () => { wiz.step = 'file'; wiz.file = null; wiz.buffer = null; wiz.info = null; wiz.error = ''; render(); setScroll(0); }, wiz.busy));
+}
+function stepReviewFlex(body, bar) {
+    const sum = wiz.preview.summary;
+    const issues = wiz.preview.issues || [];
+    const roles = sum.mode === 'roles';
+    body.appendChild(el('h3', '', wiz.file ? wiz.file.name : t('main.regImport')));
+    body.appendChild(el('p', 'rg-app-sub', t('main.regRowsRead', { rows: num(sum.rowsInFile), sheet: sum.sheet || '' })));
+    const grid = el('div', 'rg-app-grid2');
+    grid.setAttribute('data-help-key', 'appRegWizRevision');
+    const cnt = (value, label, cls) => { const box = el('div', `rg-app-cnt${cls ? ` rg-app-cnt-${cls}` : ''}`); box.append(el('b', '', num(value)), el('span', '', label)); return box; };
+    grid.append(cnt(sum.newRows, t('main.colRegCargaNuevos'), sum.newRows ? 'ok' : ''));
+    if (roles) grid.append(cnt(sum.valuesAdded, t('home.regToAdd'), sum.valuesAdded ? 'ok' : ''), cnt(sum.merged, t('home.flexMerged')), cnt(sum.untouched, t('main.colRegCargaYaEstaba')), cnt(sum.different, t('main.colRegCargaDistintos'), sum.different ? 'warn' : ''));
+    grid.append(cnt(sum.errors, t('main.colRegCargaErrores'), sum.errors ? 'bad' : 'ok'));
+    body.appendChild(grid);
+    if (sum.blank) body.appendChild(el('p', 'rg-app-sub', t('main.flexSumBlank', { n: num(sum.blank) })));
+    if (!sum.added) body.appendChild(el('p', 'rg-app-note', t('main.regSumNothing')));
+    if (issues.length) {
+        const det = el('details', 'aa-app-control');
+        det.setAttribute('open', '');
+        det.appendChild(el('summary', '', t('home.regIssuesTitle', { n: num(sum.issuesTotal || issues.length) })));
+        issues.slice(0, ISSUES_SHOWN).forEach((i) => {
+            const card = el('div', `rg-app-issue rg-app-issue-${i.kind === 'error' ? 'error' : 'warn'}`);
+            card.appendChild(el('b', '', [`${t('main.regIssueRow')} ${i.line}`, i.column].filter(Boolean).join(' · ')));
+            card.appendChild(el('span', '', t(`main.flexProb_${i.problem}`)));
+            if (i.file !== undefined || i.saved !== undefined) card.appendChild(el('small', '', [i.file === undefined ? '' : `${t('main.regIssueFile')}: ${i.file}`, i.saved === undefined ? '' : `${t('main.regIssueSaved')}: ${i.saved}`].filter(Boolean).join(' · ')));
+            det.appendChild(card);
+        });
+        if ((sum.issuesTotal || 0) > ISSUES_SHOWN) det.appendChild(el('p', 'rg-app-sub', t('main.regIssuesMore', { shown: ISSUES_SHOWN, total: num(sum.issuesTotal) })));
+        body.appendChild(det);
+    }
+    bar.appendChild(wizBtn('rg-app-btn-ok', !sum.added ? t('main.regLoadNothing') : t('main.regLoadGo'), commitLoad, !sum.added || wiz.busy, 'bx-upload'));
+    bar.appendChild(wizBtn('rg-app-btn-out', t('main.flexBack'), () => { wiz.step = 'map'; wiz.preview = null; wiz.error = ''; render(); setScroll(0); }, wiz.busy));
+    bar.appendChild(wizBtn('rg-app-btn-tx', t('main.regChooseAnother'), () => { wiz.step = 'file'; wiz.file = null; wiz.buffer = null; wiz.info = null; wiz.preview = null; wiz.error = ''; render(); setScroll(0); }, wiz.busy));
+}
+
 // Último paso: la revisión (no se ha guardado nada) y «Confirmar carga».
 function stepReview(body, bar) {
+    if (currentReg().kind === 'tabla') { stepReviewFlex(body, bar); return; }
     const sum = wiz.preview.summary;
     const issues = wiz.preview.issues || [];
     body.appendChild(el('h3', '', wiz.file ? wiz.file.name : t('main.regImport')));
@@ -1215,7 +1495,7 @@ function stepDone(body, bar) {
     const sum = wiz.result.summary;
     const big = el('div', 'rg-app-okbig');
     big.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
-    body.append(big, el('h3', 'rg-app-center', t('main.regDoneTitle')), el('p', 'rg-app-sub rg-app-center', t('main.regDoneText', { n: num(sum.valuesAdded), rows: num(sum.newRows) })));
+    body.append(big, el('h3', 'rg-app-center', t('main.regDoneTitle')), el('p', 'rg-app-sub rg-app-center', (currentReg().kind === 'tabla' ? t('main.flexDoneText', { rows: num(sum.newRows), values: num(sum.mode === 'roles' ? sum.valuesAdded : 0) }) : t('main.regDoneText', { n: num(sum.valuesAdded), rows: num(sum.newRows) }))));
     if (sum.newPeriods && sum.newPeriods.length) body.appendChild(el('p', 'rg-app-sub rg-app-center', t('main.regDoneNewPeriods', { periods: sum.newPeriods.map(periodLabel).join(', ') })));
     if (sum.different || sum.errors) body.appendChild(el('p', 'rg-app-sub rg-app-center', t('main.regDoneKept', { n: num(sum.different + sum.errors) })));
     const loadId = wiz.result.loadId;

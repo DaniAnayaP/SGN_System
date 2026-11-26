@@ -83,7 +83,7 @@ const {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
-    listRegistryDefs, createRegistryDef, updateRegistryDef,
+    listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, MR_SCREEN,
@@ -7255,7 +7255,8 @@ const REG_BUILTIN_NAMES = ['cargos por sitio mensuales', 'monthly charges by sit
 function regClientRegistries(clientId, isTestAccount) {
     const builtIns = Object.values(manualRegistries.REGISTRIES).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, valueNameKey: r.valueNameKey, custom: false, status: 'active' }));
     const custom = listRegistryDefs(clientId, isTestAccount).map((d) => ({ key: d.key, kind: d.kind, name: d.name, valueName: d.valueName, custom: true, status: d.status, createdBy: d.createdBy, createdAt: d.createdAt, defId: d.id }));
-    return [...builtIns, ...custom];
+    const obsolete = listRegistryObsolete(clientId, isTestAccount);
+    return [...builtIns, ...custom].map((r) => ({ ...r, obsolete: obsolete.has(r.key) }));
 }
 // needActive: para cargar o bajar la plantilla (un registro desactivado ya no recibe cargas; sus datos se pueden ver).
 function regRegistry(req, res, { needActive = false } = {}) {
@@ -7263,6 +7264,7 @@ function regRegistry(req, res, { needActive = false } = {}) {
     const registry = regClientRegistries(req.user.clientId, req.user.isTestAccount).find((r) => r.key === String(req.params.key || ''));
     if (!registry) { res.status(404).json({ code: 'REGISTRY_NOT_FOUND', message: 'Ese registro no existe.' }); return null; }
     if (needActive && registry.status !== 'active') { res.status(409).json({ code: 'REG_INACTIVE', message: 'Ese registro está desactivado.' }); return null; }
+    if (needActive && registry.obsolete) { res.status(409).json({ code: 'REG_OBSOLETE', message: 'Ese registro es obsoleto: ya no recibe cargas.' }); return null; }
     return registry;
 }
 function regForbidden(res) { res.status(403).json({ code: 'REG_FORBIDDEN', message: 'No tienes permiso para cargar registros.' }); }
@@ -7285,7 +7287,7 @@ app.get('/api/business/manual-registries/menu', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.json({ registries: [], canCreateRegistry: false });
     const canCreateRegistry = regAbilities(req).canCreateRegistry;
     // los de siempre llevan su nombre por idioma (nameKey); los agregados, el nombre que les puso el cliente. Un desactivado solo lo ve quien puede crear (para volver a activarlo).
-    res.json({ registries: regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => r.status === 'active' || canCreateRegistry).map((r) => ({ key: r.key, custom: r.custom, status: r.status, ...(r.custom ? { name: r.name } : { nameKey: r.nameKey }) })), canCreateRegistry });
+    res.json({ registries: regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => r.status === 'active' || canCreateRegistry).map((r) => ({ key: r.key, custom: r.custom, status: r.status, obsolete: !!r.obsolete, ...(r.custom ? { name: r.name } : { nameKey: r.nameKey }) })), canCreateRegistry });
 });
 // Agregar un registro nuevo: nombre, periodicidad (mensual o diaria) y lo que mide. Lleva las mismas columnas de referencia que los demás. Del botón «Crear registro» (colRegCrearAuth).
 function regNameTaken(req, name, exceptKey = '') {
@@ -7317,9 +7319,18 @@ app.patch('/api/business/manual-registries/:key', requireAuth, (req, res) => {
     const registry = regRegistry(req, res);
     if (!registry) return;
     if (!regAbilities(req).canCreateRegistry) return regForbidden(res);
+    const body = req.body || {};
+    // Obsoletos: vale para los de siempre y para los agregados; los datos y las cargas se conservan
+    if (body.obsolete !== undefined) {
+        if (typeof body.obsolete !== 'boolean') return res.status(400).json({ code: 'REG_STATUS', message: 'Estado no válido.' });
+        if (body.obsolete !== !!registry.obsolete) {
+            setRegistryObsolete(req.user.clientId, req.user.isTestAccount, registry.key, body.obsolete, changedByLabel(req));
+            logTableChange({ clientId: req.user.clientId, tableKey: REG_TABLE, recordId: registry.defId || 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.regObsoleto', oldValue: registry.obsolete ? 'obsoleto' : 'en uso', newValue: body.obsolete ? 'obsoleto' : 'en uso', changedBy: changedByLabel(req) });
+        }
+        return res.json({ registry: regClientRegistries(req.user.clientId, req.user.isTestAccount).find((r) => r.key === registry.key) });
+    }
     if (!registry.custom) return res.status(400).json({ code: 'REG_BUILTIN', message: 'Ese registro no se puede cambiar.' });
     const { clientId, isTestAccount } = req.user;
-    const body = req.body || {};
     const patch = {};
     if (body.name !== undefined) {
         const name = manualAnalyses.cleanText(body.name, 80);

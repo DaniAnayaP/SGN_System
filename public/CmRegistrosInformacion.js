@@ -73,7 +73,7 @@ async function loadRegistries() {
 function renderManage() {
     let bar = document.getElementById('reg-manage');
     const reg = currentRegistry();
-    const show = !!(reg && reg.custom && st.canCreateRegistry);
+    const show = !!(reg && st.canCreateRegistry); // los de siempre solo traen «Pasar a obsoletos»; los agregados, además, cambiar nombre, convertir y desactivar
     if (!show) { if (bar) bar.remove(); return; }
     if (!bar) {
         bar = document.createElement('div');
@@ -85,6 +85,7 @@ function renderManage() {
     }
     bar.textContent = '';
     if (reg.status !== 'active') { const off = document.createElement('span'); off.className = 'reg-pill reg-pill-off'; off.textContent = t('main.regStatus_inactive'); bar.appendChild(off); }
+    if (reg.obsolete) { const ob = document.createElement('span'); ob.className = 'reg-pill reg-pill-off'; ob.textContent = t('main.regStatus_obsolete'); bar.appendChild(ob); }
     const make = (icon, key, onClick) => {
         const btn = document.createElement('button');
         btn.type = 'button'; btn.className = 'btn btn-secondary reg-manage-btn';
@@ -92,9 +93,10 @@ function renderManage() {
         btn.addEventListener('click', onClick);
         bar.appendChild(btn);
     };
-    make('bx-edit', 'main.regRename', () => openRenameRegistry(reg));
-    if (reg.kind !== 'tabla' && !reg.lastLoad) make('bx-table', 'main.regToTabla', () => openConvertRegistry(reg)); // solo mientras no tenga cargas
-    make(reg.status === 'active' ? 'bx-hide' : 'bx-show', reg.status === 'active' ? 'main.regDeactivate' : 'main.regActivate', () => toggleRegistry(reg));
+    if (reg.custom) make('bx-edit', 'main.regRename', () => openRenameRegistry(reg));
+    if (reg.custom && reg.kind !== 'tabla' && !reg.lastLoad && !reg.obsolete) make('bx-table', 'main.regToTabla', () => openConvertRegistry(reg)); // solo mientras no tenga cargas
+    make(reg.obsolete ? 'bx-archive-out' : 'bx-archive-in', reg.obsolete ? 'main.regRestoreObsolete' : 'main.regMakeObsolete', () => toggleObsolete(reg));
+    if (reg.custom) make(reg.status === 'active' ? 'bx-hide' : 'bx-show', reg.status === 'active' ? 'main.regDeactivate' : 'main.regActivate', () => toggleRegistry(reg));
 }
 // La opción «＋ Agregar nuevo registro» del menú lateral abre esta pantalla con ?nuevo=1: se muestra la ventana de alta (solo con el botón «Crear registro») y se limpia la dirección.
 function openNewFromMenu() {
@@ -106,7 +108,7 @@ function openNewFromMenu() {
 }
 function regErrorText(body) {
     const code = body && body.code;
-    return ['REG_NAME_REQUIRED', 'REG_NAME_TAKEN', 'REG_KIND', 'REG_FORBIDDEN', 'REG_STATUS', 'REG_BUILTIN', 'REG_HAS_DATA'].includes(code) ? t(`main.regErr_${code}`) : t('admin.saveError');
+    return ['REG_NAME_REQUIRED', 'REG_NAME_TAKEN', 'REG_KIND', 'REG_FORBIDDEN', 'REG_STATUS', 'REG_BUILTIN', 'REG_HAS_DATA', 'REG_OBSOLETE'].includes(code) ? t(`main.regErr_${code}`) : t('admin.saveError');
 }
 function openModal(html, helpKey, onReady) {
     const overlay = document.createElement('div');
@@ -179,6 +181,13 @@ function openConvertRegistry(reg) {
             } catch (e) { btn.disabled = false; const el = overlay.querySelector('#reg-c-error'); el.textContent = regErrorText(e.body); el.hidden = false; }
         });
     });
+}
+// Pasar a «Obsoletos» (o sacarlo de ahí): sus datos y cargas se conservan, ya no recibe cargas y sale en el apartado Obsoletos del menú.
+async function toggleObsolete(reg) {
+    try {
+        await sendRegistry('PATCH', `${API}/${encodeURIComponent(reg.key)}`, { obsolete: !reg.obsolete });
+        location.reload(); // el menú lo cambia de apartado
+    } catch (e) { Dashboard.showToast(regErrorText(e.body), 'error'); }
 }
 async function toggleRegistry(reg) {
     try {
@@ -471,7 +480,7 @@ function renderButtons() {
     const toolbar = wrapperOf(DATA_TABLE)?.previousElementSibling;
     if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;
     const reg = currentRegistry();
-    if (toolbar.querySelector('#reg-import-btn') || !(st.canTemplate || st.canExcel) || (reg && reg.status !== 'active')) return;
+    if (toolbar.querySelector('#reg-import-btn') || !(st.canTemplate || st.canExcel) || (reg && (reg.status !== 'active' || reg.obsolete))) return; // un obsoleto ya no recibe cargas
     const make = (id, icon, key, helpKey, onClick) => {
         const btn = document.createElement('button');
         btn.type = 'button';

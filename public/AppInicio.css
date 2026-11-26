@@ -2674,6 +2674,11 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .rg-app-mapname b{ font-size: 0.8rem; color: var(--home-text-primary); overflow-wrap: anywhere; }
 .rg-app-mapname small{ font-size: 0.65rem; color: var(--home-text-muted); overflow-wrap: anywhere; }
 .rg-app-mapsel{ width: 100%; }
+.rg-app-fxsub{ display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.rg-app-fxsub .pm-app-input{ flex: 1 1 8rem; min-width: 0; }
+.rg-app-fxoff{ opacity: 0.55; }
+.rg-app-fxasis{ font-size: 0.7rem; color: var(--home-text-muted); }
+.rg-app-fxwhen .pm-app-input{ margin-top: 0.3rem; }
 .rg-app-switch{ display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; color: var(--home-text-secondary); }
 .rg-app-issue{ display: flex; flex-direction: column; gap: 0.15rem; padding: 0.5rem 0.7rem; margin: 0.35rem 0; border-radius: 0.7rem; font-size: 0.72rem; }
 .rg-app-issue-error{ background: #fbdde1; color: #7a1f2c; }

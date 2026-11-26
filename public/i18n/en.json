@@ -425,6 +425,8 @@
     "catAnalisisManualesAbbr": "Manual anal.",
     "catAnalisisManualesAbbr1": "Manual anal.",
     "catAnalisisManualesAbbr2": "Manual",
+    "cmRegistrosObsoletos": "Obsolete",
+    "cmRegistrosObsoletosAbbr1": "Obsol.",
     "cmRegistrosInformacion": "Information Records",
     "cmRegistrosInformacionAbbr1": "Info. Records",
     "cmRegistrosInformacionAbbr2": "Records",
@@ -5439,6 +5441,13 @@
     "regToTablaGo": "Convert",
     "regErr_REG_HAS_DATA": "That record already has loads: it cannot be converted.",
     "regTipo": "Type",
+    "regKindTablaPill": "Free table",
+    "flexModeLabel": "How it was loaded",
+    "regMakeObsolete": "Move to obsolete",
+    "regRestoreObsolete": "Take out of obsolete",
+    "regStatus_obsolete": "Obsolete",
+    "regErr_REG_OBSOLETE": "That record is obsolete: it no longer receives loads.",
+    "regObsoleto": "Use",
     "regUpdated": "Last update:",
     "regShowing": "Showing {shown} of {total} rows",
     "regShowMore": "Show more",
@@ -9090,6 +9099,10 @@
     "regReason": "Reason",
     "regNeedSignal": "You need signal to void a load.",
     "regLoadNotActive": "That load is no longer active.",
+    "flexWithRoles": "With roles",
+    "flexLoadOf": "Load of {when}",
+    "flexMerged": "Rows merged into others",
+    "regObsoleteTitle": "Obsolete",
     "regTemplateShort": "Template",
     "regWizHow": "How do you want to load it?",
     "regWizFile": "Choose the file",
@@ -9442,6 +9455,22 @@
     "appRegWizArchivo": {
       "what": "Choose the .xlsx with the phone's file picker (Files, Drive, WhatsApp…). Once chosen it is checked by itself; nothing is saved yet.",
       "example": "cargos-nov.xlsx"
+    },
+    "appRegFlexModo": {
+      "what": "\"Save as is\" keeps every column of your Excel with its order and names. \"Choose each column's role\" lets you decide what goes down the list and what becomes a new column on every load.",
+      "example": "Save as is"
+    },
+    "appRegFlexMapeo": {
+      "what": "Each column of your file: its role (Key, Row data, New column on every load or Not loaded), whether rows that land together are added up or one is taken (for example the cost) and the name you want to give it.",
+      "example": "ON_HAND_QTY → New column · Add up · \"Stock\""
+    },
+    "appRegFlexCuando": {
+      "what": "The day and time this load belongs to (the file doesn't carry them). Every load is its own column, even with the same day and time.",
+      "example": "11/26/2026 06:00"
+    },
+    "appRegObsoletos": {
+      "what": "Records that are no longer used. You can see them but they no longer receive loads; take them out from the Web.",
+      "example": "Monthly charges by site"
     },
     "appRegWizMapeo": {
       "what": "Each column of your file and how it is loaded: unit, unit description, code, description, category, UOM (or the value, in a daily record) or \"Not loaded\". Months are ticked or removed. Unit, code and value are required.",
