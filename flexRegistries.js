@@ -50,6 +50,17 @@ function findHeader(top) {
     return null;
 }
 
+// ¿El nombre de la columna ya trae una fecha o una hora («EXIST 25-NOV 06:00», «Consumo 25/11/2026»)? Entonces no se le pega, además, el día y la hora de la carga: saldría la fecha dos veces.
+const MONTH_WORD = '(?:ene(?:ro)?|feb(?:rero)?|mar(?:zo)?|abr(?:il)?|may(?:o)?|jun(?:io)?|jul(?:io)?|ago(?:sto)?|sep(?:t(?:iembre)?)?|oct(?:ubre)?|nov(?:iembre)?|dic(?:iembre)?|jan(?:uary)?|apr(?:il)?|aug(?:ust)?|dec(?:ember)?)';
+const DATE_IN_NAME = [
+    new RegExp(`\\b\\d{1,2}\\s*[-/. ]\\s*${MONTH_WORD}\\b`),   // 25-nov, 25/nov, 25 nov
+    new RegExp(`\\b${MONTH_WORD}\\s*[-/. ]\\s*\\d{1,4}\\b`),   // nov-25, nov 25
+    /\b\d{1,2}:\d{2}\b/,                                       // 06:00
+    /\b\d{4}-\d{1,2}-\d{1,2}\b/,                               // 2026-11-25
+    /\b\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\b/,                      // 25/11/2026
+];
+const nameHasDate = (name) => { const f = String(name == null ? '' : name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); return DATE_IN_NAME.some((re) => re.test(f)); };
+
 // Una sugerencia de papel para cada columna (la persona la puede cambiar): los meses son columnas nuevas con su nombre fijo; los códigos, unidades, lotes y ubicaciones son llave;
 // las cantidades, costos e importes son columnas nuevas en cada carga; lo demás es dato.
 const KEY_WORDS = /(^| )(unidad|unit|codigo|code|sku|item|articulo|lote|lot number|locator|localizador|subinv|subinventory|subinventario)( |$)/;
@@ -57,12 +68,13 @@ const NOT_KEY_WORDS = /(type|tipo|desc|name|nombre|date|fecha|expir|period)/;
 const VALUE_WORDS = /(qty|cantidad|existencia|stock|on hand|importe|costo|cost|monto|total)/;
 function suggestRole(text, rawValue, sampleValues) {
     if (rawValue instanceof Date || manual.parsePeriodHeader(rawValue)) return { role: 'value', agg: 'sum', stampName: false };
+    const stampName = !nameHasDate(text); // si el título ya trae su fecha, no se le agrega la de la carga
     const f = foldText(text);
     const filled = sampleValues.filter((v) => v !== null && v !== undefined);
     const numeric = filled.length > 0 && filled.filter((v) => typeof v === 'number').length / filled.length >= 0.6; // casi todos números (un «n/a» suelto no la desacomoda)
-    if (VALUE_WORDS.test(f) && numeric) return { role: 'value', agg: /(cost|costo|precio|price)/.test(f) ? 'one' : 'sum', stampName: true };
-    if (KEY_WORDS.test(f) && !NOT_KEY_WORDS.test(f)) return { role: 'key', agg: 'sum', stampName: true };
-    return { role: 'data', agg: 'sum', stampName: true };
+    if (VALUE_WORDS.test(f) && numeric) return { role: 'value', agg: /(cost|costo|precio|price)/.test(f) ? 'one' : 'sum', stampName };
+    if (KEY_WORDS.test(f) && !NOT_KEY_WORDS.test(f)) return { role: 'key', agg: 'sum', stampName };
+    return { role: 'data', agg: 'sum', stampName };
 }
 
 // El archivo a la vista antes de cargar: sus hojas, el renglón de títulos, las columnas (con su papel sugerido) y unos renglones de ejemplo. No escribe nada.
@@ -430,7 +442,7 @@ function buildColumns(loads, { tz = 0, lang = 'es' } = {}) {
             const clsF = noteClass(c);
             if (c.role === 'value') {
                 const myK = k; k += 1;
-                if (c.stampName) valueCols.push({ kind: 'value', group: 'value', name: c.name, loadId: load.id, srcKey: `m:${load.id}:${myK}`, label: uniqueLabel(`${c.name} ${loadStamp}`), clsF });
+                if (c.stampName) valueCols.push({ kind: 'value', group: 'value', name: c.name, loadId: load.id, srcKey: `m:${load.id}:${myK}`, label: uniqueLabel(nameHasDate(c.name) ? c.name : `${c.name} ${loadStamp}`), clsF });
                 else if (!namedPlaced.has(f)) { namedPlaced.add(f); valueCols.push({ kind: 'value', group: 'value', name: c.name, srcKey: periodNameKey(c.name), label: c.name, clsF }); }
             } else {
                 const slot = cellAt.get(f);
@@ -506,4 +518,4 @@ function parseFilter(raw, columns) {
 }
 
 const foldName = (name) => foldText(name);
-module.exports = { suggestLinks, nameScore, packValues, unpackValues, unpackSlot, valueSlotKeys, prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };
+module.exports = { nameHasDate, suggestLinks, nameScore, packValues, unpackValues, unpackSlot, valueSlotKeys, prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };

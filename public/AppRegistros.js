@@ -956,7 +956,7 @@ async function startLoad() {
     siteBlocked = await window.AppSiteGate.blocked();
     // una tabla libre se carga siempre con tu Excel: no hay paso de «cómo» y se va directo al archivo
     const flexReg = reg.kind === 'tabla';
-    wiz = { step: flexReg ? 'file' : 'start', source: a.template && !flexReg ? 'plantilla' : 'excel', file: null, buffer: null, info: null, sheet: null, include: new Set(), picks: {}, day: todayText(), preview: null, result: null, busy: false, error: '', mode: 'file', pasteText: '', fmode: 'asis', cols: [], time: nowTime(), classColors: {}, classSeeded: false };
+    wiz = { step: flexReg ? 'file' : 'start', source: a.template && !flexReg ? 'plantilla' : 'excel', file: null, buffer: null, info: null, sheet: null, include: new Set(), picks: {}, day: todayText(), preview: null, result: null, busy: false, error: '', mode: 'file', pasteText: '', fmode: 'asis', cols: [], time: nowTime(), classColors: {}, classSeeded: false, view: 'all', open: {} };
     view = 'wizard';
     render();
     setScroll(0);
@@ -1028,12 +1028,23 @@ async function inspect(sheet) {
     wiz.info = await post('inspect', q, wiz.buffer);
     wiz.sheet = wiz.info.sheet;
     if (reg.kind === 'tabla') {
-        // si el registro ya tuvo una carga, cada columna viene con lo que se eligió ahí (se empareja por el título del Excel); las que no estaban llevan la marca «Nueva»
+        // si el registro ya tuvo cargas, cada título se reconoce solo (por el título que traía en una carga anterior) y toma lo ya definido: «ya existe». Uno que trae otro nombre pero se parece a una columna que ya existe
+        // queda «por confirmar» (se decide si es esa o una nueva adicional); lo demás es una nueva adicional con la marca «Nueva».
         const prevRoles = wiz.info.prevMode === 'roles';
+        const known = exMap();
         wiz.cols = wiz.info.headers.map((h, k) => {
             const p = h.prefill;
             if (p && p.cls && Number.isInteger(p.color) && wiz.classColors[foldCls(p.cls)] === undefined) wiz.classColors[foldCls(p.cls)] = p.color;
-            return { i: h.index, text: h.text, name: (p && p.name) || h.text, example: wiz.info.sample[0] ? wiz.info.sample[0].values[k] : '', role: p && prevRoles ? p.role : (prevRoles && h.suggest.role === 'key' ? 'data' : h.suggest.role), agg: p && prevRoles && p.agg ? p.agg : h.suggest.agg, stampName: p && prevRoles ? p.stampName !== false : h.suggest.stampName !== false, cls: (p && p.cls) || '', isNew: !!wiz.info.prevMode && !p };
+            const c = { i: h.index, text: h.text, example: wiz.info.sample[0] ? wiz.info.sample[0].values[k] : '', st: 'new', link: '', sug: '', sugState: '', isNew: !!wiz.info.prevMode, sel: false,
+                role: p && prevRoles ? p.role : (prevRoles && h.suggest.role === 'key' ? 'data' : h.suggest.role), agg: p && prevRoles && p.agg ? p.agg : h.suggest.agg, stampName: p && prevRoles ? p.stampName !== false : h.suggest.stampName !== false,
+                name: (p && p.name) || h.text, cls: (p && p.cls) || '' };
+            if (prevRoles && p && p.role === 'skip') { c.st = 'skip'; c.isNew = false; c.role = h.suggest.role; c.name = h.text; }
+            else if (prevRoles && p && known.has(p.name)) { c.st = 'exist'; c.link = p.name; c.isNew = false; }
+            else if (prevRoles && p) c.isNew = false;
+            else if (prevRoles && h.link && known.has(h.link.name)) {
+                if (h.link.score >= 1) { c.st = 'exist'; c.link = h.link.name; c.isNew = false; } else { c.sug = h.link.name; c.sugState = 'pending'; }
+            }
+            return c;
         });
         if (wiz.info.prevMode && !wiz.prevApplied) { wiz.prevApplied = true; wiz.fmode = wiz.info.prevMode; }
         return;
@@ -1324,17 +1335,37 @@ const foldCls = (v) => String(v || '').trim().toLowerCase().normalize('NFD').rep
 const nextClassColor = () => { const used = new Set(Object.values(wiz.classColors)); for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i; return Object.keys(wiz.classColors).length % CLASS_COLORS.length; };
 const ensureClassColor = (c) => { const f = foldCls(c.cls); if (f && wiz.classColors[f] === undefined) wiz.classColors[f] = nextClassColor(); };
 const nowTime = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-// lo que se puede revisar sin ir al servidor: un día y una hora válidos, una llave al menos y nombres sin repetir
+// lo que lleva la ventana de columnas de una tabla libre (App): una tarjeta por columna con UNA decisión (ya existe / nueva adicional / no se carga), igual que en la Web
+const foldName = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const exMap = () => new Map(((wiz.info && wiz.info.existing) || []).map((e) => [e.name, e]));
+const hasExisting = () => !!(wiz.info && wiz.info.existing && wiz.info.existing.length);
+// lo que de verdad se manda de una columna: lo ya definido si «ya existe», lo que se escribió si es nueva
+const flexEffective = (c) => {
+    if (wiz.fmode === 'asis') return { name: c.name, role: 'data', agg: 'sum', stampName: true, cls: c.cls || '', color: c.cls ? wiz.classColors[foldCls(c.cls)] : null };
+    if (c.st === 'skip') return { name: c.text, role: 'skip', agg: 'sum', stampName: true, cls: '', color: null };
+    if (c.st === 'exist') {
+        const e = exMap().get(c.link);
+        if (e) return { name: e.name, role: e.role, agg: e.agg, stampName: e.stampName, cls: e.cls || '', color: Number.isInteger(e.color) ? e.color : null };
+    }
+    return { name: c.name, role: c.role, agg: c.agg, stampName: c.stampName, cls: c.cls || '', color: c.cls ? wiz.classColors[foldCls(c.cls)] : null };
+};
+// lo que se puede revisar sin ir al servidor: un día y una hora válidos, columnas por confirmar, una llave al menos y nombres sin repetir
 function flexProblem() {
     const stamp = new Date(`${wiz.day}T${wiz.time || '00:00'}`);
     if (!wiz.day || Number.isNaN(stamp.getTime())) return t('main.regErr_IMPORT_STAMP');
-    const used = wiz.cols.filter((c) => wiz.fmode === 'asis' || c.role !== 'skip');
+    if (wiz.fmode === 'roles') {
+        const pend = wiz.cols.filter((c) => c.st === 'new' && c.sugState === 'pending');
+        if (pend.length) return t('main.flexErrPending', { list: pend.map((c) => `«${c.text}» → «${c.sug}»`).join(', ') });
+        const noLink = wiz.cols.find((c) => c.st === 'exist' && !c.link);
+        if (noLink) return t('main.flexErrNoLink', { name: noLink.text });
+    }
+    const used = wiz.cols.filter((c) => wiz.fmode === 'asis' || c.st !== 'skip').map(flexEffective);
     if (wiz.fmode === 'roles' && !used.some((c) => c.role === 'key')) return t('main.regErr_FLEX_NO_KEY');
     const seen = new Set();
-    for (const c of used) { const f = String(c.name || '').trim().toLowerCase(); if (seen.has(f)) return t('main.regErr_FLEX_DUP_NAME'); seen.add(f); }
+    for (const c of used) { const f = foldName(c.name); if (seen.has(f)) return t('main.regErr_FLEX_DUP_NAME'); seen.add(f); }
     return '';
 }
-const flexConfig = () => ({ mode: wiz.fmode, columns: wiz.cols.map((c) => ({ i: c.i, src: c.text, name: c.name, role: wiz.fmode === 'asis' ? 'data' : c.role, agg: c.agg, stampName: c.stampName, cls: c.cls || '', color: c.cls ? wiz.classColors[foldCls(c.cls)] : null })) });
+const flexConfig = () => ({ mode: wiz.fmode, columns: wiz.cols.map((c) => { const e = flexEffective(c); return { i: c.i, src: c.text, name: e.name, role: e.role, agg: e.agg, stampName: e.stampName, cls: e.cls, color: e.color }; }) });
 const flexStampIso = () => { const d = new Date(`${wiz.day}T${wiz.time || '00:00'}`); return Number.isNaN(d.getTime()) ? '' : d.toISOString(); };
 function stepMapFlex(body, bar) {
     const info = wiz.info;
@@ -1371,90 +1402,199 @@ function stepMapFlex(body, bar) {
         field.append(el('span', '', t('main.regSheet')), select);
         body.appendChild(field);
     }
-    const list = el('div', 'rg-app-maplist');
-    list.setAttribute('data-help-key', 'appRegFlexMapeo');
-    wiz.cols.forEach((c) => {
-        const off = roles && c.role === 'skip';
-        const row = el('div', `rg-app-maprow${off ? ' rg-app-fxoff' : ''}`);
+    // ---- las tarjetas: una por columna del Excel, con UNA decisión; lo ya definido va en grupos cerrados ----
+    const rerender = () => { const y = getScroll(); render(); setScroll(y); };
+    const inView = (c) => wiz.view === 'all' || (roles && ((wiz.view === 'new' && c.st === 'new') || (wiz.view === 'skip' && c.st === 'skip')));
+    const segBtn = (label, pressed, onClick) => { const b = el('button', '', label); b.type = 'button'; b.setAttribute('aria-pressed', pressed ? 'true' : 'false'); b.addEventListener('click', onClick); return b; };
+    const seg = (buttons) => { const s = el('span', 'rg-app-seg'); s.setAttribute('role', 'group'); buttons.forEach((b) => s.appendChild(b)); return s; };
+    const setState = (c, to) => {
+        if (to === 'exist') { c.st = 'exist'; if (!c.link) c.link = c.sug && exMap().has(c.sug) ? c.sug : ''; if (c.link && c.link === c.sug) c.sugState = 'accepted'; c.isNew = false; }
+        else { if (c.sugState === 'pending') c.sugState = 'rejected'; c.st = to; if (to === 'new' && wiz.info.prevMode) c.isNew = true; }
+        wiz.error = '';
+    };
+    const classRow = (c) => {
+        const clsRow = el('div', 'rg-app-clsrow');
+        const input = el('input', 'pm-app-input');
+        input.type = 'text'; input.maxLength = 40; input.value = c.cls || '';
+        input.placeholder = t('main.flexClsNone');
+        input.setAttribute('aria-label', t('main.flexColClass'));
+        input.setAttribute('list', 'rg-app-cls-list');
+        input.addEventListener('input', () => { c.cls = input.value; });
+        input.addEventListener('change', () => { c.cls = input.value.replace(/\s+/g, ' ').trim(); ensureClassColor(c); rerender(); });
+        clsRow.appendChild(input);
+        if (c.cls) {
+            const color = wiz.classColors[foldCls(c.cls)];
+            const dots = el('span', 'rg-app-dots');
+            CLASS_COLORS.forEach((hex, i) => {
+                const dot = el('button', 'rg-app-dot');
+                dot.type = 'button';
+                dot.style.background = hex;
+                dot.setAttribute('aria-pressed', color === i ? 'true' : 'false');
+                dot.setAttribute('aria-label', t(`main.flexColor_${i}`));
+                dot.addEventListener('click', () => { wiz.classColors[foldCls(c.cls)] = i; rerender(); });
+                dots.appendChild(dot);
+            });
+            const down = el('button', 'rg-app-down');
+            down.type = 'button';
+            down.title = t('main.flexClsDown');
+            down.setAttribute('aria-label', t('main.flexClsDown'));
+            down.innerHTML = '<i class="bx bx-down-arrow-alt" aria-hidden="true"></i>';
+            down.addEventListener('click', () => {
+                const at = wiz.cols.indexOf(c);
+                for (let k = at + 1; k < wiz.cols.length; k += 1) { const n = wiz.cols[k]; if (n.cls || (roles && n.st === 'skip')) break; n.cls = c.cls; }
+                rerender();
+            });
+            clsRow.append(dots, down);
+        }
+        return clsRow;
+    };
+    const cardNode = (c) => {
+        const card = el('div', `rg-app-cd${roles && c.st === 'skip' ? ' rg-app-cd-off' : ''}${roles && c.isNew && c.st === 'new' ? ' rg-app-cd-new' : ''}`);
+        const head = el('div', 'rg-app-cdhead');
+        const pick = el('input');
+        pick.type = 'checkbox'; pick.checked = !!c.sel; pick.className = 'rg-app-pick';
+        pick.setAttribute('aria-label', t('main.flexPick', { name: c.text }));
+        pick.addEventListener('change', () => { c.sel = pick.checked; rerender(); });
         const name = el('span', 'rg-app-mapname');
         name.append(el('b', '', c.text), el('small', '', c.example === undefined || c.example === null ? '' : String(c.example)));
-        if (c.isNew) name.appendChild(el('em', 'rg-app-new', t('main.flexNewCol')));
-        row.appendChild(name);
+        if (roles && c.isNew && c.st === 'new') name.appendChild(el('em', 'rg-app-new', t('main.flexNewCol')));
+        head.append(pick, name);
+        card.appendChild(head);
         if (roles) {
-            const select = el('select', 'pm-app-input rg-app-mapsel');
-            select.setAttribute('aria-label', c.text);
-            ['key', 'data', 'value', 'skip'].forEach((r) => { const o = el('option', '', t(`main.flexRole_${r}`)); o.value = r; if (c.role === r) o.selected = true; select.appendChild(o); });
-            select.addEventListener('change', () => { c.role = select.value; const y = getScroll(); render(); setScroll(y); });
-            row.appendChild(select);
-        } else {
-            row.appendChild(el('small', 'rg-app-fxasis', t('main.flexRole_asis')));
+            const buttons = [];
+            if (hasExisting()) buttons.push(segBtn(t('main.flexStExist'), c.st === 'exist', () => { setState(c, 'exist'); rerender(); }));
+            buttons.push(segBtn(t('main.flexStNew'), c.st === 'new', () => { setState(c, 'new'); rerender(); }), segBtn(t('main.flexStSkip'), c.st === 'skip', () => { setState(c, 'skip'); rerender(); }));
+            const choice = el('div', 'rg-app-cdchoice');
+            choice.appendChild(seg(buttons));
+            if (c.st === 'exist') {
+                const ex = exMap();
+                const link = el('label', 'rg-app-cdlink');
+                link.appendChild(el('span', '', t('main.flexLinkTo')));
+                const select = el('select', 'pm-app-input');
+                select.setAttribute('aria-label', t('main.flexLinkTo'));
+                if (!c.link) { const o = el('option', '', t('main.flexLinkPick')); o.value = ''; o.selected = true; select.appendChild(o); }
+                [...ex.values()].forEach((e) => { const o = el('option', '', e.name); o.value = e.name; if (e.name === c.link) o.selected = true; select.appendChild(o); });
+                select.addEventListener('change', () => { c.link = select.value; if (c.link && c.link === c.sug) c.sugState = 'accepted'; wiz.error = ''; rerender(); });
+                link.appendChild(select);
+                const cur = ex.get(c.link);
+                if (cur) link.appendChild(el('b', '', t(`main.flexRole_${cur.role}`)));
+                choice.appendChild(link);
+            }
+            card.appendChild(choice);
+            if (c.st === 'new' && c.sugState === 'pending') {
+                const sug = el('div', 'rg-app-cdsug');
+                sug.appendChild(el('span', '', t('main.flexSugAsk', { name: c.sug })));
+                sug.append(segBtn(t('main.flexSugYes'), false, () => { c.st = 'exist'; c.link = c.sug; c.sugState = 'accepted'; c.isNew = false; wiz.error = ''; rerender(); }), segBtn(t('main.flexSugNo'), false, () => { c.sugState = 'rejected'; wiz.error = ''; rerender(); }));
+                card.appendChild(sug);
+            }
         }
-        const sub = el('div', 'rg-app-fxsub');
-        if (roles && c.role === 'value') {
-            const agg = el('select', 'pm-app-input');
-            agg.setAttribute('aria-label', t('main.flexColJoin'));
-            [['sum', 'main.flexAgg_sum'], ['one', 'main.flexAgg_one']].forEach(([v, k]) => { const o = el('option', '', t(k)); o.value = v; if (c.agg === v) o.selected = true; agg.appendChild(o); });
-            agg.addEventListener('change', () => { c.agg = agg.value; });
-            sub.appendChild(agg);
-        }
-        if (!off) {
+        if (!roles || c.st === 'new') {
+            const det = el('div', 'rg-app-cddet');
+            if (roles) {
+                const roleRow = el('div', 'rg-app-cdrow');
+                roleRow.append(el('b', '', t('main.flexColLoadAs')), seg(['key', 'data', 'value'].map((r) => segBtn(t(`main.flexRole_${r}`), c.role === r, () => { c.role = r; rerender(); }))));
+                det.appendChild(roleRow);
+                if (c.role === 'value') {
+                    const aggRow = el('div', 'rg-app-cdrow');
+                    aggRow.append(el('b', '', t('main.flexColJoin')), seg(['sum', 'one'].map((a) => segBtn(t(`main.flexAgg_${a}`), c.agg === a, () => { c.agg = a; rerender(); }))));
+                    const label = el('label', 'rg-app-switch');
+                    const box = el('input');
+                    box.type = 'checkbox'; box.checked = !!c.stampName;
+                    box.addEventListener('change', () => { c.stampName = box.checked; });
+                    label.append(box, el('span', '', t('main.flexStampName')));
+                    aggRow.appendChild(label);
+                    det.appendChild(aggRow);
+                }
+            }
+            const nameRow = el('div', 'rg-app-cdrow');
             const input = el('input', 'pm-app-input');
-            input.type = 'text';
-            input.maxLength = 60;
-            input.value = c.name;
+            input.type = 'text'; input.maxLength = 60; input.value = c.name;
             input.setAttribute('aria-label', t('main.flexColName'));
             input.addEventListener('input', () => { c.name = input.value; });
-            sub.appendChild(input);
+            nameRow.append(el('b', '', t('main.flexColName')), input);
+            det.appendChild(nameRow);
+            const clsBlock = el('div', 'rg-app-cdrow');
+            clsBlock.append(el('b', '', t('main.flexColClass')), classRow(c));
+            det.appendChild(clsBlock);
+            card.appendChild(det);
         }
-        if (roles && c.role === 'value') {
-            const label = el('label', 'rg-app-switch');
-            const box = el('input');
-            box.type = 'checkbox';
-            box.checked = !!c.stampName;
-            box.addEventListener('change', () => { c.stampName = box.checked; });
-            label.append(box, el('span', '', t('main.flexStampName')));
-            sub.appendChild(label);
+        return card;
+    };
+    const groupDetails = (id, titleKey, items, defaultOpen) => {
+        if (!items.length) return null;
+        const det = el('details', 'rg-app-grp');
+        const open = wiz.view !== 'all' || id === 'pending' || (wiz.open[id] === undefined ? defaultOpen : wiz.open[id]);
+        if (open) det.setAttribute('open', '');
+        det.addEventListener('toggle', () => { wiz.open[id] = det.open; });
+        const sum = el('summary', '', t(titleKey));
+        sum.appendChild(el('small', '', ` ${items.length}`));
+        det.appendChild(sum);
+        const cards = el('div', 'rg-app-cdlist');
+        items.forEach((c) => cards.appendChild(cardNode(c)));
+        det.appendChild(cards);
+        return det;
+    };
+    const buildGroups = () => {
+        const box = el('div', 'rg-app-cdgroups');
+        box.setAttribute('data-help-key', 'appRegFlexMapeo');
+        const list = wiz.cols.filter(inView);
+        if (!roles) { const cards = el('div', 'rg-app-cdlist'); list.forEach((c) => cards.appendChild(cardNode(c))); box.appendChild(cards); return box; }
+        const ex = exMap();
+        const pending = (c) => (c.st === 'new' && c.sugState === 'pending') || (c.st === 'exist' && !c.link);
+        const isValueLink = (c) => c.st === 'exist' && ex.get(c.link) && ex.get(c.link).role === 'value';
+        const groups = hasExisting() ? [
+            ['pending', 'main.flexGrpPending', list.filter(pending), true],
+            ['new', 'main.flexGrpNew', list.filter((c) => c.st === 'new' && !pending(c)), true],
+            ['existKeys', 'main.flexGrpExistKeys', list.filter((c) => c.st === 'exist' && !pending(c) && !isValueLink(c)), false],
+            ['existValues', 'main.flexGrpExistValues', list.filter((c) => isValueLink(c) && !pending(c)), false],
+            ['skip', 'main.flexGrpSkip', list.filter((c) => c.st === 'skip'), false],
+        ] : [
+            ['all', 'main.flexGrpAll', list.filter((c) => c.st !== 'skip'), true],
+            ['skip', 'main.flexGrpSkip', list.filter((c) => c.st === 'skip'), true],
+        ];
+        groups.forEach(([id, key, items, open]) => { const g = groupDetails(id, key, items, open); if (g) box.appendChild(g); });
+        return box;
+    };
+    // el resumen, los filtros y la barra de las elegidas
+    const top = el('div', 'rg-app-cdtop');
+    if (roles) {
+        const count = (st) => wiz.cols.filter((c) => c.st === st).length;
+        const pend = wiz.cols.filter((c) => c.st === 'new' && c.sugState === 'pending').length;
+        const sum = el('div', 'rg-app-cdsum');
+        if (hasExisting()) sum.appendChild(el('span', 'rg-app-pill rg-app-pill-ok', t('main.flexSumExist', { n: num(count('exist')) })));
+        sum.appendChild(el('span', 'rg-app-pill rg-app-pill-new', t('main.flexSumNew', { n: num(count('new') - pend) })));
+        if (pend) sum.appendChild(el('span', 'rg-app-pill rg-app-pill-warn', t('main.flexSumPending', { n: num(pend) })));
+        sum.appendChild(el('span', 'rg-app-pill rg-app-pill-off', t('main.flexSumSkip', { n: num(count('skip')) })));
+        top.appendChild(sum);
+        if (hasExisting()) {
+            const views = el('div', 'rg-app-seg rg-app-cdviews');
+            [['all', 'main.flexViewAll'], ['new', 'main.flexViewNew'], ['skip', 'main.flexViewSkip']].forEach(([v, k]) => views.appendChild(segBtn(t(k), wiz.view === v, () => { wiz.view = v; rerender(); })));
+            top.appendChild(views);
         }
-        if (sub.childNodes.length) row.appendChild(sub);
-        // la clasificación (nombre y color) de la columna
-        if (!off) {
-            const clsRow = el('div', 'rg-app-clsrow');
-            const input = el('input', 'pm-app-input');
-            input.type = 'text'; input.maxLength = 40; input.value = c.cls || '';
-            input.placeholder = t('main.flexClsNone');
-            input.setAttribute('aria-label', t('main.flexColClass'));
-            input.setAttribute('list', 'rg-app-cls-list');
-            input.addEventListener('input', () => { c.cls = input.value; });
-            input.addEventListener('change', () => { c.cls = input.value.replace(/\s+/g, ' ').trim(); ensureClassColor(c); const y = getScroll(); render(); setScroll(y); });
-            clsRow.appendChild(input);
-            if (c.cls) {
-                const color = wiz.classColors[foldCls(c.cls)];
-                const dots = el('span', 'rg-app-dots');
-                CLASS_COLORS.forEach((hex, i) => {
-                    const dot = el('button', 'rg-app-dot');
-                    dot.type = 'button';
-                    dot.style.background = hex;
-                    dot.setAttribute('aria-pressed', color === i ? 'true' : 'false');
-                    dot.setAttribute('aria-label', t(`main.flexColor_${i}`));
-                    dot.addEventListener('click', () => { wiz.classColors[foldCls(c.cls)] = i; const y = getScroll(); render(); setScroll(y); });
-                    dots.appendChild(dot);
-                });
-                const down = el('button', 'rg-app-down');
-                down.type = 'button';
-                down.title = t('main.flexClsDown');
-                down.setAttribute('aria-label', t('main.flexClsDown'));
-                down.innerHTML = '<i class="bx bx-down-arrow-alt" aria-hidden="true"></i>';
-                down.addEventListener('click', () => {
-                    const at = wiz.cols.indexOf(c);
-                    for (let k = at + 1; k < wiz.cols.length; k += 1) { const n = wiz.cols[k]; if (n.cls || (roles && n.role === 'skip')) break; n.cls = c.cls; }
-                    const y = getScroll(); render(); setScroll(y);
-                });
-                clsRow.append(dots, down);
-            }
-            row.appendChild(clsRow);
+    }
+    const nSel = wiz.cols.filter((c) => c.sel).length;
+    const bulk = el('div', 'rg-app-cdbulk');
+    bulk.appendChild(el('b', '', t('main.flexBulkCount', { n: num(nSel) })));
+    const linkBtn = (label, fn) => { const b = el('button', 'rg-app-cdlinkbtn', label); b.type = 'button'; b.addEventListener('click', fn); return b; };
+    bulk.append(linkBtn(t('main.flexBulkAll'), () => { wiz.cols.filter(inView).forEach((c) => { c.sel = true; }); rerender(); }), linkBtn(t('main.flexBulkNone'), () => { wiz.cols.forEach((c) => { c.sel = false; }); rerender(); }));
+    if (nSel) {
+        const chosen = () => wiz.cols.filter((c) => c.sel);
+        const apply = (fn) => () => { chosen().forEach((c) => { if (c.sugState === 'pending') c.sugState = 'rejected'; fn(c); }); wiz.error = ''; rerender(); };
+        const acts = [];
+        if (roles) {
+            acts.push(segBtn(t('main.flexStNew'), false, apply((c) => { c.st = 'new'; if (wiz.info.prevMode) c.isNew = true; })), segBtn(t('main.flexStSkip'), false, apply((c) => { c.st = 'skip'; })));
+            ['key', 'data', 'value'].forEach((r) => acts.push(segBtn(t(`main.flexRole_${r}`), false, apply((c) => { c.st = 'new'; c.role = r; if (wiz.info.prevMode) c.isNew = true; }))));
         }
-        list.appendChild(row);
-    });
+        bulk.appendChild(seg(acts));
+        const clsBox = el('span', 'rg-app-cdbulkcls');
+        const clsInput = el('input', 'pm-app-input');
+        clsInput.type = 'text'; clsInput.maxLength = 40; clsInput.placeholder = t('main.flexClsNone'); clsInput.setAttribute('aria-label', t('main.flexColClass')); clsInput.setAttribute('list', 'rg-app-cls-list');
+        clsBox.append(clsInput, segBtn(t('main.flexBulkApply'), false, () => { const v = clsInput.value.replace(/\s+/g, ' ').trim(); chosen().forEach((c) => { if (!roles || c.st === 'new') { c.cls = v; ensureClassColor(c); } }); rerender(); }));
+        bulk.appendChild(clsBox);
+    }
+    top.appendChild(bulk);
+    body.appendChild(top);
+    const list = buildGroups();
     // las clasificaciones que ya existen en el registro y las que se escribieron aquí, para escogerlas al escribir
     const known = new Map();
     ((currentData() && currentData().classes) || []).forEach((x) => known.set(foldCls(x.name), x.name));

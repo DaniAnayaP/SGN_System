@@ -5366,6 +5366,10 @@
     "anColPeriods": "Period(s)",
     "anNoPeriods": "This record has no periods loaded yet.",
     "anRemove": "Remove",
+    "anMoveUp": "Move up",
+    "anMoveDown": "Move down",
+    "anDragHandle": "Drag to change the order",
+    "anErr_TOO_MANY": "An analysis allows up to {max} queried columns; this selection would make {total}.",
     "anAgg_value": "The value",
     "anAgg_avg": "The average",
     "anAgg_sum": "The sum",
@@ -5453,6 +5457,7 @@
     "regLoadState_off": "Not counted",
     "regLoadState_failed": "Failed",
     "regLoadState_deleted": "Data deleted",
+    "regLoadPickShort": "Pick",
     "regConsider": "Count it",
     "regNoConsider": "Do not count",
     "regDeleteData": "Delete data",
@@ -10024,12 +10029,12 @@
       "example": "Unit, Code, Description and UoM."
     },
     "anConsBlock": {
-      "what": "The queried columns: what is brought from each record. You can bring the value of one month or day, or the average, sum, minimum or maximum of several. A code that is not in a record comes out with an empty cell.",
-      "example": "Average consumption of sep-26 and oct-26; Stock of 24/nov."
+      "what": "The queried columns: what is brought from each record. You can bring the value of one or several months or days (one column for each), or the average, sum, minimum or maximum of several. The order of this list is the order of the columns in the file: drag with the handle or use the arrows to move up and down. A code that is not in a record comes out with an empty cell.",
+      "example": "Consumption of jun-24, jul-24 and aug-24 (three columns, in that order); Stock of 24/nov."
     },
     "anFiltersBlock": {
-      "what": "Optional filters when extracting, to avoid bringing everything: by unit, category or code (comma-separated, case does not matter).",
-      "example": "Units: GAE, GPA."
+      "what": "Makes the file come out with only some of the rows. If you leave it empty, the file has every code of every unit. If you type something, only the matching rows come out (several values separated by commas, case does not matter). They apply when extracting and do not change the records.",
+      "example": "Units: GAE, GPA (only those two units). Categories: Food (only food)."
     },
     "anExtract": {
       "what": "Takes out the file with today's design and saves it as a new version. It is a copy: it does not change even if a record changes later. If the design produces no rows, nothing is saved.",

@@ -3741,6 +3741,10 @@
     .data-table-col-dragging{
         opacity: 0.4;
     }
+    .data-table-reordering,
+    .data-table-reordering th{
+        cursor: progress !important;
+    }
     .data-table-col-drop-indicator{
         position: absolute;
         top: 0;

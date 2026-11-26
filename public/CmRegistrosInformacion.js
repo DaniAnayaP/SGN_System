@@ -528,7 +528,14 @@ function drawLoads() {
             pick.setAttribute('data-help-key', 'regLoadsBulk');
             pick.setAttribute('aria-label', t('main.regLoadPick', { file: l.fileName || '' }));
             pick.addEventListener('change', () => { if (pick.checked) st.loadPick.add(l.id); else st.loadPick.delete(l.id); renderLoadsBulk(); });
-            actions.appendChild(pick);
+            // la casilla lleva su palabra («Elegir») para que se entienda sin conocerla
+            const pickLabel = document.createElement('label');
+            pickLabel.className = 'reg-load-pick-l';
+            pickLabel.setAttribute('data-help-key', 'regLoadsBulk');
+            const pickText = document.createElement('span');
+            pickText.textContent = t('main.regLoadPickShort');
+            pickLabel.append(pick, pickText);
+            actions.appendChild(pickLabel);
         }
         actions.appendChild(iconBtn('bx-history', 'changeHistory', t('main.changeHistoryTitleRecord'), () => Dashboard.openChangeHistory(LOADS_TABLE, l.id)));
         if (flexReg && st.canAnnul) {

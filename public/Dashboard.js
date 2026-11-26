@@ -3872,9 +3872,18 @@ function applyDataTableColumnLayout(tableId) {
     // the normal ones no longer fit. See distributeDataTableColumnWidths.
     distributeDataTableColumnWidths(tableId);
 
-    Array.from(table.tBodies[0]?.rows || []).forEach((tr) => {
-        if (!tr.querySelector('td.data-table-empty-cell')) applyRowColumnState(tr, tableId);
-    });
+    // Con miles de renglones, mover las celdas una por una con la tabla a la vista hacía que el navegador recalculara el diseño a cada paso: se esconde el cuerpo mientras se acomoda y se vuelve a mostrar (sin ningún cálculo de por medio).
+    const bodyEl = table.tBodies[0];
+    const bodyRows = Array.from(bodyEl?.rows || []);
+    const bodyDisplay = bodyEl ? bodyEl.style.display : '';
+    if (bodyEl && bodyRows.length > 200) bodyEl.style.display = 'none';
+    try {
+        bodyRows.forEach((tr) => {
+            if (!tr.querySelector('td.data-table-empty-cell')) applyRowColumnState(tr, tableId);
+        });
+    } finally {
+        if (bodyEl) bodyEl.style.display = bodyDisplay;
+    }
 
     if (fadeMode) updateFadeStyle(tableId, config.hidden);
     renderColumnGroupBand(tableId);
@@ -4106,14 +4115,23 @@ function observeTableBody(table, tableId) {
 }
 
 let dataTableDropIndicatorEl = null;
+// La barra que marca dónde cae la columna va FUERA de la tabla (fija sobre la pantalla, en el borde de la columna de destino): si se metía dentro del encabezado, cada movimiento del ratón obligaba al navegador a recalcular toda la tabla,
+// y con miles de renglones el arrastre se sentía congelado.
 function showDataTableDropIndicator(th, before) {
     if (!dataTableDropIndicatorEl) {
         dataTableDropIndicatorEl = document.createElement('div');
         dataTableDropIndicatorEl.className = 'data-table-col-drop-indicator';
     }
-    dataTableDropIndicatorEl.style.left = before ? '0' : 'auto';
-    dataTableDropIndicatorEl.style.right = before ? 'auto' : '0';
-    th.appendChild(dataTableDropIndicatorEl);
+    const rect = th.getBoundingClientRect();
+    const style = dataTableDropIndicatorEl.style;
+    style.position = 'fixed';
+    style.left = `${Math.round((before ? rect.left : rect.right) - 1)}px`;
+    style.top = `${Math.round(rect.top)}px`;
+    style.height = `${Math.round(rect.height)}px`;
+    style.bottom = 'auto';
+    style.right = 'auto';
+    style.zIndex = '2000';
+    if (dataTableDropIndicatorEl.parentNode !== document.body) document.body.appendChild(dataTableDropIndicatorEl);
 }
 function hideDataTableDropIndicator() {
     dataTableDropIndicatorEl?.remove();
@@ -4168,7 +4186,14 @@ function enableHeaderDragReorder(table, tableId) {
         const state = dataTableColumnState.get(tableId);
         if (!state || state.config.pinned.includes(th.dataset.col)) return;
         const rect = th.getBoundingClientRect();
-        reorderColumn(tableId, key, th.dataset.col, (event.clientX - rect.left) < rect.width / 2);
+        const before = (event.clientX - rect.left) < rect.width / 2;
+        const targetKey = th.dataset.col;
+        // Con miles de renglones acomodar toma uno o dos segundos: primero se quita lo de «a medio arrastrar» (columna tenue y barra) y se pone el cursor de espera, y el acomodo corre justo después, para que la pantalla no se vea congelada.
+        headerRow.querySelectorAll('.data-table-col-dragging').forEach((el) => el.classList.remove('data-table-col-dragging'));
+        state.wrapper.classList.add('data-table-reordering');
+        setTimeout(() => {
+            try { reorderColumn(tableId, key, targetKey, before); } finally { state.wrapper.classList.remove('data-table-reordering'); }
+        }, 30);
     });
     headerRow.addEventListener('dragend', () => {
         headerRow.querySelectorAll('.data-table-col-dragging').forEach((el) => el.classList.remove('data-table-col-dragging'));

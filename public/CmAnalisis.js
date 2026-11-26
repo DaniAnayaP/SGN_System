@@ -11,6 +11,7 @@ const VERSIONS_TABLE = 'analisis-extracciones';
 const DIMS = ['unidad', 'unidadNombre', 'codigo', 'descripcion', 'categoria', 'udm'];
 const KEY_DIMS = ['unidad', 'codigo'];
 const AGGS = ['value', 'avg', 'sum', 'min', 'max'];
+const MAX_CONSULTED = 40; // el mismo tope que el servidor (manualAnalyses.js)
 const t = (key, params) => Dashboard.t(key, params);
 const lang = () => (localStorage.getItem('lang') === 'en' ? 'en' : 'es');
 const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -111,11 +112,17 @@ function renderDesign() {
     const d = st.design;
     const dis = st.canCreate ? '' : ' disabled';
     const refs = DIMS.map((dim) => `<label class="an-check${KEY_DIMS.includes(dim) ? ' an-check-fixed' : ''}"><input type="checkbox" data-an-ref="${dim}"${d.reference.includes(dim) ? ' checked' : ''}${KEY_DIMS.includes(dim) || !st.canCreate ? ' disabled' : ''}> <span>${esc(t(`main.regDim_${dim}`))}</span>${KEY_DIMS.includes(dim) ? `<small>${esc(t('main.anKey'))}</small>` : ''}</label>`).join('');
-    const rows = d.consulted.map((c, i) => `<tr><td><input type="text" class="an-label" data-an-label="${i}" value="${esc(c.label)}" maxlength="80"${dis}></td><td>${esc(regName(registryByKey(c.registry)) || c.registry)}</td><td>${esc(t(`main.anAgg_${c.agg}`))}</td><td>${esc(periodsText(c.periods))}</td><td>${st.canCreate ? `<button type="button" class="admin-icon-btn" data-an-remove="${i}" aria-label="${esc(t('main.anRemove'))}" title="${esc(t('main.anRemove'))}"><i class="bx bx-trash" aria-hidden="true"></i></button>` : ''}</td></tr>`).join('');
+    const last = d.consulted.length - 1;
+    const order = (i) => (st.canCreate
+        ? `<td class="an-order"><button type="button" class="admin-icon-btn an-grip" draggable="true" data-an-drag="${i}" aria-label="${esc(t('main.anDragHandle'))}" title="${esc(t('main.anDragHandle'))}"><i class="bx bx-dots-vertical-rounded" aria-hidden="true"></i><i class="bx bx-dots-vertical-rounded" aria-hidden="true"></i></button>`
+          + `<button type="button" class="admin-icon-btn" data-an-move="${i}" data-dir="-1" aria-label="${esc(t('main.anMoveUp'))}" title="${esc(t('main.anMoveUp'))}"${i === 0 ? ' disabled' : ''}><i class="bx bx-chevron-up" aria-hidden="true"></i></button>`
+          + `<button type="button" class="admin-icon-btn" data-an-move="${i}" data-dir="1" aria-label="${esc(t('main.anMoveDown'))}" title="${esc(t('main.anMoveDown'))}"${i === last ? ' disabled' : ''}><i class="bx bx-chevron-down" aria-hidden="true"></i></button></td>`
+        : '<td></td>');
+    const rows = d.consulted.map((c, i) => `<tr data-an-row="${i}">${order(i)}<td><input type="text" class="an-label" data-an-label="${i}" value="${esc(c.label)}" maxlength="80"${dis}></td><td>${esc(regName(registryByKey(c.registry)) || c.registry)}</td><td>${esc(t(`main.anAgg_${c.agg}`))}</td><td>${esc(periodsText(c.periods))}</td><td>${st.canCreate ? `<button type="button" class="admin-icon-btn" data-an-remove="${i}" aria-label="${esc(t('main.anRemove'))}" title="${esc(t('main.anRemove'))}"><i class="bx bx-trash" aria-hidden="true"></i></button>` : ''}</td></tr>`).join('');
     const list = (key) => (d.filters[key] || []).join(', ');
     host.innerHTML = `<section class="an-block an-block-ref" data-help-key="anRefBlock"><header><b>${esc(t('main.anRefTitle'))}</b></header><div class="an-checks-row">${refs}</div></section>
         <section class="an-block an-block-cons" data-help-key="anConsBlock"><header><b>${esc(t('main.anConsTitle'))}</b></header>
-            ${d.consulted.length ? `<div class="wp-imp-table-wrap"><table class="wp-imp-table an-cons-table"><thead><tr><th>${esc(t('main.anColLabel'))}</th><th>${esc(t('main.anColRegistry'))}</th><th>${esc(t('main.anColWhat'))}</th><th>${esc(t('main.anColPeriods'))}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="admin-hint">${esc(t('main.anNoColumns'))}</p>`}
+            ${d.consulted.length ? `<div class="wp-imp-table-wrap"><table class="wp-imp-table an-cons-table"><thead><tr><th></th><th>${esc(t('main.anColLabel'))}</th><th>${esc(t('main.anColRegistry'))}</th><th>${esc(t('main.anColWhat'))}</th><th>${esc(t('main.anColPeriods'))}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="admin-hint">${esc(t('main.anNoColumns'))}</p>`}
             ${st.canCreate ? `<p><button type="button" class="btn btn-secondary" data-an-add><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumn'))}</button></p>` : ''}</section>
         <section class="an-block an-block-filters" data-help-key="anFiltersBlock"><header><b>${esc(t('main.anFiltersTitle'))}</b></header><div class="an-filters">
             ${['unidades', 'categorias', 'codigos'].map((k) => `<div class="filter-field"><label for="an-f-${k}">${esc(t(`main.anFilter_${k}`))}</label><input type="text" id="an-f-${k}" data-an-filter="${k}" value="${esc(list(k))}" placeholder="${esc(t('main.anFilterHint'))}"${dis}></div>`).join('')}</div></section>
@@ -186,31 +193,90 @@ function openAddColumn() {
         const agg = () => overlay.querySelector('#an-a-agg').value;
         const chosen = () => [...overlay.querySelectorAll('#an-a-periods input:checked')].map((i) => i.value);
         let labelTouched = false;
-        const syncLabel = () => { if (!labelTouched && chosen().length) overlay.querySelector('#an-a-label').value = defaultLabel(reg(), agg(), chosen()); };
+        // «El valor» de varios periodos = una columna por cada periodo (en orden de fecha); el nombre de la casilla es entonces el nombre base y a cada columna se le agrega su periodo
+        const many = () => agg() === 'value' && chosen().length > 1;
+        const valueName = () => ((reg() && reg().valueName) || t((reg() && reg().valueNameKey) || 'main.regValueColumn'));
+        let wasMany = false;
+        const syncLabel = () => {
+            if (many() !== wasMany) { wasMany = many(); labelTouched = false; }
+            if (!labelTouched && chosen().length) overlay.querySelector('#an-a-label').value = many() ? valueName() : defaultLabel(reg(), agg(), chosen());
+        };
         const drawPeriods = () => {
             const r = reg();
-            const single = agg() === 'value';
             const list = (r && r.periods) || [];
-            overlay.querySelector('#an-a-periods').innerHTML = list.length ? list.slice().reverse().map((p, i) => `<label><input type="${single ? 'radio' : 'checkbox'}" name="an-a-p" value="${esc(p)}"${i === 0 ? ' checked' : ''}> <span>${esc(periodLabel(p))}</span></label>`).join('') : `<span class="admin-hint">${esc(t('main.anNoPeriods'))}</span>`;
+            overlay.querySelector('#an-a-periods').innerHTML = list.length ? list.slice().reverse().map((p, i) => `<label><input type="checkbox" name="an-a-p" value="${esc(p)}"${i === 0 ? ' checked' : ''}> <span>${esc(periodLabel(p))}</span></label>`).join('') : `<span class="admin-hint">${esc(t('main.anNoPeriods'))}</span>`;
+            wasMany = false;
             syncLabel();
         };
         overlay.querySelector('#an-a-reg').addEventListener('change', () => { labelTouched = false; drawPeriods(); });
-        overlay.querySelector('#an-a-agg').addEventListener('change', drawPeriods);
+        overlay.querySelector('#an-a-agg').addEventListener('change', syncLabel);
         overlay.querySelector('#an-a-periods').addEventListener('change', syncLabel);
         overlay.querySelector('#an-a-label').addEventListener('input', () => { labelTouched = true; });
         drawPeriods();
         overlay.querySelector('[data-an-go]').addEventListener('click', () => {
-            const periods = chosen();
-            if (!periods.length) { const el = overlay.querySelector('#an-a-error'); el.textContent = t('main.anErr_DESIGN_COLUMN_PERIODS'); el.hidden = false; return; }
-            st.design.consulted.push({ id: `c${Date.now().toString(36)}`, label: overlay.querySelector('#an-a-label').value.trim() || defaultLabel(reg(), agg(), periods), registry: reg().key, agg: agg(), periods });
+            const periods = chosen().sort();
+            const fail = (text) => { const el = overlay.querySelector('#an-a-error'); el.textContent = text; el.hidden = false; };
+            if (!periods.length) return fail(t('main.anErr_DESIGN_COLUMN_PERIODS'));
+            const typed = overlay.querySelector('#an-a-label').value.trim();
+            const stamp = Date.now().toString(36);
+            const added = many()
+                ? periods.map((p, k) => ({ id: `c${stamp}${k}`, label: `${typed || valueName()} ${periodsText([p])}`.slice(0, 80), registry: reg().key, agg: 'value', periods: [p] }))
+                : [{ id: `c${stamp}`, label: typed || defaultLabel(reg(), agg(), periods), registry: reg().key, agg: agg(), periods }];
+            if (st.design.consulted.length + added.length > MAX_CONSULTED) return fail(t('main.anErr_TOO_MANY', { max: MAX_CONSULTED, total: st.design.consulted.length + added.length }));
+            st.design.consulted.push(...added);
             setDirty(); close(); renderDesign();
         });
     });
 }
+// El orden de las columnas consultadas es el orden en el archivo: se cambia con las flechas o arrastrando el asa de cada renglón (de la posición from a la to).
+function moveColumn(from, to, dir) {
+    const list = st.design.consulted;
+    if (!st.canCreate || from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return;
+    list.splice(to, 0, list.splice(from, 1)[0]);
+    setDirty(); renderDesign();
+    // con las flechas, el foco sigue a la columna que se movió, para poder seguir moviéndola
+    const again = dir ? document.querySelector(`[data-an-move="${to}"][data-dir="${dir}"]:not([disabled])`) || document.querySelector(`[data-an-move="${to}"]:not([disabled])`) : null;
+    if (again) again.focus();
+}
+let dragFrom = -1;
+const dropTarget = (event) => { const tr = event.target.closest && event.target.closest('tr[data-an-row]'); return tr && tr.closest('.an-cons-table') ? tr : null; };
+const clearDrop = () => document.querySelectorAll('.an-drop-above, .an-drop-below, .an-dragging').forEach((n) => n.classList.remove('an-drop-above', 'an-drop-below', 'an-dragging'));
+document.addEventListener('dragstart', (event) => {
+    const grip = event.target.closest && event.target.closest('[data-an-drag]');
+    if (!grip) return;
+    dragFrom = Number(grip.dataset.anDrag);
+    const tr = grip.closest('tr');
+    if (event.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', String(dragFrom)); if (tr && event.dataTransfer.setDragImage) event.dataTransfer.setDragImage(tr, 16, 16); }
+    if (tr) tr.classList.add('an-dragging');
+});
+document.addEventListener('dragover', (event) => {
+    if (dragFrom < 0) return;
+    const tr = dropTarget(event);
+    if (!tr) return;
+    event.preventDefault();
+    const box = tr.getBoundingClientRect();
+    const below = event.clientY > box.top + box.height / 2;
+    document.querySelectorAll('.an-drop-above, .an-drop-below').forEach((n) => n.classList.remove('an-drop-above', 'an-drop-below'));
+    tr.classList.add(below ? 'an-drop-below' : 'an-drop-above');
+});
+document.addEventListener('drop', (event) => {
+    if (dragFrom < 0) return;
+    const tr = dropTarget(event);
+    if (!tr) return;
+    event.preventDefault();
+    const box = tr.getBoundingClientRect();
+    const over = Number(tr.dataset.anRow);
+    const slot = event.clientY > box.top + box.height / 2 ? over + 1 : over; // lugar entre renglones, antes de sacar el que se arrastra
+    const from = dragFrom;
+    dragFrom = -1; clearDrop();
+    moveColumn(from, from < slot ? slot - 1 : slot, '');
+});
+document.addEventListener('dragend', () => { dragFrom = -1; clearDrop(); });
 document.addEventListener('click', async (event) => {
     const add = event.target.closest('[data-an-add]'); const remove = event.target.closest('[data-an-remove]');
-    const save = event.target.closest('[data-an-save]'); const go = event.target.closest('[data-an-extract]');
+    const save = event.target.closest('[data-an-save]'); const go = event.target.closest('[data-an-extract]'); const move = event.target.closest('[data-an-move]');
     if (add) openAddColumn();
+    else if (move) moveColumn(Number(move.dataset.anMove), Number(move.dataset.anMove) + Number(move.dataset.dir), move.dataset.dir);
     else if (remove) { st.design.consulted.splice(Number(remove.dataset.anRemove), 1); setDirty(); renderDesign(); }
     else if (save) {
         save.disabled = true; showError('');

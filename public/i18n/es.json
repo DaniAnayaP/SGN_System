@@ -5365,6 +5365,10 @@
     "anColPeriods": "Periodo(s)",
     "anNoPeriods": "Este registro todavía no tiene periodos cargados.",
     "anRemove": "Quitar",
+    "anMoveUp": "Subir",
+    "anMoveDown": "Bajar",
+    "anDragHandle": "Arrastrar para cambiar el orden",
+    "anErr_TOO_MANY": "Un análisis admite hasta {max} columnas consultadas; con esta selección serían {total}.",
     "anAgg_value": "El valor",
     "anAgg_avg": "El promedio",
     "anAgg_sum": "La suma",
@@ -5452,6 +5456,7 @@
     "regLoadState_off": "No se considera",
     "regLoadState_failed": "Falló",
     "regLoadState_deleted": "Datos eliminados",
+    "regLoadPickShort": "Elegir",
     "regConsider": "Sí considerar",
     "regNoConsider": "No considerar",
     "regDeleteData": "Eliminar datos",
@@ -10023,12 +10028,12 @@
       "example": "Unidad, Código, Descripción y UDM."
     },
     "anConsBlock": {
-      "what": "Las columnas consultadas: lo que se trae de cada registro. Puedes traer el valor de un mes o día, o el promedio, la suma, el mínimo o el máximo de varios. Un código que no está en un registro sale con la celda vacía.",
-      "example": "Consumo promedio de sep-26 y oct-26; Existencia del 24/nov."
+      "what": "Las columnas consultadas: lo que se trae de cada registro. Puedes traer el valor de uno o varios meses o días (sale una columna por cada uno), o el promedio, la suma, el mínimo o el máximo de varios. El orden de esta lista es el orden de las columnas en el archivo: arrastra con el asa o usa las flechas para subir y bajar. Un código que no está en un registro sale con la celda vacía.",
+      "example": "Consumo de jun-24, jul-24 y ago-24 (tres columnas, en ese orden); Existencia del 24/nov."
     },
     "anFiltersBlock": {
-      "what": "Filtros opcionales al extraer, para no traer todo: por unidad, categoría o código (separados por coma, sin importar mayúsculas).",
-      "example": "Unidades: GAE, GPA."
+      "what": "Sirve para que el archivo salga solo con una parte de los renglones. Si lo dejas vacío, el archivo trae todos los códigos de todas las unidades. Si escribes algo, solo salen los renglones que coinciden (varios valores separados por coma, sin importar mayúsculas). Se aplican al extraer, no cambian los registros.",
+      "example": "Unidades: GAE, GPA (solo esas dos unidades). Categorías: Alimentos (solo alimentos)."
     },
     "anExtract": {
       "what": "Saca el archivo con el diseño de hoy y lo guarda como una versión nueva. Es una copia: no cambia aunque después cambie un registro. Si el diseño no saca ningún renglón, no se guarda nada.",
