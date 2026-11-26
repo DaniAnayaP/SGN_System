@@ -463,8 +463,10 @@
         // Lo que esta persona tiene como adicional (ni lo da el puesto ni está por quitar): lo único que se puede quitar aquí.
         // Lo que se puede quitar aquí: un adicional de esta persona o algo que le da su puesto (menos General, que siempre vale).
         // «+ Adicionales» del cliente: solo lo que el cliente tiene como adicional y el plan NO le da (General también se puede quitar si no lo da el plan).
+        // General (main::) es la excepción de lo que da el puesto («General siempre vale»: no se le resta a la persona), pero lo que se le dio a ELLA como adicional de General (Inicio, Panel, Mensajes…) sí se puede quitar:
+        // antes esas filas perdían su casilla en cuanto se marcaban y ya no había forma de deshacerlo (Daniel, 2026-11-26).
         const isOwnExtra = allowRemove
-            ? (k) => !String(k).startsWith('main::') && (planGrantSet.has(k) || effectiveClientSet().has(k))
+            ? (k) => (String(k).startsWith('main::') ? (!planGrantSet.has(k) && effectiveClientSet().has(k)) : (planGrantSet.has(k) || effectiveClientSet().has(k)))
             : (k) => !planGrantSet.has(k) && effectiveClientSet().has(k);
 
         // Same expansion init() already did for grantSet in the other two
