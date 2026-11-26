@@ -14,6 +14,9 @@ const analysisAdded = require('./analysisAdded');
 const MAX_CONSULTED = 40;
 const MAX_PERIODS = 120;
 const MAX_FILTER_ITEMS = 500;
+// Cómo se ve el valor de una columna consultada en el Archivo (Daniel, 2026-11-26): general = como viene; los demás son solo de presentación (el dato no cambia).
+const FORMATS = ['general', 'int', 'dec1', 'dec2', 'money'];
+const CLASS_COLOR_COUNT = 6;
 
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/;
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
@@ -39,7 +42,12 @@ function normalizeDesign(raw, registryKeys) {
         if (!id || ids.has(id)) id = `c${consulted.length + 1}`;
         while (ids.has(id)) id += '_';
         ids.add(id);
-        consulted.push({ id, label: cleanText(c.label, 80) || periods.join(', '), registry: String(c.registry), agg, periods: agg === 'value' ? periods.slice(0, 1) : periods });
+        const entry = { id, label: cleanText(c.label, 80) || periods.join(', '), registry: String(c.registry), agg, periods: agg === 'value' ? periods.slice(0, 1) : periods };
+        // la clasificación (el nombre que quiera la persona, con su color) y el formato; sin nombre no hay color
+        const cls = cleanText(c.cls, 40);
+        if (cls) { entry.cls = cls; if (Number.isInteger(c.color) && c.color >= 0 && c.color < CLASS_COLOR_COUNT) entry.color = c.color; }
+        if (FORMATS.includes(c.fmt) && c.fmt !== 'general') entry.fmt = c.fmt;
+        consulted.push(entry);
     }
     // las columnas agregadas en el Archivo (se calculan al leer cada versión; ver analysisAdded.js)
     const addedChecked = analysisAdded.normalizeAdded(src.added);
@@ -87,4 +95,4 @@ function buildExtraction(design, sources) {
     ]);
     return { columns, rows, truncated };
 }
-module.exports = { REFERENCE_DIMS, KEY_DIMS, AGGS, MAX_ROWS, MAX_CONSULTED, normalizeDesign, periodsNeeded, buildExtraction, aggregate, keyOf, cleanText };
+module.exports = { FORMATS, CLASS_COLOR_COUNT, REFERENCE_DIMS, KEY_DIMS, AGGS, MAX_ROWS, MAX_CONSULTED, normalizeDesign, periodsNeeded, buildExtraction, aggregate, keyOf, cleanText };

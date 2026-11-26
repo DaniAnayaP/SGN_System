@@ -7753,7 +7753,13 @@ app.get('/api/business/manual-analyses/:id/extractions/:eid/data', requireAuth, 
     res.set('Cache-Control', 'no-store');
     // Las columnas agregadas (Daniel, 2026-11-26) se calculan al leer, con los datos de ESTA versión (que no cambian): quedan al final, con su letra y su fórmula de Excel.
     const added = (analysis.design && Array.isArray(analysis.design.added)) ? analysis.design.added : [];
-    const columns = added.length ? [...extraction.columns, ...analysisAdded.addedColumnDefs(added, extraction.columns)] : extraction.columns;
+    // La clasificación (nombre y color) y el formato de las columnas consultadas se leen del diseño de ahora (Daniel, 2026-11-26): lo que se cambia vale también para las versiones ya extraídas (es solo presentación; los datos no cambian).
+    const consultedNow = new Map(((analysis.design && analysis.design.consulted) || []).map((c) => [c.id, c]));
+    const baseColumns = extraction.columns.map((c) => {
+        const now = c.group === 'consulted' ? consultedNow.get(c.id) : null;
+        return now ? { ...c, ...(now.cls ? { cls: now.cls, ...(Number.isInteger(now.color) ? { color: now.color } : {}) } : {}), ...(now.fmt ? { fmt: now.fmt } : {}) } : c;
+    });
+    const columns = added.length ? [...baseColumns, ...analysisAdded.addedColumnDefs(added, extraction.columns)] : baseColumns;
     res.json({ extraction, columns, rows: added.length ? analysisAdded.applyAdded(added, extraction.columns, rows) : rows, total, truncated: total > rows.length, baseColumns: extraction.columns.length });
 });
 // Guardar la lista de columnas agregadas (la lista completa, en orden). Es parte del diseño: se repite sola en cada versión.

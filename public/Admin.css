@@ -10498,8 +10498,23 @@ td.an-added, th.an-added{ background: color-mix(in srgb, var(--color-accent) 7%,
 .an-checks{ display: grid; gap: 0.35rem; margin: 0.3rem 0 0.6rem; }
 .an-checks label{ display: flex; gap: 0.5rem; align-items: center; font-size: 0.85rem; }
 .an-checks small{ opacity: 0.7; }
-.an-periods{ display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; max-height: 9rem; overflow: auto; margin: 0.3rem 0 0.6rem; }
+.an-periods{ display: flex; flex-wrap: wrap; gap: 0.35rem 0.4rem; max-height: 9rem; overflow: auto; margin: 0.3rem 0 0.6rem; }
 .an-periods label{ display: inline-flex; gap: 0.3rem; align-items: center; font-size: 0.82rem; }
+/* Periodos como etiquetas (opción A de «Campos de las ventanas», Daniel, 2026-11-26): marcada = color del estilo con ✓; sin marcar = punteada. La casilla sigue siendo la de siempre (teclado y lectores de pantalla). */
+.an-pchip{ position: relative; display: inline-flex; cursor: pointer; }
+.an-pchip input{ position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.an-pchip span{ display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.12rem 0.65rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 999px; font-size: 0.76rem; color: var(--color-text-secondary); }
+.an-pchip input:checked + span{ border-style: solid; background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface)); color: var(--color-text-primary); font-weight: 500; }
+.an-pchip input:checked + span::before{ content: "✓"; font-size: 0.7rem; }
+.an-pchip input:focus-visible + span{ outline: 2px solid var(--color-accent); outline-offset: 2px; }
+/* Clasificación de una columna: el nombre libre y su color */
+.an-clsrow{ display: flex; align-items: center; gap: 0.45rem; min-width: 0; }
+.an-clsrow input[type="text"]{ flex: 1; min-width: 7rem; }
+.an-swatches{ display: inline-flex; gap: 0.35rem; flex: 0 0 auto; }
+.an-sw{ width: 1.45rem; height: 1.45rem; padding: 0; border-radius: 50%; border: 2px solid transparent; flex: 0 0 auto; cursor: pointer; }
+.an-sw[aria-pressed="true"]{ border-color: var(--color-text-primary); box-shadow: 0 0 0 2px var(--color-surface) inset; }
+.an-clsrow > .an-sw{ border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); }
+.an-cons-table select.an-fmt{ min-width: 10rem; }
 .reg-field-label{ margin: 0.6rem 0 0.2rem; font-size: 0.78rem; font-weight: 600; opacity: 0.8; }
 td.an-ref, th.an-ref{ background: color-mix(in srgb, #dde7f0 55%, transparent); }
 td.an-cons, th.an-cons{ background: color-mix(in srgb, #f7d9f5 45%, transparent); }
@@ -10537,4 +10552,21 @@ body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom[hidden]{
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-search-pill.named,
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-layout-pill.open,
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-layout-pill.named{ grid-column: 1 / -1; justify-self: stretch; width: auto; max-width: none; }
+}
+
+/* Campos de todo el sistema (Daniel, 2026-11-26, opción A de «Campos de las ventanas»: «para todo lo que estaba con los contornos feos»): punteado y tinte del estilo; al escribir, línea sólida con aro.
+   Va con :where() para que valga CERO de especificidad: solo cubre los campos que no traen estilo propio (los que sí lo traen, como los filtros, lo conservan) y no cambia casillas, botones de opción ni archivos. */
+:where(input:not([type]), input[type="text"], input[type="number"], input[type="search"], input[type="email"], input[type="password"], input[type="tel"], input[type="url"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], select, textarea){
+    border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent);
+    background-color: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+    color: inherit;
+    font: inherit;
+    border-radius: 0.55rem;
+    padding: 0.38rem 0.7rem;
+}
+:where(input:not([type]), input[type="text"], input[type="number"], input[type="search"], input[type="email"], input[type="password"], input[type="tel"], input[type="url"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], select, textarea):focus{
+    border-style: solid;
+    border-color: var(--color-accent);
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
 }

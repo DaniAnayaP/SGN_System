@@ -28,7 +28,7 @@ const regName = (r) => (r ? (r.name || t(r.nameKey)) : '');
 const colKeyOf = (key) => `an_${key}`;
 
 const params = new URLSearchParams(location.search);
-const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, dirty: false, tab: params.get('tab') || '', extraction: null, data: null, text: '' };
+const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, tab: params.get('tab') || '', extraction: null, data: null, text: '' };
 const wrapperOf = (id) => document.querySelector(`[data-table-id="${id}"]`);
 const tableOf = (id) => wrapperOf(id)?.querySelector('table.data-table');
 const registryByKey = (k) => st.registries.find((r) => r.key === k);
@@ -119,11 +119,14 @@ function renderDesign() {
           + `<button type="button" class="admin-icon-btn" data-an-move="${i}" data-dir="-1" aria-label="${esc(t('main.anMoveUp'))}" title="${esc(t('main.anMoveUp'))}"${i === 0 ? ' disabled' : ''}><i class="bx bx-chevron-up" aria-hidden="true"></i></button>`
           + `<button type="button" class="admin-icon-btn" data-an-move="${i}" data-dir="1" aria-label="${esc(t('main.anMoveDown'))}" title="${esc(t('main.anMoveDown'))}"${i === last ? ' disabled' : ''}><i class="bx bx-chevron-down" aria-hidden="true"></i></button></td>`
         : '<td></td>');
-    const rows = d.consulted.map((c, i) => `<tr data-an-row="${i}">${order(i)}<td><input type="text" class="an-label" data-an-label="${i}" value="${esc(c.label)}" maxlength="80"${dis}></td><td>${esc(regName(registryByKey(c.registry)) || c.registry)}</td><td>${esc(t(`main.anAgg_${c.agg}`))}</td><td>${esc(periodsText(c.periods))}</td><td>${st.canCreate ? `<button type="button" class="admin-icon-btn" data-an-remove="${i}" aria-label="${esc(t('main.anRemove'))}" title="${esc(t('main.anRemove'))}"><i class="bx bx-trash" aria-hidden="true"></i></button>` : ''}</td></tr>`).join('');
+    // Clasificación (nombre libre + color) y Formato de cada columna consultada
+    const classCells = (c, i, disabled) => `<td><div class="an-clsrow"><input type="text" class="an-cls" data-an-cls="${i}" list="an-cls-list" value="${esc(c.cls || '')}" maxlength="40" autocomplete="off" placeholder="${esc(t('main.anColClassNone'))}"${disabled}><button type="button" class="an-sw" data-an-clscolor="${i}" style="background:${c.cls && Number.isInteger(c.color) ? CLASS_COLORS[c.color] : 'transparent'}" aria-label="${esc(t('main.anColClassColor'))}" title="${esc(t('main.anColClassColor'))}"${disabled}></button></div></td>`
+        + `<td><select class="an-fmt" data-an-fmt="${i}" aria-label="${esc(t('main.anColFormat'))}"${disabled}>${FORMATS.map((f) => `<option value="${f}"${(c.fmt || 'general') === f ? ' selected' : ''}>${esc(t(`main.anFmt_${f}`))}</option>`).join('')}</select></td>`;
+    const rows = d.consulted.map((c, i) => `<tr data-an-row="${i}">${order(i)}<td><input type="text" class="an-label" data-an-label="${i}" value="${esc(c.label)}" maxlength="80"${dis}></td><td>${esc(regName(registryByKey(c.registry)) || c.registry)}</td><td>${esc(t(`main.anAgg_${c.agg}`))}</td><td>${esc(periodsText(c.periods))}</td>${classCells(c, i, dis)}<td>${st.canCreate ? `<button type="button" class="admin-icon-btn" data-an-remove="${i}" aria-label="${esc(t('main.anRemove'))}" title="${esc(t('main.anRemove'))}"><i class="bx bx-trash" aria-hidden="true"></i></button>` : ''}</td></tr>`).join('');
     const list = (key) => (d.filters[key] || []).join(', ');
     host.innerHTML = `<section class="an-block an-block-ref" data-help-key="anRefBlock"><header><b>${esc(t('main.anRefTitle'))}</b></header><div class="an-checks-row">${refs}</div></section>
         <section class="an-block an-block-cons" data-help-key="anConsBlock"><header><b>${esc(t('main.anConsTitle'))}</b></header>
-            ${d.consulted.length ? `<div class="wp-imp-table-wrap"><table class="wp-imp-table an-cons-table"><thead><tr><th>${esc(t('main.anColOrder'))}</th><th>${esc(t('main.anColLabel'))}</th><th>${esc(t('main.anColRegistry'))}</th><th>${esc(t('main.anColWhat'))}</th><th>${esc(t('main.anColPeriods'))}</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<p class="admin-hint">${esc(t('main.anNoColumns'))}</p>`}
+            ${d.consulted.length ? `<div class="wp-imp-table-wrap"><table class="wp-imp-table an-cons-table"><thead><tr><th>${esc(t('main.anColOrder'))}</th><th>${esc(t('main.anColLabel'))}</th><th>${esc(t('main.anColRegistry'))}</th><th>${esc(t('main.anColWhat'))}</th><th>${esc(t('main.anColPeriods'))}</th><th data-help-key="anColClass">${esc(t('main.anColClass'))}</th><th data-help-key="anColFormat">${esc(t('main.anColFormat'))}</th><th></th></tr></thead><tbody>${rows}</tbody></table><datalist id="an-cls-list">${classKnown().map((x) => `<option value="${esc(x)}"></option>`).join('')}</datalist></div>` : `<p class="admin-hint">${esc(t('main.anNoColumns'))}</p>`}
             ${st.canCreate ? `<p><button type="button" class="btn btn-secondary" data-an-add><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumn'))}</button></p>` : ''}</section>
         <section class="an-block an-block-filters" data-help-key="anFiltersBlock"><header><b>${esc(t('main.anFiltersTitle'))}</b></header><div class="an-filters">
             ${['unidades', 'categorias', 'codigos'].map((k) => `<div class="filter-field"><label for="an-f-${k}">${esc(t(`main.anFilter_${k}`))}</label><input type="text" id="an-f-${k}" data-an-filter="${k}" value="${esc(list(k))}" placeholder="${esc(t('main.anFilterHint'))}"${dis}></div>`).join('')}</div></section>
@@ -187,6 +190,10 @@ function openAddColumn() {
         <label for="an-a-agg">${esc(t('main.anColWhat'))}</label><select id="an-a-agg">${AGGS.map((a) => `<option value="${a}">${esc(t(`main.anAgg_${a}`))}</option>`).join('')}</select>
         <p class="reg-field-label">${esc(t('main.anColPeriods'))}</p><div class="an-periods" id="an-a-periods"></div>
         <label for="an-a-label">${esc(t('main.anColLabel'))}</label><input type="text" id="an-a-label" maxlength="80" autocomplete="off">
+        <label for="an-a-cls">${esc(t('main.anColClass'))}</label>
+        <div class="an-clsrow" data-help-key="anColClass"><input type="text" id="an-a-cls" maxlength="40" autocomplete="off" list="an-a-cls-list" placeholder="${esc(t('main.anColClassNone'))}"><datalist id="an-a-cls-list">${classKnown().map((x) => `<option value="${esc(x)}"></option>`).join('')}</datalist>
+            <span class="an-swatches" id="an-a-sw" role="group" aria-label="${esc(t('main.anColClassColor'))}">${CLASS_COLORS.map((col, i) => `<button type="button" class="an-sw" data-an-sw="${i}" style="background:${col}" aria-pressed="false" aria-label="${esc(t('main.anColClassColor'))} ${i + 1}"></button>`).join('')}</span></div>
+        <label for="an-a-fmt">${esc(t('main.anColFormat'))}</label><select id="an-a-fmt" data-help-key="anColFormat">${FORMATS.map((f) => `<option value="${f}">${esc(t(`main.anFmt_${f}`))}</option>`).join('')}</select>
         <p class="admin-error" id="an-a-error" role="alert" hidden></p>
         <div class="admin-form-actions"><button type="button" class="btn" data-an-go>${esc(t('main.anAddColumn'))}</button><button type="button" class="btn btn-secondary" data-an-close>${esc(t('main.regCancel'))}</button></div>`;
     modal(html, (overlay, close) => {
@@ -200,12 +207,13 @@ function openAddColumn() {
         let wasMany = false;
         const syncLabel = () => {
             if (many() !== wasMany) { wasMany = many(); labelTouched = false; }
-            if (!labelTouched && chosen().length) overlay.querySelector('#an-a-label').value = many() ? valueName() : defaultLabel(reg(), agg(), chosen());
+            // sin periodos marcados (o sin periodos cargados) el nombre vuelve al de lo que mide el registro, no se queda con el de otro registro
+            if (!labelTouched) overlay.querySelector('#an-a-label').value = chosen().length ? (many() ? valueName() : defaultLabel(reg(), agg(), chosen())) : valueName();
         };
         const drawPeriods = () => {
             const r = reg();
             const list = (r && r.periods) || [];
-            overlay.querySelector('#an-a-periods').innerHTML = list.length ? list.slice().reverse().map((p, i) => `<label><input type="checkbox" name="an-a-p" value="${esc(p)}"${i === 0 ? ' checked' : ''}> <span>${esc(periodLabel(p))}</span></label>`).join('') : `<span class="admin-hint">${esc(t('main.anNoPeriods'))}</span>`;
+            overlay.querySelector('#an-a-periods').innerHTML = list.length ? list.slice().reverse().map((p, i) => `<label class="an-pchip"><input type="checkbox" name="an-a-p" value="${esc(p)}"${i === 0 ? ' checked' : ''}><span>${esc(periodLabel(p))}</span></label>`).join('') : `<span class="admin-hint">${esc(t('main.anNoPeriods'))}</span>`;
             wasMany = false;
             syncLabel();
         };
@@ -213,6 +221,12 @@ function openAddColumn() {
         overlay.querySelector('#an-a-agg').addEventListener('change', syncLabel);
         overlay.querySelector('#an-a-periods').addEventListener('change', syncLabel);
         overlay.querySelector('#an-a-label').addEventListener('input', () => { labelTouched = true; });
+        // la clasificación: el nombre libre y su color (si ya hay columnas con ese nombre, toma su color mientras no se elija otro)
+        let color = null; let colorTouched = false;
+        const clsTyped = () => overlay.querySelector('#an-a-cls').value.trim();
+        const drawSwatches = () => overlay.querySelectorAll('[data-an-sw]').forEach((b) => b.setAttribute('aria-pressed', Number(b.dataset.anSw) === color ? 'true' : 'false'));
+        overlay.querySelector('#an-a-cls').addEventListener('input', () => { if (!colorTouched) { color = clsTyped() ? colorOfClass(clsTyped(), null) : null; drawSwatches(); } });
+        overlay.querySelector('#an-a-sw').addEventListener('click', (event) => { const b = event.target.closest('[data-an-sw]'); if (!b) return; color = Number(b.dataset.anSw); colorTouched = true; drawSwatches(); });
         drawPeriods();
         overlay.querySelector('[data-an-go]').addEventListener('click', () => {
             const periods = chosen().sort();
@@ -223,6 +237,10 @@ function openAddColumn() {
             const added = many()
                 ? periods.map((p, k) => ({ id: `c${stamp}${k}`, label: `${typed || valueName()} ${periodsText([p])}`.slice(0, 80), registry: reg().key, agg: 'value', periods: [p] }))
                 : [{ id: `c${stamp}`, label: typed || defaultLabel(reg(), agg(), periods), registry: reg().key, agg: agg(), periods }];
+            const typedRaw = clsTyped(); const typedClass = classKnown().find((x) => foldCls(x) === foldCls(typedRaw)) || typedRaw; // si ya hay una con ese nombre (sin importar mayúsculas), se usa la que ya existe
+            const picked = overlay.querySelector('#an-a-fmt').value;
+            if (typedClass) { const pick = Number.isInteger(color) ? color : colorOfClass(typedClass, null); if (colorTouched) paintClass(typedClass, pick); added.forEach((x) => { x.cls = typedClass; x.color = pick; }); }
+            if (picked !== 'general') added.forEach((x) => { x.fmt = picked; });
             if (st.design.consulted.length + added.length > MAX_CONSULTED) return fail(t('main.anErr_TOO_MANY', { max: MAX_CONSULTED, total: st.design.consulted.length + added.length }));
             st.design.consulted.push(...added);
             setDirty(); close(); renderDesign();
@@ -278,6 +296,7 @@ document.addEventListener('click', async (event) => {
     const save = event.target.closest('[data-an-save]'); const go = event.target.closest('[data-an-extract]'); const move = event.target.closest('[data-an-move]');
     if (add) openAddColumn();
     else if (move) moveColumn(Number(move.dataset.anMove), Number(move.dataset.anMove) + Number(move.dataset.dir), move.dataset.dir);
+    else if (event.target.closest('[data-an-clscolor]')) cycleClassColor(event.target.closest('[data-an-clscolor]'));
     else if (remove) { st.design.consulted.splice(Number(remove.dataset.anRemove), 1); setDirty(); renderDesign(); }
     else if (save) {
         save.disabled = true; showError('');
@@ -299,7 +318,24 @@ document.addEventListener('change', (event) => {
 });
 document.addEventListener('input', (event) => {
     const label = event.target.closest('[data-an-label]');
-    if (label) { st.design.consulted[Number(label.dataset.anLabel)].label = label.value; setDirty(); }
+    if (label) { st.design.consulted[Number(label.dataset.anLabel)].label = label.value; setDirty(); return; }
+    // la clasificación de una columna consultada: el nombre que quiera la persona; toma el color de las que ya se llaman igual (o el siguiente libre) mientras no haya elegido uno
+    const cls = event.target.closest('[data-an-cls]');
+    if (cls) {
+        const c = st.design.consulted[Number(cls.dataset.anCls)];
+        const typed = cls.value.trim();
+        if (typed) { c.cls = typed; if (!st.picked.has(c.id)) c.color = colorOfClass(typed, c); } else { delete c.cls; delete c.color; }
+        const dot = cls.parentElement.querySelector('[data-an-clscolor]');
+        if (dot) dot.style.background = c.cls && Number.isInteger(c.color) ? CLASS_COLORS[c.color] : 'transparent';
+        setDirty();
+    }
+});
+document.addEventListener('change', (event) => {
+    const fmt = event.target.closest('[data-an-fmt]');
+    if (!fmt) return;
+    const c = st.design.consulted[Number(fmt.dataset.anFmt)];
+    if (fmt.value === 'general') delete c.fmt; else c.fmt = fmt.value;
+    setDirty();
 });
 
 // ---- columnas agregadas en el Archivo (Daniel, 2026-11-26): se agregan sobre el archivo ya extraído; pieza 1 = «Operación paso a paso» ---------------------------------------------------------
@@ -308,6 +344,35 @@ const OPS = ['add', 'sub', 'mul', 'div', 'pow', 'min', 'max', 'logbase', 'round'
 const OPS_NO_ARG = new Set(['sqrt', 'ln', 'log10', 'exp', 'abs']);
 const OPS_VALUE_ONLY = new Set(['logbase', 'round']);
 const foldCls = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+// Clasificación de columnas (Daniel, 2026-11-26): el nombre lo escribe la persona y cada nombre lleva un color; columnas con el mismo nombre comparten color y banda en el Archivo.
+const FORMATS = ['general', 'int', 'dec1', 'dec2', 'money'];
+const classedList = () => [...((st.design && st.design.consulted) || []), ...((st.analysis && st.analysis.design && st.analysis.design.added) || [])];
+const classKnown = () => [...new Set(classedList().map((x) => x.cls).filter(Boolean))];
+const colorOfClass = (cls, skip) => {
+    if (!cls) return null;
+    const others = classedList().filter((x) => x !== skip);
+    const same = others.find((x) => foldCls(x.cls) === foldCls(cls) && Number.isInteger(x.color));
+    if (same) return same.color;
+    const used = new Set(others.map((x) => x.color).filter(Number.isInteger));
+    for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i;
+    return others.length % CLASS_COLORS.length;
+};
+const paintClass = (cls, color) => { (st.design.consulted || []).forEach((x) => { if (x.cls && foldCls(x.cls) === foldCls(cls)) x.color = color; }); };
+const fmtByKind = (v, fmt) => {
+    if (v === null || v === undefined) return '';
+    const dec = (d) => Number(v).toLocaleString(lang() === 'en' ? 'en-US' : 'es-MX', { minimumFractionDigits: d, maximumFractionDigits: d });
+    if (fmt === 'int') return dec(0);
+    if (fmt === 'dec1') return dec(1);
+    if (fmt === 'dec2') return dec(2);
+    if (fmt === 'money') return `$${dec(2)}`;
+    return num(v);
+};
+function cycleClassColor(btn) {
+    const c = st.design.consulted[Number(btn.dataset.anClscolor)];
+    if (!c || !c.cls) { Dashboard.showToast(t('main.anColClassFirst'), 'error'); return; }
+    const next = (Number.isInteger(c.color) ? c.color + 1 : 0) % CLASS_COLORS.length;
+    paintClass(c.cls, next); st.picked.add(c.id); setDirty(); renderDesign();
+}
 const columnLetter = (index) => { let n = index + 1; let out = ''; while (n > 0) { const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26); } return out; };
 const fmtCell = (v, decimals) => {
     if (v === null || v === undefined) return '';
@@ -392,14 +457,7 @@ function openAddedDialog(editId) {
                 return `<div class="an-step"><b>${i + 1}</b>${opSel}${arg}<button type="button" class="admin-icon-btn" data-an-delstep="${i}" aria-label="${esc(t('main.anRemoveStep'))}" title="${esc(t('main.anRemoveStep'))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>`;
             }).join('');
         };
-        const colorFor = (cls) => {
-            if (!cls) return null;
-            const same = added.find((a) => a.id !== (editing && editing.id) && foldCls(a.cls) === foldCls(cls) && Number.isInteger(a.color));
-            if (same) return same.color;
-            const used = new Set(added.filter((a) => a.id !== (editing && editing.id)).map((a) => a.color).filter(Number.isInteger));
-            for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i;
-            return added.length % CLASS_COLORS.length;
-        };
+        const colorFor = (cls) => colorOfClass(cls, editing); // el mismo nombre de clasificación lleva el mismo color en las columnas consultadas y en las agregadas
         const toDef = () => {
             const steps = [];
             for (const s of draft.steps) {
@@ -533,14 +591,7 @@ function openCriterionDialog(editId) {
             }).join('');
             $('#an-cr-other').innerHTML = `<b>·</b><span>${esc(t('main.anNoneMatch'))}</span>${resultEditor(draft.otherwise, 'o')}`;
         };
-        const colorFor = (cls) => {
-            if (!cls) return null;
-            const same = added.find((a) => a.id !== (editing && editing.id) && foldCls(a.cls) === foldCls(cls) && Number.isInteger(a.color));
-            if (same) return same.color;
-            const used = new Set(added.filter((a) => a.id !== (editing && editing.id)).map((a) => a.color).filter(Number.isInteger));
-            for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i;
-            return added.length % CLASS_COLORS.length;
-        };
+        const colorFor = (cls) => colorOfClass(cls, editing); // el mismo nombre de clasificación lleva el mismo color en las columnas consultadas y en las agregadas
         const parseResult = (res) => {
             if (res.type === 'empty') return { empty: true };
             if (res.type === 'text') { const tx = res.text.trim(); return tx ? { text: tx } : null; }
@@ -694,7 +745,10 @@ async function loadFile() {
                     if (c.cls) { groupTable = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(groupTable, c.cls, CLASS_COLORS[c.color] || CLASS_COLORS[0]); }
                     return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: `${c.kind === 'criterion' ? '?' : 'ƒ'} ${c.label}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
                 }
-                return { col: colKeyOf(c.key), group: 'main.anGroupCons', label: c.label, cls: 'an-cons col-num' };
+                // una columna consultada con clasificación va bajo su propia banda (nombre y color de la persona); sin clasificación, bajo «Consultadas» como siempre
+                let consBand;
+                if (c.cls) { consBand = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(consBand, c.cls, CLASS_COLORS[c.color] || CLASS_COLORS[0]); }
+                return { col: colKeyOf(c.key), group: 'main.anGroupCons', groupTable: consBand, label: c.label, cls: 'an-cons col-num' };
             }),
         ];
         const first = buildHeader(FILE_TABLE, columns);
@@ -706,7 +760,7 @@ async function loadFile() {
                 ...cols.map((c, i) => {
                     if (c.group === 'reference') return cell(colKeyOf(c.key), row[i], 'an-ref');
                     if (c.group === 'added') return cell(colKeyOf(c.key), row[i] === null ? '' : fmtCell(row[i], c.decimals), c.kind === 'criterion' ? 'an-added' : 'an-added col-num');
-                    return cell(colKeyOf(c.key), row[i] === null ? '' : num(row[i]), 'an-cons col-num');
+                    return cell(colKeyOf(c.key), row[i] === null ? '' : fmtByKind(row[i], c.fmt), 'an-cons col-num');
                 }),
             );
             tbody.appendChild(tr);

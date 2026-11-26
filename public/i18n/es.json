@@ -5374,6 +5374,16 @@
     "anMoveDown": "Bajar",
     "anDragHandle": "Arrastrar para cambiar el orden",
     "anColOrder": "Orden",
+    "anColClass": "Clasificación",
+    "anColClassNone": "Sin clasificación",
+    "anColClassColor": "Color de la clasificación",
+    "anColClassFirst": "Primero escribe el nombre de la clasificación.",
+    "anColFormat": "Formato",
+    "anFmt_general": "General (como viene)",
+    "anFmt_int": "Número, sin decimales",
+    "anFmt_dec1": "Número, 1 decimal",
+    "anFmt_dec2": "Número, 2 decimales",
+    "anFmt_money": "Moneda ($, 2 decimales)",
     "anAddKindOp": "Operación paso a paso",
     "anAddKindCriterion": "Criterio (si… entonces…)",
     "anCriterionTitle": "Agregar columna › Criterio",
@@ -10118,6 +10128,14 @@
     "anAddedBar": {
       "what": "Aquí agregas columnas nuevas al archivo ya extraído. «Operación» calcula con otras columnas y un valor, paso a paso: sumas, restas, multiplicaciones, divisiones, potencias, raíces y logaritmos. «Criterio» pone un resultado según reglas «si… entonces…» (se revisan de arriba abajo y gana la primera que se cumple). Abajo ves la fórmula de Excel que resulta y los primeros renglones. Las columnas agregadas se repiten solas en cada extracción y se recalculan con los datos de esa versión; un clic en una de ellas la edita.",
       "example": "Variación = consumo de oct ÷ consumo de sep × 100; o el logaritmo base 10 del promedio + 1."
+    },
+    "anColClass": {
+      "what": "Agrupa las columnas bajo una banda de color arriba del Archivo, con el nombre que tú quieras. Las que se llaman igual comparten banda y color; el círculo de color se cambia con un clic.",
+      "example": "Consumo, Existencia, Variación."
+    },
+    "anColFormat": {
+      "what": "Cómo se ve el valor en el Archivo: como viene, con 0, 1 o 2 decimales o como moneda. Solo cambia la presentación; el dato no cambia.",
+      "example": "1234.5 con 2 decimales se ve 1,234.50."
     },
     "anFiltersBlock": {
       "what": "Sirve para que el archivo salga solo con una parte de los renglones. Si lo dejas vacío, el archivo trae todos los códigos de todas las unidades. Si escribes algo, solo salen los renglones que coinciden (varios valores separados por coma, sin importar mayúsculas). Se aplican al extraer, no cambian los registros.",

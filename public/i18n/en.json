@@ -5375,6 +5375,16 @@
     "anMoveDown": "Move down",
     "anDragHandle": "Drag to change the order",
     "anColOrder": "Order",
+    "anColClass": "Classification",
+    "anColClassNone": "No classification",
+    "anColClassColor": "Classification color",
+    "anColClassFirst": "Type the classification name first.",
+    "anColFormat": "Format",
+    "anFmt_general": "General (as is)",
+    "anFmt_int": "Number, no decimals",
+    "anFmt_dec1": "Number, 1 decimal",
+    "anFmt_dec2": "Number, 2 decimals",
+    "anFmt_money": "Currency ($, 2 decimals)",
     "anAddKindOp": "Step-by-step operation",
     "anAddKindCriterion": "Criterion (if… then…)",
     "anCriterionTitle": "Add column › Criterion",
@@ -10119,6 +10129,14 @@
     "anAddedBar": {
       "what": "Here you add new columns to the extracted file. “Operation” calculates with other columns and a value, step by step: additions, subtractions, multiplications, divisions, powers, roots and logarithms. “Criterion” sets a result according to “if… then…” rules (checked top to bottom; the first one that is met wins). Below you see the resulting Excel formula and the first rows. Added columns repeat on their own in every extraction and are recalculated with that version's data; one click on one of them edits it.",
       "example": "Change = October consumption ÷ September consumption × 100; or the base 10 logarithm of the average + 1."
+    },
+    "anColClass": {
+      "what": "Groups the columns under a colored band above the File, with any name you like. Columns with the same name share the band and color; click the color circle to change it.",
+      "example": "Consumption, Stock, Variation."
+    },
+    "anColFormat": {
+      "what": "How the value looks in the File: as is, with 0, 1 or 2 decimals, or as currency. Only the presentation changes; the data does not.",
+      "example": "1234.5 with 2 decimals shows as 1,234.50."
     },
     "anFiltersBlock": {
       "what": "Makes the file come out with only some of the rows. If you leave it empty, the file has every code of every unit. If you type something, only the matching rows come out (several values separated by commas, case does not matter). They apply when extracting and do not change the records.",
