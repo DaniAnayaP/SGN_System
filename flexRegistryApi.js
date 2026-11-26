@@ -7,6 +7,7 @@ const SearchSyntax = require('./public/SearchSyntax.js');
 const db = require('./db');
 
 const PAGE = 2000;
+const CELL_BUDGET = 20000; // celdas (renglones x columnas) que se mandan para dibujar de una vez
 const DISTINCT_LIMIT = 150;
 const MESSAGES = {
     FLEX_CONFIG: 'La elección de columnas no es válida.', FLEX_DUP_NAME: 'Dos columnas se llaman igual: cambia el nombre de una.', FLEX_NO_KEY: 'Elige al menos una columna como llave (va hacia abajo).',
@@ -105,14 +106,16 @@ module.exports = function createFlexApi(deps) {
         if (ctx.error) return fail(res, 400, ctx.error);
         let total = 0;
         const rows = [];
+        // cuántos renglones se mandan para dibujar: máximo 2,000, y menos si la tabla es ancha (2,000 renglones x 35 columnas son 70 mil celdas y el navegador se traba al moverla); el resto se alcanza buscando, filtrando o descargando
+        const pageRows = Math.max(200, Math.min(PAGE, Math.floor(CELL_BUDGET / Math.max(1, ctx.columns.length))));
         if (!ctx.filter && !ctx.textTest) {
             // sin filtro: el total sale de contar y los primeros renglones de leer solo la primera página (no se recorren los 140 mil)
             const loadIds = ctx.rolesLoads.map((l) => l.id);
             const keyed = loadIds.length ? db.flexCountRows(ctx.clientId, ctx.isTestAccount, registry.key, loadIds) : 0;
             total = keyed + db.flexBlockCount(ctx.scopeAsis.map((l) => l.id));
-            scan(ctx, (get) => { rows.push(rowArray(ctx, get)); return rows.length < PAGE; });
+            scan(ctx, (get) => { rows.push(rowArray(ctx, get)); return rows.length < pageRows; });
         } else {
-            scan(ctx, (get) => { total += 1; if (rows.length < PAGE) rows.push(rowArray(ctx, get)); return true; });
+            scan(ctx, (get) => { total += 1; if (rows.length < pageRows) rows.push(rowArray(ctx, get)); return true; });
         }
         const num = ctx.columns.map((c, i) => c.kind === 'value' || (rows.length > 0 && rows.every((r) => r[i] === null || typeof r[i] === 'number') && rows.some((r) => typeof r[i] === 'number')));
         const lastLoad = ctx.loads.length ? ctx.loads[ctx.loads.length - 1] : null;
@@ -139,7 +142,12 @@ module.exports = function createFlexApi(deps) {
         if (ctx.error) return fail(res, 400, ctx.error);
         const format = req.query.format === 'xlsx' ? 'xlsx' : 'csv';
         const base = String(req.query.file || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) || `Registro-${registry.key}`;
-        const headers = ctx.columns.map((c) => c.label);
+        // las columnas que la persona dejó visibles (cols = claves separadas por coma, en el orden en que las ve); sin cols, todas
+        const asked = String(req.query.cols || '').split(',').map((k) => k.trim()).filter(Boolean);
+        const picked = asked.map((k) => ctx.columns.findIndex((c) => c.key === k)).filter((i) => i >= 0);
+        const only = asked.length && picked.length ? picked : null;
+        const headers = (only || ctx.columns.map((c, i) => i)).map((i) => ctx.columns[i].label);
+        const exportRow = (get) => { const full = rowArray(ctx, get); return only ? only.map((i) => full[i]) : full; };
         res.set('Cache-Control', 'no-store');
         res.setHeader('Content-Type', format === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', buildContentDisposition(`${base}.${format}`));
@@ -148,7 +156,7 @@ module.exports = function createFlexApi(deps) {
             // se junta por tandas de 2,000 y se manda: así 140 mil renglones no se arman todos juntos en la respuesta
             const batches = [];
             let current = [];
-            scan(ctx, (get) => { current.push(rowArray(ctx, get)); if (current.length >= PAGE) { batches.push(current); current = []; } return true; });
+            scan(ctx, (get) => { current.push(exportRow(get)); if (current.length >= PAGE) { batches.push(current); current = []; } return true; });
             if (current.length) batches.push(current);
             if (format === 'csv') {
                 const csv = (v) => { const text = String(v ?? ''); return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; };

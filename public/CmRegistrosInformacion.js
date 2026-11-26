@@ -295,10 +295,15 @@ function drawData() {
     wrapper.setAttribute('data-help-key', flex ? 'regTableLibre' : 'regTable');
     if (Dashboard.attachTableDownloadButton) {
         Dashboard.attachTableDownloadButton(DATA_TABLE, { getTitle: () => `${regName(currentRegistry())}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : ''),
-            getFullDownload: (format) => (st.data && st.data.truncated ? `${API}/${encodeURIComponent(st.key)}/export?format=${format}&lang=${lang()}&tz=${tzOffset()}&text=${encodeURIComponent(st.text || '')}${st.cf ? `&cf=${encodeURIComponent(JSON.stringify(st.cf))}` : ''}&file=${encodeURIComponent(`${regName(currentRegistry())}_${todayStamp()}`)}` : null) });
+            getFullDownload: (format) => (st.data && st.data.truncated ? `${API}/${encodeURIComponent(st.key)}/export?format=${format}&lang=${lang()}&tz=${tzOffset()}&text=${encodeURIComponent(st.text || '')}${st.cf ? `&cf=${encodeURIComponent(JSON.stringify(st.cf))}` : ''}${visibleColsParam()}&file=${encodeURIComponent(`${regName(currentRegistry())}_${todayStamp()}`)}` : null) });
     }
     updateNote();
     renderButtons();
+}
+// las columnas que la persona dejó visibles (las ocultas o difuminadas no se bajan), para que la descarga completa del servidor traiga las mismas que la pantalla
+function visibleColsParam() {
+    const keys = Dashboard.getVisibleColumnKeys ? Dashboard.getVisibleColumnKeys(DATA_TABLE) : null;
+    return keys && keys.length ? `&cols=${encodeURIComponent(keys.join(','))}` : '';
 }
 // Los renglones de la tabla de datos se dibujan por partes: dibujarlos todos de un golpe (hasta 2,000 x 36 columnas) congelaba el navegador varios segundos. Cada parte se arma como UN bloque de HTML.
 function rowsHtml(body, from, to) {

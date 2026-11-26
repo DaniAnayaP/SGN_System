@@ -5802,6 +5802,14 @@ function getVisibleTableSnapshot(tableId) {
     return { columns, rows };
 }
 
+// Las claves de las columnas que se ven (no ocultas ni difuminadas), en el orden en que se ven: para que una descarga completa del servidor baje las mismas columnas que la pantalla.
+function getVisibleColumnKeys(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return null;
+    const hiddenSet = new Set(state.config.hidden);
+    return getVisualColumnOrder(state.config).filter((k) => !hiddenSet.has(k));
+}
+
 // El icono Descargar de una tabla (Daniel, 2026-11-25): baja SIEMPRE lo que se ve, o sea los renglones que pasan los filtros y las columnas que no están ocultas o difuminadas, en Excel, CSV o PDF.
 // Es del icono iconDownload del árbol (el administrador del cliente lo ve siempre). getTitle() da el nombre del archivo; getNotice() puede devolver un aviso (p. ej. la tabla solo trae una parte de los renglones).
 // Va en la misma barra .data-table-zoom que los demás iconos; se llama una vez por tabla, cuando ya se armó.
@@ -15786,6 +15794,7 @@ window.Dashboard = {
     initDataTableColumns,
     getVisibleTableSnapshot,
     attachTableDownloadButton,
+    getVisibleColumnKeys,
     showToast,
     setMessagesBadge,
     addMenuResizeGrip,
