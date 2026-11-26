@@ -5719,6 +5719,12 @@
     "flexViewAll": "All",
     "flexViewNew": "Only the new ones",
     "flexViewSkip": "The ones not loaded",
+    "flexTbCol": "Excel column",
+    "flexTbDo": "What to do",
+    "flexTbResult": "Result",
+    "flexRoleS_key": "Key",
+    "flexRoleS_data": "Data",
+    "flexRoleS_value": "Value",
     "flexErrPending": "Confirm these columns before reviewing: {list}. Choose whether they are the one that already exists or a new additional one.",
     "flexErrNoLink": "Pick which existing column \"{name}\" corresponds to.",
     "flexClsDown": "Apply to the following columns without a classification",
@@ -10145,7 +10151,7 @@
       "example": "3 old loads → Delete data (3)"
     },
     "regFlexMap": {
-      "what": "For each column of your Excel you pick its role: Key (identifies the row and goes down the list), Row data, New column on every load (stock, cost…) or Not loaded. If several rows land on the same key, the new column is added up or one is taken (for example, the cost). Every column can be renamed. Each column is a card with a single decision: \"Already exists\" (it joins a column the record already has), \"New additional\" (you define its role, name, classification and color) or \"Not loaded\". Columns that already exist are recognized by the title they had and sit in closed groups; if one comes with another name but looks like one that already exists, you are asked whether it is that one. This way columns are not duplicated.",
+      "what": "For each column of your Excel you pick its role: Key (identifies the row and goes down the list), Row data, New column on every load (stock, cost…) or Not loaded. If several rows land on the same key, the new column is added up or one is taken (for example, the cost). Every column can be renamed. Each column is a row of the table, in the order of your Excel and fully visible, with a single decision: \"Already exists\" (it joins a column the record already has; you pick which one there), \"New additional\" (in the same row you define its role, name, classification and color) or \"Not loaded\". Columns that already exist are recognized by the title they had; if one comes with another name but looks like one that already exists, its row is highlighted and you are asked whether it is that one. This way columns are not duplicated.",
       "example": "ON_HAND_QTY → New column, Add up, \"Stock\""
     },
     "regFlexWhen": {

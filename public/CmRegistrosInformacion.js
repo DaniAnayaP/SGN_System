@@ -758,7 +758,7 @@ function openFlexLoadModal() {
         ${s.inputMode === 'paste' ? `<div class="reg-paste"><textarea id="reg-i-paste" spellcheck="false" placeholder="${esc(t('main.tplPastePlaceholder'))}"${s.busy ? ' disabled' : ''}>${esc(s.pasteText)}</textarea><button type="button" class="btn btn-secondary" data-reg-i="paste-go"${s.busy ? ' disabled' : ''}>${esc(s.busy ? t('main.regReading') : t('main.tplPasteGo'))}</button></div>` : `<label class="wp-imp-drop" id="reg-i-drop" for="reg-i-file" data-help-key="regDrop"><b>${esc(s.busy ? t('main.regReading') : t('main.regDrop'))}</b><span>${esc(t('main.regDropOr'))}</span></label>
         <input type="file" id="reg-i-file" class="wp-imp-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"${s.busy ? ' disabled' : ''}>`}
         ${errBox()}<div class="admin-form-actions"><button type="button" class="btn btn-secondary" data-reg-i="cancel"${s.busy ? ' disabled' : ''}>${esc(t('main.regCancel'))}</button></div>`;
-    // ---- la ventana de columnas (desde 2026-11-26): una tarjeta por columna del Excel con UNA decisión (ya existe / nueva adicional / no se carga); las ya definidas van en grupos cerrados ----
+    // ---- la ventana de columnas (desde 2026-11-26): una fila por columna del Excel con UNA decisión (ya existe / nueva adicional / no se carga); ver la tabla más abajo (tableHtml) ----
     const foldName = (v) => String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const exMap = () => new Map(((s.info && s.info.existing) || []).map((e) => [e.name, e]));
     const hasExisting = () => !!(s.info && s.info.existing && s.info.existing.length);
@@ -778,53 +778,41 @@ function openFlexLoadModal() {
         const dots = c.cls ? CLASS_COLORS.map((hex, i) => `<button type="button" class="reg-fx-dot" data-fx-color="${i}" data-fx-for="${c.i}" style="background:${hex}" aria-pressed="${color === i ? 'true' : 'false'}" aria-label="${esc(t(`main.flexColor_${i}`))}"></button>`).join('') : '';
         return `<div class="reg-fx-clsbox"><input type="text" class="reg-fx-cls" list="fx-cls-list" data-fx-cls="${c.i}" maxlength="40" value="${esc(c.cls || '')}" placeholder="${esc(t('main.flexClsNone'))}" aria-label="${esc(t('main.flexColClass'))}">${c.cls ? `<button type="button" class="reg-fx-down" data-fx-down="${c.i}" title="${esc(t('main.flexClsDown'))}" aria-label="${esc(t('main.flexClsDown'))}"><i class="bx bx-down-arrow-alt" aria-hidden="true"></i></button>` : ''}</div><div class="reg-fx-dots">${dots}</div>`;
     };
-    const cardHtml = (c) => {
+    // ---- la tabla de columnas (Daniel, 2026-11-26, «La opción A, hazlo!»): UNA TABLA con una fila por columna del Excel, en el orden del archivo y todo a la vista (antes eran tarjetas en grupos cerrados que había que abrir uno por uno) ----
+    // Cada fila lleva UNA decisión (ya existe / nueva adicional / no se carga) y, a su lado, el resultado: a cuál columna se une, o los campos de una columna nueva (cómo se carga, cómo se junta, nombre y clasificación). En «tal cual» no hay decisión: solo nombre y clasificación.
+    const tbField = (label, html) => `<span class="reg-tb-f"><b>${esc(label)}</b>${html}</span>`;
+    const rowHtml = (c) => {
         const roles = s.mode === 'roles';
         const ex = exMap();
         const segBtn = (st, key) => `<button type="button" data-fx-st="${st}" data-fx-for="${c.i}" aria-pressed="${c.st === st ? 'true' : 'false'}">${esc(t(key))}</button>`;
-        let choice = '';
-        if (roles) {
-            choice = `<span class="reg-seg" role="group" aria-label="${esc(c.text)}">${hasExisting() ? segBtn('exist', 'main.flexStExist') : ''}${segBtn('new', 'main.flexStNew')}${segBtn('skip', 'main.flexStSkip')}</span>`;
-            if (c.st === 'exist') {
-                const opts = [...ex.values()].map((e) => `<option value="${esc(e.name)}"${e.name === c.link ? ' selected' : ''}>${esc(e.name)}</option>`).join('');
-                const cur = ex.get(c.link);
-                choice += `<span class="reg-cd-link">${esc(t('main.flexLinkTo'))} <select data-fx-link="${c.i}" aria-label="${esc(t('main.flexLinkTo'))}">${c.link ? '' : `<option value="" selected>${esc(t('main.flexLinkPick'))}</option>`}${opts}</select>${cur ? ` · <b>${esc(t(`main.flexRole_${cur.role}`))}</b>` : ''}</span>`;
-            }
-        }
-        const sug = roles && c.st === 'new' && c.sugState === 'pending'
-            ? `<div class="reg-cd-sug"><span>${esc(t('main.flexSugAsk', { name: c.sug }))}</span><button type="button" class="btn btn-secondary" data-fx-sug="yes" data-fx-for="${c.i}">${esc(t('main.flexSugYes'))}</button><button type="button" class="btn btn-secondary" data-fx-sug="no" data-fx-for="${c.i}">${esc(t('main.flexSugNo'))}</button></div>` : '';
-        let det = '';
-        if (!roles || c.st === 'new') {
-            const isValue = roles && c.role === 'value';
-            const roleRow = roles ? `<div class="reg-cd-row"><b>${esc(t('main.flexColLoadAs'))}</b><span class="reg-seg" role="group">${['key', 'data', 'value'].map((r) => `<button type="button" data-fx-rolebtn="${r}" data-fx-for="${c.i}" aria-pressed="${c.role === r ? 'true' : 'false'}">${esc(t(`main.flexRole_${r}`))}</button>`).join('')}</span></div>` : '';
-            const aggRow = isValue ? `<div class="reg-cd-row"><b>${esc(t('main.flexColJoin'))}</b><span class="reg-seg" role="group">${['sum', 'one'].map((a) => `<button type="button" data-fx-aggbtn="${a}" data-fx-for="${c.i}" aria-pressed="${c.agg === a ? 'true' : 'false'}">${esc(t(`main.flexAgg_${a}`))}</button>`).join('')}</span><label class="reg-fx-stamp"><input type="checkbox" data-fx-stamp="${c.i}"${c.stampName ? ' checked' : ''}> <span>${esc(t('main.flexStampName'))}</span></label></div>` : '';
-            det = `<div class="reg-cd-det">${roleRow}${aggRow}<div class="reg-cd-row"><b>${esc(t('main.flexColName'))}</b><input type="text" class="reg-fx-name" data-fx-name="${c.i}" maxlength="60" value="${esc(c.name)}" aria-label="${esc(t('main.flexColName'))}"></div><div class="reg-cd-row"><b>${esc(t('main.flexColClass'))}</b>${classBox(c)}</div></div>`;
-        }
-        const tag = roles && c.isNew && c.st === 'new' ? `<span class="reg-fx-new">${esc(t('main.flexNewCol'))}</span>` : '';
-        return `<div class="reg-cd${roles && c.st === 'skip' ? ' reg-cd-off' : ''}${roles && c.isNew && c.st === 'new' ? ' reg-cd-new' : ''}"><div class="reg-cd-name"><label class="reg-cd-pick"><input type="checkbox" data-fx-pick="${c.i}"${c.sel ? ' checked' : ''} aria-label="${esc(t('main.flexPick', { name: c.text }))}"></label><div><b>${esc(c.text)}</b>${tag}<small>${c.example === undefined || c.example === null || c.example === '' ? '' : esc(c.example)}</small></div></div><div class="reg-cd-choice">${choice}</div>${sug}${det}</div>`;
+        const pending = roles && c.st === 'new' && c.sugState === 'pending';
+        const isNewCol = roles && c.isNew && c.st === 'new';
+        const nameInput = `<input type="text" class="reg-fx-name" data-fx-name="${c.i}" maxlength="60" value="${esc(c.name)}" aria-label="${esc(t('main.flexColName'))}">`;
+        const classEdit = `<span class="reg-tb-clsw">${classBox(c)}</span>`;
+        const cls = ['reg-tb-row', roles ? `reg-tb-${c.st}` : 'reg-tb-asis', isNewCol ? 'reg-tb-newcol' : '', pending ? 'reg-tb-pending' : ''].filter(Boolean).join(' ');
+        const pick = `<div class="reg-tb-pick"><label class="reg-cd-pick"><input type="checkbox" data-fx-pick="${c.i}"${c.sel ? ' checked' : ''} aria-label="${esc(t('main.flexPick', { name: c.text }))}"></label></div>`;
+        const colCell = `<div class="reg-tb-col"><b>${esc(c.text)}</b>${isNewCol ? `<span class="reg-fx-new">${esc(t('main.flexNewCol'))}</span>` : ''}<small>${c.example === undefined || c.example === null || c.example === '' ? '' : esc(c.example)}</small></div>`;
+        if (!roles) return `<div class="${cls}">${pick}${colCell}<div class="reg-tb-name">${nameInput}</div><div class="reg-tb-cls">${classEdit}</div></div>`;
+        const choice = `<div class="reg-tb-st"><span class="reg-seg reg-tb-seg" role="group" aria-label="${esc(c.text)}">${hasExisting() ? segBtn('exist', 'main.flexStExist') : ''}${segBtn('new', 'main.flexStNew')}${segBtn('skip', 'main.flexStSkip')}</span></div>`;
+        let result;
+        if (c.st === 'exist') {
+            const opts = [...ex.values()].map((e) => `<option value="${esc(e.name)}"${e.name === c.link ? ' selected' : ''}>${esc(e.name)}</option>`).join('');
+            const cur = ex.get(c.link);
+            result = `<span class="reg-tb-link">${esc(t('main.flexLinkTo'))} <select data-fx-link="${c.i}" aria-label="${esc(t('main.flexLinkTo'))}">${c.link ? '' : `<option value="" selected>${esc(t('main.flexLinkPick'))}</option>`}${opts}</select>${cur ? ` <span class="reg-tb-role" title="${esc(t(`main.flexRole_${cur.role}`))}">${esc(t(`main.flexRoleS_${cur.role}`))}${cur.role === 'value' && cur.agg ? ` · ${esc(t(`main.flexAgg_${cur.agg}`))}` : ''}</span>` : ''}</span>`;
+        } else if (c.st === 'new') {
+            const roleSeg = `<span class="reg-seg" role="group">${['key', 'data', 'value'].map((r) => `<button type="button" data-fx-rolebtn="${r}" data-fx-for="${c.i}" title="${esc(t(`main.flexRole_${r}`))}" aria-pressed="${c.role === r ? 'true' : 'false'}">${esc(t(`main.flexRoleS_${r}`))}</button>`).join('')}</span>`;
+            const aggSeg = `<span class="reg-seg" role="group">${['sum', 'one'].map((a) => `<button type="button" data-fx-aggbtn="${a}" data-fx-for="${c.i}" aria-pressed="${c.agg === a ? 'true' : 'false'}">${esc(t(`main.flexAgg_${a}`))}</button>`).join('')}</span><label class="reg-fx-stamp"><input type="checkbox" data-fx-stamp="${c.i}"${c.stampName ? ' checked' : ''}> <span>${esc(t('main.flexStampName'))}</span></label>`;
+            result = `${tbField(t('main.flexColLoadAs'), roleSeg)}${c.role === 'value' ? tbField(t('main.flexColJoin'), aggSeg) : ''}${tbField(t('main.flexColName'), nameInput)}${tbField(t('main.flexColClass'), classEdit)}`;
+        } else result = '<span class="reg-fx-dash">—</span>';
+        const sug = pending ? `<div class="reg-cd-sug"><span>${esc(t('main.flexSugAsk', { name: c.sug }))}</span><button type="button" class="btn btn-secondary" data-fx-sug="yes" data-fx-for="${c.i}">${esc(t('main.flexSugYes'))}</button><button type="button" class="btn btn-secondary" data-fx-sug="no" data-fx-for="${c.i}">${esc(t('main.flexSugNo'))}</button></div>` : '';
+        return `<div class="${cls}">${pick}${colCell}${choice}<div class="reg-tb-res">${result}</div>${sug}</div>`;
     };
     const inView = (c) => s.view === 'all' || (s.mode === 'roles' && ((s.view === 'new' && c.st === 'new') || (s.view === 'skip' && c.st === 'skip')));
-    const groupsHtml = () => {
+    const tableHtml = () => {
         const roles = s.mode === 'roles';
         const list = s.cols.filter(inView);
-        if (!roles) return `<div class="reg-cd-list">${list.map(cardHtml).join('')}</div>`;
-        const ex = exMap();
-        const pending = (c) => (c.st === 'new' && c.sugState === 'pending') || (c.st === 'exist' && !c.link);
-        const isValueLink = (c) => c.st === 'exist' && ex.get(c.link) && ex.get(c.link).role === 'value';
-        const groups = hasExisting() ? [
-            { id: 'pending', title: 'main.flexGrpPending', items: list.filter(pending), open: true },
-            { id: 'new', title: 'main.flexGrpNew', items: list.filter((c) => c.st === 'new' && !pending(c)), open: true },
-            { id: 'existKeys', title: 'main.flexGrpExistKeys', items: list.filter((c) => c.st === 'exist' && !pending(c) && !isValueLink(c)), open: false },
-            { id: 'existValues', title: 'main.flexGrpExistValues', items: list.filter((c) => isValueLink(c) && !pending(c)), open: false },
-            { id: 'skip', title: 'main.flexGrpSkip', items: list.filter((c) => c.st === 'skip'), open: false },
-        ] : [
-            { id: 'all', title: 'main.flexGrpAll', items: list.filter((c) => c.st !== 'skip'), open: true },
-            { id: 'skip', title: 'main.flexGrpSkip', items: list.filter((c) => c.st === 'skip'), open: true },
-        ];
-        return groups.filter((g) => g.items.length).map((g) => {
-            const open = s.view !== 'all' || g.id === 'pending' || (s.open[g.id] === undefined ? g.open : s.open[g.id]);
-            return `<details class="reg-grp" data-grp="${g.id}"${open ? ' open' : ''}><summary>${esc(t(g.title))} <small>${g.items.length}</small></summary><div class="reg-cd-list">${g.items.map(cardHtml).join('')}</div></details>`;
-        }).join('');
+        const head = roles ? ['', t('main.flexTbCol'), t('main.flexTbDo'), t('main.flexTbResult')] : ['', t('main.flexTbCol'), t('main.flexColName'), t('main.flexColClass')];
+        return `<div class="reg-tb reg-tb-m-${roles ? 'roles' : 'asis'}"><div class="reg-tb-head">${head.map((h) => `<span>${esc(h)}</span>`).join('')}</div>${list.map(rowHtml).join('') || `<p class="admin-hint reg-tb-empty">${esc(t('main.emptyStateText'))}</p>`}</div>`;
     };
     const mapHtml = () => {
         const info = s.info;
@@ -841,7 +829,7 @@ function openFlexLoadModal() {
             <p class="admin-hint">${esc(t('main.flexRead', { cols: info.headers.length, rows: num(info.rowsDeclared) }))}</p>
             ${info.sheets.length > 1 ? `<div class="reg-sheet"><label for="reg-i-sheet">${esc(t('main.regSheet'))}</label><select id="reg-i-sheet">${info.sheets.map((sh) => `<option value="${esc(sh.name)}"${sh.name === s.sheet ? ' selected' : ''}>${esc(sh.name)}</option>`).join('')}</select></div>` : ''}
             ${pills}${views}${bulk}
-            <div class="wp-imp-table-wrap reg-cd-wrap" data-help-key="regFlexMap">${groupsHtml()}</div>${classList()}
+            <div class="wp-imp-table-wrap reg-cd-wrap" data-help-key="regFlexMap">${tableHtml()}</div>${classList()}
             <div class="reg-day" data-help-key="regFlexWhen"><label for="fx-day">${esc(t('main.flexWhen'))}</label><input type="date" id="fx-day" value="${esc(s.day)}" max="${esc(todayText)}"><input type="time" id="fx-time" value="${esc(s.time)}" aria-label="${esc(t('main.flexWhenTime'))}"></div>
             ${errBox()}<div class="admin-form-actions"><button type="button" class="btn" data-reg-i="review"${s.busy ? ' disabled' : ''}>${esc(t('main.regReview'))}</button><button type="button" class="btn btn-secondary" data-reg-i="again"${s.busy ? ' disabled' : ''}>${esc(t('main.regChooseAnother'))}</button><button type="button" class="btn btn-secondary" data-reg-i="cancel"${s.busy ? ' disabled' : ''}>${esc(t('main.regCancel'))}</button></div>`;
     };

@@ -5718,6 +5718,12 @@
     "flexViewAll": "Todas",
     "flexViewNew": "Solo las nuevas",
     "flexViewSkip": "Las que no se cargan",
+    "flexTbCol": "Columna del Excel",
+    "flexTbDo": "¿Qué se hace?",
+    "flexTbResult": "Resultado",
+    "flexRoleS_key": "Llave",
+    "flexRoleS_data": "Dato",
+    "flexRoleS_value": "Valor",
     "flexErrPending": "Confirma estas columnas antes de revisar: {list}. Elige si son la que ya existe o una nueva adicional.",
     "flexErrNoLink": "Elige a cuál columna que ya existe corresponde «{name}».",
     "flexClsDown": "Aplicar a las siguientes columnas sin clasificación",
@@ -10144,7 +10150,7 @@
       "example": "3 cargas viejas → Eliminar datos (3)"
     },
     "regFlexMap": {
-      "what": "Para cada columna de tu Excel eliges su papel: Llave (identifica el renglón y va hacia abajo), Dato del renglón, Columna nueva en cada carga (existencia, costo…) o No se carga. Si varios renglones caen en la misma llave, la columna nueva se suma o se toma uno (por ejemplo, el costo). Todas las columnas se pueden renombrar. Cada columna es una tarjeta con una sola decisión: «Ya existe» (se une a una columna que el registro ya tiene), «Nueva adicional» (se define su papel, nombre, clasificación y color) o «No se carga». Las que ya existen se reconocen solas por el título que traían y van en grupos cerrados; si una trae otro nombre pero se parece a una que ya existe, se te pregunta si es esa. Así no se duplican columnas.",
+      "what": "Para cada columna de tu Excel eliges su papel: Llave (identifica el renglón y va hacia abajo), Dato del renglón, Columna nueva en cada carga (existencia, costo…) o No se carga. Si varios renglones caen en la misma llave, la columna nueva se suma o se toma uno (por ejemplo, el costo). Todas las columnas se pueden renombrar. Cada columna es una fila de la tabla, en el orden de tu Excel y con todo a la vista, con una sola decisión: «Ya existe» (se une a una columna que el registro ya tiene; ahí eliges a cuál), «Nueva adicional» (en la misma fila defines su papel, nombre, clasificación y color) o «No se carga». Las que ya existen se reconocen solas por el título que traían; si una trae otro nombre pero se parece a una que ya existe, su fila sale resaltada y se te pregunta si es esa. Así no se duplican columnas.",
       "example": "ON_HAND_QTY → Columna nueva, Sumar, «Existencia»"
     },
     "regFlexWhen": {
