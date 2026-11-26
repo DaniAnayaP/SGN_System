@@ -630,7 +630,7 @@ function openFlexLoadModal() {
         const roles = s.mode === 'roles';
         const rows = s.cols.map((c) => {
             const isValue = roles && c.role === 'value';
-            return `<tr class="${roles && c.role === 'skip' ? 'reg-fx-off' : ''}"><td>${esc(c.text)}</td><td class="reg-map-ex">${esc(c.example)}</td>
+            return `<tr class="${roles && c.role === 'skip' ? 'reg-fx-off' : ''}"><td>${esc(c.text)}${c.isNew ? ` <span class="reg-fx-new">${esc(t('main.flexNewCol'))}</span>` : ''}</td><td class="reg-map-ex">${esc(c.example)}</td>
                 <td>${roles ? `<select data-fx-role="${c.i}" aria-label="${esc(t('main.flexColLoadAs'))}">${roleOptions(c.role)}</select>` : `<span class="reg-fx-asis">${esc(t('main.flexRole_asis'))}</span>`}</td>
                 <td>${isValue ? `<select data-fx-agg="${c.i}" aria-label="${esc(t('main.flexColJoin'))}"><option value="sum"${c.agg === 'sum' ? ' selected' : ''}>${esc(t('main.flexAgg_sum'))}</option><option value="one"${c.agg === 'one' ? ' selected' : ''}>${esc(t('main.flexAgg_one'))}</option></select>` : '<span class="reg-fx-dash">—</span>'}</td>
                 <td>${roles && c.role === 'skip' ? '<span class="reg-fx-dash">—</span>' : `<input type="text" class="reg-fx-name" data-fx-name="${c.i}" maxlength="60" value="${esc(c.name)}" aria-label="${esc(t('main.flexColName'))}">`}${isValue ? `<label class="reg-fx-stamp"><input type="checkbox" data-fx-stamp="${c.i}"${c.stampName ? ' checked' : ''}> <span>${esc(t('main.flexStampName'))}</span></label>` : ''}</td>${classCells(c, roles)}</tr>`;
@@ -676,9 +676,29 @@ function openFlexLoadModal() {
             ${sum.different || sum.errors ? `<p class="admin-hint">${esc(t('main.regDoneKept', { n: num(sum.different + sum.errors) }))}</p>` : ''}
             <div class="admin-form-actions"><button type="button" class="btn" data-reg-i="done">${esc(t('main.regDone'))}</button></div>`;
     };
+    let paintedStep = null;
     const paint = () => {
         const wide = s.step === 'preview' || s.step === 'map';
+        // al volver a dibujar el MISMO paso (por ejemplo al elegir una opción de una columna) la lista de columnas se queda donde iba y el foco en el mismo control: antes regresaba hasta arriba
+        const same = paintedStep === s.step;
+        const wrapOld = same ? overlay.querySelector('.wp-imp-table-wrap') : null;
+        const panelOld = same ? overlay.querySelector('.modal-panel') : null;
+        const keep = { wt: wrapOld ? wrapOld.scrollTop : 0, wl: wrapOld ? wrapOld.scrollLeft : 0, pt: panelOld ? panelOld.scrollTop : 0 };
+        const active = same && document.activeElement && overlay.contains(document.activeElement) ? document.activeElement : null;
+        let focusSel = '';
+        if (active) {
+            const attr = [...active.attributes].find((a) => a.name.startsWith('data-fx-') && a.value !== '');
+            if (attr) focusSel = `[${attr.name}="${attr.value}"]`; else if (active.id) focusSel = `#${active.id}`;
+        }
         overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal wp-imp${wide ? ' wp-imp-wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="reg-i-title" aria-label="${esc(t('main.regImport'))}" data-help-key="regFlexImport">${s.step === 'preview' ? previewHtml() : s.step === 'map' ? mapHtml() : s.step === 'done' ? doneHtml() : startHtml()}</div>`;
+        if (same) {
+            const wrapNew = overlay.querySelector('.wp-imp-table-wrap');
+            if (wrapNew) { wrapNew.scrollTop = keep.wt; wrapNew.scrollLeft = keep.wl; }
+            const panelNew = overlay.querySelector('.modal-panel');
+            if (panelNew) panelNew.scrollTop = keep.pt;
+            if (focusSel) { const again = overlay.querySelector(focusSel); if (again && typeof again.focus === 'function') again.focus({ preventScroll: true }); }
+        }
+        paintedStep = s.step;
     };
     const showError = (text) => { s.error = text; const el = overlay.querySelector('#reg-i-error'); if (el) { el.textContent = text; el.hidden = !text; } };
     const setBusy = (busy) => { s.busy = busy; paint(); if (s.error) showError(s.error); };
@@ -692,12 +712,19 @@ function openFlexLoadModal() {
         const q = {}; if (sheet) q.sheet = sheet;
         s.info = await post('inspect', q, s.buffer);
         s.sheet = s.info.sheet;
-        s.cols = s.info.headers.map((h, k) => ({ i: h.index, text: h.text, name: h.text, example: s.info.sample[0] ? s.info.sample[0].values[k] : '', role: h.suggest.role, agg: h.suggest.agg, stampName: h.suggest.stampName !== false }));
+        // si el registro ya tuvo una carga, cada columna viene con lo que se eligió ahí (se empareja por el título del Excel); las que no estaban llevan la marca «Nueva»
+        const prevRoles = s.info.prevMode === 'roles';
+        s.cols = s.info.headers.map((h, k) => {
+            const p = h.prefill;
+            if (p && p.cls && Number.isInteger(p.color) && s.classColors[foldCls(p.cls)] === undefined) s.classColors[foldCls(p.cls)] = p.color;
+            return { i: h.index, text: h.text, name: (p && p.name) || h.text, example: s.info.sample[0] ? s.info.sample[0].values[k] : '', role: p && prevRoles ? p.role : (prevRoles && h.suggest.role === 'key' ? 'data' : h.suggest.role), agg: p && prevRoles && p.agg ? p.agg : h.suggest.agg, stampName: p && prevRoles ? p.stampName !== false : h.suggest.stampName !== false, cls: (p && p.cls) || '', isNew: !!s.info.prevMode && !p };
+        });
+        if (s.info.prevMode && !s.prevApplied) { s.prevApplied = true; s.mode = s.info.prevMode; }
     };
     const stampIso = () => { const d = new Date(`${s.day}T${s.time || '00:00'}`); return Number.isNaN(d.getTime()) ? '' : d.toISOString(); };
     const readWhen = () => { const d = overlay.querySelector('#fx-day'); const tm = overlay.querySelector('#fx-time'); if (d) s.day = d.value; if (tm) s.time = tm.value; };
     // la elección de esta carga: «tal cual» lleva todas las columnas; con papeles, las que no se cargan van marcadas
-    const config = () => ({ mode: s.mode, columns: s.cols.map((c) => ({ i: c.i, name: c.name, role: s.mode === 'asis' ? 'data' : c.role, agg: c.agg, stampName: c.stampName, cls: c.cls || '', color: c.cls ? s.classColors[foldCls(c.cls)] : null })) });
+    const config = () => ({ mode: s.mode, columns: s.cols.map((c) => ({ i: c.i, src: c.text, name: c.name, role: s.mode === 'asis' ? 'data' : c.role, agg: c.agg, stampName: c.stampName, cls: c.cls || '', color: c.cls ? s.classColors[foldCls(c.cls)] : null })) });
     const importQuery = (mode) => ({ mode, header: String(s.info.headerRow), sheet: s.sheet || '', file: s.file ? s.file.name : '', cfg: JSON.stringify(config()), stamp: stampIso() });
     // lo que se puede revisar sin ir al servidor: una llave al menos, nombres sin repetir y un día válido
     const problem = () => {
@@ -879,9 +906,29 @@ function openLoadModal() {
             ${sum.different || sum.errors ? `<p class="admin-hint">${esc(t('main.regDoneKept', { n: num(sum.different + sum.errors) }))}</p>` : ''}
             <div class="admin-form-actions"><button type="button" class="btn" data-reg-i="done">${esc(t('main.regDone'))}</button></div>`;
     };
+    let paintedStep = null;
     const paint = () => {
         const wide = s.step === 'preview' || s.step === 'map';
+        // al volver a dibujar el MISMO paso (por ejemplo al elegir una opción de una columna) la lista de columnas se queda donde iba y el foco en el mismo control: antes regresaba hasta arriba
+        const same = paintedStep === s.step;
+        const wrapOld = same ? overlay.querySelector('.wp-imp-table-wrap') : null;
+        const panelOld = same ? overlay.querySelector('.modal-panel') : null;
+        const keep = { wt: wrapOld ? wrapOld.scrollTop : 0, wl: wrapOld ? wrapOld.scrollLeft : 0, pt: panelOld ? panelOld.scrollTop : 0 };
+        const active = same && document.activeElement && overlay.contains(document.activeElement) ? document.activeElement : null;
+        let focusSel = '';
+        if (active) {
+            const attr = [...active.attributes].find((a) => a.name.startsWith('data-') && a.name !== 'data-help-key' && a.value !== '');
+            if (attr) focusSel = `[${attr.name}="${attr.value}"]`; else if (active.id) focusSel = `#${active.id}`;
+        }
         overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal wp-imp${wide ? ' wp-imp-wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="reg-i-title" aria-label="${esc(t('main.regImport'))}" data-help-key="regImport">${s.step === 'preview' ? previewHtml() : s.step === 'map' ? mapHtml() : s.step === 'done' ? doneHtml() : startHtml()}</div>`;
+        if (same) {
+            const wrapNew = overlay.querySelector('.wp-imp-table-wrap');
+            if (wrapNew) { wrapNew.scrollTop = keep.wt; wrapNew.scrollLeft = keep.wl; }
+            const panelNew = overlay.querySelector('.modal-panel');
+            if (panelNew) panelNew.scrollTop = keep.pt;
+            if (focusSel) { const again = overlay.querySelector(focusSel); if (again && typeof again.focus === 'function') again.focus({ preventScroll: true }); }
+        }
+        paintedStep = s.step;
     };
     const showError = (text) => { s.error = text; const el = overlay.querySelector('#reg-i-error'); if (el) { el.textContent = text; el.hidden = !text; } };
     const setBusy = (busy) => { s.busy = busy; paint(); if (s.error) showError(s.error); };

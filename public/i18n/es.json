@@ -5450,6 +5450,7 @@
     "flexColClass": "Clasificación",
     "flexColColor": "Color",
     "flexClsNone": "Sin clasificación",
+    "flexNewCol": "Nueva",
     "flexClsDown": "Aplicar a las siguientes columnas sin clasificación",
     "flexColor_0": "Azul",
     "flexColor_1": "Rosa",
@@ -9471,7 +9472,7 @@
       "example": "Guardar tal cual"
     },
     "appRegFlexMapeo": {
-      "what": "Cada columna de tu archivo: su papel (Llave, Dato del renglón, Columna nueva en cada carga o No se carga), si varios renglones caen juntos se suman o se toma uno (por ejemplo el costo), el nombre que le quieres poner y su clasificación (un nombre y un color para agrupar columnas; con el mismo nombre se usa el mismo color).",
+      "what": "Cada columna de tu archivo: su papel (Llave, Dato del renglón, Columna nueva en cada carga o No se carga), si varios renglones caen juntos se suman o se toma uno (por ejemplo el costo), el nombre que le quieres poner y su clasificación (un nombre y un color para agrupar columnas; con el mismo nombre se usa el mismo color). Desde la segunda carga viene ya llenado con lo de la carga anterior y las columnas que no estaban llevan la marca «Nueva».",
       "example": "ON_HAND_QTY → Columna nueva · Sumar · «Existencia» · Clasificación «Existencias» (azul)"
     },
     "appRegFlexCuando": {
@@ -9852,7 +9853,7 @@
       "example": "Guardar tal cual"
     },
     "regFlexMap": {
-      "what": "Para cada columna de tu Excel eliges su papel: Llave (identifica el renglón y va hacia abajo), Dato del renglón, Columna nueva en cada carga (existencia, costo…) o No se carga. Si varios renglones caen en la misma llave, la columna nueva se suma o se toma uno (por ejemplo, el costo). Todas las columnas se pueden renombrar.",
+      "what": "Para cada columna de tu Excel eliges su papel: Llave (identifica el renglón y va hacia abajo), Dato del renglón, Columna nueva en cada carga (existencia, costo…) o No se carga. Si varios renglones caen en la misma llave, la columna nueva se suma o se toma uno (por ejemplo, el costo). Todas las columnas se pueden renombrar. Desde la segunda carga todo viene ya llenado con lo que elegiste en la anterior (se empareja por el título de la columna del Excel); las columnas que no estaban antes llevan la marca «Nueva». Se puede cambiar lo que sea, pero si cambias el nombre de una llave los renglones no se reconocen y se crean de nuevo.",
       "example": "ON_HAND_QTY → Columna nueva, Sumar, «Existencia»"
     },
     "regFlexWhen": {

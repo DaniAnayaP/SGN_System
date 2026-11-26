@@ -177,7 +177,7 @@ module.exports = function createFlexApi(deps) {
             if (!res.headersSent) res.status(500).json({ code: 'EXPORT_ERROR', message: 'No se pudo armar la descarga.' }); else res.destroy();
         }
     }
-    async function inspectRoute(req, res) {
+    async function inspectRoute(req, res, registry) {
         const ability = regAbilities(req);
         if (!ability.canTemplate && !ability.canExcel) return regForbidden(res);
         if (!Buffer.isBuffer(req.body)) return fail(res, 400, 'IMPORT_FILE');
@@ -185,6 +185,9 @@ module.exports = function createFlexApi(deps) {
         res.set('Cache-Control', 'no-store');
         if (info.error && !info.sheets) return fail(res, 400, info.error);
         if (info.error) return res.status(400).json({ code: info.error, message: MESSAGES[info.error] || REG_MESSAGES[info.error] || REG_MESSAGES.IMPORT_FILE, sheets: info.sheets, sheet: info.sheet });
+        // el cuadro de columnas viene ya llenado con la elección de la última carga de este registro (si la hay)
+        const prev = registry ? db.flexLastConfig(req.user.clientId, req.user.isTestAccount, registry.key) : null;
+        if (prev && Array.isArray(prev.columns)) { flex.prefillHeaders(info.headers, prev); info.prevMode = prev.mode === 'roles' ? 'roles' : 'asis'; }
         res.json(info);
     }
     async function importRoute(req, res, registry) {
@@ -217,7 +220,7 @@ module.exports = function createFlexApi(deps) {
                 return res.json({ mode: 'preview', sheet, headerRow, summary: result.summary, issues: result.issues });
             }
             loadId = db.createRegistryLoad({ clientId, isTestData: isTestAccount, registryKey: registry.key, source: 'excel', fileName, sheet, day: '', loadedBy: changedByLabel(req), loadedByUserId: req.user.sub });
-            db.setFlexLoadInfo(loadId, stamp, { mode: parsed.cfg.mode, columns: parsed.cfg.columns.filter((c) => c.role !== 'skip').map((c) => ({ name: c.name, role: c.role, agg: c.agg, stampName: c.stampName, cls: c.cls, color: c.color })) });
+            db.setFlexLoadInfo(loadId, stamp, { mode: parsed.cfg.mode, columns: parsed.cfg.columns.filter((c) => c.role !== 'skip').map((c) => ({ src: c.src, name: c.name, role: c.role, agg: c.agg, stampName: c.stampName, cls: c.cls, color: c.color })), skipped: parsed.cfg.columns.filter((c) => c.role === 'skip').map((c) => c.src || c.name) });
             const store = db.flexStore({ clientId, isTestData: isTestAccount, registryKey: registry.key, loadId });
             const result = await flex.run(req.body, options, parsed.cfg, store, loadId, { dryRun: false });
             if (result.error) {

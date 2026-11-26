@@ -7463,7 +7463,7 @@ app.get('/api/business/manual-registries/:key/template', requireAuth, async (req
 app.post('/api/business/manual-registries/:key/inspect', requireAuth, regRaw, async (req, res) => {
     const registry = regRegistry(req, res, { needActive: true });
     if (!registry) return;
-    if (registry.kind === 'tabla') return flexApi.inspectRoute(req, res);
+    if (registry.kind === 'tabla') return flexApi.inspectRoute(req, res, registry);
     const ability = regAbilities(req);
     if (!ability.canTemplate && !ability.canExcel) return regForbidden(res);
     if (!Buffer.isBuffer(req.body)) return res.status(400).json({ code: 'IMPORT_FILE', message: REG_MESSAGES.IMPORT_FILE });

@@ -5451,6 +5451,7 @@
     "flexColClass": "Classification",
     "flexColColor": "Color",
     "flexClsNone": "No classification",
+    "flexNewCol": "New",
     "flexClsDown": "Apply to the following columns without a classification",
     "flexColor_0": "Blue",
     "flexColor_1": "Pink",
@@ -9472,7 +9473,7 @@
       "example": "Save as is"
     },
     "appRegFlexMapeo": {
-      "what": "Each column of your file: its role (Key, Row data, New column on every load or Not loaded), whether rows that land together are added up or one is taken (for example the cost), the name you want to give it and its classification (a name and a color to group columns; the same name keeps the same color).",
+      "what": "Each column of your file: its role (Key, Row data, New column on every load or Not loaded), whether rows that land together are added up or one is taken (for example the cost), the name you want to give it and its classification (a name and a color to group columns; the same name keeps the same color). From the second load on it comes already filled in with the previous load and columns that were not there carry a \"New\" tag.",
       "example": "ON_HAND_QTY → New column · Add up · \"Stock\" · Classification \"Stock levels\" (blue)"
     },
     "appRegFlexCuando": {
@@ -9853,7 +9854,7 @@
       "example": "Save as is"
     },
     "regFlexMap": {
-      "what": "For each column of your Excel you pick its role: Key (identifies the row and goes down the list), Row data, New column on every load (stock, cost…) or Not loaded. If several rows land on the same key, the new column is added up or one is taken (for example, the cost). Every column can be renamed.",
+      "what": "For each column of your Excel you pick its role: Key (identifies the row and goes down the list), Row data, New column on every load (stock, cost…) or Not loaded. If several rows land on the same key, the new column is added up or one is taken (for example, the cost). Every column can be renamed. From the second load on, everything comes already filled in with what you chose last time (matched by the title of the Excel column); columns that were not there before carry a \"New\" tag. You can change anything, but if you rename a key the rows are no longer recognized and are created again.",
       "example": "ON_HAND_QTY → New column, Add up, \"Stock\""
     },
     "regFlexWhen": {

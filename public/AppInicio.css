@@ -2679,6 +2679,7 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .rg-app-fxoff{ opacity: 0.55; }
 .rg-app-clsrow{ display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .rg-app-clsrow .pm-app-input{ flex: 1 1 9rem; min-width: 0; }
+.rg-app-new{ align-self: flex-start; margin-top: 0.15rem; padding: 0 0.45rem; border-radius: 999px; background: #fdecc8; color: #7a4d00; font-size: 0.66rem; font-weight: 700; font-style: normal; }
 .rg-app-dots{ display: inline-flex; gap: 0.3rem; align-items: center; }
 .rg-app-dot{ width: 1.2rem; height: 1.2rem; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--home-border); padding: 0; cursor: pointer; }
 .rg-app-dot[aria-pressed="true"]{ box-shadow: 0 0 0 2px var(--home-text-primary); }

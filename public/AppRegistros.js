@@ -1026,7 +1026,17 @@ async function inspect(sheet) {
     if (sheet) q.sheet = sheet;
     wiz.info = await post('inspect', q, wiz.buffer);
     wiz.sheet = wiz.info.sheet;
-    if (reg.kind === 'tabla') { wiz.cols = wiz.info.headers.map((h, k) => ({ i: h.index, text: h.text, name: h.text, example: wiz.info.sample[0] ? wiz.info.sample[0].values[k] : '', role: h.suggest.role, agg: h.suggest.agg, stampName: h.suggest.stampName !== false })); return; }
+    if (reg.kind === 'tabla') {
+        // si el registro ya tuvo una carga, cada columna viene con lo que se eligió ahí (se empareja por el título del Excel); las que no estaban llevan la marca «Nueva»
+        const prevRoles = wiz.info.prevMode === 'roles';
+        wiz.cols = wiz.info.headers.map((h, k) => {
+            const p = h.prefill;
+            if (p && p.cls && Number.isInteger(p.color) && wiz.classColors[foldCls(p.cls)] === undefined) wiz.classColors[foldCls(p.cls)] = p.color;
+            return { i: h.index, text: h.text, name: (p && p.name) || h.text, example: wiz.info.sample[0] ? wiz.info.sample[0].values[k] : '', role: p && prevRoles ? p.role : (prevRoles && h.suggest.role === 'key' ? 'data' : h.suggest.role), agg: p && prevRoles && p.agg ? p.agg : h.suggest.agg, stampName: p && prevRoles ? p.stampName !== false : h.suggest.stampName !== false, cls: (p && p.cls) || '', isNew: !!wiz.info.prevMode && !p };
+        });
+        if (wiz.info.prevMode && !wiz.prevApplied) { wiz.prevApplied = true; wiz.fmode = wiz.info.prevMode; }
+        return;
+    }
     wiz.include = new Set((wiz.info.mapping.valueCols || []).map((v) => v.col));
     wiz.picks = {};
     Object.entries(wiz.info.mapping.dims || {}).forEach(([dim, col]) => { wiz.picks[col] = dim; });
@@ -1323,7 +1333,7 @@ function flexProblem() {
     for (const c of used) { const f = String(c.name || '').trim().toLowerCase(); if (seen.has(f)) return t('main.regErr_FLEX_DUP_NAME'); seen.add(f); }
     return '';
 }
-const flexConfig = () => ({ mode: wiz.fmode, columns: wiz.cols.map((c) => ({ i: c.i, name: c.name, role: wiz.fmode === 'asis' ? 'data' : c.role, agg: c.agg, stampName: c.stampName, cls: c.cls || '', color: c.cls ? wiz.classColors[foldCls(c.cls)] : null })) });
+const flexConfig = () => ({ mode: wiz.fmode, columns: wiz.cols.map((c) => ({ i: c.i, src: c.text, name: c.name, role: wiz.fmode === 'asis' ? 'data' : c.role, agg: c.agg, stampName: c.stampName, cls: c.cls || '', color: c.cls ? wiz.classColors[foldCls(c.cls)] : null })) });
 const flexStampIso = () => { const d = new Date(`${wiz.day}T${wiz.time || '00:00'}`); return Number.isNaN(d.getTime()) ? '' : d.toISOString(); };
 function stepMapFlex(body, bar) {
     const info = wiz.info;
@@ -1367,6 +1377,7 @@ function stepMapFlex(body, bar) {
         const row = el('div', `rg-app-maprow${off ? ' rg-app-fxoff' : ''}`);
         const name = el('span', 'rg-app-mapname');
         name.append(el('b', '', c.text), el('small', '', c.example === undefined || c.example === null ? '' : String(c.example)));
+        if (c.isNew) name.appendChild(el('em', 'rg-app-new', t('main.flexNewCol')));
         row.appendChild(name);
         if (roles) {
             const select = el('select', 'pm-app-input rg-app-mapsel');

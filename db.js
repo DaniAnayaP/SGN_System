@@ -5207,6 +5207,12 @@ async function cleanupFailedFlexLoads() {
     }
 }
 setTimeout(() => { cleanupFailedFlexLoads(); }, 8000).unref();
+// La elección de la última carga de un registro libre (para traer el cuadro de columnas ya llenado): la última vigente; si no hay ninguna (todas se cayeron o se anularon), la del último intento.
+function flexLastConfig(clientId, forTestAccount, registryKey) {
+    const row = db.prepare("SELECT config_json FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND config_json <> '' AND status IN ('vigente', 'anulada') ORDER BY (status = 'vigente') DESC, id DESC LIMIT 1")
+        .get(clientId, forTestAccount ? 1 : 0, registryKey);
+    return row ? parseJsonObject(row.config_json) : null;
+}
 // Las cargas vigentes de un registro libre, en orden, con su día y hora y su elección.
 function flexVigenteLoads(clientId, forTestAccount, registryKey) {
     return db.prepare("SELECT id, stamp, created_at, file_name, loaded_by, config_json FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND status = 'vigente' AND config_json <> '' ORDER BY id")
@@ -23063,7 +23069,7 @@ module.exports = {
     listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
-    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, discardFlexLoadData, flexVigenteLoads, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,

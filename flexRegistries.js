@@ -118,7 +118,9 @@ function parseConfig(raw, headerCount = MAX_COLUMNS) {
         // la clasificación (nombre y color) que la persona le pone a la columna, además de su papel
         const cls = trim(col.cls).replace(/\s+/g, ' ').slice(0, MAX_CLASS);
         const color = cls && Number.isInteger(col.color) && col.color >= 0 && col.color < CLASS_COLORS ? col.color : null;
-        columns.push({ i: col.i, name, role, agg: col.agg === 'one' ? 'one' : 'sum', stampName: col.stampName !== false, cls, color });
+        // el título que traía la columna en el Excel (se guarda con la carga para emparejar la siguiente por ese título, aunque la columna se haya renombrado)
+        const src = trim(col.src).replace(/\s+/g, ' ').slice(0, 120);
+        columns.push({ i: col.i, name, role, agg: col.agg === 'one' ? 'one' : 'sum', stampName: col.stampName !== false, cls, color, src });
     }
     columns.sort((a, b) => a.i - b.i);
     if (mode === 'roles' && !columns.some((x) => x.role === 'key')) return { error: 'FLEX_NO_KEY' };
@@ -201,6 +203,22 @@ async function readRows(buffer, { sheet, headerRow }, cfg) {
 }
 
 const periodNameKey = (name) => `n:${foldText(name)}`;
+
+// El cuadro de columnas ya llenado: cada título del Excel nuevo se empareja (sin importar mayúsculas, acentos ni el orden) con el que traía en la última carga del registro y toma lo que se eligió ahí
+// (papel, sumar o tomar uno, nombre, clasificación y color). Un título que no estaba antes no lleva nada (lo sugiere el sistema y se marca «Nueva»); uno que antes era «no se carga» sigue sin cargarse.
+// prev = { mode, columns: [{ src?, name, role, agg, stampName, cls, color }], skipped: [título] } (la elección guardada con la carga). Pone h.prefill en cada título que se reconoce.
+function prefillHeaders(headers, prev) {
+    if (!prev || !Array.isArray(prev.columns)) return;
+    const byTitle = new Map();
+    prev.columns.forEach((c) => { const k = foldText(c.src || c.name); if (k && !byTitle.has(k)) byTitle.set(k, c); });
+    const skipped = new Set((Array.isArray(prev.skipped) ? prev.skipped : []).map((x) => foldText(x)));
+    headers.forEach((h) => {
+        const k = foldText(h.text);
+        const c = byTitle.get(k);
+        if (c) h.prefill = { role: c.role, agg: c.agg === 'one' ? 'one' : 'sum', stampName: c.stampName !== false, name: trim(c.name) || h.text, cls: trim(c.cls), color: Number.isInteger(c.color) ? c.color : null };
+        else if (skipped.has(k)) h.prefill = { role: 'skip' };
+    });
+}
 
 // Corre (o ensaya) una carga. `store` pone la base:
 //   store.existingKeys(): Map(keyText → rowId) de los renglones del registro      store.namedValues(colKey): Map(rowId → valor) de lo vigente en una columna de nombre fijo
@@ -388,4 +406,4 @@ function parseFilter(raw, columns) {
 }
 
 const foldName = (name) => foldText(name);
-module.exports = { MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };
+module.exports = { prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };
