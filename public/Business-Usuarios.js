@@ -52,11 +52,13 @@ async function loadCostCentersForTree() {
 const activePermsModal = document.getElementById('active-perms-modal');
 const activePermsSubtitle = document.getElementById('active-perms-subtitle');
 const activePermsContainer = document.getElementById('active-perms-container');
+const activePermsNotice = document.getElementById('active-perms-notice');
 const activePermsError = document.getElementById('active-perms-error');
 
 let activePermsUser = null;
 async function openActivePermsModal(user) {
     activePermsUser = user;
+    activePermsNotice.hidden = true;
     activePermsSubtitle.textContent = `${user.name} (${user.username})`;
     activePermsError.hidden = true;
     activePermsContainer.innerHTML = '';
@@ -65,6 +67,7 @@ async function openActivePermsModal(user) {
         const res = await fetch(`/api/business/users/${user.id}/grants`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
+        showMissingAssignmentNotice(data.accessStatus, activePermsNotice);
         const order = await fetch(`/api/business/permission-order?level=usuario&entityId=${user.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
         const classOverrides = await fetch(`/api/business/permission-classifications?level=usuario&entityId=${user.id}`, { credentials: 'include' }).then((r) => (r.ok ? r.json() : null)).then((d) => (d && d.overrides) || null).catch(() => null);
         const tree = window.PermissionCostTree.create(activePermsContainer, {
@@ -118,7 +121,7 @@ function grantLimitsForUser(data) {
 }
 
 // Lo que le falta a la persona (Mi Recurso Humano) para que sus accesos tengan efecto: puesto, sitio, departamentos o centros de costos.
-function showMissingAssignmentNotice(status) {
+function showMissingAssignmentNotice(status, target = grantAccessNotice) {
     const missing = [];
     if (status) {
         if (!status.hasPosition) missing.push(Dashboard.t('business.grantMissingPosition'));
@@ -126,8 +129,8 @@ function showMissingAssignmentNotice(status) {
         if (status.missingDepartments) missing.push(Dashboard.t('business.grantMissingDepartments'));
         if (status.missingCenters) missing.push(Dashboard.t('business.grantMissingCenters'));
     }
-    grantAccessNotice.textContent = missing.length ? Dashboard.t('business.grantAccessMissing', { list: missing.join(', ') }) : '';
-    grantAccessNotice.hidden = !missing.length;
+    target.textContent = missing.length ? Dashboard.t('business.grantAccessMissing', { list: missing.join(', ') }) : '';
+    target.hidden = !missing.length;
 }
 
 async function openGrantAccessModal(user) {

@@ -755,11 +755,12 @@
                     label.textContent = labelText;
                     applyClassificationColorTo(label, classificationId);
                     row.appendChild(label);
-                    // Un centro de costos fuera de la asignación de la persona: el motivo se ve en la fila, no solo al tocarla.
-                    if (colorSlot && colorSlot.limitReason === 'assignment') {
+                    // Una fila que no se puede marcar: el motivo se ve en la fila (no solo al tocarla): fuera de la asignación de la persona, fuera de lo contratado, en otro Estatus o no habilitado para servicio.
+                    if (colorSlot && colorSlot.limitReason) {
+                        const reason = colorSlot.limitReason;
                         const tag = document.createElement('span');
                         tag.className = 'perm-tree-limit-tag';
-                        tag.textContent = t('main.limitAssignmentTag');
+                        tag.textContent = reason === 'assignment' ? t('main.limitAssignmentTag') : (reason === 'status' ? t('main.limitStatusTag') : (typeof reason === 'string' && reason.indexOf('service:') === 0 ? t('main.limitServiceTag') : t('main.limitContractTag')));
                         row.appendChild(tag);
                     }
                     if (colorSlot && colorSlot.limitReason) {

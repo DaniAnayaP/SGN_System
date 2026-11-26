@@ -16029,11 +16029,29 @@ function contractKeyForGrant(submenuId) {
 function isCostCenterGrant(g) {
     return g.itemId === 'cc-list' || String(g.submenuId || '').startsWith('cc-');
 }
+// «Registros Información» sale en dos lugares del árbol (Centro de Distribución y Análisis › Cadena de Suministro › Análisis Manuales): es la MISMA pantalla, no una venta aparte. Si la empresa tiene contratada la de Centro de Distribución
+// (en su plan o como adicional) y tiene algo de Análisis, la de Análisis también cuenta como contratada, con los mismos renglones (la migración seed-registros-en-analisis-v1 solo copia lo que estaba en la misma tabla de permisos).
+function withRegistrosAnalisisAlias(list) {
+    const FROM = { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', prefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' };
+    const TO = { sectionId: 'analysis', itemId: 'an-area-supply-chain', prefix: 'cat-analisis-manuales/cat-analisis-manuales-registros' };
+    if (!Array.isArray(list) || !list.some((g) => g.sectionId === TO.sectionId)) return list;
+    const keyOf = (g) => `${g.sectionId}::${g.itemId || ''}::${g.submenuId || ''}`;
+    const have = new Set(list.map(keyOf));
+    const extra = [];
+    list.forEach((g) => {
+        if (g.sectionId !== FROM.sectionId || g.itemId !== FROM.itemId || !g.submenuId) return;
+        if (g.submenuId !== FROM.prefix && !String(g.submenuId).startsWith(`${FROM.prefix}/`)) return;
+        const copy = { ...g, sectionId: TO.sectionId, itemId: TO.itemId, submenuId: TO.prefix + String(g.submenuId).slice(FROM.prefix.length) };
+        const key = keyOf(copy);
+        if (!have.has(key)) { have.add(key); extra.push(copy); }
+    });
+    return extra.length ? [...list, ...extra] : list;
+}
 // Lo que una empresa tiene contratado: el árbol de su plan más los adicionales que compró. null si no tiene plan (no hay con qué comparar).
 function getClientContractGrants(clientId) {
     const client = clientId ? getClientById(clientId) : null;
     const plan = client && client.plan ? getPlanByName(client.plan) : null;
-    return plan ? [...getPlanGrants(plan.id), ...getClientPermissionGrants(clientId)] : null;
+    return plan ? withRegistrosAnalisisAlias([...getPlanGrants(plan.id), ...getClientPermissionGrants(clientId)]) : null;
 }
 // Lo que el administrador del cliente ve en su menú: lo que se le asignó, o sea el árbol del plan (si tiene) más los adicionales de Nuestros Clientes.
 // A diferencia de getClientContractGrants, con adicionales y sin plan también hay lista. Vacía = el cliente no tiene nada asignado en el árbol (los
@@ -16042,7 +16060,7 @@ function getClientAdminContractGrants(clientId) {
     const client = clientId ? getClientById(clientId) : null;
     if (!client) return [];
     const plan = client.plan ? getPlanByName(client.plan) : null;
-    return [...(plan ? getPlanGrants(plan.id) : []), ...getClientPermissionGrants(clientId)];
+    return withRegistrosAnalisisAlias([...(plan ? getPlanGrants(plan.id) : []), ...getClientPermissionGrants(clientId)]);
 }
 // General (main) que el administrador del cliente puede DAR a su gente (Daniel, 2026-11-19: «limita también lo que puede dar»): solo lo que su contrato (plan + adicionales) trae de General, la misma medida con la que se arma SU menú
 // (Dashboard.adminMainCovers). Vacía = el contrato no trae nada de General (clientes armados antes de que el árbol lo llevara): ahí no hay límite. Los centros de costos no cuentan.
