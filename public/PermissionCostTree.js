@@ -402,7 +402,8 @@
         const removableColor = (c) => c === 'yellow' || (allowRemove && c === 'green');
         // «+ Adicionales» de un cliente (interactivo): el marcador de color ES el interruptor. Un clic lo activa (⊕ amarillo) y otro lo desactiva (⊕ apagado); un nivel a medias (−) activa con un clic todo lo de adentro y con otro lo quita.
         // Sin casillas azules ni botoncitos aparte. Lo que da el plan (verde) no se quita.
-        const toggleMode = allowRemoveExtras && interactive;
+        // Con allowRemove (el árbol de una persona) el interruptor es el mismo que el de «+ Adicionales» (Daniel, 2026-11-26: «debe ser como el que manejamos para asignar adicionales al cliente»): el marcador de color es el botón.
+        const toggleMode = (allowRemoveExtras || allowRemove) && interactive;
         // allowRemove: lo que da el PUESTO y se le quita a esta persona (las llaves, ya guardadas o de esta sesión), y los permisos crudos del puesto (para saber qué contenedores cubren lo quitado).
         let excludedKeys = new TrackedSet();
         let planRawGrants = [];
@@ -869,12 +870,12 @@
             // lo que todavía no cubre ni el plan ni lo ya vendido: es lo que agrega un nivel «a medias» al marcarlo
             const missing = stageable.filter((k) => !covered(k));
             // lo adicional del cliente que hay dentro de un nivel a medias (lo que da el plan no se quita)
-            const partialRemoveKeys = allowRemoveExtras && interactive && color === null ? [...new Set([...leafKeys, ...deeper])].filter(isOwnExtra) : [];
+            const partialRemoveKeys = (allowRemoveExtras || allowRemove) && interactive && color === null ? [...new Set([...leafKeys, ...deeper])].filter(isOwnExtra) : [];
             const removeKeys = canRemove && interactive && removableColor(color) ? [...new Set([...leafKeys, ...deeper])].filter(isOwnExtra) : [];
             const lockedReason = grantLimits && leafKeys.length > 0 && own.length === 0 ? limitReasonKey(leafKeys[0]) : null;
             return [ownKey, {
                 color,
-                partial: allowRemoveExtras && interactive && color === null && (missing.length > 0 || partialRemoveKeys.length > 0),
+                partial: (allowRemoveExtras || allowRemove) && interactive && color === null && (missing.length > 0 || partialRemoveKeys.length > 0),
                 canAdd: missing.length > 0,
                 canRemoveAll: partialRemoveKeys.length > 0,
                 onEnableAll: () => missing.forEach(stageAdd),

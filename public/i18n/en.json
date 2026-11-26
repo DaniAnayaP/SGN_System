@@ -1844,7 +1844,7 @@
     "accesosTitle": "Access & Permissions",
     "accesosSubtitle": "Grant a user extra modules, sections, or screens beyond what their profile(s) already give them.",
     "selectUserForAccess": "Select a user",
-    "extraAccessHint": "This is in addition to whatever their assigned profiles already grant. Green is given by the job position and amber is what you gave this person: both are removed by unchecking their box (green is only taken from this person; the job position is not changed).",
+    "extraAccessHint": "This is in addition to whatever their assigned profiles already grant. Green is given by the job position and amber is what you gave this person: one click on its marker turns it on or removes it (green is only taken from this person; the job position is not changed).",
     "accessSaved": "Access updated.",
     "accesosHrStatusCol": "HR Status",
     "accesosOperationalStatusCol": "Operational Status",
