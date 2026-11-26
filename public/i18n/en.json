@@ -5369,6 +5369,7 @@
     "anMoveUp": "Move up",
     "anMoveDown": "Move down",
     "anDragHandle": "Drag to change the order",
+    "anColOrder": "Order",
     "anErr_TOO_MANY": "An analysis allows up to {max} queried columns; this selection would make {total}.",
     "anAgg_value": "The value",
     "anAgg_avg": "The average",

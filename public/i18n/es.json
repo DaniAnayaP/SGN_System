@@ -5368,6 +5368,7 @@
     "anMoveUp": "Subir",
     "anMoveDown": "Bajar",
     "anDragHandle": "Arrastrar para cambiar el orden",
+    "anColOrder": "Orden",
     "anErr_TOO_MANY": "Un análisis admite hasta {max} columnas consultadas; con esta selección serían {total}.",
     "anAgg_value": "El valor",
     "anAgg_avg": "El promedio",
