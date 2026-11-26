@@ -2580,6 +2580,10 @@ db.exec('CREATE INDEX IF NOT EXISTS idx_hr_workers_user_id ON hr_workers(user_id
     });
 }
 
+// Las personas dadas de alta solo con sitio (Mi Recurso Humano, 2026-11-26: nombre, apellido y sitio) quedan con TODOS los centros de ese sitio (se pueden restringir después); antes de esto nacían sin centros y no se les podían dar accesos.
+// Antes del alta por sitio no existía «con sitio y sin departamentos» (la cadena lo exigía), así que esto solo toca esas altas.
+db.prepare("UPDATE hr_workers SET assigned_cost_centers = 'all' WHERE assigned_sites <> '' AND assigned_departments = '' AND assigned_cost_centers = ''").run();
+
 // web_enabled/app_enabled added after master_permission_status shipped
 // twice already under two different (both superseded) shapes -- a
 // combined single status, then a status split per platform. Neither stuck
@@ -20778,6 +20782,17 @@ function hrWorkerAssignmentOf(userId) {
     return { departments, areas, allowedCenters };
 }
 // Los ids de los centros de costos donde opera esa persona según su asignación (lista, vacía si todavía no eligió ninguno); null = sin asignación, sin límite. Lo usa el árbol por usuario para bloquear los que no están.
+// Para el aviso de «Otorgar Accesos»: qué le falta a esta persona de Mi Recurso Humano para que lo que se le da tenga efecto (null si la cuenta no es una persona de Mi Recurso Humano).
+// El puesto es la base de sus permisos; con asignación («Dónde trabaja»), lo que no se eligió es «ninguno»: sin departamentos no vale ningún permiso de departamento y sin centros ninguno de centros de costos. Sin ninguna asignación todavía no hay límite.
+function getHrWorkerAccessStatus(userId) {
+    const w = db.prepare('SELECT job_position_id AS jobPositionId, assigned_departments AS d, assigned_sites AS s, assigned_cost_centers AS c FROM hr_workers WHERE user_id = ?').get(userId);
+    if (!w) return null;
+    const departments = !!parseHrAssignment(w.d);
+    const sites = !!parseHrAssignment(w.s);
+    const centers = !!parseHrAssignment(w.c);
+    const limited = departments || sites || centers;
+    return { hasPosition: !!w.jobPositionId, limited, missingSites: limited && !sites, missingDepartments: limited && !departments, missingCenters: limited && !centers };
+}
 function getHrAssignedCenterIds(userId) {
     const assignment = hrWorkerAssignmentOf(userId);
     return assignment ? [...assignment.allowedCenters] : null;
@@ -23348,6 +23363,7 @@ module.exports = {
     describeHrAssignment,
     applyHrAssignmentLimits,
     getHrAssignedCenterIds,
+    getHrWorkerAccessStatus,
     getHrAssignedCenterGrants,
     listPlans,
     getPlanById,

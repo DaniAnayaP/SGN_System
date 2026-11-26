@@ -567,7 +567,7 @@
       ]
     },
     {
-      "id": "cat-cargas-manuales", "labelKey": "menu.catCargasManuales", "abbrKey": "menu.catCargasManualesAbbr", "abbrKeys": ["menu.catCargasManualesAbbr1", "menu.catCargasManualesAbbr2"], "icon": "bx-spreadsheet",
+      "id": "cat-cargas-manuales", "labelKey": "menu.catCargasManuales", "abbrKey": "menu.catCargasManualesAbbr", "abbrKeys": ["menu.catCargasManualesAbbr1", "menu.catCargasManualesAbbr2"], "icon": "bx-spreadsheet", "hideWhenEmpty": true,
       "submenu": []
     },
     {

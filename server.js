@@ -509,6 +509,7 @@ const {
     getClientMainContractGrants,
     clampNewGrantsToLimits,
     getHrAssignedCenterIds,
+    getHrWorkerAccessStatus,
     getHrAssignedCenterGrants,
     getOrderTreeForTarget,
     getInheritedClassificationOverridesForTarget,
@@ -6442,6 +6443,8 @@ app.get('/api/business/users/:id/grants', requireAuth, requireClientAdmin, (req,
         mainContractGrants: getClientMainContractGrants(req.user.clientId),
         // Los centros de costos de su «Asignación a laborar» (Mi Recurso Humano): el árbol bloquea, con su motivo, los que no están. null = esa persona no tiene asignación (sin límite).
         assignedCostCenterIds: getHrAssignedCenterIds(req.params.id),
+        // Lo que le falta a esta persona para que sus accesos tengan efecto (puesto, departamentos, centros…): el aviso de la ventana «Otorgar Accesos». null si no es una persona de Mi Recurso Humano.
+        accessStatus: getHrWorkerAccessStatus(req.params.id),
     });
 });
 
@@ -7605,9 +7608,11 @@ const AN_COLS = { create: 'colAnCrearAuth', extract: 'colAnExtraerAuth', annul: 
 const AN_MESSAGES = {
     AN_NAME_REQUIRED: 'Ponle un nombre al análisis.', AN_NAME_TAKEN: 'Ya hay un análisis con ese nombre.', DESIGN_REGISTRIES: 'Elige al menos un registro.', DESIGN_COLUMN_REGISTRY: 'Una columna usa un registro que el análisis no tiene.',
     DESIGN_COLUMN_PERIODS: 'Cada columna consultada necesita al menos un periodo.', AN_NO_COLUMNS: 'Agrega al menos una columna consultada antes de extraer.', AN_EMPTY: 'Con este diseño no sale ningún renglón: revisa los periodos y los filtros.',
+    ADDED_NAME: 'Ponle un nombre a la columna.', ADDED_STEPS: 'Revisa los pasos de la operación.', ADDED_KIND: 'Ese tipo de columna todavía no se puede agregar.', ADDED_TOO_MANY: 'Un análisis admite hasta 40 columnas agregadas.',
     AN_INACTIVE: 'El análisis está desactivado.', AN_BUSY: 'Ya se está extrayendo este análisis. Espera a que termine.', AN_FORBIDDEN: 'No tienes permiso para esto.',
 };
 const anExtracting = new Set();
+const analysisAdded = require('./analysisAdded');
 function anAbilities(req) {
     const admin = !!req.user.isClientAdmin;
     const grants = admin ? null : getUserEffectiveGrants(req.user.sub);
@@ -7679,7 +7684,10 @@ app.patch('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
         if (name !== analysis.name) patch.name = name;
     }
     if (body.design !== undefined) {
-        const checked = manualAnalyses.normalizeDesign(body.design, anRegistryKeys(req));
+        // guardar el Diseño (columnas de registros) no borra las columnas agregadas en el Archivo si quien lo manda no las trae
+        const sent = body.design && typeof body.design === 'object' ? { ...body.design } : body.design;
+        if (sent && typeof sent === 'object' && sent.added === undefined) sent.added = (analysis.design && analysis.design.added) || [];
+        const checked = manualAnalyses.normalizeDesign(sent, anRegistryKeys(req));
         if (checked.error) return anFail(res, checked.error);
         patch.design = checked.design;
     }
@@ -7743,7 +7751,45 @@ app.get('/api/business/manual-analyses/:id/extractions/:eid/data', requireAuth, 
     if (!extraction || extraction.status === 'en_proceso') return res.status(404).json({ code: 'EXTRACTION_NOT_FOUND', message: 'Esa versión no existe.' });
     const { rows, total } = listExtractionRows(extraction.id, { text: req.query.text });
     res.set('Cache-Control', 'no-store');
-    res.json({ extraction, columns: extraction.columns, rows, total, truncated: total > rows.length });
+    // Las columnas agregadas (Daniel, 2026-11-26) se calculan al leer, con los datos de ESTA versión (que no cambian): quedan al final, con su letra y su fórmula de Excel.
+    const added = (analysis.design && Array.isArray(analysis.design.added)) ? analysis.design.added : [];
+    const columns = added.length ? [...extraction.columns, ...analysisAdded.addedColumnDefs(added, extraction.columns)] : extraction.columns;
+    res.json({ extraction, columns, rows: added.length ? analysisAdded.applyAdded(added, extraction.columns, rows) : rows, total, truncated: total > rows.length, baseColumns: extraction.columns.length });
+});
+// Guardar la lista de columnas agregadas (la lista completa, en orden). Es parte del diseño: se repite sola en cada versión.
+app.put('/api/business/manual-analyses/:id/added', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    if (!anAbilities(req).canCreate) return anForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const checked = analysisAdded.normalizeAdded(req.body && req.body.added);
+    if (checked.error) return anFail(res, checked.error);
+    const next = manualAnalyses.normalizeDesign({ ...analysis.design, added: checked.added }, anRegistryKeys(req));
+    if (next.error) return anFail(res, next.error);
+    const updated = updateAnalysis(analysis.id, clientId, isTestAccount, { design: next.design });
+    const before = ((analysis.design && analysis.design.added) || []).length;
+    logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: updated.name, action: 'update', fieldKey: 'main.anColumnasAgregadas', oldValue: String(before), newValue: String(checked.added.length), changedBy: changedByLabel(req) });
+    res.json({ analysis: updated });
+});
+// Vista previa de UNA columna agregada (sin guardar): su fórmula de Excel y lo que daría en los primeros renglones de esa versión.
+app.post('/api/business/manual-analyses/:id/extractions/:eid/added-preview', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    const extraction = getExtraction(Number(req.params.eid) || 0, analysis.id);
+    if (!extraction || extraction.status === 'en_proceso') return res.status(404).json({ code: 'EXTRACTION_NOT_FOUND', message: 'Esa versión no existe.' });
+    const rawDef = { ...((req.body && req.body.def) || {}), id: (req.body && req.body.def && req.body.def.id) || 'preview_tmp' };
+    const checked = analysisAdded.normalizeAdded([rawDef]);
+    if (checked.error || !checked.added.length) return anFail(res, checked.error || 'ADDED_STEPS');
+    const def = checked.added[0];
+    // lo que ya hay se calcula igual, y esta va al final (o en su lugar, si se está editando)
+    const current = ((analysis.design && analysis.design.added) || []).filter((c) => c.id !== def.id);
+    const before = current.length;
+    const all = [...current, def];
+    const { rows } = listExtractionRows(extraction.id, { limit: 5 });
+    const computed = analysisAdded.applyAdded(all, extraction.columns, rows);
+    const defs = analysisAdded.addedColumnDefs(all, extraction.columns);
+    const codeAt = extraction.columns.findIndex((c) => c.key === 'ref_codigo');
+    res.json({ formula: defs[before].formula, letter: defs[before].letter, rows: computed.map((row, i) => ({ label: String(codeAt >= 0 ? rows[i][codeAt] : rows[i][0] || ''), value: row[extraction.columns.length + before] })) });
 });
 app.post('/api/business/manual-analyses/:id/extractions/:eid/annul', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
@@ -21263,7 +21309,7 @@ app.post('/api/business/hr-workers', requireAuth, async (req, res) => {
     const positionDepartments = jobPosition ? getJobPositionDepartments(jobPosition.id).filter((key) => options.departments.includes(key)) : [];
     const resolved = resolveHrAssignment({
         clientId: req.user.clientId, forTestAccount: req.user.isTestAccount, current: { departments: null, sites: null, costCenters: null },
-        patch: { departments: positionDepartments.length ? positionDepartments : (jobPosition && center ? 'all' : null), sites: [siteCode.trim()], costCenters: center ? [center.id] : null },
+        patch: { departments: positionDepartments.length ? positionDepartments : (jobPosition && center ? 'all' : null), sites: [siteCode.trim()], costCenters: center ? [center.id] : 'all' },
     });
     if (!resolved.ok) return res.status(400).json({ message: resolved.message });
     const assignment = resolved.value;

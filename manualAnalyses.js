@@ -10,6 +10,7 @@ const REFERENCE_DIMS = ['unidad', 'unidadNombre', 'codigo', 'descripcion', 'cate
 const KEY_DIMS = ['unidad', 'codigo'];
 const AGGS = ['value', 'avg', 'sum', 'min', 'max'];
 const MAX_ROWS = 300000;
+const analysisAdded = require('./analysisAdded');
 const MAX_CONSULTED = 40;
 const MAX_PERIODS = 120;
 const MAX_FILTER_ITEMS = 500;
@@ -40,9 +41,12 @@ function normalizeDesign(raw, registryKeys) {
         ids.add(id);
         consulted.push({ id, label: cleanText(c.label, 80) || periods.join(', '), registry: String(c.registry), agg, periods: agg === 'value' ? periods.slice(0, 1) : periods });
     }
+    // las columnas agregadas en el Archivo (se calculan al leer cada versión; ver analysisAdded.js)
+    const addedChecked = analysisAdded.normalizeAdded(src.added);
+    if (addedChecked.error) return { error: addedChecked.error, field: 'added' };
     const list = (v) => [...new Set((Array.isArray(v) ? v : []).map((x) => cleanText(x, 80)).filter(Boolean))].slice(0, MAX_FILTER_ITEMS);
     const filters = { unidades: list(src.filters && src.filters.unidades), categorias: list(src.filters && src.filters.categorias), codigos: list(src.filters && src.filters.codigos) };
-    return { design: { registries, reference, consulted, filters } };
+    return { design: { registries, reference, consulted, added: addedChecked.added, filters } };
 }
 // Los periodos que necesita cada registro para armar el archivo (para pedir a la base solo esos).
 function periodsNeeded(design) {

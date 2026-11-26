@@ -96,6 +96,7 @@ function showTab(tab) {
     if (fileBar && fileBar.classList.contains('data-table-zoom')) fileBar.hidden = tab !== 'file';
     if (verBar && verBar.classList.contains('data-table-zoom')) verBar.hidden = tab !== 'versions';
     const note = document.getElementById('an-truncated'); if (note) note.hidden = tab !== 'file';
+    const addedBar = document.getElementById('an-added-bar'); if (addedBar && tab !== 'file') addedBar.hidden = true;
     renderFileInfo();
     if (tab === 'design') renderDesign();
     else if (tab === 'file') loadFile();
@@ -136,7 +137,7 @@ function setDirty() {
 function showError(text) { const el = document.getElementById('an-d-error'); if (el) { el.textContent = text; el.hidden = !text; } }
 function errorText(body) {
     const code = body && body.code;
-    return ['AN_NAME_REQUIRED', 'AN_NAME_TAKEN', 'DESIGN_REGISTRIES', 'DESIGN_COLUMN_REGISTRY', 'DESIGN_COLUMN_PERIODS', 'AN_NO_COLUMNS', 'AN_EMPTY', 'AN_INACTIVE', 'AN_BUSY', 'AN_FORBIDDEN', 'AN_ERROR'].includes(code) ? t(`main.anErr_${code}`) : t('admin.saveError');
+    return ['AN_NAME_REQUIRED', 'AN_NAME_TAKEN', 'DESIGN_REGISTRIES', 'DESIGN_COLUMN_REGISTRY', 'DESIGN_COLUMN_PERIODS', 'ADDED_NAME', 'ADDED_STEPS', 'ADDED_KIND', 'ADDED_TOO_MANY', 'AN_NO_COLUMNS', 'AN_EMPTY', 'AN_INACTIVE', 'AN_BUSY', 'AN_FORBIDDEN', 'AN_ERROR'].includes(code) ? t(`main.anErr_${code}`) : t('admin.saveError');
 }
 function readFilters() {
     document.querySelectorAll('[data-an-filter]').forEach((input) => {
@@ -283,6 +284,12 @@ document.addEventListener('click', async (event) => {
         try { await saveDesign(); renderHead(); renderDesign(); Dashboard.showToast(t('main.anSaved'), 'success'); } catch (err) { save.disabled = false; showError(errorText(err.body)); }
     } else if (go) extract();
 });
+document.addEventListener('click', (event) => {
+    const addCol = event.target.closest('[data-an-addcol]'); const editCol = event.target.closest('[data-an-editcol]'); const delCol = event.target.closest('[data-an-delcol]');
+    if (addCol) openAddedDialog(null);
+    else if (editCol) openAddedDialog(editCol.dataset.anEditcol);
+    else if (delCol) removeAdded(delCol.dataset.anDelcol);
+});
 document.addEventListener('change', (event) => {
     const ref = event.target.closest('[data-an-ref]'); const filter = event.target.closest('[data-an-filter]');
     if (ref) { const set = new Set(st.design.reference); if (ref.checked) set.add(ref.dataset.anRef); else set.delete(ref.dataset.anRef); st.design.reference = DIMS.filter((d) => set.has(d)); setDirty(); }
@@ -292,6 +299,163 @@ document.addEventListener('input', (event) => {
     const label = event.target.closest('[data-an-label]');
     if (label) { st.design.consulted[Number(label.dataset.anLabel)].label = label.value; setDirty(); }
 });
+
+// ---- columnas agregadas en el Archivo (Daniel, 2026-11-26): se agregan sobre el archivo ya extraído; pieza 1 = «Operación paso a paso» ---------------------------------------------------------
+const CLASS_COLORS = ['#3f78ad', '#b23fb8', '#2b8456', '#b57a05', '#4f58c2', '#c4473a'];
+const OPS = ['add', 'sub', 'mul', 'div', 'pow', 'min', 'max', 'logbase', 'round', 'sqrt', 'ln', 'log10', 'exp', 'abs'];
+const OPS_NO_ARG = new Set(['sqrt', 'ln', 'log10', 'exp', 'abs']);
+const OPS_VALUE_ONLY = new Set(['logbase', 'round']);
+const foldCls = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+const columnLetter = (index) => { let n = index + 1; let out = ''; while (n > 0) { const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26); } return out; };
+const fmtCell = (v, decimals) => (v === null || v === undefined ? '' : (decimals === null || decimals === undefined ? num(v) : Number(v).toLocaleString(lang() === 'en' ? 'en-US' : 'es-MX', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })));
+const columnTitle = (c) => (c.group === 'reference' ? t(`main.regDim_${c.dim}`) : c.label);
+
+// la franja de arriba del Archivo: «＋ Agregar columna» y las columnas ya agregadas (un clic las edita; ✕ las quita)
+function renderAddedBar() {
+    const bar = document.getElementById('an-added-bar');
+    if (!bar) return;
+    const added = (st.analysis && st.analysis.design && st.analysis.design.added) || [];
+    if (st.tab !== 'file' || !st.extraction || !st.data || (!st.canCreate && !added.length)) { bar.hidden = true; return; }
+    const cols = st.data.columns || [];
+    const letterOfKey = (key) => { const i = cols.findIndex((c) => c.key === key); return i < 0 ? '' : columnLetter(i); };
+    bar.innerHTML = `${st.canCreate ? `<button type="button" class="btn btn-secondary" data-an-addcol data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))}</button>` : ''}`
+        + added.map((a) => `<span class="an-addedchip"><button type="button" data-an-editcol="${esc(a.id)}" title="${esc(t('main.anAddedEditTitle'))}"${st.canCreate ? '' : ' disabled'}>ƒ ${esc(a.name)} <small>${esc(letterOfKey(`a_${a.id}`))}</small></button>${st.canCreate ? `<button type="button" data-an-delcol="${esc(a.id)}" aria-label="${esc(t('main.anAddedRemove'))}" title="${esc(t('main.anAddedRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</span>`).join('');
+    bar.hidden = false;
+}
+async function saveAdded(list) {
+    const res = await fetch(`${API}/${st.id}/added`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ added: list }) });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error('failed'), { body: out });
+    st.analysis = out.analysis; st.design = JSON.parse(JSON.stringify(st.analysis.design));
+    // el motor de tablas no cambia las columnas de una tabla ya iniciada: se vuelve a abrir el Archivo con las columnas nuevas
+    location.href = `CmAnalisis.html?id=${st.id}&v=${st.extraction ? st.extraction.id : ''}&tab=file`;
+}
+async function removeAdded(id) {
+    const added = (st.analysis.design.added || []);
+    const col = added.find((a) => a.id === id);
+    if (!col) return;
+    if (!(await Dashboard.confirm(t('main.anAddedRemoveConfirm', { name: col.name })))) return;
+    try { await saveAdded(added.filter((a) => a.id !== id)); } catch (err) { Dashboard.showToast(errorText(err.body), 'error'); }
+}
+function openAddedDialog(editId) {
+    const allCols = (st.data && st.data.columns) || [];
+    const added = (st.analysis.design.added || []);
+    const editing = editId ? added.find((a) => a.id === editId) : null;
+    // las columnas que se pueden usar: las consultadas y las agregadas ANTES de esta (cada una con su letra de Excel)
+    const editAt = editing ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length;
+    const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), group: c.group })).filter((c, i) => c.group !== 'reference' && i < editAt);
+    const newLetter = columnLetter(editing ? editAt : allCols.length);
+    const toDraftStep = (s) => (s.op === 'start' || s.arg
+        ? { op: s.op, kind: s.arg && s.arg.col !== undefined ? 'col' : 'value', col: s.arg && s.arg.col !== undefined ? s.arg.col : '', value: s.arg && s.arg.value !== undefined ? String(s.arg.value) : '' }
+        : { op: s.op, kind: 'value', col: '', value: '' });
+    const first = pickable[0];
+    const draft = editing
+        ? { name: editing.name, cls: editing.cls || '', decimals: editing.decimals, steps: editing.steps.map(toDraftStep) }
+        : { name: '', cls: '', decimals: 1, steps: [{ op: 'start', kind: 'col', col: first ? first.key : '', value: '' }] };
+    let touchedName = !!editing;
+    const html = `<h3>${esc(t(editing ? 'main.anAddedEditTitle' : 'main.anAddedTitle'))}</h3>
+        <div class="an-f2">
+            <div><label for="an-ad-name">${esc(t('main.anColLabel'))}</label><input type="text" id="an-ad-name" maxlength="80" autocomplete="off" value="${esc(draft.name)}"></div>
+            <div><label for="an-ad-cls">${esc(t('main.anAddedClass'))}</label><input type="text" id="an-ad-cls" maxlength="40" autocomplete="off" list="an-ad-cls-list" placeholder="${esc(t('main.anAddedClassNone'))}" value="${esc(draft.cls)}"><datalist id="an-ad-cls-list">${[...new Set(added.map((a) => a.cls).filter(Boolean))].map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
+            <div><label for="an-ad-dec">${esc(t('main.anAddedFormat'))}</label><select id="an-ad-dec"><option value="">${esc(t('main.anFmtAuto'))}</option>${[0, 1, 2, 3, 4].map((n) => `<option value="${n}">${esc(t('main.anFmtDecimals', { n }))}</option>`).join('')}</select></div>
+        </div>
+        <p class="reg-field-label">${esc(t('main.anAddedSteps'))}</p>
+        <div class="an-steps" id="an-ad-steps"></div>
+        <p><button type="button" class="btn btn-secondary" data-an-addstep><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddStep'))}</button></p>
+        <p class="reg-field-label">${esc(t('main.anFormulaExcel'))}</p>
+        <div class="an-formula" id="an-ad-formula">—</div>
+        <div id="an-ad-preview"></div>
+        <p class="admin-error" id="an-ad-error" role="alert" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" data-an-go>${esc(t(editing ? 'main.anAddedSave' : 'main.anAddedGo'))}</button><button type="button" class="btn btn-secondary" data-an-close>${esc(t('main.regCancel'))}</button></div>`;
+    modal(html, (overlay, close) => {
+        const $ = (sel) => overlay.querySelector(sel);
+        $('#an-ad-dec').value = draft.decimals === null || draft.decimals === undefined ? '' : String(draft.decimals);
+        const colSelect = (value, field, stepIndex, withValue) => `<select data-st="${stepIndex}" data-f="${field}">${pickable.map((c) => `<option value="${esc(c.key)}"${value === c.key ? ' selected' : ''}>${esc(c.letter)} · ${esc(c.title)}</option>`).join('')}${withValue ? `<option value="__value"${value === '__value' ? ' selected' : ''}>${esc(t('main.anArgValue'))}</option>` : ''}</select>`;
+        const drawSteps = () => {
+            $('#an-ad-steps').innerHTML = draft.steps.map((s, i) => {
+                if (i === 0) {
+                    return `<div class="an-step"><b>1</b><span>${esc(t('main.anStepStart'))}</span>${colSelect(s.kind === 'col' ? s.col : '__value', 'pick', 0, true)}${s.kind === 'value' ? `<input type="text" inputmode="decimal" data-st="0" data-f="value" value="${esc(s.value)}" placeholder="${esc(t('main.anArgValuePh'))}" aria-label="${esc(t('main.anArgValuePh'))}">` : ''}</div>`;
+                }
+                const opSel = `<select data-st="${i}" data-f="op">${OPS.map((o) => `<option value="${o}"${s.op === o ? ' selected' : ''}>${esc(t(`main.anOp_${o}`))}</option>`).join('')}</select>`;
+                let arg = '';
+                if (!OPS_NO_ARG.has(s.op)) {
+                    const valueOnly = OPS_VALUE_ONLY.has(s.op);
+                    arg = `${valueOnly ? '' : colSelect(s.kind === 'col' ? s.col : '__value', 'pick', i, true)}${valueOnly || s.kind === 'value' ? `<input type="text" inputmode="decimal" data-st="${i}" data-f="value" value="${esc(s.value)}" placeholder="${esc(t('main.anArgValuePh'))}" aria-label="${esc(t('main.anArgValuePh'))}">` : ''}`;
+                }
+                return `<div class="an-step"><b>${i + 1}</b>${opSel}${arg}<button type="button" class="admin-icon-btn" data-an-delstep="${i}" aria-label="${esc(t('main.anRemoveStep'))}" title="${esc(t('main.anRemoveStep'))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>`;
+            }).join('');
+        };
+        const colorFor = (cls) => {
+            if (!cls) return null;
+            const same = added.find((a) => a.id !== (editing && editing.id) && foldCls(a.cls) === foldCls(cls) && Number.isInteger(a.color));
+            if (same) return same.color;
+            const used = new Set(added.filter((a) => a.id !== (editing && editing.id)).map((a) => a.color).filter(Number.isInteger));
+            for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i;
+            return added.length % CLASS_COLORS.length;
+        };
+        const toDef = () => {
+            const steps = [];
+            for (const s of draft.steps) {
+                if (s.op === 'start') {
+                    if (s.kind === 'col') { if (!s.col) return null; steps.push({ op: 'start', arg: { col: s.col } }); } else { const n = Number(String(s.value).replace(',', '.')); if (String(s.value).trim() === '' || !Number.isFinite(n)) return null; steps.push({ op: 'start', arg: { value: n } }); }
+                } else if (OPS_NO_ARG.has(s.op)) steps.push({ op: s.op });
+                else if (s.kind === 'col' && !OPS_VALUE_ONLY.has(s.op)) { if (!s.col) return null; steps.push({ op: s.op, arg: { col: s.col } }); } else { const n = Number(String(s.value).replace(',', '.')); if (String(s.value).trim() === '' || !Number.isFinite(n)) return null; steps.push({ op: s.op, arg: { value: n } }); }
+            }
+            return { id: editing ? editing.id : undefined, kind: 'op', name: draft.name.trim(), cls: draft.cls.trim(), color: colorFor(draft.cls.trim()), decimals: draft.decimals, steps };
+        };
+        // la fórmula y los primeros renglones los calcula el servidor (el mismo cálculo de siempre): se pide un momento después del último cambio
+        let timer = null; let seq = 0;
+        const preview = () => {
+            clearTimeout(timer);
+            const def = toDef();
+            const box = $('#an-ad-preview'); const fx = $('#an-ad-formula');
+            if (!def) { fx.textContent = '—'; box.innerHTML = ''; return; }
+            timer = setTimeout(async () => {
+                const mine = ++seq;
+                try {
+                    const res = await fetch(`${API}/${st.id}/extractions/${st.extraction.id}/added-preview`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ def: { ...def, name: def.name || 'x' } }) });
+                    const out = await res.json().catch(() => ({}));
+                    if (mine !== seq) return;
+                    if (!res.ok) { fx.textContent = '—'; box.innerHTML = ''; return; }
+                    fx.textContent = out.formula;
+                    box.innerHTML = `<div class="wp-imp-table-wrap"><table class="wp-imp-table"><thead><tr><th>${esc(t('main.regDim_codigo'))}</th><th class="col-num">${esc(newLetter)} · ${esc(def.name || t('main.anAddedTitle'))}</th></tr></thead><tbody>${(out.rows || []).map((r) => `<tr><td>${esc(r.label)}</td><td class="col-num">${r.value === null ? '—' : esc(fmtCell(r.value, def.decimals))}</td></tr>`).join('')}</tbody></table></div>`;
+                } catch { /* sin vista previa */ }
+            }, 250);
+        };
+        drawSteps(); preview();
+        overlay.addEventListener('input', (event) => {
+            const el = event.target;
+            if (el.id === 'an-ad-name') { draft.name = el.value; touchedName = true; return; }
+            if (el.id === 'an-ad-cls') { draft.cls = el.value; return; }
+            if (el.dataset && el.dataset.f === 'value') { draft.steps[Number(el.dataset.st)].value = el.value; preview(); }
+        });
+        overlay.addEventListener('change', (event) => {
+            const el = event.target;
+            if (el.id === 'an-ad-dec') { draft.decimals = el.value === '' ? null : Number(el.value); return; }
+            if (el.id === 'an-ad-cls') { draft.cls = el.value; return; }
+            if (!el.dataset || el.dataset.st === undefined) return;
+            const s = draft.steps[Number(el.dataset.st)];
+            if (el.dataset.f === 'op') { s.op = el.value; if (OPS_VALUE_ONLY.has(s.op)) s.kind = 'value'; }
+            if (el.dataset.f === 'pick') { if (el.value === '__value') s.kind = 'value'; else { s.kind = 'col'; s.col = el.value; } }
+            drawSteps(); preview();
+        });
+        overlay.addEventListener('click', (event) => {
+            const del = event.target.closest('[data-an-delstep]');
+            if (event.target.closest('[data-an-addstep]')) { draft.steps.push({ op: 'add', kind: 'value', col: '', value: '' }); drawSteps(); preview(); return; }
+            if (del) { draft.steps.splice(Number(del.dataset.anDelstep), 1); drawSteps(); preview(); }
+        });
+        $('[data-an-go]').addEventListener('click', async () => {
+            const err = (text) => { const el = $('#an-ad-error'); el.textContent = text; el.hidden = !text; };
+            const def = toDef();
+            if (!draft.name.trim()) return err(t('main.anErr_ADDED_NAME'));
+            if (!def) return err(t('main.anErr_ADDED_STEPS'));
+            if (!editing && added.length >= 40) return err(t('main.anErr_ADDED_TOO_MANY'));
+            const next = editing ? added.map((a) => (a.id === editing.id ? def : a)) : [...added, { ...def, id: `a${Date.now().toString(36)}` }];
+            try { await saveAdded(next); } catch (e) { err(errorText(e.body)); }
+        });
+        if (!touchedName) setTimeout(() => $('#an-ad-name').focus(), 0);
+    });
+}
 
 // ---- tablas ---------------------------------------------------------------------------------------------------------------------------------------------
 function cell(col, value, extraClass) {
@@ -316,6 +480,7 @@ function buildHeader(tableId, columns) {
         const th = document.createElement('th');
         th.dataset.col = c.col;
         if (c.group) th.dataset.group = c.group;
+        if (c.groupTable) th.dataset.groupTable = c.groupTable; // la clasificación de una columna agregada (banda de arriba, con su color)
         if (c.labelKey) { th.dataset.i18n = c.labelKey; th.textContent = t(c.labelKey); } else th.textContent = c.label;
         if (c.cls) th.className = c.cls;
         row.appendChild(th);
@@ -341,7 +506,15 @@ async function loadFile() {
         st.data = await res.json();
         const cols = st.data.columns;
         const columns = [
-            ...cols.map((c) => (c.group === 'reference' ? { col: colKeyOf(c.key), group: 'main.anGroupRef', labelKey: `main.regDim_${c.dim}`, cls: 'an-ref' } : { col: colKeyOf(c.key), group: 'main.anGroupCons', label: c.label, cls: 'an-cons col-num' })),
+            ...cols.map((c) => {
+                if (c.group === 'reference') return { col: colKeyOf(c.key), group: 'main.anGroupRef', labelKey: `main.regDim_${c.dim}`, cls: 'an-ref' };
+                if (c.group === 'added') {
+                    let groupTable;
+                    if (c.cls) { groupTable = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(groupTable, c.cls, CLASS_COLORS[c.color] || CLASS_COLORS[0]); }
+                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: `ƒ ${c.label}`, cls: 'an-added col-num' };
+                }
+                return { col: colKeyOf(c.key), group: 'main.anGroupCons', label: c.label, cls: 'an-cons col-num' };
+            }),
         ];
         const first = buildHeader(FILE_TABLE, columns);
         const tbody = tableOf(FILE_TABLE).tBodies[0];
@@ -349,7 +522,11 @@ async function loadFile() {
         st.data.rows.forEach((row) => {
             const tr = document.createElement('tr');
             tr.append(
-                ...cols.map((c, i) => (c.group === 'reference' ? cell(colKeyOf(c.key), row[i], 'an-ref') : cell(colKeyOf(c.key), row[i] === null ? '' : num(row[i]), 'an-cons col-num'))),
+                ...cols.map((c, i) => {
+                    if (c.group === 'reference') return cell(colKeyOf(c.key), row[i], 'an-ref');
+                    if (c.group === 'added') return cell(colKeyOf(c.key), row[i] === null ? '' : fmtCell(row[i], c.decimals), 'an-added col-num');
+                    return cell(colKeyOf(c.key), row[i] === null ? '' : num(row[i]), 'an-cons col-num');
+                }),
             );
             tbody.appendChild(tr);
         });
@@ -363,6 +540,7 @@ async function loadFile() {
             if (!note) { note = document.createElement('p'); note.id = 'an-truncated'; note.className = 'admin-hint'; wrapper.after(note); }
             note.textContent = t('main.anTruncated', { shown: st.data.rows.length, total: num(st.data.total) });
         } else if (note) note.remove();
+        renderAddedBar();
         window.dispatchEvent(new Event('resize'));
     } catch (err) {
         console.error('Análisis: failed to load the file', err);

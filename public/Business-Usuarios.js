@@ -89,6 +89,7 @@ activePermsModal.addEventListener('click', (event) => { if (event.target === act
 const grantAccessModal = document.getElementById('grant-access-modal');
 const grantAccessSubtitle = document.getElementById('grant-access-subtitle');
 const grantAccessContainer = document.getElementById('grant-access-container');
+const grantAccessNotice = document.getElementById('grant-access-notice');
 const grantAccessVisibleStatuses = document.getElementById('grant-access-visible-statuses');
 const grantAccessError = document.getElementById('grant-access-error');
 const grantAccessSaveBtn = document.getElementById('grant-access-save');
@@ -112,10 +113,24 @@ function grantLimitsForUser(data) {
     };
 }
 
+// Lo que le falta a la persona (Mi Recurso Humano) para que sus accesos tengan efecto: puesto, sitio, departamentos o centros de costos.
+function showMissingAssignmentNotice(status) {
+    const missing = [];
+    if (status) {
+        if (!status.hasPosition) missing.push(Dashboard.t('business.grantMissingPosition'));
+        if (status.missingSites) missing.push(Dashboard.t('business.grantMissingSites'));
+        if (status.missingDepartments) missing.push(Dashboard.t('business.grantMissingDepartments'));
+        if (status.missingCenters) missing.push(Dashboard.t('business.grantMissingCenters'));
+    }
+    grantAccessNotice.textContent = missing.length ? Dashboard.t('business.grantAccessMissing', { list: missing.join(', ') }) : '';
+    grantAccessNotice.hidden = !missing.length;
+}
+
 async function openGrantAccessModal(user) {
     activeUserId = user.id;
     grantAccessSubtitle.textContent = `${user.name} (${user.username})`;
     grantAccessError.hidden = true;
+    grantAccessNotice.hidden = true;
     grantAccessContainer.innerHTML = '';
     grantAccessVisibleStatuses.innerHTML = '';
     grantAccessModal.hidden = false;
@@ -123,6 +138,7 @@ async function openGrantAccessModal(user) {
         const res = await fetch(`/api/business/users/${user.id}/grants`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         const data = await res.json();
+        showMissingAssignmentNotice(data.accessStatus);
         // Tricolor, same as Nuestros Clientes' own Permisos Adicionales
         // (Admin-SaaS.js): what the Puesto already grants shows green/locked
         // instead of an indistinguishable blank checklist, so this reads as
@@ -327,7 +343,7 @@ function renderUsersTable() {
         tdName.textContent = user.name;
         const tdEmail = document.createElement('td');
         tdEmail.dataset.col = 'accEmail';
-        tdEmail.textContent = user.email;
+        tdEmail.textContent = /@sgn\.invalid$/i.test(user.email || '') ? '' : user.email; // el correo de relleno de quien se dio de alta sin correo no se muestra
         // Nombre del Puesto: la columna existe desde el principio pero la fila nunca llevaba su celda, y todo lo demás se recorría una columna a la izquierda (bajo «Nombre del Puesto» salía la fecha de creación).
         const tdJobPosition = document.createElement('td');
         tdJobPosition.dataset.col = 'accJobPosition';
