@@ -15,6 +15,8 @@ const manual = require('./manualRegistries.js');
 
 const MAX_COLUMNS = 400;
 const MAX_NAME = 60;
+const MAX_CLASS = 40; // el nombre de una clasificación de columnas
+const CLASS_COLORS = 6; // los colores de la paleta (0 a 5)
 const MAX_ISSUES = 2000;
 const BATCH = 2000;
 
@@ -113,7 +115,10 @@ function parseConfig(raw, headerCount = MAX_COLUMNS) {
             if (seenName.has(f)) return { error: 'FLEX_DUP_NAME', detail: name };
             seenName.add(f);
         }
-        columns.push({ i: col.i, name, role, agg: col.agg === 'one' ? 'one' : 'sum', stampName: col.stampName !== false });
+        // la clasificación (nombre y color) que la persona le pone a la columna, además de su papel
+        const cls = trim(col.cls).replace(/\s+/g, ' ').slice(0, MAX_CLASS);
+        const color = cls && Number.isInteger(col.color) && col.color >= 0 && col.color < CLASS_COLORS ? col.color : null;
+        columns.push({ i: col.i, name, role, agg: col.agg === 'one' ? 'one' : 'sum', stampName: col.stampName !== false, cls, color });
     }
     columns.sort((a, b) => a.i - b.i);
     if (mode === 'roles' && !columns.some((x) => x.role === 'key')) return { error: 'FLEX_NO_KEY' };
@@ -268,19 +273,33 @@ function stampLabel(stamp, tz = 0, lang = 'es', withYear = false) {
     const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])) - (Number(tz) || 0) * 60000);
     return `${pad2(d.getUTCDate())}/${MONTHS[lang === 'en' ? 'en' : 'es'][d.getUTCMonth()]}${withYear ? `/${pad2(d.getUTCFullYear() % 100)}` : ''} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 }
-// Las columnas de la tabla: las de TODAS las cargas vigentes, en el orden en que cada una apareció por primera vez (cada columna se queda en el lugar que tenía en el Excel). Una columna nueva por carga se abre en una columna por carga
-// (nombre + día y hora; si dos cargas tienen la misma etiqueta, la segunda lleva «(2)»); una columna de nombre fijo (p. ej. un mes) es una sola. Si hay cargas «tal cual» se agrega al final la columna «Carga».
-// loads: [{ id, stamp, config: { mode, columns } }] en orden de carga. Devuelve { columns: [{ key, label, group, kind, name, loadId?, srcKey? }], hasAsis, labels: Map(loadId → etiqueta) }.
+// Las columnas de la tabla: primero las de datos (llave, dato, tal cual) de TODAS las cargas vigentes, en el orden en que cada una apareció por primera vez, y luego las columnas NUEVAS de cada carga EN BLOQUE (las de una
+// carga juntas, en el orden de su Excel; la siguiente carga agrega su bloque al lado): nombre + día y hora, y si dos cargas tienen la misma etiqueta, la segunda lleva «(2)»; una columna de nombre fijo (p. ej. un mes) es una sola
+// y entra en el bloque de la primera carga que la trae. Si hay cargas «tal cual» se agrega al final la columna «Carga».
+// Cada columna puede traer su clasificación (nombre y color que puso la persona): el color es de la CLASIFICACIÓN (el último que se eligió para ese nombre; sin elegir, uno de la paleta según el orden en que apareció).
+// loads: [{ id, stamp, config: { mode, columns } }] en orden de carga. Devuelve { columns: [{ key, label, group, kind, name, cls, color, loadId?, srcKey? }], hasAsis, labels: Map(loadId → etiqueta), classes: [{ name, color }] }.
 function buildColumns(loads, { tz = 0, lang = 'es' } = {}) {
     const years = new Set(loads.map((l) => String(l.stamp || '').slice(0, 4)).filter(Boolean));
     const withYear = years.size > 1;
-    const slots = [];
-    const slotAt = new Map();
+    const cellSlots = [];
+    const cellAt = new Map();
+    const valueCols = [];
+    const namedPlaced = new Set();
     const labelsSeen = new Map();
     const loadLabels = new Map();
+    const classOrder = [];
+    const classDisplay = new Map();
+    const classColor = new Map();
     let hasAsis = false;
-    const slot = (key, make) => { let i = slotAt.get(key); if (i === undefined) { i = slots.length; slots.push(make()); slotAt.set(key, i); } return slots[i]; };
     const uniqueLabel = (base) => { const n = (labelsSeen.get(base) || 0) + 1; labelsSeen.set(base, n); return n === 1 ? base : `${base} (${n})`; };
+    const noteClass = (c) => {
+        const name = trim(c.cls);
+        if (!name) return '';
+        const f = foldText(name);
+        if (!classDisplay.has(f)) { classDisplay.set(f, name); classOrder.push(f); }
+        if (Number.isInteger(c.color) && c.color >= 0 && c.color < CLASS_COLORS) classColor.set(f, c.color); // el último que se eligió
+        return f;
+    };
     loads.forEach((load) => {
         const cfg = load.config;
         if (!cfg || !Array.isArray(cfg.columns)) return;
@@ -290,24 +309,24 @@ function buildColumns(loads, { tz = 0, lang = 'es' } = {}) {
         cfg.columns.forEach((c) => {
             if (c.role === 'skip') return;
             const f = foldText(c.name);
+            const clsF = noteClass(c);
             if (c.role === 'value') {
                 const myK = k; k += 1;
-                if (c.stampName) {
-                    const s = slot(`f:${f}`, () => ({ type: 'family', name: c.name, cols: [] }));
-                    s.cols.push({ kind: 'value', group: 'value', name: c.name, loadId: load.id, srcKey: `m:${load.id}:${myK}`, label: uniqueLabel(`${c.name} ${loadStamp}`) });
-                } else {
-                    slot(`n:${f}`, () => ({ type: 'single', col: { kind: 'value', group: 'value', name: c.name, srcKey: periodNameKey(c.name), label: c.name } }));
-                }
+                if (c.stampName) valueCols.push({ kind: 'value', group: 'value', name: c.name, loadId: load.id, srcKey: `m:${load.id}:${myK}`, label: uniqueLabel(`${c.name} ${loadStamp}`), clsF });
+                else if (!namedPlaced.has(f)) { namedPlaced.add(f); valueCols.push({ kind: 'value', group: 'value', name: c.name, srcKey: periodNameKey(c.name), label: c.name, clsF }); }
             } else {
-                slot(`c:${f}`, () => ({ type: 'single', col: { kind: 'cell', group: c.role === 'key' ? 'key' : 'data', name: c.name, srcKey: `c:${f}`, label: c.name } }));
+                const slot = cellAt.get(f);
+                if (!slot) { const made = { kind: 'cell', group: c.role === 'key' ? 'key' : 'data', name: c.name, srcKey: `c:${f}`, label: c.name, clsF }; cellAt.set(f, made); cellSlots.push(made); } else if (!slot.clsF && clsF) slot.clsF = clsF;
             }
         });
     });
-    const flat = [];
-    slots.forEach((s) => { if (s.type === 'family') flat.push(...s.cols); else flat.push(s.col); });
-    if (hasAsis) flat.push({ kind: 'carga', group: 'load', name: 'Carga', srcKey: 'carga', label: 'Carga' });
+    const flat = [...cellSlots, ...valueCols];
+    if (hasAsis) flat.push({ kind: 'carga', group: 'load', name: 'Carga', srcKey: 'carga', label: 'Carga', clsF: '' });
     flat.forEach((c, i) => { c.key = `c${i}`; });
-    return { columns: flat, hasAsis, labels: loadLabels };
+    const classes = classOrder.map((f, n) => ({ fold: f, name: classDisplay.get(f), color: classColor.has(f) ? classColor.get(f) : n % CLASS_COLORS }));
+    const byFold = new Map(classes.map((x) => [x.fold, x]));
+    flat.forEach((c) => { const x = c.clsF ? byFold.get(c.clsF) : null; c.cls = x ? x.name : ''; c.color = x ? x.color : null; delete c.clsF; });
+    return { columns: flat, hasAsis, labels: loadLabels, classes: classes.map(({ name, color }) => ({ name, color })) };
 }
 
 // ---- el filtro por columna de la pantalla (cf = { f: { columna: [valores] }, r: { columna: regla } }), aplicado a TODOS los renglones: la misma regla de la pantalla (SearchSyntax) sobre lo que se ve ----
@@ -369,4 +388,4 @@ function parseFilter(raw, columns) {
 }
 
 const foldName = (name) => foldText(name);
-module.exports = { inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };
+module.exports = { MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };

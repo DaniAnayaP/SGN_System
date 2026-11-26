@@ -5448,6 +5448,16 @@
     "regStatus_obsolete": "Obsolete",
     "regErr_REG_OBSOLETE": "That record is obsolete: it no longer receives loads.",
     "regObsoleto": "Use",
+    "flexColClass": "Classification",
+    "flexColColor": "Color",
+    "flexClsNone": "No classification",
+    "flexClsDown": "Apply to the following columns without a classification",
+    "flexColor_0": "Blue",
+    "flexColor_1": "Pink",
+    "flexColor_2": "Green",
+    "flexColor_3": "Amber",
+    "flexColor_4": "Indigo",
+    "flexColor_5": "Red",
     "regUpdated": "Last update:",
     "regShowing": "Showing {shown} of {total} rows",
     "regShowMore": "Show more",
@@ -5544,6 +5554,7 @@
     "regErr_REG_BUSY": "A load of this record is already in progress. Wait for it to finish.",
     "regErr_COST_CENTER_REQUIRED": "First create a complete cost center in Our Cost Centers: every operation is tied to one.",
     "regErr_IMPORT_ERROR": "The load could not be completed. Nothing was added.",
+    "regErr_DISK_FULL": "The server ran out of space to save this load. Nothing was added: tell support.",
     "regErr_IMPORT_HEADERS": "There are columns left to match: {missing}.",
     "regProb_ROW_KEY_MISSING": "The unit or the code is missing: not loaded",
     "regProb_ROW_REPEATED": "Row repeated in the file (same unit and code): not loaded",
@@ -9461,8 +9472,8 @@
       "example": "Save as is"
     },
     "appRegFlexMapeo": {
-      "what": "Each column of your file: its role (Key, Row data, New column on every load or Not loaded), whether rows that land together are added up or one is taken (for example the cost) and the name you want to give it.",
-      "example": "ON_HAND_QTY → New column · Add up · \"Stock\""
+      "what": "Each column of your file: its role (Key, Row data, New column on every load or Not loaded), whether rows that land together are added up or one is taken (for example the cost), the name you want to give it and its classification (a name and a color to group columns; the same name keeps the same color).",
+      "example": "ON_HAND_QTY → New column · Add up · \"Stock\" · Classification \"Stock levels\" (blue)"
     },
     "appRegFlexCuando": {
       "what": "The day and time this load belongs to (the file doesn't carry them). Every load is its own column, even with the same day and time.",
@@ -9856,6 +9867,10 @@
     "regToTablaDialog": {
       "what": "Turns this record into a free table (any columns). It can only be done while the record has no loads at all.",
       "example": "Global Stock"
+    },
+    "regFlexClass": {
+      "what": "A name and a color for a group of columns (for example \"Item and location\" or \"Stock Nov-25\"), on top of each column's type. A classification that already exists in the record takes the same color; the arrow button copies it to the columns below that have none.",
+      "example": "Stock Nov-25"
     },
     "regUpdated": {
       "what": "The date and time of the latest load that counts in this record, in your time. Who did it and from which file is in the Loads tab.",

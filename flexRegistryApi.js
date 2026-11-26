@@ -42,7 +42,7 @@ module.exports = function createFlexApi(deps) {
         if (cargaCond) scopeAsis = asisLoads.filter((l) => cargaCond.set.has(built.labels.get(l.id)));
         const text = String(query.text || '').trim().slice(0, 200);
         const textTest = text && SearchSyntax.ready('contains', text) ? SearchSyntax.compile('contains', text) : null;
-        return { clientId, isTestAccount, lang, tz, loads, rolesLoads, asisLoads, scopeAsis, columns: built.columns, labels: built.labels, filter: parsed.filter, textTest, cargaIdx, registry };
+        return { clientId, isTestAccount, lang, tz, loads, rolesLoads, asisLoads, scopeAsis, columns: built.columns, classes: built.classes, labels: built.labels, filter: parsed.filter, textTest, cargaIdx, registry };
     }
     // Recorre los renglones que cumplen el filtro: los que tienen llave (en el orden en que se agregaron) y luego los de las cargas «tal cual» elegidas. onMatch(get) con get(columna) → texto, número o null.
     // Si onMatch devuelve false, se detiene. Con `count` en false no se sigue contando después de parar.
@@ -120,7 +120,7 @@ module.exports = function createFlexApi(deps) {
         res.json({
             registry: { key: registry.key, kind: registry.kind, name: registry.name, custom: registry.custom, status: registry.status },
             periods: [], lastLoad: lastLoad ? { id: lastLoad.id, createdAt: lastLoad.createdAt, stamp: lastLoad.stamp, fileName: lastLoad.fileName, loadedBy: lastLoad.loadedBy } : null,
-            columns: ctx.columns.map((c, i) => ({ key: c.key, label: c.label, name: c.name, group: c.group, kind: c.kind, num: num[i] })),
+            columns: ctx.columns.map((c, i) => ({ key: c.key, label: c.label, name: c.name, group: c.group, kind: c.kind, cls: c.cls, color: c.color, num: num[i] })), classes: ctx.classes,
             rows, total, truncated: total > rows.length, scope: { asis: ctx.scopeAsis.map((l) => ctx.labels.get(l.id)), hasAsis: ctx.asisLoads.length > 0 }, ...regAbilities(req),
         });
     }
@@ -217,7 +217,7 @@ module.exports = function createFlexApi(deps) {
                 return res.json({ mode: 'preview', sheet, headerRow, summary: result.summary, issues: result.issues });
             }
             loadId = db.createRegistryLoad({ clientId, isTestData: isTestAccount, registryKey: registry.key, source: 'excel', fileName, sheet, day: '', loadedBy: changedByLabel(req), loadedByUserId: req.user.sub });
-            db.setFlexLoadInfo(loadId, stamp, { mode: parsed.cfg.mode, columns: parsed.cfg.columns.filter((c) => c.role !== 'skip').map((c) => ({ name: c.name, role: c.role, agg: c.agg, stampName: c.stampName })) });
+            db.setFlexLoadInfo(loadId, stamp, { mode: parsed.cfg.mode, columns: parsed.cfg.columns.filter((c) => c.role !== 'skip').map((c) => ({ name: c.name, role: c.role, agg: c.agg, stampName: c.stampName, cls: c.cls, color: c.color })) });
             const store = db.flexStore({ clientId, isTestData: isTestAccount, registryKey: registry.key, loadId });
             const result = await flex.run(req.body, options, parsed.cfg, store, loadId, { dryRun: false });
             if (result.error) {
@@ -234,7 +234,11 @@ module.exports = function createFlexApi(deps) {
             return res.json({ mode: 'commit', loadId, sheet, headerRow, summary: result.summary, issues: result.issues });
         } catch (err) {
             console.error('Registros (tabla libre): la carga falló:', err);
-            if (loadId) db.failRegistryLoad(loadId, 'ERROR');
+            // lo que alcanzó a escribir se quita: «no se agregó nada» tiene que ser cierto (y el reintento parte de cero)
+            if (loadId) { try { await db.discardFlexLoadData(loadId); } catch (cleanErr) { console.error('Registros (tabla libre): no se pudo limpiar la carga fallida:', cleanErr); } }
+            const full = /SQLITE_FULL|database or disk is full/i.test(`${err && err.code} ${err && err.message}`);
+            if (loadId) db.failRegistryLoad(loadId, full ? 'DISK_FULL' : 'ERROR');
+            if (full) return res.status(507).json({ code: 'DISK_FULL', message: 'El servidor se quedó sin espacio para guardar esta carga. No se agregó nada.' });
             return res.status(500).json({ code: 'IMPORT_ERROR', message: 'La carga no se pudo completar. No se agregó nada.' });
         } finally {
             regLoading.delete(lockKey);

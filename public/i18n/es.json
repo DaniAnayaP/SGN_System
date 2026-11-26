@@ -5447,6 +5447,16 @@
     "regStatus_obsolete": "Obsoleto",
     "regErr_REG_OBSOLETE": "Ese registro es obsoleto: ya no recibe cargas.",
     "regObsoleto": "Uso",
+    "flexColClass": "Clasificación",
+    "flexColColor": "Color",
+    "flexClsNone": "Sin clasificación",
+    "flexClsDown": "Aplicar a las siguientes columnas sin clasificación",
+    "flexColor_0": "Azul",
+    "flexColor_1": "Rosa",
+    "flexColor_2": "Verde",
+    "flexColor_3": "Ámbar",
+    "flexColor_4": "Índigo",
+    "flexColor_5": "Rojo",
     "regUpdated": "Última actualización:",
     "regShowing": "Mostrando {shown} de {total} renglones",
     "regShowMore": "Mostrar más",
@@ -5543,6 +5553,7 @@
     "regErr_REG_BUSY": "Ya hay una carga de este registro en curso. Espera a que termine.",
     "regErr_COST_CENTER_REQUIRED": "Primero crea un centro de costos completo en Nuestros Centros Costos: toda operación va ligada a uno.",
     "regErr_IMPORT_ERROR": "La carga no se pudo completar. No se agregó nada.",
+    "regErr_DISK_FULL": "El servidor se quedó sin espacio para guardar esta carga. No se agregó nada: avisa a soporte.",
     "regErr_IMPORT_HEADERS": "Faltan columnas por emparejar: {missing}.",
     "regProb_ROW_KEY_MISSING": "Falta la unidad o el código: no se carga",
     "regProb_ROW_REPEATED": "Renglón repetido en el archivo (misma unidad y código): no se carga",
@@ -9460,8 +9471,8 @@
       "example": "Guardar tal cual"
     },
     "appRegFlexMapeo": {
-      "what": "Cada columna de tu archivo: su papel (Llave, Dato del renglón, Columna nueva en cada carga o No se carga), si varios renglones caen juntos se suman o se toma uno (por ejemplo el costo) y el nombre que le quieres poner.",
-      "example": "ON_HAND_QTY → Columna nueva · Sumar · «Existencia»"
+      "what": "Cada columna de tu archivo: su papel (Llave, Dato del renglón, Columna nueva en cada carga o No se carga), si varios renglones caen juntos se suman o se toma uno (por ejemplo el costo), el nombre que le quieres poner y su clasificación (un nombre y un color para agrupar columnas; con el mismo nombre se usa el mismo color).",
+      "example": "ON_HAND_QTY → Columna nueva · Sumar · «Existencia» · Clasificación «Existencias» (azul)"
     },
     "appRegFlexCuando": {
       "what": "El día y la hora a los que corresponde esta carga (el archivo no los trae). Cada carga es su propia columna, aunque tenga el mismo día y hora.",
@@ -9855,6 +9866,10 @@
     "regToTablaDialog": {
       "what": "Vuelve este registro una tabla libre (cualquier columna). Solo se puede mientras el registro no tenga ninguna carga.",
       "example": "Existencias Globales"
+    },
+    "regFlexClass": {
+      "what": "Un nombre y un color para un grupo de columnas (por ejemplo «Artículo y ubicación» o «Existencias 25-nov»), además del tipo de cada una. Una clasificación que ya existe en el registro toma su mismo color; el botón de la flecha la copia a las columnas de abajo que no tienen.",
+      "example": "Existencias 25-nov"
     },
     "regUpdated": {
       "what": "La fecha y hora de la última carga que cuenta en este registro, en tu hora. Quién la hizo y de qué archivo está en la pestaña Cargas.",

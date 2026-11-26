@@ -2677,6 +2677,13 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .rg-app-fxsub{ display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 .rg-app-fxsub .pm-app-input{ flex: 1 1 8rem; min-width: 0; }
 .rg-app-fxoff{ opacity: 0.55; }
+.rg-app-clsrow{ display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.rg-app-clsrow .pm-app-input{ flex: 1 1 9rem; min-width: 0; }
+.rg-app-dots{ display: inline-flex; gap: 0.3rem; align-items: center; }
+.rg-app-dot{ width: 1.2rem; height: 1.2rem; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--home-border); padding: 0; cursor: pointer; }
+.rg-app-dot[aria-pressed="true"]{ box-shadow: 0 0 0 2px var(--home-text-primary); }
+.rg-app-down{ border: 1px solid var(--home-border); background: var(--home-surface); border-radius: 0.5rem; width: 1.8rem; height: 1.8rem; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.rg-app-clshead{ grid-column: 1 / -1; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.35rem 0 0.2rem; border-bottom: 2px solid; margin-top: 0.4rem; }
 .rg-app-fxasis{ font-size: 0.7rem; color: var(--home-text-muted); }
 .rg-app-fxwhen .pm-app-input{ margin-top: 0.3rem; }
 .rg-app-switch{ display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; color: var(--home-text-secondary); }

@@ -15,6 +15,8 @@ const DIM_COLUMNS = [
 ];
 const LOAD_COLUMNS = ['colRegCargaArchivo', 'colRegCargaOrigen', 'colRegCargaFechaHora', 'colRegCargaPor', 'colRegCargaPeriodos', 'colRegCargaRenglones', 'colRegCargaNuevos', 'colRegCargaAgregados', 'colRegCargaYaEstaba', 'colRegCargaDistintos', 'colRegCargaErrores', 'colRegCargaEstado'];
 const ISSUES_SHOWN = 200;
+// la paleta de las clasificaciones de columnas (el color de la banda de cada clasificación y los círculos de la ventana de cargar)
+const CLASS_COLORS = ['#3f78ad', '#b23fb8', '#2b8456', '#b57a05', '#4f58c2', '#c4473a'];
 const FIRST_ROWS = 100; // los renglones que se dibujan al entrar
 const NEXT_ROWS = 200; // los que se agregan al bajar o con «Mostrar más»
 const t = (key, params) => Dashboard.t(key, params);
@@ -226,10 +228,11 @@ function stampCell(col, value) {
     if (value) { const span = document.createElement('span'); Dashboard.renderTimeStamp(span, value); td.appendChild(span); } else td.textContent = '—';
     return td;
 }
-function headerCell(col, group, label, labelKey, extraClass) {
+function headerCell(col, group, label, labelKey, extraClass, groupTable) {
     const th = document.createElement('th');
     th.dataset.col = col;
     if (group) th.dataset.group = group;
+    if (groupTable) th.dataset.groupTable = groupTable; // la clasificación que le puso la persona (banda de arriba, con su color)
     if (labelKey) { th.dataset.i18n = labelKey; th.textContent = t(labelKey); } else th.textContent = label;
     if (extraClass) th.className = extraClass;
     return th;
@@ -240,7 +243,7 @@ function buildHeader(tableId, columns) {
     if (!table || table.dataset.colInit) return false;
     const row = table.tHead.rows[0] || table.tHead.insertRow();
     row.textContent = '';
-    columns.forEach((c) => row.appendChild(headerCell(c.col, c.group, c.label, c.labelKey, c.cls)));
+    columns.forEach((c) => row.appendChild(headerCell(c.col, c.group, c.label, c.labelKey, c.cls, c.groupTable)));
     return true;
 }
 function ensureEmpty(tableId, span) {
@@ -258,7 +261,11 @@ function ensureEmpty(tableId, span) {
 // Un registro de tabla libre trae sus columnas del servidor (las de su Excel, en su orden, cada una con su papel); los demás tienen las de siempre.
 const isFlex = (body) => !!(body && Array.isArray(body.columns));
 const FLEX_GROUPS = { key: 'main.regGroupKey', data: 'main.regGroupData', value: 'main.regGroupNew', load: 'main.regGroupLoad' };
-const flexColumns = (body) => body.columns.map((c) => ({ col: c.key, group: FLEX_GROUPS[c.group] || FLEX_GROUPS.data, label: c.label, cls: c.num ? 'col-num' : '' }));
+const flexColumns = (body) => body.columns.map((c) => {
+    let groupTable;
+    if (c.cls) { groupTable = `regcls:${c.cls.toLowerCase().replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(groupTable, c.cls, CLASS_COLORS[c.color] || CLASS_COLORS[0]); }
+    return { col: c.key, group: FLEX_GROUPS[c.group] || FLEX_GROUPS.data, groupTable, label: c.label, cls: c.num ? 'col-num' : '' };
+});
 const tzOffset = () => new Date().getTimezoneOffset(); // minutos que la hora de quien mira va detrás de UTC: las etiquetas de día y hora de las cargas salen en su hora
 function dataColumns(periods) {
     return [
@@ -279,6 +286,8 @@ function drawData() {
     drawRows(FIRST_ROWS);
     ensureEmpty(DATA_TABLE, flex ? body.columns.length : DIM_COLUMNS.length + body.periods.length);
     if (first && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 0);
+    // la banda con la clasificación que puso la persona (nombre y color) va ARRIBA y la del tipo de columna (Llave, Dato, Columna nueva) debajo
+    if (first && flex && table.tHead) { const mine = table.tHead.querySelector('tr.data-table-group-band-table'); const type = table.tHead.querySelector('tr.data-table-group-band-classification'); if (mine && type) table.tHead.insertBefore(mine, type); }
     if (first && Dashboard.registerServerFilteredTable) Dashboard.registerServerFilteredTable(DATA_TABLE, { onChange: (spec) => { st.cf = spec; refreshData(); }, getValues: fetchColumnValues });
     if (first && Dashboard.registerPartialTable) Dashboard.registerPartialTable(DATA_TABLE, { isComplete: () => !st.data || st.drawn >= st.data.rows.length, loadAll: drawAllRows });
     watchScroll(wrapper);
@@ -572,7 +581,7 @@ function problemText(issue) { return t(`main.regProb_${issue.problem}`); }
 function errorTextOf(err) {
     const body = (err && err.body) || {};
     if (body.code === 'IMPORT_HEADERS') return t('main.regErr_IMPORT_HEADERS', { missing: (body.missing || []).map((k) => (k === 'value' ? t('main.regValueColumn') : t(`main.regDim_${k}`))).join(', ') });
-    return ['IMPORT_FILE', 'IMPORT_EMPTY', 'IMPORT_TOO_BIG', 'IMPORT_DAY', 'IMPORT_DAY_FUTURE', 'REG_FORBIDDEN', 'REG_BUSY', 'COST_CENTER_REQUIRED', 'IMPORT_ERROR', 'FLEX_CONFIG', 'FLEX_DUP_NAME', 'FLEX_NO_KEY', 'IMPORT_STAMP', 'IMPORT_TOO_MANY_COLUMNS'].includes(body.code) ? t(`main.regErr_${body.code}`) : t('admin.saveError');
+    return ['IMPORT_FILE', 'IMPORT_EMPTY', 'IMPORT_TOO_BIG', 'IMPORT_DAY', 'IMPORT_DAY_FUTURE', 'REG_FORBIDDEN', 'REG_BUSY', 'COST_CENTER_REQUIRED', 'IMPORT_ERROR', 'DISK_FULL', 'FLEX_CONFIG', 'FLEX_DUP_NAME', 'FLEX_NO_KEY', 'IMPORT_STAMP', 'IMPORT_TOO_MANY_COLUMNS'].includes(body.code) ? t(`main.regErr_${body.code}`) : t('admin.saveError');
 }
 // ---- Registros de TABLA LIBRE: cada carga lleva su propia elección de columnas (no se recuerda de una carga a otra) ------------------------------------------------------------------------------
 // «Guardar tal cual» (todas las columnas del Excel, con su orden y nombres) o «Elegir el papel de cada columna»: llave (va hacia abajo), dato del renglón, columna nueva en cada carga (se suma o se toma uno) o no se carga.
@@ -586,12 +595,30 @@ function openFlexLoadModal() {
     const now = new Date();
     const p2 = (n) => String(n).padStart(2, '0');
     const todayText = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`;
-    const s = { step: 'start', file: null, buffer: null, info: null, sheet: null, mode: 'asis', cols: [], day: todayText, time: `${p2(now.getHours())}:${p2(now.getMinutes())}`, preview: null, result: null, busy: false, error: '', inputMode: 'file', pasteText: '' };
+    const s = { step: 'start', file: null, buffer: null, info: null, sheet: null, mode: 'asis', cols: [], day: todayText, time: `${p2(now.getHours())}:${p2(now.getMinutes())}`, preview: null, result: null, busy: false, error: '', inputMode: 'file', pasteText: '', classColors: {} };
+    // las clasificaciones que ya tiene el registro (con su color): al escribir una igual se toma el mismo color
+    const foldCls = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+    ((st.data && st.data.classes) || []).forEach((x) => { s.classColors[foldCls(x.name)] = x.color; });
     const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
     const onKey = (event) => { if (event.key === 'Escape' && !s.busy) close(); };
     document.addEventListener('keydown', onKey);
     overlay.addEventListener('mousedown', (event) => { if (event.target === overlay && !s.busy) close(); });
     const errBox = () => `<p class="admin-error" id="reg-i-error" role="alert"${s.error ? '' : ' hidden'}>${esc(s.error)}</p>`;
+    const nextClassColor = () => { const used = new Set(Object.values(s.classColors)); for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i; return Object.keys(s.classColors).length % CLASS_COLORS.length; };
+    const ensureClassColor = (c) => { const f = foldCls(c.cls); if (f && s.classColors[f] === undefined) s.classColors[f] = nextClassColor(); };
+    // la clasificación de cada columna: un nombre (el de una que ya existe o uno nuevo) y su color
+    const classCells = (c, roles) => {
+        if (roles && c.role === 'skip') return '<td><span class="reg-fx-dash">—</span></td><td></td>';
+        const color = c.cls ? s.classColors[foldCls(c.cls)] : undefined;
+        const dots = c.cls ? CLASS_COLORS.map((hex, i) => `<button type="button" class="reg-fx-dot" data-fx-color="${i}" data-fx-for="${c.i}" style="background:${hex}" aria-pressed="${color === i ? 'true' : 'false'}" aria-label="${esc(t(`main.flexColor_${i}`))}"></button>`).join('') : '';
+        return `<td><div class="reg-fx-clsbox"><input type="text" class="reg-fx-cls" list="fx-cls-list" data-fx-cls="${c.i}" maxlength="40" value="${esc(c.cls || '')}" placeholder="${esc(t('main.flexClsNone'))}" aria-label="${esc(t('main.flexColClass'))}">${c.cls ? `<button type="button" class="reg-fx-down" data-fx-down="${c.i}" title="${esc(t('main.flexClsDown'))}" aria-label="${esc(t('main.flexClsDown'))}"><i class="bx bx-down-arrow-alt" aria-hidden="true"></i></button>` : ''}</div></td><td><div class="reg-fx-dots">${dots}</div></td>`;
+    };
+    const classList = () => {
+        const names = new Map();
+        ((st.data && st.data.classes) || []).forEach((x) => names.set(foldCls(x.name), x.name));
+        s.cols.forEach((c) => { if (c.cls && !names.has(foldCls(c.cls))) names.set(foldCls(c.cls), c.cls); });
+        return `<datalist id="fx-cls-list">${[...names.values()].map((n) => `<option value="${esc(n)}"></option>`).join('')}</datalist>`;
+    };
     const roleOptions = (selected) => ['key', 'data', 'value', 'skip'].map((r) => `<option value="${r}"${selected === r ? ' selected' : ''}>${esc(t(`main.flexRole_${r}`))}</option>`).join('');
     const startHtml = () => `<h3 id="reg-i-title">${esc(t('main.flexImpTitle', { name: regName(reg) }))}</h3>
         <div class="tpl-seg" role="group"><button type="button" data-reg-i="mode-file" aria-pressed="${s.inputMode === 'file'}" data-help-key="tplUpload"${s.busy ? ' disabled' : ''}>${esc(t('main.tplModeFile'))}</button><button type="button" data-reg-i="mode-paste" aria-pressed="${s.inputMode === 'paste'}" data-help-key="tplPaste"${s.busy ? ' disabled' : ''}>${esc(t('main.tplModePaste'))}</button></div>
@@ -606,13 +633,13 @@ function openFlexLoadModal() {
             return `<tr class="${roles && c.role === 'skip' ? 'reg-fx-off' : ''}"><td>${esc(c.text)}</td><td class="reg-map-ex">${esc(c.example)}</td>
                 <td>${roles ? `<select data-fx-role="${c.i}" aria-label="${esc(t('main.flexColLoadAs'))}">${roleOptions(c.role)}</select>` : `<span class="reg-fx-asis">${esc(t('main.flexRole_asis'))}</span>`}</td>
                 <td>${isValue ? `<select data-fx-agg="${c.i}" aria-label="${esc(t('main.flexColJoin'))}"><option value="sum"${c.agg === 'sum' ? ' selected' : ''}>${esc(t('main.flexAgg_sum'))}</option><option value="one"${c.agg === 'one' ? ' selected' : ''}>${esc(t('main.flexAgg_one'))}</option></select>` : '<span class="reg-fx-dash">—</span>'}</td>
-                <td>${roles && c.role === 'skip' ? '<span class="reg-fx-dash">—</span>' : `<input type="text" class="reg-fx-name" data-fx-name="${c.i}" maxlength="60" value="${esc(c.name)}" aria-label="${esc(t('main.flexColName'))}">`}${isValue ? `<label class="reg-fx-stamp"><input type="checkbox" data-fx-stamp="${c.i}"${c.stampName ? ' checked' : ''}> <span>${esc(t('main.flexStampName'))}</span></label>` : ''}</td></tr>`;
+                <td>${roles && c.role === 'skip' ? '<span class="reg-fx-dash">—</span>' : `<input type="text" class="reg-fx-name" data-fx-name="${c.i}" maxlength="60" value="${esc(c.name)}" aria-label="${esc(t('main.flexColName'))}">`}${isValue ? `<label class="reg-fx-stamp"><input type="checkbox" data-fx-stamp="${c.i}"${c.stampName ? ' checked' : ''}> <span>${esc(t('main.flexStampName'))}</span></label>` : ''}</td>${classCells(c, roles)}</tr>`;
         }).join('');
         return `<h3 id="reg-i-title">${esc(t('main.flexImpTitle', { name: regName(reg) }))}</h3>
             <div class="reg-fx-modes" role="radiogroup" data-help-key="regFlexMode"><label class="reg-fx-mode${roles ? '' : ' reg-fx-mode-on'}"><input type="radio" name="fx-mode" value="asis"${roles ? '' : ' checked'}> <span>${esc(t('main.flexModeAsis'))}</span></label><label class="reg-fx-mode${roles ? ' reg-fx-mode-on' : ''}"><input type="radio" name="fx-mode" value="roles"${roles ? ' checked' : ''}> <span>${esc(t('main.flexModeRoles'))}</span></label></div>
             <p class="admin-hint">${esc(t('main.flexRead', { cols: info.headers.length, rows: num(info.rowsDeclared) }))}</p>
             ${info.sheets.length > 1 ? `<div class="reg-sheet"><label for="reg-i-sheet">${esc(t('main.regSheet'))}</label><select id="reg-i-sheet">${info.sheets.map((sh) => `<option value="${esc(sh.name)}"${sh.name === s.sheet ? ' selected' : ''}>${esc(sh.name)}</option>`).join('')}</select></div>` : ''}
-            <div class="wp-imp-table-wrap"><table class="wp-imp-table reg-map-table" data-help-key="regFlexMap"><thead><tr><th>${esc(t('main.flexColExcel'))}</th><th>${esc(t('main.flexColExample'))}</th><th>${esc(t('main.flexColLoadAs'))}</th><th>${esc(t('main.flexColJoin'))}</th><th>${esc(t('main.flexColName'))}</th></tr></thead><tbody>${rows}</tbody></table></div>
+            <div class="wp-imp-table-wrap"><table class="wp-imp-table reg-map-table" data-help-key="regFlexMap"><thead><tr><th>${esc(t('main.flexColExcel'))}</th><th>${esc(t('main.flexColExample'))}</th><th>${esc(t('main.flexColLoadAs'))}</th><th>${esc(t('main.flexColJoin'))}</th><th>${esc(t('main.flexColName'))}</th><th>${esc(t('main.flexColClass'))}</th><th>${esc(t('main.flexColColor'))}</th></tr></thead><tbody>${rows}</tbody></table></div>${classList()}
             <div class="reg-day" data-help-key="regFlexWhen"><label for="fx-day">${esc(t('main.flexWhen'))}</label><input type="date" id="fx-day" value="${esc(s.day)}" max="${esc(todayText)}"><input type="time" id="fx-time" value="${esc(s.time)}" aria-label="${esc(t('main.flexWhenTime'))}"></div>
             ${errBox()}<div class="admin-form-actions"><button type="button" class="btn" data-reg-i="review"${s.busy ? ' disabled' : ''}>${esc(t('main.regReview'))}</button><button type="button" class="btn btn-secondary" data-reg-i="again"${s.busy ? ' disabled' : ''}>${esc(t('main.regChooseAnother'))}</button><button type="button" class="btn btn-secondary" data-reg-i="cancel"${s.busy ? ' disabled' : ''}>${esc(t('main.regCancel'))}</button></div>`;
     };
@@ -670,7 +697,7 @@ function openFlexLoadModal() {
     const stampIso = () => { const d = new Date(`${s.day}T${s.time || '00:00'}`); return Number.isNaN(d.getTime()) ? '' : d.toISOString(); };
     const readWhen = () => { const d = overlay.querySelector('#fx-day'); const tm = overlay.querySelector('#fx-time'); if (d) s.day = d.value; if (tm) s.time = tm.value; };
     // la elección de esta carga: «tal cual» lleva todas las columnas; con papeles, las que no se cargan van marcadas
-    const config = () => ({ mode: s.mode, columns: s.cols.map((c) => ({ i: c.i, name: c.name, role: s.mode === 'asis' ? 'data' : c.role, agg: c.agg, stampName: c.stampName })) });
+    const config = () => ({ mode: s.mode, columns: s.cols.map((c) => ({ i: c.i, name: c.name, role: s.mode === 'asis' ? 'data' : c.role, agg: c.agg, stampName: c.stampName, cls: c.cls || '', color: c.cls ? s.classColors[foldCls(c.cls)] : null })) });
     const importQuery = (mode) => ({ mode, header: String(s.info.headerRow), sheet: s.sheet || '', file: s.file ? s.file.name : '', cfg: JSON.stringify(config()), stamp: stampIso() });
     // lo que se puede revisar sin ir al servidor: una llave al menos, nombres sin repetir y un día válido
     const problem = () => {
@@ -715,6 +742,20 @@ function openFlexLoadModal() {
         chooseFile(file);
     };
     overlay.addEventListener('click', (event) => {
+        // el color de una clasificación y «aplicar a las siguientes columnas sin clasificación»
+        const dot = event.target.closest('[data-fx-color]');
+        if (dot && !s.busy) { const c = s.cols.find((x) => String(x.i) === dot.dataset.fxFor); if (c && c.cls) { readWhen(); s.classColors[foldCls(c.cls)] = Number(dot.dataset.fxColor); paint(); } return; }
+        const down = event.target.closest('[data-fx-down]');
+        if (down && !s.busy) {
+            const at = s.cols.findIndex((x) => String(x.i) === down.dataset.fxDown);
+            const from = s.cols[at];
+            if (from && from.cls) {
+                readWhen();
+                for (let k = at + 1; k < s.cols.length; k += 1) { const c = s.cols[k]; if (c.cls || (s.mode === 'roles' && c.role === 'skip')) break; c.cls = from.cls; }
+                paint();
+            }
+            return;
+        }
         const btn = event.target.closest('[data-reg-i]');
         if (!btn || s.busy) return;
         const op = btn.dataset.regI;
@@ -737,11 +778,13 @@ function openFlexLoadModal() {
         else if (el.dataset.fxRole !== undefined) { const c = col('fxRole'); if (c) { readWhen(); c.role = el.value; paint(); } }
         else if (el.dataset.fxAgg !== undefined) { const c = col('fxAgg'); if (c) c.agg = el.value; }
         else if (el.dataset.fxStamp !== undefined) { const c = col('fxStamp'); if (c) c.stampName = el.checked; }
+        else if (el.dataset.fxCls !== undefined) { const c = col('fxCls'); if (c) { readWhen(); c.cls = el.value.replace(/\s+/g, ' ').trim(); ensureClassColor(c); paint(); } } // al terminar de escribir: toma el color de la clasificación (el de una que ya existe o el siguiente de la paleta)
     });
     overlay.addEventListener('input', (event) => {
         const el = event.target;
         if (el.id === 'reg-i-paste') s.pasteText = el.value;
         else if (el.dataset && el.dataset.fxName !== undefined) { const c = s.cols.find((x) => String(x.i) === el.dataset.fxName); if (c) c.name = el.value; }
+        else if (el.dataset && el.dataset.fxCls !== undefined) { const c = s.cols.find((x) => String(x.i) === el.dataset.fxCls); if (c) c.cls = el.value; }
     });
     overlay.addEventListener('paste', (event) => { if (event.target.id !== 'reg-i-paste') return; setTimeout(() => { s.pasteText = event.target.value; if (s.pasteText.trim() && !s.busy) pasteGo(); }, 50); });
     overlay.addEventListener('dragover', (event) => { const zone = event.target.closest && event.target.closest('#reg-i-drop'); if (zone) { event.preventDefault(); zone.classList.add('wp-imp-drop-over'); } });

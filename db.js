@@ -5179,6 +5179,34 @@ function flexStore({ clientId, isTestData = false, registryKey, loadId }) {
         rollback: () => {},
     };
 }
+// Una carga de tabla libre que se cayó a la mitad: se quitan los renglones con llave y los valores que alcanzó a escribir (el mensaje dice «no se agregó nada» y así debe ser; un reintento no los toma por renglones «que ya estaban»).
+// Solo toca lo que esa carga misma creó; lo de las demás cargas no se mueve. Se borra por tandas (los valores se van con su renglón).
+async function discardFlexLoadData(loadId, { maxMs = 180000 } = {}) {
+    const started = Date.now();
+    const del = db.prepare('DELETE FROM manual_flex_rows WHERE id IN (SELECT id FROM manual_flex_rows WHERE load_id = ? LIMIT 2000)');
+    const delVals = db.prepare('DELETE FROM manual_flex_values WHERE (row_id, col, load_id) IN (SELECT row_id, col, load_id FROM manual_flex_values WHERE load_id = ? LIMIT 20000)');
+    const yieldTurn = () => new Promise((resolve) => setImmediate(resolve)); // entre tandas los demás usuarios siguen siendo atendidos
+    while (delVals.run(loadId).changes > 0) { if (Date.now() - started > maxMs) break; await yieldTurn(); }
+    while (del.run(loadId).changes > 0) { if (Date.now() - started > maxMs) break; await yieldTurn(); }
+    db.prepare('DELETE FROM manual_flex_blocks WHERE load_id = ?').run(loadId);
+}
+// Al arrancar el servidor: las cargas de tabla libre que se cayeron y dejaron renglones o valores a medias se limpian (las que anuló el SISTEMA por un error, y las que se quedaron «en proceso» más de 30 minutos porque el servidor
+// se reinició a la mitad). Nunca toca una carga vigente ni una que la persona anuló: solo lo que ninguna pantalla muestra ni cuenta. Se hace por tandas, después de que el servidor ya atiende.
+async function cleanupFailedFlexLoads() {
+    try {
+        db.prepare("UPDATE manual_registry_loads SET status = 'anulada', annulled_at = datetime('now'), annulled_by = 'sistema', annul_note = 'ERROR' WHERE status = 'en_proceso' AND config_json <> '' AND created_at < datetime('now', '-30 minutes')").run();
+        const failed = db.prepare("SELECT id FROM manual_registry_loads WHERE config_json <> '' AND status = 'anulada' AND annulled_by = 'sistema' AND annul_note IN ('ERROR', 'DISK_FULL') ORDER BY id").all();
+        const left = db.prepare('SELECT (EXISTS (SELECT 1 FROM manual_flex_rows WHERE load_id = ?) OR EXISTS (SELECT 1 FROM manual_flex_values WHERE load_id = ?) OR EXISTS (SELECT 1 FROM manual_flex_blocks WHERE load_id = ?)) AS n');
+        for (const f of failed) {
+            if (!left.get(f.id, f.id, f.id).n) continue;
+            await discardFlexLoadData(f.id);
+            console.log(`[db] Tabla libre: se limpió la carga fallida #${f.id} (renglones y valores a medias).`);
+        }
+    } catch (err) {
+        console.error('[db] Tabla libre: no se pudo limpiar las cargas fallidas (se reintenta al siguiente arranque):', err && err.message);
+    }
+}
+setTimeout(() => { cleanupFailedFlexLoads(); }, 8000).unref();
 // Las cargas vigentes de un registro libre, en orden, con su día y hora y su elección.
 function flexVigenteLoads(clientId, forTestAccount, registryKey) {
     return db.prepare("SELECT id, stamp, created_at, file_name, loaded_by, config_json FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND status = 'vigente' AND config_json <> '' ORDER BY id")
@@ -23035,7 +23063,7 @@ module.exports = {
     listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
-    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, flexVigenteLoads, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, discardFlexLoadData, flexVigenteLoads, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,

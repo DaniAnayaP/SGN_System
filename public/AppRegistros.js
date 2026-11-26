@@ -679,7 +679,12 @@ function renderFlexRow() {
     const first = columns.findIndex((c, i) => c.group !== 'value' && c.group !== 'load' && flexText(row[i]) !== '');
     titleEl.textContent = first >= 0 ? flexText(row[first]) : regName(currentReg());
     const meta = el('div', 'pm-app-meta rg-app-plist');
+    let lastCls = null;
     columns.forEach((c, i) => {
+        if ((c.cls || '') !== lastCls) {
+            lastCls = c.cls || '';
+            if (lastCls) { const head = el('div', 'rg-app-clshead', lastCls); head.style.color = CLASS_COLORS[c.color] || CLASS_COLORS[0]; head.style.borderColor = CLASS_COLORS[c.color] || CLASS_COLORS[0]; meta.appendChild(head); }
+        }
         const v = row[i];
         const div = el('div', v === null || v === undefined || v === '' ? 'rg-app-none' : '');
         div.append(el('span', '', c.label), el('b', '', v === null || v === undefined || v === '' ? '—' : (typeof v === 'number' ? String(v) : v)));
@@ -951,7 +956,7 @@ async function startLoad() {
     siteBlocked = await window.AppSiteGate.blocked();
     // una tabla libre se carga siempre con tu Excel: no hay paso de «cómo» y se va directo al archivo
     const flexReg = reg.kind === 'tabla';
-    wiz = { step: flexReg ? 'file' : 'start', source: a.template && !flexReg ? 'plantilla' : 'excel', file: null, buffer: null, info: null, sheet: null, include: new Set(), picks: {}, day: todayText(), preview: null, result: null, busy: false, error: '', mode: 'file', pasteText: '', fmode: 'asis', cols: [], time: nowTime() };
+    wiz = { step: flexReg ? 'file' : 'start', source: a.template && !flexReg ? 'plantilla' : 'excel', file: null, buffer: null, info: null, sheet: null, include: new Set(), picks: {}, day: todayText(), preview: null, result: null, busy: false, error: '', mode: 'file', pasteText: '', fmode: 'asis', cols: [], time: nowTime(), classColors: {}, classSeeded: false };
     view = 'wizard';
     render();
     setScroll(0);
@@ -983,7 +988,7 @@ function errorTextOf(err) {
     const body = (err && err.body) || {};
     if (!err || !err.body) return t('home.regLoadNeedSignal');
     if (body.code === 'IMPORT_HEADERS') return t('main.regErr_IMPORT_HEADERS', { missing: (body.missing || []).map((k) => (k === 'value' ? t('main.regValueColumn') : t(`main.regDim_${k}`))).join(', ') });
-    return ['IMPORT_FILE', 'IMPORT_EMPTY', 'IMPORT_TOO_BIG', 'IMPORT_DAY', 'IMPORT_DAY_FUTURE', 'REG_FORBIDDEN', 'REG_BUSY', 'COST_CENTER_REQUIRED', 'IMPORT_ERROR', 'FLEX_CONFIG', 'FLEX_DUP_NAME', 'FLEX_NO_KEY', 'IMPORT_STAMP', 'IMPORT_TOO_MANY_COLUMNS'].includes(body.code) ? t(`main.regErr_${body.code}`) : t('admin.saveError');
+    return ['IMPORT_FILE', 'IMPORT_EMPTY', 'IMPORT_TOO_BIG', 'IMPORT_DAY', 'IMPORT_DAY_FUTURE', 'REG_FORBIDDEN', 'REG_BUSY', 'COST_CENTER_REQUIRED', 'IMPORT_ERROR', 'DISK_FULL', 'FLEX_CONFIG', 'FLEX_DUP_NAME', 'FLEX_NO_KEY', 'IMPORT_STAMP', 'IMPORT_TOO_MANY_COLUMNS'].includes(body.code) ? t(`main.regErr_${body.code}`) : t('admin.saveError');
 }
 const problemText = (issue) => t(`main.regProb_${issue.problem}`);
 async function post(path, query, body) {
@@ -1302,6 +1307,11 @@ function stepMap(body, bar) {
     bar.append(wizBtn('rg-app-btn-pri', t('main.regReview'), review, wiz.busy), wizBtn('rg-app-btn-tx', t('main.regChooseAnother'), () => { wiz.step = 'file'; wiz.file = null; wiz.buffer = null; wiz.info = null; wiz.error = ''; render(); setScroll(0); }, wiz.busy));
 }
 // --- Cargar a una TABLA LIBRE: «tal cual» o el papel de cada columna (llave, dato, columna nueva que se suma o se toma uno, no se carga); cada columna se puede renombrar; el día y la hora de la carga se eligen aquí ----------
+// la paleta de las clasificaciones de columnas (la misma de la Web)
+const CLASS_COLORS = ['#3f78ad', '#b23fb8', '#2b8456', '#b57a05', '#4f58c2', '#c4473a'];
+const foldCls = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+const nextClassColor = () => { const used = new Set(Object.values(wiz.classColors)); for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i; return Object.keys(wiz.classColors).length % CLASS_COLORS.length; };
+const ensureClassColor = (c) => { const f = foldCls(c.cls); if (f && wiz.classColors[f] === undefined) wiz.classColors[f] = nextClassColor(); };
 const nowTime = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 // lo que se puede revisar sin ir al servidor: un día y una hora válidos, una llave al menos y nombres sin repetir
 function flexProblem() {
@@ -1313,11 +1323,13 @@ function flexProblem() {
     for (const c of used) { const f = String(c.name || '').trim().toLowerCase(); if (seen.has(f)) return t('main.regErr_FLEX_DUP_NAME'); seen.add(f); }
     return '';
 }
-const flexConfig = () => ({ mode: wiz.fmode, columns: wiz.cols.map((c) => ({ i: c.i, name: c.name, role: wiz.fmode === 'asis' ? 'data' : c.role, agg: c.agg, stampName: c.stampName })) });
+const flexConfig = () => ({ mode: wiz.fmode, columns: wiz.cols.map((c) => ({ i: c.i, name: c.name, role: wiz.fmode === 'asis' ? 'data' : c.role, agg: c.agg, stampName: c.stampName, cls: c.cls || '', color: c.cls ? wiz.classColors[foldCls(c.cls)] : null })) });
 const flexStampIso = () => { const d = new Date(`${wiz.day}T${wiz.time || '00:00'}`); return Number.isNaN(d.getTime()) ? '' : d.toISOString(); };
 function stepMapFlex(body, bar) {
     const info = wiz.info;
     const roles = wiz.fmode === 'roles';
+    // las clasificaciones que ya tiene el registro (con su color): al escribir una igual se toma el mismo color
+    if (!wiz.classSeeded) { wiz.classSeeded = true; ((currentData() && currentData().classes) || []).forEach((x) => { wiz.classColors[foldCls(x.name)] = x.color; }); }
     body.appendChild(el('h3', '', t('main.regMapTitle')));
     const ways = el('div', 'rg-app-ways');
     ways.setAttribute('role', 'radiogroup');
@@ -1392,9 +1404,53 @@ function stepMapFlex(body, bar) {
             sub.appendChild(label);
         }
         if (sub.childNodes.length) row.appendChild(sub);
+        // la clasificación (nombre y color) de la columna
+        if (!off) {
+            const clsRow = el('div', 'rg-app-clsrow');
+            const input = el('input', 'pm-app-input');
+            input.type = 'text'; input.maxLength = 40; input.value = c.cls || '';
+            input.placeholder = t('main.flexClsNone');
+            input.setAttribute('aria-label', t('main.flexColClass'));
+            input.setAttribute('list', 'rg-app-cls-list');
+            input.addEventListener('input', () => { c.cls = input.value; });
+            input.addEventListener('change', () => { c.cls = input.value.replace(/\s+/g, ' ').trim(); ensureClassColor(c); const y = getScroll(); render(); setScroll(y); });
+            clsRow.appendChild(input);
+            if (c.cls) {
+                const color = wiz.classColors[foldCls(c.cls)];
+                const dots = el('span', 'rg-app-dots');
+                CLASS_COLORS.forEach((hex, i) => {
+                    const dot = el('button', 'rg-app-dot');
+                    dot.type = 'button';
+                    dot.style.background = hex;
+                    dot.setAttribute('aria-pressed', color === i ? 'true' : 'false');
+                    dot.setAttribute('aria-label', t(`main.flexColor_${i}`));
+                    dot.addEventListener('click', () => { wiz.classColors[foldCls(c.cls)] = i; const y = getScroll(); render(); setScroll(y); });
+                    dots.appendChild(dot);
+                });
+                const down = el('button', 'rg-app-down');
+                down.type = 'button';
+                down.title = t('main.flexClsDown');
+                down.setAttribute('aria-label', t('main.flexClsDown'));
+                down.innerHTML = '<i class="bx bx-down-arrow-alt" aria-hidden="true"></i>';
+                down.addEventListener('click', () => {
+                    const at = wiz.cols.indexOf(c);
+                    for (let k = at + 1; k < wiz.cols.length; k += 1) { const n = wiz.cols[k]; if (n.cls || (roles && n.role === 'skip')) break; n.cls = c.cls; }
+                    const y = getScroll(); render(); setScroll(y);
+                });
+                clsRow.append(dots, down);
+            }
+            row.appendChild(clsRow);
+        }
         list.appendChild(row);
     });
-    body.appendChild(list);
+    // las clasificaciones que ya existen en el registro y las que se escribieron aquí, para escogerlas al escribir
+    const known = new Map();
+    ((currentData() && currentData().classes) || []).forEach((x) => known.set(foldCls(x.name), x.name));
+    wiz.cols.forEach((c) => { if (c.cls && !known.has(foldCls(c.cls))) known.set(foldCls(c.cls), c.cls); });
+    const datalist = el('datalist');
+    datalist.id = 'rg-app-cls-list';
+    known.forEach((name) => { const o = el('option'); o.value = name; datalist.appendChild(o); });
+    body.append(list, datalist);
     const when = el('div', 'aa-app-field rg-app-fxwhen');
     when.setAttribute('data-help-key', 'appRegFlexCuando');
     when.appendChild(el('span', '', t('main.flexWhen')));

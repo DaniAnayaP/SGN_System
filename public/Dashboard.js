@@ -5897,7 +5897,7 @@ function renderColumnGroupBand(tableId) {
     // renders at 0 width either way, so there's no need to special-case it.
     const visualOrder = getVisualColumnOrder(state.config);
     const tableBandRow = state.table.tHead.querySelector('tr.data-table-group-band-table');
-    if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map(), null, state, false);
+    if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map(), null, state, true); // el color propio solo lo trae una clasificación registrada (setColumnClassMeta); las demás bandas de tabla siguen igual
     const classBandRow = state.table.tHead.querySelector('tr.data-table-group-band-classification');
     if (classBandRow) fillBandRow(classBandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending', state, true);
 }
@@ -7147,6 +7147,8 @@ function applyCascadedColumnOrder(tableId, groups) {
     state.config.order = order;
     applyDataTableColumnLayout(tableId);
 }
+// Una pantalla con columnas que la persona clasifica (nombre y color, como las tablas libres de Registros Información) registra aquí cada clasificación para que la banda de su tabla la dibuje.
+function setColumnClassMeta(key, label, color) { classificationMetaById.set(key, { label, color: color || null }); }
 function resolveGroupLabel(groupKey) {
     if (!groupKey) return '';
     const meta = classificationMetaById.get(groupKey);
@@ -15688,6 +15690,7 @@ window.Dashboard = {
     registerPartialTable,
     registerServerFilteredTable,
     resetServerFilterValues,
+    setColumnClassMeta,
     reapplyColumnFilters,
     getSingleSelectedCostCenterId,
     setBreadcrumbSuffix,
