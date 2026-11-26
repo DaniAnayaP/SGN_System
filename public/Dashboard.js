@@ -14019,11 +14019,10 @@ function updateDatabaseMenuLabel(branding) {
     label.textContent = branding?.companyAbbreviation ? `${base} ${branding.companyAbbreviation}` : base;
 }
 
-// Los registros (los de siempre y los agregados) son pantallas anidadas dentro de «Registros Información» en Cargas Manuales de Centro de Distribución y también en Análisis › Cadena de Suministro › Manuales (con el mismo permiso: grantFrom);
+// Los registros (los de siempre y los agregados) son pantallas anidadas dentro de «Registros Información» en Cargas Manuales de Centro de Distribución y también en Análisis › Cadena de Suministro › Manuales (cada lugar con SU permiso en el árbol);
 // los análisis agregados salen en Análisis › Manuales. El nombre de los agregados es dato del cliente, así que va en item.label. Se quita lo anterior antes de poner la lista, así que se puede llamar de nuevo.
 // Lo que no se pudo leer esta vez se arma con la última lectura buena.
 const manualMenuBodies = { an: null, reg: null };
-const REGISTROS_GRANT_FROM = { dept: 'supply-chain', area: 'sc-area-distribution-center', path: 'cat-cargas-manuales/cat-cargas-manuales-registros' };
 async function loadManualAnalysesMenu() {
     try {
         const getJson = async (url) => { try { const res = await fetch(url, { credentials: 'include' }); return res.ok ? await res.json() : null; } catch { return null; } };
@@ -14062,8 +14061,8 @@ async function loadManualAnalysesMenu() {
                 const at = base.findIndex((n) => n.id === 'cat-analisis-manuales-lista');
                 if (at >= 0) {
                     const items = [];
-                    // primero «Registros Información» (anidado: Nuevo registro y los registros), con el permiso de esa pantalla en Cargas Manuales
-                    if (reg) items.push(...registryItems('cat-analisis-manuales-reg', { grantFrom: REGISTROS_GRANT_FROM }));
+                    // primero «Registros Información» (anidado: Nuevo registro y los registros), con SU permiso en Análisis (nodo propio del árbol, aparte del de Cargas Manuales de Centro de Distribución)
+                    if (reg) items.push(...registryItems('cat-analisis-manuales-reg', { grantAs: 'cat-analisis-manuales-registros' }));
                     if (an) {
                         // «＋ Agregar nuevo análisis»: solo para quien tiene el botón «Crear análisis»; abre la lista con la ventana de alta
                         if (an.canCreate) items.push({ id: 'cat-analisis-manuales-nuevo', labelKey: 'main.anNew', abbrKeys: ['main.anNewAbbr1', 'main.anNewAbbr2'], icon: 'bx-plus', href: 'CmAnalisisLista.html?nuevo=1', grantAs: 'cat-analisis-manuales-lista', sidebarGroup: 'analisisReg', dynamicAnalysis: true, addNew: true });
@@ -14073,6 +14072,9 @@ async function loadManualAnalysesMenu() {
                     }
                     base.splice(at + 1, 0, ...items);
                     base[at] = { ...base[at], sidebarHidden: true };
+                    // la pantalla de «Registros Información» sola queda para los permisos: en el menú la reemplaza su grupo
+                    const regAt = base.findIndex((n) => n.id === 'cat-analisis-manuales-registros');
+                    if (regAt >= 0) base[regAt] = { ...base[regAt], sidebarHidden: true };
                     overrides[key]['cat-analisis-manuales'] = base;
                 }
             }
@@ -15189,7 +15191,7 @@ function hasScreenAccess(activePage) {
     if (activePage === 'cat-operaciones-ti-casos-soporte' && /OpTISoporteCaso\.html/i.test(location.pathname)) return true;
     const path = SCREEN_GRANT_PATHS[activePage];
     if (!path) return true; // not one of the mapped pages — unaffected, same as today
-    return hasScreenGrant(path.sectionId, path.itemId, path.submenuPrefix);
+    return [path, ...(SCREEN_GRANT_ALT_PATHS[activePage] || [])].some((p) => hasScreenGrant(p.sectionId, p.itemId, p.submenuPrefix));
 }
 
 // The 13 "Control Interno" columns sit one level deeper in menu.json than a
@@ -15206,19 +15208,32 @@ function columnSubmenuBase(path, colKey) {
     return SYSTEM_COLUMN_IDS.has(colKey) ? `${path.submenuPrefix}/${SYSTEM_COLUMN_CLASSIFICATION}/${colKey}` : `${path.submenuPrefix}/${colKey}`;
 }
 
+// Una pantalla que sale en DOS áreas con permiso propio en cada una (Registros Información: Centro de Distribución y Análisis › Cadena de Suministro › Análisis Manuales, Daniel 2026-11-26): vale el permiso de cualquiera de los dos
+// nodos (espejo de TABLE_GRANT_ALT_PATHS de db.js; mantener igual).
+const REGISTROS_ANALISIS_PATH = { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-registros' };
+const TABLE_GRANT_ALT_PATHS = {
+    registros: [REGISTROS_ANALISIS_PATH],
+    'registros-cargas': [REGISTROS_ANALISIS_PATH],
+};
+const SCREEN_GRANT_ALT_PATHS = {
+    'cat-cargas-manuales-registros': [REGISTROS_ANALISIS_PATH],
+};
+const grantPathsOf = (tableKey) => [TABLE_GRANT_PATHS[tableKey], ...(TABLE_GRANT_ALT_PATHS[tableKey] || [])].filter(Boolean);
+
 // No grant at all on a column behaves as 'solo-ver' — mirrors
 // getColumnGrantLevel in db.js exactly (kept in sync by hand, same as
 // TABLE_GRANT_PATHS itself).
 function getColumnGrantLevel(tableKey, colKey) {
     if (!!currentUser?.isClientAdmin) return 'editar';
-    const path = TABLE_GRANT_PATHS[tableKey];
-    if (!path) return 'solo-ver';
-    const base = columnSubmenuBase(path, colKey);
     const grants = cachedBusinessProfile?.effectiveGrants || [];
-    const has = (level) => grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/${level}`);
-    if (has('editar')) return 'editar';
-    if (has('ver-y-operar')) return 'ver-y-operar';
-    return 'solo-ver';
+    let best = 'solo-ver';
+    for (const path of grantPathsOf(tableKey)) {
+        const base = columnSubmenuBase(path, colKey);
+        const has = (level) => grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/${level}`);
+        if (has('editar')) return 'editar';
+        if (has('ver-y-operar')) best = 'ver-y-operar';
+    }
+    return best;
 }
 function hasColumnEditGrant(tableKey, colKey) {
     return getColumnGrantLevel(tableKey, colKey) === 'editar';
@@ -15229,11 +15244,11 @@ function hasColumnEditGrant(tableKey, colKey) {
 // client-side instead of just letting the click land on a 403.
 function hasColumnDeleteGrant(tableKey, colKey) {
     if (!!currentUser?.isClientAdmin) return true;
-    const path = TABLE_GRANT_PATHS[tableKey];
-    if (!path) return false;
-    const base = columnSubmenuBase(path, colKey);
     const grants = cachedBusinessProfile?.effectiveGrants || [];
-    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/eliminar`);
+    return grantPathsOf(tableKey).some((path) => {
+        const base = columnSubmenuBase(path, colKey);
+        return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/eliminar`);
+    });
 }
 
 // Opciones de Búsqueda por columna (Filtrar / Reordenar columna / Ordenar filas): hojas <columna>/buscar-filtrar | buscar-reordenar | buscar-ordenar. Solo se revisan las
@@ -15244,15 +15259,14 @@ const SEARCH_OPTION_LEAF = { filter: 'buscar-filtrar', reorder: 'buscar-reordena
 function hasColumnSearchGrant(tableKey, colKey, option) {
     if (!!currentUser?.isClientAdmin || !currentUser?.clientId) return true;
     if (DIALOG_TABLE_KEYS.has(tableKey)) return true;
-    const path = TABLE_GRANT_PATHS[tableKey];
+    const paths = grantPathsOf(tableKey);
     const profile = cachedBusinessProfile;
     const gated = profile && profile.searchGatedColumns && profile.searchGatedColumns[tableKey];
-    if (!path || !gated || !colKey || !gated.includes(colKey)) return true;
-    const prefix = `${path.submenuPrefix}/`;
+    if (!paths.length || !gated || !colKey || !gated.includes(colKey)) return true;
     const suffix = `/${colKey}/${SEARCH_OPTION_LEAF[option]}`;
-    return (profile.effectiveGrants || []).some((g) => (
-        g.sectionId === path.sectionId && g.itemId === path.itemId && typeof g.submenuId === 'string' && g.submenuId.startsWith(prefix) && g.submenuId.endsWith(suffix)
-    ));
+    return (profile.effectiveGrants || []).some((g) => paths.some((path) => (
+        g.sectionId === path.sectionId && g.itemId === path.itemId && typeof g.submenuId === 'string' && g.submenuId.startsWith(`${path.submenuPrefix}/`) && g.submenuId.endsWith(suffix)
+    )));
 }
 // Vuelve a aplicar lo que no se puede usar en las tablas que ya se armaron (los permisos pueden llegar después que la tabla): quita el embudo, el ordenar y el arrastre.
 function refreshColumnSearchGates() {
@@ -15274,22 +15288,22 @@ function refreshColumnSearchGates() {
 // icons -- this only takes effect for a pantalla that actually opted in.
 function hasIconGrant(tableKey, iconId) {
     if (!!currentUser?.isClientAdmin) return true;
-    const path = TABLE_GRANT_PATHS[tableKey];
-    if (!path) return true;
+    const paths = grantPathsOf(tableKey);
+    if (!paths.length) return true;
     const grants = cachedBusinessProfile?.effectiveGrants || [];
-    return grants.some((g) => (
+    return grants.some((g) => paths.some((path) => (
         g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/${iconId}`
-    ));
+    )));
 }
 // Icono de Reglas de Orden de Llenado: el administrador del cliente siempre; los demás solo con la hoja <pantalla>/iconFieldRules (espejo de hasTableIconGrant en db.js).
 // Una tabla sin ruta en el árbol no tiene dónde dárselo, así que solo la ve el administrador.
 function hasFieldRulesIconGrant(tableKey) {
     if (!!currentUser?.isClientAdmin) return true;
     if (!currentUser?.clientId) return false;
-    const path = TABLE_GRANT_PATHS[tableKey];
-    if (!path) return false;
+    const paths = grantPathsOf(tableKey);
+    if (!paths.length) return false;
     const grants = cachedBusinessProfile?.effectiveGrants || [];
-    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/iconFieldRules`);
+    return grants.some((g) => paths.some((path) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/iconFieldRules`));
 }
 // Dispatcher every icon-grant check site calls instead of hasIconGrant
 // directly -- hasSaasTableIconGrant returns null for a tableKey it doesn't

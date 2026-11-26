@@ -4180,6 +4180,14 @@ function categoryPantallasFor(sectionId, areaId, apartadoId) {
     return (generic && generic.submenu) || [];
 }
 
+// Una pantalla que sale en DOS áreas con permiso PROPIO en cada una (Registros Información: Centro de Distribución y Análisis › Cadena de Suministro › Análisis Manuales, Daniel 2026-11-26): son dos nodos del árbol, y vale el
+// permiso que se tenga en cualquiera de los dos (los permisos que dan los dos se suman). La ruta principal es la de TABLE_GRANT_PATHS; estas son las otras (mantener igual que TABLE_GRANT_ALT_PATHS de Dashboard.js).
+const REGISTROS_ANALISIS_PATH = { sectionId: 'analysis', itemId: 'an-area-supply-chain', submenuPrefix: 'cat-analisis-manuales/cat-analisis-manuales-registros' };
+const TABLE_GRANT_ALT_PATHS = {
+    registros: [REGISTROS_ANALISIS_PATH],
+    'registros-cargas': [REGISTROS_ANALISIS_PATH],
+};
+const grantPathsOf = (tableKey, pathOverride) => (pathOverride ? [pathOverride] : [TABLE_GRANT_PATHS[tableKey], ...(TABLE_GRANT_ALT_PATHS[tableKey] || [])].filter(Boolean));
 // Walks a TABLE_GRANT_PATHS entry's own {sectionId, itemId, submenuPrefix}
 // down to the real Pantalla node in menu.json. 'main' items nest
 // statically (no área merge involved, e.g. btn-configuracion/btn-base-
@@ -4255,29 +4263,31 @@ function columnSubmenuBase(path, colKey) {
 // PermissionTree.js already renders each combination as its own separate
 // checkbox.
 function getColumnGrantLevel(grants, tableKey, colKey, pathOverride) {
-    const path = pathOverride || TABLE_GRANT_PATHS[tableKey];
-    if (!path) return 'solo-ver';
-    const base = columnSubmenuBase(path, colKey);
-    const has = (level) => grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/${level}`);
-    if (has('editar')) return 'editar';
-    if (has('ver-y-operar')) return 'ver-y-operar';
-    return 'solo-ver';
+    const paths = grantPathsOf(tableKey, pathOverride);
+    let best = 'solo-ver';
+    for (const path of paths) {
+        const base = columnSubmenuBase(path, colKey);
+        const has = (level) => grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/${level}`);
+        if (has('editar')) return 'editar';
+        if (has('ver-y-operar')) best = 'ver-y-operar';
+    }
+    return best;
 }
 
 // ¿La cuenta tiene ALGÚN permiso de esa columna (Ver, Ver y Operar o Modificar)? getColumnGrantLevel contesta «solo-ver» también cuando no hay ninguno (es el nivel mínimo para quien ya ve la pantalla); esto distingue
 // «tiene Ver» de «no tiene nada de esa columna», para esconder lo que la cuenta no tiene en el árbol.
 function hasColumnGrant(grants, tableKey, colKey, pathOverride) {
-    const path = pathOverride || TABLE_GRANT_PATHS[tableKey];
-    if (!path) return false;
-    const base = columnSubmenuBase(path, colKey);
-    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && ['solo-ver', 'ver-y-operar', 'editar'].some((level) => g.submenuId === `${base}/${level}`));
+    return grantPathsOf(tableKey, pathOverride).some((path) => {
+        const base = columnSubmenuBase(path, colKey);
+        return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && ['solo-ver', 'ver-y-operar', 'editar'].some((level) => g.submenuId === `${base}/${level}`));
+    });
 }
 
 function canAuthorizeColumn(grants, tableKey, colKey, pathOverride) {
-    const path = pathOverride || TABLE_GRANT_PATHS[tableKey];
-    if (!path) return false;
-    const base = columnSubmenuBase(path, colKey);
-    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/autorizar`);
+    return grantPathsOf(tableKey, pathOverride).some((path) => {
+        const base = columnSubmenuBase(path, colKey);
+        return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/autorizar`);
+    });
 }
 
 // Same shape as canAuthorizeColumn above, checking the independent
@@ -4287,10 +4297,10 @@ function canAuthorizeColumn(grants, tableKey, colKey, pathOverride) {
 // table that has nothing to do with a real data field, just carries this
 // (and the Autorizar) grant for the whole screen's delete action.
 function canDeleteColumn(grants, tableKey, colKey, pathOverride) {
-    const path = pathOverride || TABLE_GRANT_PATHS[tableKey];
-    if (!path) return false;
-    const base = columnSubmenuBase(path, colKey);
-    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/eliminar`);
+    return grantPathsOf(tableKey, pathOverride).some((path) => {
+        const base = columnSubmenuBase(path, colKey);
+        return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/eliminar`);
+    });
 }
 
 // Independent "can this user create a new row in this table" gate --
@@ -4374,21 +4384,19 @@ const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules']
 // El icono mismo (<pantalla>/<icono>): quien no es administrador del cliente lo usa solo con esa hoja en su arbol. Hoy se pide para iconFieldRules (Reglas de Orden de Llenado,
 // que antes era solo del administrador): crear y editar reglas en server.js y, en pantalla, ver el icono.
 function hasTableIconGrant(grants, tableKey, iconId) {
-    const path = TABLE_GRANT_PATHS[tableKey];
-    if (!path) return false;
-    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/${iconId}`);
+    return grantPathsOf(tableKey).some((path) => grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/${iconId}`));
 }
 function canNotifyIcon(grants, tableKey, iconId) {
-    const path = TABLE_GRANT_PATHS[tableKey];
-    if (!path || !NOTIFY_ICON_IDS.includes(iconId)) return false;
-    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/${iconId}/notificar`);
+    if (!NOTIFY_ICON_IDS.includes(iconId)) return false;
+    return grantPathsOf(tableKey).some((path) => grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${path.submenuPrefix}/${iconId}/notificar`));
 }
 function canNotifyColumn(grants, tableKey, colKey, kind, pathOverride) {
-    const path = pathOverride || TABLE_GRANT_PATHS[tableKey];
     const leaf = NOTIFY_COLUMN_LEAF[kind];
-    if (!path || !leaf) return false;
-    const base = columnSubmenuBase(path, colKey);
-    return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/${leaf}`);
+    if (!leaf) return false;
+    return grantPathsOf(tableKey, pathOverride).some((path) => {
+        const base = columnSubmenuBase(path, colKey);
+        return grants.some((g) => g.sectionId === path.sectionId && g.itemId === path.itemId && g.submenuId === `${base}/${leaf}`);
+    });
 }
 // Las personas de un cliente con ese permiso Notificar, menos las de skipUserIds. Primero se mira lo guardado de cada una (barato) y solo a quien lo trae se le aplican
 // los límites (contrato, Estatus), que son los que de verdad deciden si el permiso vale.
@@ -4937,6 +4945,47 @@ function moveAnalysisToDepartmentOnce() {
     // los planes que ahora traen Análisis abren su departamento
     db.prepare("SELECT DISTINCT plan_id AS id FROM plan_grants WHERE section_id = 'analysis'").all().forEach(({ id }) => { try { syncPlanModulesFromGrants(id); } catch (err) { console.error('[db] Análisis: no se pudo abrir el departamento en el plan', id, err.message); } });
     console.log(`[db] Departamento Análisis (una vez): «Análisis Registros Manuales» pasó de Cargas Manuales (Centro de Distribución) a Análisis › Cadena de Suministro: ${JSON.stringify(stats)}.`);
+}
+// «Registros Información» con su permiso PROPIO en Análisis › Cadena de Suministro › Análisis Manuales (Daniel, 2026-11-26, opción 1): es un nodo más del árbol, aparte del de Cargas Manuales de Centro de Distribución, y vale el permiso
+// de cualquiera de los dos (ver TABLE_GRANT_ALT_PATHS). Una sola vez, para que nadie pierda lo que ya veía en Análisis: lo que un plan, un cliente (adicionales), un giro, un perfil, un puesto o una persona tenía en la pantalla de Centro de
+// Distribución se copia al nodo nuevo SOLO si ese mismo dueño ya tiene algo de Análisis (así no se le abre a nadie un departamento que no contrató: Análisis se vende aparte). Lo global (estatus y costos del árbol maestro) se copia igual.
+const REGISTROS_EN_ANALISIS_KEY = 'seed-registros-en-analisis-v1';
+function copyRegistrosGrantsToAnalisisOnce() {
+    if (db.prepare('SELECT 1 FROM schema_migrations_data WHERE key = ?').get(REGISTROS_EN_ANALISIS_KEY)) return;
+    const FROM = { sectionId: 'supply-chain', itemId: 'sc-area-distribution-center', prefix: 'cat-cargas-manuales/cat-cargas-manuales-registros' };
+    const TO = { sectionId: 'analysis', itemId: 'an-area-supply-chain', prefix: 'cat-analisis-manuales/cat-analisis-manuales-registros' };
+    // columna de dueño → la tabla de permisos de ese dueño (para saber si ya tiene algo de Análisis)
+    const OWNERS = { plan_id: 'plan_grants', client_id: 'client_permission_grants', job_position_id: 'job_position_grants', user_id: 'user_grants', business_sector_id: 'sector_grants', profile_id: 'profile_grants' };
+    const stats = {};
+    const bump = (key, n) => { if (n) stats[key] = (stats[key] || 0) + n; };
+    db.transaction(() => {
+        const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name);
+        tables.forEach((table) => {
+            const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+            if (!(cols.includes('section_id') && cols.includes('item_id') && cols.includes('submenu_id'))) return;
+            const skip = new Set(['id', 'section_id', 'item_id', 'submenu_id', 'created_at', 'updated_at', 'granted_at']);
+            const others = cols.filter((c) => !skip.has(c));
+            const ownerCols = others.filter((c) => OWNERS[c]);
+            const rows = db.prepare(`SELECT rowid AS _rid, * FROM ${table} WHERE section_id = ? AND item_id = ? AND (submenu_id = ? OR substr(submenu_id, 1, ?) = ?)`)
+                .all(FROM.sectionId, FROM.itemId, FROM.prefix, FROM.prefix.length + 1, `${FROM.prefix}/`);
+            if (!rows.length) return;
+            const exists = db.prepare(`SELECT 1 FROM ${table} WHERE section_id = ? AND item_id = ? AND submenu_id = ?${others.map((c) => ` AND ${c} IS ?`).join('')}`);
+            const insert = db.prepare(`INSERT INTO ${table} (section_id, item_id, submenu_id${others.map((c) => `, ${c}`).join('')}) VALUES (?, ?, ?${others.map(() => ', ?').join('')})`);
+            rows.forEach((row) => {
+                if (row.submenu_id.includes('/class-control-interno')) return; // Control Interno ya no es parte de Registros Información
+                // lo que se le quitó a una persona de lo que le da su puesto se copia siempre (solo cuenta si el nodo nuevo le llega); lo demás, solo si el dueño ya tiene Análisis
+                if (ownerCols.length && table !== 'user_grant_exclusions') {
+                    const hasAnalysis = ownerCols.every((c) => db.prepare(`SELECT 1 FROM ${OWNERS[c]} WHERE section_id = 'analysis' AND ${c} IS ? LIMIT 1`).get(row[c]));
+                    if (!hasAnalysis) return;
+                }
+                const target = TO.prefix + row.submenu_id.slice(FROM.prefix.length);
+                if (exists.get(TO.sectionId, TO.itemId, target, ...others.map((c) => row[c]))) return;
+                try { insert.run(TO.sectionId, TO.itemId, target, ...others.map((c) => row[c])); bump(table, 1); } catch { /* una restricción de la tabla: ese renglón se omite */ }
+            });
+        });
+        db.prepare('INSERT INTO schema_migrations_data (key) VALUES (?)').run(REGISTROS_EN_ANALISIS_KEY);
+    })();
+    console.log(`[db] Registros Información con permiso propio en Análisis (una vez): ${JSON.stringify(stats)}.`);
 }
 // Cargas Manuales sin Control Interno (Daniel, 2026-11-25, «Aquí no vamos a poner lo de Control Interno» y eligió «En todo Cargas Manuales»; después «Sí» también para Pedidos por sitio): las 13 columnas de Control Interno
 // salieron de Ventas Manuales, Registros Información (Datos y Cargas), Análisis Registros Manuales y Pedidos por sitio, y de su árbol de permisos (menu.json). Una sola vez se borran los permisos que colgaban de ellas (de planes, giros,
@@ -22832,6 +22881,7 @@ try { moveCodeScreensToTiOnce(); } catch (err) { console.error('[db] Códigos de
 try { moveVentasToCargasManualesOnce(); } catch (err) { console.error('[db] Ventas Manuales: no se pudo mover Ventas a Cargas Manuales (se reintentará al arrancar):', err.message); }
 try { moveVentasManualesToAdditionalOnce(); } catch (err) { console.error('[db] Ventas Manuales: no se pudo pasar a adicional (se reintentará al arrancar):', err.message); }
 try { moveAnalysisToDepartmentOnce(); } catch (err) { console.error('[db] Análisis: no se pudo pasar al departamento Análisis (se reintentará al arrancar):', err.message); }
+try { copyRegistrosGrantsToAnalisisOnce(); } catch (err) { console.error('[db] Registros Información en Análisis: no se pudieron copiar los permisos (se reintentará al arrancar):', err.message); }
 try { removeControlInternoFromCargasManualesOnce(); } catch (err) { console.error('[db] Cargas Manuales: no se pudo limpiar Control Interno (se reintentará al arrancar):', err.message); }
 try { removeControlInternoFromPedidosSitioOnce(); } catch (err) { console.error('[db] Pedidos por sitio: no se pudo limpiar Control Interno (se reintentará al arrancar):', err.message); }
 try { seedRegistrosCreateButton(); } catch (err) { console.error('[db] Registros: no se pudo sembrar el botón Crear registro (se reintentará al arrancar):', err.message); }
