@@ -2,7 +2,11 @@
 // Pieza 1: «Operación paso a paso». Cada columna agregada es { id, kind: 'op', name, cls, color, decimals, steps } y vive en el diseño del análisis (design.added), así que se repite sola en cada versión y se
 // RECALCULA con los datos de esa versión (los datos de la versión no cambian; lo agregado se calcula al leerla). Las piezas siguientes (criterio, fórmula, captura) agregan sus propios «kind».
 //
-// Los pasos se aplican de arriba abajo sobre un acumulador: el primero toma una columna o un valor; los demás hacen una operación con otra columna o con un valor (o sobre el acumulador solo).
+// Pieza 2, «Criterio»: { id, kind: 'criterion', name, cls, color, decimals, rules: [{ conds: [{ col, op, value, value2 }], join: 'and' | 'or', result }], otherwise } — las reglas se revisan de arriba abajo y gana la primera que
+// se cumple; si ninguna, vale «otherwise» (o queda vacía). Un resultado es un texto, un número, el valor de otra columna o vacío. Operadores: lt, lte, gt, gte, between, eq, neq, contains, empty, notEmpty.
+// Una celda vacía no cumple ninguna comparación (solo «está vacío» y «es distinto de»).
+//
+// Los pasos de «Operación» se aplican de arriba abajo sobre un acumulador: el primero toma una columna o un valor; los demás hacen una operación con otra columna o con un valor (o sobre el acumulador solo).
 //   con argumento (columna o valor): add, sub, mul, div, pow, min, max, logbase (base), round (decimales)
 //   sin argumento:                   sqrt, ln, log10, exp, abs
 // Una celda vacía o que no es número en cualquier columna usada deja el resultado vacío; dividir entre cero, un logaritmo de un número que no es positivo o una raíz negativa también (no se inventa nada).
@@ -16,6 +20,11 @@ const COLUMN_KEY = /^(ref_[A-Za-z]+|c_[A-Za-z0-9_]+|a_[A-Za-z0-9_]+)$/;
 const WITH_ARG = new Set(['add', 'sub', 'mul', 'div', 'pow', 'min', 'max', 'logbase', 'round']);
 const NO_ARG = new Set(['sqrt', 'ln', 'log10', 'exp', 'abs']);
 const VALUE_ONLY = new Set(['logbase', 'round']); // la base y los decimales son un valor, no una columna
+const MAX_RULES = 20;
+const MAX_CONDS = 5;
+const MAX_TEXT = 80;
+const COND_OPS = new Set(['lt', 'lte', 'gt', 'gte', 'between', 'eq', 'neq', 'contains', 'empty', 'notEmpty']);
+const NUMERIC_COND_OPS = new Set(['lt', 'lte', 'gt', 'gte']);
 
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
 const cleanText = (value, max) => String(value == null ? '' : value).replace(/[\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -51,6 +60,49 @@ function normalizeSteps(raw) {
     }
     return steps;
 }
+const numericOf = (v) => {
+    if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) return null;
+    const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'));
+    return Number.isFinite(n) && Math.abs(n) <= 1e12 ? n : null;
+};
+function normalizeCond(raw) {
+    if (!raw || typeof raw !== 'object' || typeof raw.col !== 'string' || !COLUMN_KEY.test(raw.col) || !COND_OPS.has(raw.op)) return null;
+    const cond = { col: raw.col, op: raw.op };
+    if (raw.op === 'empty' || raw.op === 'notEmpty') return cond;
+    if (raw.op === 'between') {
+        const a = numericOf(raw.value); const b = numericOf(raw.value2);
+        if (a === null || b === null) return null;
+        return { ...cond, value: a, value2: b };
+    }
+    if (NUMERIC_COND_OPS.has(raw.op)) {
+        const n = numericOf(raw.value);
+        return n === null ? null : { ...cond, value: n };
+    }
+    // eq, neq, contains: un texto o un número tal como se escribió
+    const v = typeof raw.value === 'number' ? (Number.isFinite(raw.value) ? raw.value : null) : cleanText(raw.value, MAX_TEXT);
+    return v === null || v === '' ? null : { ...cond, value: v };
+}
+function normalizeResult(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    if (raw.empty === true) return { empty: true };
+    if (typeof raw.col === 'string' && COLUMN_KEY.test(raw.col)) return { col: raw.col };
+    if (typeof raw.value === 'number' && Number.isFinite(raw.value) && Math.abs(raw.value) <= 1e12) return { value: raw.value };
+    if (typeof raw.text === 'string') { const t = cleanText(raw.text, MAX_TEXT); return t === '' ? null : { text: t }; }
+    return null;
+}
+function normalizeRules(raw) {
+    if (!Array.isArray(raw) || !raw.length || raw.length > MAX_RULES) return null;
+    const rules = [];
+    for (const r of raw) {
+        if (!r || typeof r !== 'object' || !Array.isArray(r.conds) || !r.conds.length || r.conds.length > MAX_CONDS) return null;
+        const conds = r.conds.map(normalizeCond);
+        if (conds.some((c) => !c)) return null;
+        const result = normalizeResult(r.result);
+        if (!result) return null;
+        rules.push({ conds, join: r.join === 'or' ? 'or' : 'and', result });
+    }
+    return rules;
+}
 // Devuelve { added } o { error }. Los ids no se repiten; el color es el de la paleta de clasificaciones (0 a 5) o vacío.
 function normalizeAdded(raw) {
     const list = Array.isArray(raw) ? raw : [];
@@ -59,18 +111,28 @@ function normalizeAdded(raw) {
     const ids = new Set();
     for (const c of list) {
         if (!c || typeof c !== 'object') continue;
-        if (c.kind !== 'op') return { error: 'ADDED_KIND' };
+        if (c.kind !== 'op' && c.kind !== 'criterion') return { error: 'ADDED_KIND' };
         const name = cleanText(c.name, MAX_NAME);
         if (!name) return { error: 'ADDED_NAME' };
-        const steps = normalizeSteps(c.steps);
-        if (!steps) return { error: 'ADDED_STEPS' };
+        let body;
+        if (c.kind === 'op') {
+            const steps = normalizeSteps(c.steps);
+            if (!steps) return { error: 'ADDED_STEPS' };
+            body = { steps };
+        } else {
+            const rules = normalizeRules(c.rules);
+            if (!rules) return { error: 'ADDED_RULES' };
+            let otherwise = null;
+            if (c.otherwise !== undefined && c.otherwise !== null) { otherwise = normalizeResult(c.otherwise); if (!otherwise) return { error: 'ADDED_RULES' }; }
+            body = { rules, otherwise };
+        }
         let id = cleanText(c.id, 20).replace(/[^a-zA-Z0-9_]/g, '');
         if (!id || ids.has(id)) id = `a${added.length + 1}`;
         while (ids.has(id)) id += '_';
         ids.add(id);
         const cls = cleanText(c.cls, MAX_CLASS);
         const decimals = Number.isInteger(c.decimals) && c.decimals >= 0 && c.decimals <= 6 ? c.decimals : null;
-        added.push({ id, kind: 'op', name, cls, color: cls && Number.isInteger(c.color) && c.color >= 0 && c.color < CLASS_COLORS ? c.color : null, decimals, steps });
+        added.push({ id, kind: c.kind, name, cls, color: cls && Number.isInteger(c.color) && c.color >= 0 && c.color < CLASS_COLORS ? c.color : null, decimals, ...body });
     }
     return { added };
 }
@@ -126,6 +188,37 @@ function formulaOfSteps(steps, letterOf) {
     return `=${expr}`;
 }
 
+const quote = (text) => `"${String(text).replace(/"/g, '""')}"`;
+// un valor escrito en una regla: número si lo es, texto entre comillas si no
+const valueText = (v) => (typeof v === 'number' ? numText(v) : (numericOf(v) !== null ? numText(numericOf(v)) : quote(v)));
+function formulaOfCriterion(def, letterOf) {
+    const ref = (key) => { const l = letterOf(key); return l ? `${l}2` : '#REF!'; };
+    const condText = (c) => {
+        const r = ref(c.col);
+        switch (c.op) {
+            case 'lt': return `${r}<${numText(c.value)}`;
+            case 'lte': return `${r}<=${numText(c.value)}`;
+            case 'gt': return `${r}>${numText(c.value)}`;
+            case 'gte': return `${r}>=${numText(c.value)}`;
+            case 'between': return `Y(${r}>=${numText(c.value)};${r}<=${numText(c.value2)})`;
+            case 'eq': return `${r}=${valueText(c.value)}`;
+            case 'neq': return `${r}<>${valueText(c.value)}`;
+            case 'contains': return `ESNUMERO(HALLAR(${quote(c.value)};${r}))`;
+            case 'empty': return `${r}=""`;
+            case 'notEmpty': return `${r}<>""`;
+            default: return '';
+        }
+    };
+    const resultText = (res) => (res.empty ? '""' : (res.col !== undefined ? ref(res.col) : (res.text !== undefined ? quote(res.text) : numText(res.value))));
+    let expr = def.otherwise ? resultText(def.otherwise) : '""';
+    for (let i = def.rules.length - 1; i >= 0; i -= 1) {
+        const rule = def.rules[i];
+        const cond = rule.conds.length === 1 ? condText(rule.conds[0]) : `${rule.join === 'or' ? 'O' : 'Y'}(${rule.conds.map(condText).join(';')})`;
+        expr = `SI(${cond};${resultText(rule.result)};${expr})`;
+    }
+    return `=${expr}`;
+}
+
 // ---- calcular --------------------------------------------------------------------------------------------------------------------------------------------
 const toNumber = (v) => {
     if (typeof v === 'number') return Number.isFinite(v) ? v : null;
@@ -163,6 +256,43 @@ function runSteps(steps, get) {
     return round6(acc);
 }
 
+const foldText = (v) => String(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+function testCond(c, v) {
+    const empty = v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
+    if (c.op === 'empty') return empty;
+    if (c.op === 'notEmpty') return !empty;
+    if (empty) return c.op === 'neq'; // una celda vacía no cumple una comparación; solo «es distinto de»
+    if (c.op === 'contains') return foldText(v).includes(foldText(c.value));
+    const n = toNumber(v);
+    if (NUMERIC_COND_OPS.has(c.op) || c.op === 'between') {
+        if (n === null) return false;
+        if (c.op === 'lt') return n < c.value;
+        if (c.op === 'lte') return n <= c.value;
+        if (c.op === 'gt') return n > c.value;
+        if (c.op === 'gte') return n >= c.value;
+        return n >= Math.min(c.value, c.value2) && n <= Math.max(c.value, c.value2);
+    }
+    const cn = numericOf(c.value);
+    const same = n !== null && cn !== null ? n === cn : foldText(v) === foldText(c.value);
+    return c.op === 'eq' ? same : !same;
+}
+// el valor de un resultado: texto, número, lo que trae otra columna, o vacío
+function resultOf(res, get) {
+    if (!res || res.empty) return null;
+    if (res.col !== undefined) { const v = get(res.col); return typeof v === 'number' ? round6(v) : (v === undefined ? null : v); }
+    if (res.text !== undefined) return res.text;
+    return res.value;
+}
+function runCriterion(def, get) {
+    for (const rule of def.rules) {
+        const results = rule.conds.map((c) => testCond(c, get(c.col)));
+        if (rule.join === 'or' ? results.some(Boolean) : results.every(Boolean)) return resultOf(rule.result, get);
+    }
+    return def.otherwise ? resultOf(def.otherwise, get) : null;
+}
+const runColumn = (c, get) => (c.kind === 'criterion' ? runCriterion(c, get) : runSteps(c.steps, get));
+const formulaOfColumn = (c, letterOf) => (c.kind === 'criterion' ? formulaOfCriterion(c, letterOf) : formulaOfSteps(c.steps, letterOf));
+
 const addedKey = (c) => `a_${c.id}`;
 // Las columnas que se agregan al final del archivo: [{ key, group: 'added', id, kind, label, cls, color, decimals, formula }]
 function addedColumnDefs(added, baseColumns) {
@@ -171,7 +301,7 @@ function addedColumnDefs(added, baseColumns) {
     const letterOf = (key) => { const i = all.indexOf(key); return i < 0 ? '' : columnLetter(i); };
     return added.map((c, i) => ({
         key: addedKey(c), group: 'added', id: c.id, kind: c.kind, label: c.name, cls: c.cls || '', color: c.cls ? c.color : null, decimals: c.decimals,
-        letter: columnLetter(baseColumns.length + i), formula: formulaOfSteps(c.steps, (key) => (all.indexOf(key) < i + baseColumns.length ? letterOf(key) : '')),
+        letter: columnLetter(baseColumns.length + i), formula: formulaOfColumn(c, (key) => (all.indexOf(key) < i + baseColumns.length ? letterOf(key) : '')),
     }));
 }
 // A cada renglón (arreglo de valores en el orden de baseColumns) le agrega lo calculado, en el orden de `added`; una columna agregada puede usar las anteriores.
@@ -185,9 +315,9 @@ function applyAdded(added, baseColumns, rows) {
             const at = added.findIndex((c) => addedKey(c) === key);
             return at >= 0 && at < extra.length ? extra[at] : null;
         };
-        added.forEach((c) => { extra.push(runSteps(c.steps, get)); });
+        added.forEach((c) => { extra.push(runColumn(c, get)); });
         return row.concat(extra);
     });
 }
 
-module.exports = { MAX_ADDED, MAX_STEPS, normalizeAdded, columnLetter, formulaOfSteps, runSteps, addedColumnDefs, applyAdded, addedKey };
+module.exports = { MAX_ADDED, MAX_STEPS, MAX_RULES, normalizeAdded, columnLetter, formulaOfSteps, formulaOfCriterion, runSteps, runCriterion, addedColumnDefs, applyAdded, addedKey };

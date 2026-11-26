@@ -7608,7 +7608,7 @@ const AN_COLS = { create: 'colAnCrearAuth', extract: 'colAnExtraerAuth', annul: 
 const AN_MESSAGES = {
     AN_NAME_REQUIRED: 'Ponle un nombre al análisis.', AN_NAME_TAKEN: 'Ya hay un análisis con ese nombre.', DESIGN_REGISTRIES: 'Elige al menos un registro.', DESIGN_COLUMN_REGISTRY: 'Una columna usa un registro que el análisis no tiene.',
     DESIGN_COLUMN_PERIODS: 'Cada columna consultada necesita al menos un periodo.', AN_NO_COLUMNS: 'Agrega al menos una columna consultada antes de extraer.', AN_EMPTY: 'Con este diseño no sale ningún renglón: revisa los periodos y los filtros.',
-    ADDED_NAME: 'Ponle un nombre a la columna.', ADDED_STEPS: 'Revisa los pasos de la operación.', ADDED_KIND: 'Ese tipo de columna todavía no se puede agregar.', ADDED_TOO_MANY: 'Un análisis admite hasta 40 columnas agregadas.',
+    ADDED_NAME: 'Ponle un nombre a la columna.', ADDED_STEPS: 'Revisa los pasos de la operación.', ADDED_RULES: 'Revisa las reglas: cada una necesita su condición y su resultado.', ADDED_KIND: 'Ese tipo de columna todavía no se puede agregar.', ADDED_TOO_MANY: 'Un análisis admite hasta 40 columnas agregadas.',
     AN_INACTIVE: 'El análisis está desactivado.', AN_BUSY: 'Ya se está extrayendo este análisis. Espera a que termine.', AN_FORBIDDEN: 'No tienes permiso para esto.',
 };
 const anExtracting = new Set();

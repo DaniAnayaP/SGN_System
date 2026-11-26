@@ -54,7 +54,9 @@ const activePermsSubtitle = document.getElementById('active-perms-subtitle');
 const activePermsContainer = document.getElementById('active-perms-container');
 const activePermsError = document.getElementById('active-perms-error');
 
+let activePermsUser = null;
 async function openActivePermsModal(user) {
+    activePermsUser = user;
     activePermsSubtitle.textContent = `${user.name} (${user.username})`;
     activePermsError.hidden = true;
     activePermsContainer.innerHTML = '';
@@ -83,6 +85,8 @@ function closeActivePermsModal() {
 }
 
 document.getElementById('active-perms-close').addEventListener('click', closeActivePermsModal);
+// «Permisos Activados» es solo para ver; de aquí se pasa directo a la ventana donde sí se otorgan (la llave de la fila)
+document.getElementById('active-perms-grant').addEventListener('click', () => { const user = activePermsUser; closeActivePermsModal(); if (user) openGrantAccessModal(user); });
 activePermsModal.addEventListener('click', (event) => { if (event.target === activePermsModal) closeActivePermsModal(); });
 
 // --- Permisos Adicionales (editable extra grants) ---------------------------

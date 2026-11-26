@@ -137,7 +137,7 @@ function setDirty() {
 function showError(text) { const el = document.getElementById('an-d-error'); if (el) { el.textContent = text; el.hidden = !text; } }
 function errorText(body) {
     const code = body && body.code;
-    return ['AN_NAME_REQUIRED', 'AN_NAME_TAKEN', 'DESIGN_REGISTRIES', 'DESIGN_COLUMN_REGISTRY', 'DESIGN_COLUMN_PERIODS', 'ADDED_NAME', 'ADDED_STEPS', 'ADDED_KIND', 'ADDED_TOO_MANY', 'AN_NO_COLUMNS', 'AN_EMPTY', 'AN_INACTIVE', 'AN_BUSY', 'AN_FORBIDDEN', 'AN_ERROR'].includes(code) ? t(`main.anErr_${code}`) : t('admin.saveError');
+    return ['AN_NAME_REQUIRED', 'AN_NAME_TAKEN', 'DESIGN_REGISTRIES', 'DESIGN_COLUMN_REGISTRY', 'DESIGN_COLUMN_PERIODS', 'ADDED_NAME', 'ADDED_STEPS', 'ADDED_RULES', 'ADDED_KIND', 'ADDED_TOO_MANY', 'AN_NO_COLUMNS', 'AN_EMPTY', 'AN_INACTIVE', 'AN_BUSY', 'AN_FORBIDDEN', 'AN_ERROR'].includes(code) ? t(`main.anErr_${code}`) : t('admin.saveError');
 }
 function readFilters() {
     document.querySelectorAll('[data-an-filter]').forEach((input) => {
@@ -285,8 +285,10 @@ document.addEventListener('click', async (event) => {
     } else if (go) extract();
 });
 document.addEventListener('click', (event) => {
-    const addCol = event.target.closest('[data-an-addcol]'); const editCol = event.target.closest('[data-an-editcol]'); const delCol = event.target.closest('[data-an-delcol]');
-    if (addCol) openAddedDialog(null);
+    const addCol = event.target.closest('[data-an-addcol]'); const addKind = event.target.closest('[data-an-addkind]'); const editCol = event.target.closest('[data-an-editcol]'); const delCol = event.target.closest('[data-an-delcol]');
+    const menu = document.querySelector('.an-addmenu');
+    if (menu) menu.hidden = addCol ? !menu.hidden : true; // «＋ Agregar columna» abre o cierra el menú; cualquier otro clic lo cierra
+    if (addKind) { if (addKind.dataset.anAddkind === 'criterion') openCriterionDialog(null); else openAddedDialog(null); }
     else if (editCol) openAddedDialog(editCol.dataset.anEditcol);
     else if (delCol) removeAdded(delCol.dataset.anDelcol);
 });
@@ -307,7 +309,11 @@ const OPS_NO_ARG = new Set(['sqrt', 'ln', 'log10', 'exp', 'abs']);
 const OPS_VALUE_ONLY = new Set(['logbase', 'round']);
 const foldCls = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
 const columnLetter = (index) => { let n = index + 1; let out = ''; while (n > 0) { const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26); } return out; };
-const fmtCell = (v, decimals) => (v === null || v === undefined ? '' : (decimals === null || decimals === undefined ? num(v) : Number(v).toLocaleString(lang() === 'en' ? 'en-US' : 'es-MX', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })));
+const fmtCell = (v, decimals) => {
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'string') return v; // el resultado de un criterio puede ser un texto
+    return decimals === null || decimals === undefined ? num(v) : Number(v).toLocaleString(lang() === 'en' ? 'en-US' : 'es-MX', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+};
 const columnTitle = (c) => (c.group === 'reference' ? t(`main.regDim_${c.dim}`) : c.label);
 
 // la franja de arriba del Archivo: «＋ Agregar columna» y las columnas ya agregadas (un clic las edita; ✕ las quita)
@@ -318,8 +324,8 @@ function renderAddedBar() {
     if (st.tab !== 'file' || !st.extraction || !st.data || (!st.canCreate && !added.length)) { bar.hidden = true; return; }
     const cols = st.data.columns || [];
     const letterOfKey = (key) => { const i = cols.findIndex((c) => c.key === key); return i < 0 ? '' : columnLetter(i); };
-    bar.innerHTML = `${st.canCreate ? `<button type="button" class="btn btn-secondary" data-an-addcol data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))}</button>` : ''}`
-        + added.map((a) => `<span class="an-addedchip"><button type="button" data-an-editcol="${esc(a.id)}" title="${esc(t('main.anAddedEditTitle'))}"${st.canCreate ? '' : ' disabled'}>ƒ ${esc(a.name)} <small>${esc(letterOfKey(`a_${a.id}`))}</small></button>${st.canCreate ? `<button type="button" data-an-delcol="${esc(a.id)}" aria-label="${esc(t('main.anAddedRemove'))}" title="${esc(t('main.anAddedRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</span>`).join('');
+    bar.innerHTML = `${st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden><button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button></span></span>` : ''}`
+        + added.map((a) => `<span class="an-addedchip"><button type="button" data-an-editcol="${esc(a.id)}" title="${esc(t('main.anAddedEditTitle'))}"${st.canCreate ? '' : ' disabled'}>${a.kind === 'criterion' ? '?' : 'ƒ'} ${esc(a.name)} <small>${esc(letterOfKey(`a_${a.id}`))}</small></button>${st.canCreate ? `<button type="button" data-an-delcol="${esc(a.id)}" aria-label="${esc(t('main.anAddedRemove'))}" title="${esc(t('main.anAddedRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</span>`).join('');
     bar.hidden = false;
 }
 async function saveAdded(list) {
@@ -341,6 +347,7 @@ function openAddedDialog(editId) {
     const allCols = (st.data && st.data.columns) || [];
     const added = (st.analysis.design.added || []);
     const editing = editId ? added.find((a) => a.id === editId) : null;
+    if (editing && editing.kind === 'criterion') { openCriterionDialog(editId); return; }
     // las columnas que se pueden usar: las consultadas y las agregadas ANTES de esta (cada una con su letra de Excel)
     const editAt = editing ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length;
     const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), group: c.group })).filter((c, i) => c.group !== 'reference' && i < editAt);
@@ -457,6 +464,180 @@ function openAddedDialog(editId) {
     });
 }
 
+// ---- «Criterio» (pieza 2): reglas «si… entonces…», de arriba abajo; gana la primera que se cumple ----------------------------------------------------------------------------------------
+const COND_OPS = ['lt', 'lte', 'gt', 'gte', 'between', 'eq', 'neq', 'contains', 'empty', 'notEmpty'];
+const NUMERIC_COND_OPS = new Set(['lt', 'lte', 'gt', 'gte', 'between']);
+const NO_VALUE_COND_OPS = new Set(['empty', 'notEmpty']);
+const RESULT_TYPES = ['text', 'value', 'col', 'empty'];
+const numOf = (v) => { const s = String(v === null || v === undefined ? '' : v).trim(); if (s === '') return null; const n = Number(s.replace(',', '.')); return Number.isFinite(n) ? n : null; };
+
+function openCriterionDialog(editId) {
+    const allCols = (st.data && st.data.columns) || [];
+    const added = (st.analysis.design.added || []);
+    const editing = editId ? added.find((a) => a.id === editId) : null;
+    // las columnas que se pueden revisar: todas las del archivo y las agregadas ANTES de esta (cada una con su letra de Excel)
+    const editAt = editing ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length;
+    const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i) })).filter((c, i) => i < editAt);
+    const newLetter = columnLetter(editing ? editAt : allCols.length);
+    const blankRes = (type) => ({ type, text: '', value: '', col: pickable[0] ? pickable[0].key : '' });
+    const fromResult = (r) => {
+        if (!r || r.empty) return blankRes('empty');
+        if (r.col !== undefined) return { ...blankRes('col'), col: r.col };
+        if (r.text !== undefined) return { ...blankRes('text'), text: r.text };
+        return { ...blankRes('value'), value: String(r.value) };
+    };
+    const blankCond = () => ({ col: pickable[0] ? pickable[0].key : '', op: 'gt', value: '', value2: '' });
+    const draft = editing
+        ? { name: editing.name, cls: editing.cls || '', decimals: editing.decimals, rules: editing.rules.map((r) => ({ conds: r.conds.map((c) => ({ col: c.col, op: c.op, value: c.value === undefined ? '' : String(c.value), value2: c.value2 === undefined ? '' : String(c.value2) })), join: r.join === 'or' ? 'or' : 'and', res: fromResult(r.result) })), otherwise: fromResult(editing.otherwise) }
+        : { name: '', cls: '', decimals: null, rules: [{ conds: [blankCond()], join: 'and', res: blankRes('text') }], otherwise: blankRes('empty') };
+    const html = `<h3>${esc(t(editing ? 'main.anCriterionEditTitle' : 'main.anCriterionTitle'))}</h3>
+        <div class="an-f2">
+            <div><label for="an-cr-name">${esc(t('main.anColLabel'))}</label><input type="text" id="an-cr-name" maxlength="80" autocomplete="off" value="${esc(draft.name)}"></div>
+            <div><label for="an-cr-cls">${esc(t('main.anAddedClass'))}</label><input type="text" id="an-cr-cls" maxlength="40" autocomplete="off" list="an-cr-cls-list" placeholder="${esc(t('main.anAddedClassNone'))}" value="${esc(draft.cls)}"><datalist id="an-cr-cls-list">${[...new Set(added.map((a) => a.cls).filter(Boolean))].map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
+            <div><label for="an-cr-dec">${esc(t('main.anAddedFormat'))}</label><select id="an-cr-dec"><option value="">${esc(t('main.anFmtAuto'))}</option>${[0, 1, 2, 3, 4].map((n) => `<option value="${n}">${esc(t('main.anFmtDecimals', { n }))}</option>`).join('')}</select></div>
+        </div>
+        <p class="reg-field-label">${esc(t('main.anRules'))}</p>
+        <div class="an-rules" id="an-cr-rules"></div>
+        <p><button type="button" class="btn btn-secondary" data-an-addrule><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddRule'))}</button></p>
+        <div class="an-step" id="an-cr-other"></div>
+        <p class="reg-field-label">${esc(t('main.anFormulaExcel'))}</p>
+        <div class="an-formula" id="an-cr-formula">—</div>
+        <div id="an-cr-preview"></div>
+        <p class="admin-error" id="an-cr-error" role="alert" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" data-an-go>${esc(t(editing ? 'main.anAddedSave' : 'main.anAddedGo'))}</button><button type="button" class="btn btn-secondary" data-an-close>${esc(t('main.regCancel'))}</button></div>`;
+    modal(html, (overlay, close) => {
+        const $ = (sel) => overlay.querySelector(sel);
+        $('#an-cr-dec').value = draft.decimals === null || draft.decimals === undefined ? '' : String(draft.decimals);
+        const colSel = (value, attrs) => `<select ${attrs}>${pickable.map((c) => `<option value="${esc(c.key)}"${value === c.key ? ' selected' : ''}>${esc(c.letter)} · ${esc(c.title)}</option>`).join('')}</select>`;
+        const resultEditor = (res, scope) => {
+            const typeSel = `<select data-cr="${scope}" data-f="rtype">${RESULT_TYPES.map((r) => `<option value="${r}"${res.type === r ? ' selected' : ''}>${esc(t(`main.anRes_${r}`))}</option>`).join('')}</select>`;
+            if (res.type === 'text') return `${typeSel}<input type="text" maxlength="80" data-cr="${scope}" data-f="rtext" value="${esc(res.text)}" placeholder="${esc(t('main.anResTextPh'))}" aria-label="${esc(t('main.anRes_text'))}">`;
+            if (res.type === 'value') return `${typeSel}<input type="text" inputmode="decimal" data-cr="${scope}" data-f="rvalue" value="${esc(res.value)}" placeholder="${esc(t('main.anArgValuePh'))}" aria-label="${esc(t('main.anRes_value'))}">`;
+            if (res.type === 'col') return `${typeSel}${colSel(res.col, `data-cr="${scope}" data-f="rcol"`)}`;
+            return typeSel;
+        };
+        const draw = () => {
+            $('#an-cr-rules').innerHTML = draft.rules.map((rule, i) => {
+                const conds = rule.conds.map((c, j) => {
+                    const lead = j === 0 ? t('main.anIf') : t(rule.join === 'or' ? 'main.anOrElse' : 'main.anAndAlso');
+                    const attrs = (f) => `data-cr="r${i}" data-c="${j}" data-f="${f}"`;
+                    let vals = '';
+                    if (!NO_VALUE_COND_OPS.has(c.op)) {
+                        vals = `<input type="text" ${NUMERIC_COND_OPS.has(c.op) ? 'inputmode="decimal"' : ''} ${attrs('value')} value="${esc(c.value)}" placeholder="${esc(t('main.anArgValuePh'))}" aria-label="${esc(t('main.anArgValuePh'))}">`;
+                        if (c.op === 'between') vals += `<span>${esc(t('main.anBetweenAnd'))}</span><input type="text" inputmode="decimal" ${attrs('value2')} value="${esc(c.value2)}" placeholder="${esc(t('main.anArgValuePh'))}" aria-label="${esc(t('main.anArgValuePh'))}">`;
+                    }
+                    return `<div class="an-cond"><span class="an-lead">${esc(lead)}</span>${colSel(c.col, attrs('col'))}<select ${attrs('op')}>${COND_OPS.map((o) => `<option value="${o}"${c.op === o ? ' selected' : ''}>${esc(t(`main.anCond_${o}`))}</option>`).join('')}</select>${vals}${rule.conds.length > 1 ? `<button type="button" class="admin-icon-btn" data-an-delcond="${i}:${j}" aria-label="${esc(t('main.anRemoveCond'))}" title="${esc(t('main.anRemoveCond'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</div>`;
+                }).join('');
+                const join = rule.conds.length > 1 ? `<div class="an-cond"><span class="an-lead">${esc(t('main.anJoinLabel'))}</span><select data-cr="r${i}" data-f="join"><option value="and"${rule.join === 'and' ? ' selected' : ''}>${esc(t('main.anJoinAnd'))}</option><option value="or"${rule.join === 'or' ? ' selected' : ''}>${esc(t('main.anJoinOr'))}</option></select></div>` : '';
+                return `<div class="an-rule"><div class="an-rulehead"><b>${esc(t('main.anRuleN', { n: i + 1 }))}</b>${draft.rules.length > 1 ? `<button type="button" class="admin-icon-btn" data-an-delrule="${i}" aria-label="${esc(t('main.anRemoveRule'))}" title="${esc(t('main.anRemoveRule'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</div>${conds}${rule.conds.length < 5 ? `<div><button type="button" class="btn btn-secondary" data-an-addcond="${i}"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddCond'))}</button></div>` : ''}${join}<div class="an-cond"><span class="an-lead">${esc(t('main.anThen'))}</span>${resultEditor(rule.res, `r${i}`)}</div></div>`;
+            }).join('');
+            $('#an-cr-other').innerHTML = `<b>·</b><span>${esc(t('main.anNoneMatch'))}</span>${resultEditor(draft.otherwise, 'o')}`;
+        };
+        const colorFor = (cls) => {
+            if (!cls) return null;
+            const same = added.find((a) => a.id !== (editing && editing.id) && foldCls(a.cls) === foldCls(cls) && Number.isInteger(a.color));
+            if (same) return same.color;
+            const used = new Set(added.filter((a) => a.id !== (editing && editing.id)).map((a) => a.color).filter(Number.isInteger));
+            for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i;
+            return added.length % CLASS_COLORS.length;
+        };
+        const parseResult = (res) => {
+            if (res.type === 'empty') return { empty: true };
+            if (res.type === 'text') { const tx = res.text.trim(); return tx ? { text: tx } : null; }
+            if (res.type === 'value') { const n = numOf(res.value); return n === null ? null : { value: n }; }
+            return res.col ? { col: res.col } : null;
+        };
+        const toDef = () => {
+            const rules = [];
+            for (const rule of draft.rules) {
+                const conds = [];
+                for (const c of rule.conds) {
+                    if (!c.col) return null;
+                    if (NO_VALUE_COND_OPS.has(c.op)) { conds.push({ col: c.col, op: c.op }); continue; }
+                    if (c.op === 'between') { const a = numOf(c.value); const b = numOf(c.value2); if (a === null || b === null) return null; conds.push({ col: c.col, op: c.op, value: a, value2: b }); continue; }
+                    if (NUMERIC_COND_OPS.has(c.op)) { const n = numOf(c.value); if (n === null) return null; conds.push({ col: c.col, op: c.op, value: n }); continue; }
+                    const text = String(c.value).trim();
+                    if (!text) return null;
+                    conds.push({ col: c.col, op: c.op, value: text });
+                }
+                const result = parseResult(rule.res);
+                if (!result) return null;
+                rules.push({ conds, join: rule.join, result });
+            }
+            const otherwise = draft.otherwise.type === 'empty' ? null : parseResult(draft.otherwise);
+            if (draft.otherwise.type !== 'empty' && !otherwise) return null;
+            return { id: editing ? editing.id : undefined, kind: 'criterion', name: draft.name.trim(), cls: draft.cls.trim(), color: colorFor(draft.cls.trim()), decimals: draft.decimals, rules, otherwise };
+        };
+        let timer = null; let seq = 0;
+        const preview = () => {
+            clearTimeout(timer);
+            const def = toDef();
+            const box = $('#an-cr-preview'); const fx = $('#an-cr-formula');
+            if (!def) { fx.textContent = '—'; box.innerHTML = ''; return; }
+            timer = setTimeout(async () => {
+                const mine = ++seq;
+                try {
+                    const res = await fetch(`${API}/${st.id}/extractions/${st.extraction.id}/added-preview`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ def: { ...def, name: def.name || 'x' } }) });
+                    const out = await res.json().catch(() => ({}));
+                    if (mine !== seq) return;
+                    if (!res.ok) { fx.textContent = '—'; box.innerHTML = ''; return; }
+                    fx.textContent = out.formula;
+                    box.innerHTML = `<div class="wp-imp-table-wrap"><table class="wp-imp-table"><thead><tr><th>${esc(t('main.regDim_codigo'))}</th><th>${esc(newLetter)} · ${esc(def.name || t('main.anCriterionTitle'))}</th></tr></thead><tbody>${(out.rows || []).map((r) => `<tr><td>${esc(r.label)}</td><td>${r.value === null ? '—' : esc(fmtCell(r.value, def.decimals))}</td></tr>`).join('')}</tbody></table></div>`;
+                } catch { /* sin vista previa */ }
+            }, 250);
+        };
+        draw(); preview();
+        // el modelo se actualiza con lo que se escribe (sin volver a dibujar, para no perder el cursor); los selectores sí vuelven a dibujar
+        const applyField = (el) => {
+            if (el.id === 'an-cr-name') { draft.name = el.value; return false; }
+            if (el.id === 'an-cr-cls') { draft.cls = el.value; return false; }
+            if (el.id === 'an-cr-dec') { draft.decimals = el.value === '' ? null : Number(el.value); return false; }
+            const scope = el.dataset && el.dataset.cr;
+            if (!scope) return false;
+            const f = el.dataset.f;
+            if (scope === 'o') {
+                const res = draft.otherwise;
+                if (f === 'rtype') { draft.otherwise = { ...blankRes(el.value), text: res.text, value: res.value, col: res.col }; draft.otherwise.type = el.value; return true; }
+                if (f === 'rtext') res.text = el.value; else if (f === 'rvalue') res.value = el.value; else if (f === 'rcol') res.col = el.value;
+                return false;
+            }
+            const rule = draft.rules[Number(scope.slice(1))];
+            if (!rule) return false;
+            if (el.dataset.c !== undefined) {
+                const c = rule.conds[Number(el.dataset.c)];
+                if (f === 'col') c.col = el.value; else if (f === 'op') { c.op = el.value; return true; } else if (f === 'value') c.value = el.value; else if (f === 'value2') c.value2 = el.value;
+                return false;
+            }
+            if (f === 'join') { rule.join = el.value === 'or' ? 'or' : 'and'; return true; }
+            if (f === 'rtype') { rule.res = { ...rule.res, type: el.value }; return true; }
+            if (f === 'rtext') rule.res.text = el.value; else if (f === 'rvalue') rule.res.value = el.value; else if (f === 'rcol') rule.res.col = el.value;
+            return false;
+        };
+        overlay.addEventListener('input', (event) => { if (event.target.tagName === 'INPUT') { applyField(event.target); preview(); } });
+        overlay.addEventListener('change', (event) => { const redraw = applyField(event.target); if (redraw) draw(); preview(); });
+        overlay.addEventListener('click', (event) => {
+            const addRule = event.target.closest('[data-an-addrule]'); const delRule = event.target.closest('[data-an-delrule]');
+            const addCond = event.target.closest('[data-an-addcond]'); const delCond = event.target.closest('[data-an-delcond]');
+            if (addRule) { if (draft.rules.length < 20) draft.rules.push({ conds: [blankCond()], join: 'and', res: blankRes('text') }); }
+            else if (delRule) draft.rules.splice(Number(delRule.dataset.anDelrule), 1);
+            else if (addCond) { const rule = draft.rules[Number(addCond.dataset.anAddcond)]; if (rule && rule.conds.length < 5) rule.conds.push(blankCond()); }
+            else if (delCond) { const [i, j] = delCond.dataset.anDelcond.split(':').map(Number); const rule = draft.rules[i]; if (rule && rule.conds.length > 1) rule.conds.splice(j, 1); }
+            else return;
+            draw(); preview();
+        });
+        $('[data-an-go]').addEventListener('click', async () => {
+            const err = (text) => { const el = $('#an-cr-error'); el.textContent = text; el.hidden = !text; };
+            const def = toDef();
+            if (!draft.name.trim()) return err(t('main.anErr_ADDED_NAME'));
+            if (!def) return err(t('main.anErr_ADDED_RULES'));
+            if (!editing && added.length >= 40) return err(t('main.anErr_ADDED_TOO_MANY'));
+            const next = editing ? added.map((a) => (a.id === editing.id ? def : a)) : [...added, { ...def, id: `a${Date.now().toString(36)}` }];
+            try { await saveAdded(next); } catch (e) { err(errorText(e.body)); }
+        });
+        setTimeout(() => { if (!draft.name) $('#an-cr-name').focus(); }, 0);
+    });
+}
+
 // ---- tablas ---------------------------------------------------------------------------------------------------------------------------------------------
 function cell(col, value, extraClass) {
     const td = document.createElement('td');
@@ -511,7 +692,7 @@ async function loadFile() {
                 if (c.group === 'added') {
                     let groupTable;
                     if (c.cls) { groupTable = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(groupTable, c.cls, CLASS_COLORS[c.color] || CLASS_COLORS[0]); }
-                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: `ƒ ${c.label}`, cls: 'an-added col-num' };
+                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: `${c.kind === 'criterion' ? '?' : 'ƒ'} ${c.label}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
                 }
                 return { col: colKeyOf(c.key), group: 'main.anGroupCons', label: c.label, cls: 'an-cons col-num' };
             }),
@@ -524,7 +705,7 @@ async function loadFile() {
             tr.append(
                 ...cols.map((c, i) => {
                     if (c.group === 'reference') return cell(colKeyOf(c.key), row[i], 'an-ref');
-                    if (c.group === 'added') return cell(colKeyOf(c.key), row[i] === null ? '' : fmtCell(row[i], c.decimals), 'an-added col-num');
+                    if (c.group === 'added') return cell(colKeyOf(c.key), row[i] === null ? '' : fmtCell(row[i], c.decimals), c.kind === 'criterion' ? 'an-added' : 'an-added col-num');
                     return cell(colKeyOf(c.key), row[i] === null ? '' : num(row[i]), 'an-cons col-num');
                 }),
             );
