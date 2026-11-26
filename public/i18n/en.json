@@ -9754,7 +9754,7 @@
       "example": "Save as is"
     },
     "appRegFlexMapeo": {
-      "what": "Each column of your file: its role (Key, Row data, New column on every load or Not loaded), whether rows that land together are added up or one is taken (for example the cost), the name you want to give it and its classification (a name and a color to group columns; the same name keeps the same color). From the second load on it comes already filled in with the previous load and columns that were not there carry a \"New\" tag.",
+      "what": "Each column of your file: its role (Key, Row data, New column on every load or Not loaded), whether rows that land together are added up or one is taken (for example the cost), the name you want to give it and its classification (a name and a color to group columns; the same name keeps the same color). All columns appear in one list, in the order of your Excel; on each one you pick \"Already exists\", \"New additional\" or \"Not loaded\". From the second load on it comes already filled in with the previous load and columns that were not there carry a \"New\" tag.",
       "example": "ON_HAND_QTY → New column · Add up · \"Stock\" · Classification \"Stock levels\" (blue)"
     },
     "appRegFlexCuando": {

@@ -2687,31 +2687,39 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .rg-app-seg button{ padding: 0.3rem 0.75rem; border: 0; background: transparent; color: var(--home-text-primary); font: inherit; font-size: 0.78rem; white-space: nowrap; }
 .rg-app-seg button[aria-pressed="true"]{ background: var(--home-accent); color: var(--home-on-accent); font-weight: 600; }
 .rg-app-cdviews{ align-self: flex-start; }
-.rg-app-cddet .rg-app-seg{ flex-direction: column; align-items: stretch; width: 100%; }
-.rg-app-cddet .rg-app-seg button{ text-align: left; white-space: normal; }
+.rg-app-cddet .rg-app-seg{ width: 100%; }
+.rg-app-cddet .rg-app-seg button{ text-align: center; white-space: normal; }
 .rg-app-cdbulk{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.7rem; padding: 0.45rem 0.7rem; border: 1px solid var(--home-border); border-radius: 0.8rem; background: var(--home-neutral-soft); font-size: 0.8rem; }
 .rg-app-cdlinkbtn{ border: 0; background: transparent; color: var(--home-accent); font: inherit; font-size: 0.78rem; text-decoration: underline; padding: 0; }
 .rg-app-cdbulkcls{ display: inline-flex; gap: 0.3rem; align-items: center; flex-wrap: wrap; }
 .rg-app-cdgroups{ display: flex; flex-direction: column; gap: 0.6rem; }
-.rg-app-grp{ border: 1px solid var(--home-border); border-radius: 0.9rem; overflow: hidden; background: var(--home-surface); }
-.rg-app-grp > summary{ padding: 0.6rem 0.8rem; background: var(--home-neutral-soft); font-weight: 600; font-size: 0.85rem; cursor: pointer; list-style: none; }
-.rg-app-grp > summary::-webkit-details-marker{ display: none; }
-.rg-app-grp > summary::before{ content: "\25B8"; color: var(--home-accent); margin-right: 0.4rem; }
-.rg-app-grp[open] > summary::before{ content: "\25BE"; }
-.rg-app-grp > summary small{ font-weight: 400; color: var(--home-text-muted); }
-.rg-app-cdlist{ display: flex; flex-direction: column; }
+.rg-app-cdlist{ display: flex; flex-direction: column; border: 1px solid var(--home-border); border-radius: 0.9rem; overflow: hidden; background: var(--home-surface); }
 .rg-app-cd{ display: flex; flex-direction: column; gap: 0.45rem; padding: 0.65rem 0.8rem; border-top: 1px solid var(--home-border); }
+.rg-app-cd:first-child{ border-top: 0; }
 .rg-app-cd-new{ background: color-mix(in srgb, var(--home-accent) 6%, var(--home-surface)); }
+.rg-app-cd-pending{ background: #fff5dc; box-shadow: inset 3px 0 0 #d9a21b; }
+.rg-app-cd-off .rg-app-cdchoice .rg-app-cdlink{ opacity: 0.55; }
 .rg-app-cd-off .rg-app-cdhead .rg-app-mapname{ opacity: 0.55; }
 .rg-app-cdhead{ display: flex; align-items: flex-start; gap: 0.6rem; }
 .rg-app-pick{ width: 1.15rem; height: 1.15rem; margin-top: 0.1rem; accent-color: var(--home-accent); flex: none; }
 .rg-app-cdchoice{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.7rem; }
 .rg-app-cdlink{ display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; font-size: 0.78rem; color: var(--home-text-secondary); }
+.rg-app-role{ font-size: 0.66rem; font-weight: 600; padding: 0.03rem 0.55rem; border-radius: 999px; background: color-mix(in srgb, var(--home-accent) 16%, var(--home-surface)); color: var(--home-text-primary); white-space: nowrap; }
+.rg-app-cdchoice .rg-app-segfull{ flex: 1 1 100%; }
+.rg-app-cdlink .pm-app-input{ width: auto; flex: 1 1 8rem; min-width: 0; }
+.rg-app-segfull{ display: flex; width: 100%; flex-wrap: nowrap; }
+.rg-app-segfull button{ flex: 1; padding: 0.35rem 0.2rem; font-size: 0.72rem; text-align: center; }
+.rg-app-seg button[aria-pressed="true"][data-st="exist"]{ background: #dcefde; color: #2a7a48; }
+.rg-app-seg button[aria-pressed="true"][data-st="new"]{ background: #fdecc8; color: #7a4d00; }
+.rg-app-seg button[aria-pressed="true"][data-st="skip"]{ background: #e9e4ec; color: #6b6074; }
 .rg-app-cdsug{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; padding: 0.5rem 0.65rem; border-radius: 0.7rem; background: #fdecc8; color: #7a4d00; font-size: 0.78rem; }
 .rg-app-cdsug button{ padding: 0.3rem 0.85rem; border: 1px solid #b98a2a; border-radius: 999px; background: #fff; color: #7a4d00; font: inherit; font-size: 0.78rem; font-weight: 600; }
 .rg-app-cddet{ display: flex; flex-direction: column; gap: 0.5rem; padding: 0.6rem 0.7rem; border: 1px dashed var(--home-accent); border-radius: 0.8rem; background: var(--home-surface); }
 .rg-app-cdrow{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.7rem; font-size: 0.78rem; color: var(--home-text-secondary); }
 .rg-app-cdrow > b{ min-width: 7.5rem; color: var(--home-text-primary); font-weight: 600; }
+.rg-app-cddet .rg-app-cdrow{ flex-direction: column; align-items: stretch; gap: 0.25rem; }
+.rg-app-cddet .rg-app-cdrow > b{ min-width: 0; font-size: 0.72rem; color: var(--home-text-secondary); }
+.rg-app-cddet .rg-app-cdrow .pm-app-input{ width: 100%; }
 /* lo que se puede modificar: punteado y con fondo tenue del color del sistema */
 .rg-app-cd .pm-app-input, .rg-app-cdbulk .pm-app-input{ border: 1px dashed color-mix(in srgb, var(--home-accent) 55%, transparent); background: color-mix(in srgb, var(--home-accent) 8%, var(--home-surface)); }
 .rg-app-cd .pm-app-input:focus, .rg-app-cdbulk .pm-app-input:focus{ border-style: solid; border-color: var(--home-accent); outline: none; }

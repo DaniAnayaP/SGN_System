@@ -1402,11 +1402,11 @@ function stepMapFlex(body, bar) {
         field.append(el('span', '', t('main.regSheet')), select);
         body.appendChild(field);
     }
-    // ---- las tarjetas: una por columna del Excel, con UNA decisión; lo ya definido va en grupos cerrados ----
+    // ---- la lista de columnas (Daniel, 2026-11-26, «La opción A, hazlo!»): un bloque por columna del Excel, todos a la vista y en el orden del archivo (antes: tarjetas en grupos cerrados), cada uno con UNA decisión ----
     const rerender = () => { const y = getScroll(); render(); setScroll(y); };
     const inView = (c) => wiz.view === 'all' || (roles && ((wiz.view === 'new' && c.st === 'new') || (wiz.view === 'skip' && c.st === 'skip')));
-    const segBtn = (label, pressed, onClick) => { const b = el('button', '', label); b.type = 'button'; b.setAttribute('aria-pressed', pressed ? 'true' : 'false'); b.addEventListener('click', onClick); return b; };
-    const seg = (buttons) => { const s = el('span', 'rg-app-seg'); s.setAttribute('role', 'group'); buttons.forEach((b) => s.appendChild(b)); return s; };
+    const segBtn = (label, pressed, onClick, state, title) => { const b = el('button', '', label); b.type = 'button'; b.setAttribute('aria-pressed', pressed ? 'true' : 'false'); if (state) b.dataset.st = state; if (title) b.title = title; b.addEventListener('click', onClick); return b; };
+    const seg = (buttons, full) => { const s = el('span', `rg-app-seg${full ? ' rg-app-segfull' : ''}`); s.setAttribute('role', 'group'); buttons.forEach((b) => s.appendChild(b)); return s; };
     const setState = (c, to) => {
         if (to === 'exist') { c.st = 'exist'; if (!c.link) c.link = c.sug && exMap().has(c.sug) ? c.sug : ''; if (c.link && c.link === c.sug) c.sugState = 'accepted'; c.isNew = false; }
         else { if (c.sugState === 'pending') c.sugState = 'rejected'; c.st = to; if (to === 'new' && wiz.info.prevMode) c.isNew = true; }
@@ -1449,7 +1449,7 @@ function stepMapFlex(body, bar) {
         return clsRow;
     };
     const cardNode = (c) => {
-        const card = el('div', `rg-app-cd${roles && c.st === 'skip' ? ' rg-app-cd-off' : ''}${roles && c.isNew && c.st === 'new' ? ' rg-app-cd-new' : ''}`);
+        const card = el('div', `rg-app-cd${roles && c.st === 'skip' ? ' rg-app-cd-off' : ''}${roles && c.isNew && c.st === 'new' ? ' rg-app-cd-new' : ''}${roles && c.st === 'new' && c.sugState === 'pending' ? ' rg-app-cd-pending' : ''}`);
         const head = el('div', 'rg-app-cdhead');
         const pick = el('input');
         pick.type = 'checkbox'; pick.checked = !!c.sel; pick.className = 'rg-app-pick';
@@ -1462,10 +1462,10 @@ function stepMapFlex(body, bar) {
         card.appendChild(head);
         if (roles) {
             const buttons = [];
-            if (hasExisting()) buttons.push(segBtn(t('main.flexStExist'), c.st === 'exist', () => { setState(c, 'exist'); rerender(); }));
-            buttons.push(segBtn(t('main.flexStNew'), c.st === 'new', () => { setState(c, 'new'); rerender(); }), segBtn(t('main.flexStSkip'), c.st === 'skip', () => { setState(c, 'skip'); rerender(); }));
+            if (hasExisting()) buttons.push(segBtn(t('main.flexStExist'), c.st === 'exist', () => { setState(c, 'exist'); rerender(); }, 'exist'));
+            buttons.push(segBtn(t('main.flexStNew'), c.st === 'new', () => { setState(c, 'new'); rerender(); }, 'new'), segBtn(t('main.flexStSkip'), c.st === 'skip', () => { setState(c, 'skip'); rerender(); }, 'skip'));
             const choice = el('div', 'rg-app-cdchoice');
-            choice.appendChild(seg(buttons));
+            choice.appendChild(seg(buttons, true));
             if (c.st === 'exist') {
                 const ex = exMap();
                 const link = el('label', 'rg-app-cdlink');
@@ -1477,7 +1477,7 @@ function stepMapFlex(body, bar) {
                 select.addEventListener('change', () => { c.link = select.value; if (c.link && c.link === c.sug) c.sugState = 'accepted'; wiz.error = ''; rerender(); });
                 link.appendChild(select);
                 const cur = ex.get(c.link);
-                if (cur) link.appendChild(el('b', '', t(`main.flexRole_${cur.role}`)));
+                if (cur) { const chip = el('span', 'rg-app-role', `${t(`main.flexRoleS_${cur.role}`)}${cur.role === 'value' && cur.agg ? ` · ${t(`main.flexAgg_${cur.agg}`)}` : ''}`); chip.title = t(`main.flexRole_${cur.role}`); link.appendChild(chip); }
                 choice.appendChild(link);
             }
             card.appendChild(choice);
@@ -1492,11 +1492,11 @@ function stepMapFlex(body, bar) {
             const det = el('div', 'rg-app-cddet');
             if (roles) {
                 const roleRow = el('div', 'rg-app-cdrow');
-                roleRow.append(el('b', '', t('main.flexColLoadAs')), seg(['key', 'data', 'value'].map((r) => segBtn(t(`main.flexRole_${r}`), c.role === r, () => { c.role = r; rerender(); }))));
+                roleRow.append(el('b', '', t('main.flexColLoadAs')), seg(['key', 'data', 'value'].map((r) => segBtn(t(`main.flexRoleS_${r}`), c.role === r, () => { c.role = r; rerender(); }, null, t(`main.flexRole_${r}`))), true));
                 det.appendChild(roleRow);
                 if (c.role === 'value') {
                     const aggRow = el('div', 'rg-app-cdrow');
-                    aggRow.append(el('b', '', t('main.flexColJoin')), seg(['sum', 'one'].map((a) => segBtn(t(`main.flexAgg_${a}`), c.agg === a, () => { c.agg = a; rerender(); }))));
+                    aggRow.append(el('b', '', t('main.flexColJoin')), seg(['sum', 'one'].map((a) => segBtn(t(`main.flexAgg_${a}`), c.agg === a, () => { c.agg = a; rerender(); })), true));
                     const label = el('label', 'rg-app-switch');
                     const box = el('input');
                     box.type = 'checkbox'; box.checked = !!c.stampName;
@@ -1520,39 +1520,13 @@ function stepMapFlex(body, bar) {
         }
         return card;
     };
-    const groupDetails = (id, titleKey, items, defaultOpen) => {
-        if (!items.length) return null;
-        const det = el('details', 'rg-app-grp');
-        const open = wiz.view !== 'all' || id === 'pending' || (wiz.open[id] === undefined ? defaultOpen : wiz.open[id]);
-        if (open) det.setAttribute('open', '');
-        det.addEventListener('toggle', () => { wiz.open[id] = det.open; });
-        const sum = el('summary', '', t(titleKey));
-        sum.appendChild(el('small', '', ` ${items.length}`));
-        det.appendChild(sum);
-        const cards = el('div', 'rg-app-cdlist');
-        items.forEach((c) => cards.appendChild(cardNode(c)));
-        det.appendChild(cards);
-        return det;
-    };
+    // todas las columnas en una sola lista, en el orden del Excel (antes: grupos cerrados que había que abrir)
     const buildGroups = () => {
         const box = el('div', 'rg-app-cdgroups');
         box.setAttribute('data-help-key', 'appRegFlexMapeo');
-        const list = wiz.cols.filter(inView);
-        if (!roles) { const cards = el('div', 'rg-app-cdlist'); list.forEach((c) => cards.appendChild(cardNode(c))); box.appendChild(cards); return box; }
-        const ex = exMap();
-        const pending = (c) => (c.st === 'new' && c.sugState === 'pending') || (c.st === 'exist' && !c.link);
-        const isValueLink = (c) => c.st === 'exist' && ex.get(c.link) && ex.get(c.link).role === 'value';
-        const groups = hasExisting() ? [
-            ['pending', 'main.flexGrpPending', list.filter(pending), true],
-            ['new', 'main.flexGrpNew', list.filter((c) => c.st === 'new' && !pending(c)), true],
-            ['existKeys', 'main.flexGrpExistKeys', list.filter((c) => c.st === 'exist' && !pending(c) && !isValueLink(c)), false],
-            ['existValues', 'main.flexGrpExistValues', list.filter((c) => isValueLink(c) && !pending(c)), false],
-            ['skip', 'main.flexGrpSkip', list.filter((c) => c.st === 'skip'), false],
-        ] : [
-            ['all', 'main.flexGrpAll', list.filter((c) => c.st !== 'skip'), true],
-            ['skip', 'main.flexGrpSkip', list.filter((c) => c.st === 'skip'), true],
-        ];
-        groups.forEach(([id, key, items, open]) => { const g = groupDetails(id, key, items, open); if (g) box.appendChild(g); });
+        const cards = el('div', 'rg-app-cdlist');
+        wiz.cols.filter(inView).forEach((c) => cards.appendChild(cardNode(c)));
+        box.appendChild(cards);
         return box;
     };
     // el resumen, los filtros y la barra de las elegidas

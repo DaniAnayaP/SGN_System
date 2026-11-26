@@ -9753,7 +9753,7 @@
       "example": "Guardar tal cual"
     },
     "appRegFlexMapeo": {
-      "what": "Cada columna de tu archivo: su papel (Llave, Dato del renglón, Columna nueva en cada carga o No se carga), si varios renglones caen juntos se suman o se toma uno (por ejemplo el costo), el nombre que le quieres poner y su clasificación (un nombre y un color para agrupar columnas; con el mismo nombre se usa el mismo color). Desde la segunda carga viene ya llenado con lo de la carga anterior y las columnas que no estaban llevan la marca «Nueva».",
+      "what": "Cada columna de tu archivo: su papel (Llave, Dato del renglón, Columna nueva en cada carga o No se carga), si varios renglones caen juntos se suman o se toma uno (por ejemplo el costo), el nombre que le quieres poner y su clasificación (un nombre y un color para agrupar columnas; con el mismo nombre se usa el mismo color). Todas las columnas salen en una lista, en el orden de tu Excel; en cada una eliges «Ya existe», «Nueva adicional» o «No se carga». Desde la segunda carga viene ya llenado con lo de la carga anterior y las columnas que no estaban llevan la marca «Nueva».",
       "example": "ON_HAND_QTY → Columna nueva · Sumar · «Existencia» · Clasificación «Existencias» (azul)"
     },
     "appRegFlexCuando": {
