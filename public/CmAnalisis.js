@@ -893,7 +893,7 @@ function setFileBusy(wrapper, on) {
     if (!note) {
         note = document.createElement('p');
         note.id = 'an-loading-note'; note.className = 'reg-loading-note'; note.setAttribute('role', 'status');
-        wrapper.parentNode.insertBefore(note, wrapper);
+        wrapper.after(note); // debajo de la tabla: el icono de descargar y los demás se buscan en el elemento que está ANTES de la tabla
     }
     note.innerHTML = '<i class="bx bx-loader-alt bx-spin" aria-hidden="true"></i> ';
     note.append(t('main.anLoading'));

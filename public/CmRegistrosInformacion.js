@@ -622,7 +622,7 @@ async function refreshData() {
         loadingNote.id = 'reg-loading-note'; loadingNote.className = 'reg-loading-note'; loadingNote.setAttribute('role', 'status');
         loadingNote.innerHTML = '<i class="bx bx-loader-alt bx-spin" aria-hidden="true"></i> ';
         loadingNote.append(t('main.regLoadingData'));
-        wrapper.parentNode.insertBefore(loadingNote, wrapper);
+        wrapper.after(loadingNote); // debajo de la tabla: la barra de iconos y los botones se buscan en el elemento que está ANTES de la tabla
     }
     try {
         const params = new URLSearchParams({ lang: lang(), tz: String(tzOffset()) });
