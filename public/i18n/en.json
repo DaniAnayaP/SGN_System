@@ -5722,6 +5722,11 @@
     "flexTbCol": "Excel column",
     "flexTbDo": "What to do",
     "flexTbResult": "Result",
+    "flexTbHow": "How it loads",
+    "flexTbName": "Name · joins",
+    "flexWriteName": "＋ Write another name",
+    "flexNamePh": "Type the name",
+    "flexErrNoName": "Type a name for {name} (or pick the existing column it joins).",
     "flexRoleS_key": "Key",
     "flexRoleS_data": "Data",
     "flexRoleS_value": "Value",
@@ -9754,7 +9759,7 @@
       "example": "Save as is"
     },
     "appRegFlexMapeo": {
-      "what": "Each column of your file: its role (Key, Row data, New column on every load or Not loaded), whether rows that land together are added up or one is taken (for example the cost), the name you want to give it and its classification (a name and a color to group columns; the same name keeps the same color). All columns appear in one list, in the order of your Excel; on each one you pick \"Already exists\", \"New additional\" or \"Not loaded\". From the second load on it comes already filled in with the previous load and columns that were not there carry a \"New\" tag.",
+      "what": "Each column of your file: its role (Key, Row data, New column on every load or Not loaded), whether rows that land together are added up or one is taken (for example the cost), the name you want to give it and its classification (a name and a color to group columns; the same name keeps the same color). All columns appear in one list, in the order of your Excel; on each one you pick \"Already exists\", \"New additional\" or \"Not loaded\". For the ones that already exist you see their classification; if you want another name for one, pick \"＋ Write another name\" at the end of its list (it becomes \"New additional\"). From the second load on it comes already filled in with the previous load and columns that were not there carry a \"New\" tag.",
       "example": "ON_HAND_QTY → New column · Add up · \"Stock\" · Classification \"Stock levels\" (blue)"
     },
     "appRegFlexCuando": {
@@ -10151,7 +10156,7 @@
       "example": "3 old loads → Delete data (3)"
     },
     "regFlexMap": {
-      "what": "For each column of your Excel you pick its role: Key (identifies the row and goes down the list), Row data, New column on every load (stock, cost…) or Not loaded. If several rows land on the same key, the new column is added up or one is taken (for example, the cost). Every column can be renamed. Each column is a row of the table, in the order of your Excel and fully visible, with a single decision: \"Already exists\" (it joins a column the record already has; you pick which one there), \"New additional\" (in the same row you define its role, name, classification and color) or \"Not loaded\". Columns that already exist are recognized by the title they had; if one comes with another name but looks like one that already exists, its row is highlighted and you are asked whether it is that one. This way columns are not duplicated.",
+      "what": "For each column of your Excel you pick its role: Key (identifies the row and goes down the list), Row data, New column on every load (stock, cost…) or Not loaded. If several rows land on the same key, the new column is added up or one is taken (for example, the cost). Every column can be renamed. Each column is a row of the table, in the order of your Excel and fully visible, with a single decision: \"Already exists\" (it joins a column the record already has; you pick which one there), \"New additional\" (in the same row you define its role, name, classification and color) or \"Not loaded\". Columns that already exist are recognized by the title they had; if one comes with another name but looks like one that already exists, its row is highlighted and you are asked whether it is that one. The table always shows the name and the classification of every column: for the ones that already exist they are shown (read only) and for new ones you type them in the same row. If you want another name for one that shows as \"Already exists\", pick \"＋ Write another name\" at the end of its list: the row becomes \"New additional\". This way columns are not duplicated.",
       "example": "ON_HAND_QTY → New column, Add up, \"Stock\""
     },
     "regFlexWhen": {

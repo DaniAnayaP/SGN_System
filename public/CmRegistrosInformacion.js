@@ -780,38 +780,44 @@ function openFlexLoadModal() {
     };
     // ---- la tabla de columnas (Daniel, 2026-11-26, «La opción A, hazlo!»): UNA TABLA con una fila por columna del Excel, en el orden del archivo y todo a la vista (antes eran tarjetas en grupos cerrados que había que abrir uno por uno) ----
     // Cada fila lleva UNA decisión (ya existe / nueva adicional / no se carga) y, a su lado, el resultado: a cuál columna se une, o los campos de una columna nueva (cómo se carga, cómo se junta, nombre y clasificación). En «tal cual» no hay decisión: solo nombre y clasificación.
-    const tbField = (label, html) => `<span class="reg-tb-f"><b>${esc(label)}</b>${html}</span>`;
     const rowHtml = (c) => {
         const roles = s.mode === 'roles';
         const ex = exMap();
         const segBtn = (st, key) => `<button type="button" data-fx-st="${st}" data-fx-for="${c.i}" aria-pressed="${c.st === st ? 'true' : 'false'}">${esc(t(key))}</button>`;
         const pending = roles && c.st === 'new' && c.sugState === 'pending';
         const isNewCol = roles && c.isNew && c.st === 'new';
-        const nameInput = `<input type="text" class="reg-fx-name" data-fx-name="${c.i}" maxlength="60" value="${esc(c.name)}" aria-label="${esc(t('main.flexColName'))}">`;
+        const nameInput = `<input type="text" class="reg-fx-name" data-fx-name="${c.i}" maxlength="60" value="${esc(c.name)}" placeholder="${esc(t('main.flexNamePh'))}" aria-label="${esc(t('main.flexColName'))}">`;
         const classEdit = `<span class="reg-tb-clsw">${classBox(c)}</span>`;
         const cls = ['reg-tb-row', roles ? `reg-tb-${c.st}` : 'reg-tb-asis', isNewCol ? 'reg-tb-newcol' : '', pending ? 'reg-tb-pending' : ''].filter(Boolean).join(' ');
         const pick = `<div class="reg-tb-pick"><label class="reg-cd-pick"><input type="checkbox" data-fx-pick="${c.i}"${c.sel ? ' checked' : ''} aria-label="${esc(t('main.flexPick', { name: c.text }))}"></label></div>`;
         const colCell = `<div class="reg-tb-col"><b>${esc(c.text)}</b>${isNewCol ? `<span class="reg-fx-new">${esc(t('main.flexNewCol'))}</span>` : ''}<small>${c.example === undefined || c.example === null || c.example === '' ? '' : esc(c.example)}</small></div>`;
         if (!roles) return `<div class="${cls}">${pick}${colCell}<div class="reg-tb-name">${nameInput}</div><div class="reg-tb-cls">${classEdit}</div></div>`;
         const choice = `<div class="reg-tb-st"><span class="reg-seg reg-tb-seg" role="group" aria-label="${esc(c.text)}">${hasExisting() ? segBtn('exist', 'main.flexStExist') : ''}${segBtn('new', 'main.flexStNew')}${segBtn('skip', 'main.flexStSkip')}</span></div>`;
-        let result;
+        // Las cuatro celdas de la derecha (Daniel, 2026-11-26, «La opción 1, hazlo!»): cómo se carga, nombre (o a cuál se une) y clasificación, SIEMPRE a la vista:
+        // «ya existe» los muestra solo para leer con lo ya definido; «nueva adicional» los escribe ahí mismo; «no se carga» lleva un guion.
+        let how; let nm; let cl;
         if (c.st === 'exist') {
             const opts = [...ex.values()].map((e) => `<option value="${esc(e.name)}"${e.name === c.link ? ' selected' : ''}>${esc(e.name)}</option>`).join('');
             const cur = ex.get(c.link);
-            result = `<span class="reg-tb-link">${esc(t('main.flexLinkTo'))} <select data-fx-link="${c.i}" aria-label="${esc(t('main.flexLinkTo'))}">${c.link ? '' : `<option value="" selected>${esc(t('main.flexLinkPick'))}</option>`}${opts}</select>${cur ? ` <span class="reg-tb-role" title="${esc(t(`main.flexRole_${cur.role}`))}">${esc(t(`main.flexRoleS_${cur.role}`))}${cur.role === 'value' && cur.agg ? ` · ${esc(t(`main.flexAgg_${cur.agg}`))}` : ''}</span>` : ''}</span>`;
+            how = cur ? `<span class="reg-tb-role" title="${esc(t(`main.flexRole_${cur.role}`))}">${esc(t(`main.flexRoleS_${cur.role}`))}${cur.role === 'value' && cur.agg ? ` · ${esc(t(`main.flexAgg_${cur.agg}`))}` : ''}</span>` : '<span class="reg-fx-dash">—</span>';
+            nm = `<select data-fx-link="${c.i}" aria-label="${esc(t('main.flexLinkTo'))}">${c.link ? '' : `<option value="" selected>${esc(t('main.flexLinkPick'))}</option>`}${opts}<option value="__new">${esc(t('main.flexWriteName'))}</option></select>`;
+            const dot = cur && Number.isInteger(cur.color) ? CLASS_COLORS[cur.color] : '';
+            cl = cur && cur.cls ? `<span class="reg-tb-ro">${dot ? `<i class="reg-tb-dot" style="background:${dot}"></i>` : ''}<span>${esc(cur.cls)}</span></span>` : `<span class="reg-tb-ro reg-tb-ro-none">${esc(t('main.flexClsNone'))}</span>`;
         } else if (c.st === 'new') {
             const roleSeg = `<span class="reg-seg" role="group">${['key', 'data', 'value'].map((r) => `<button type="button" data-fx-rolebtn="${r}" data-fx-for="${c.i}" title="${esc(t(`main.flexRole_${r}`))}" aria-pressed="${c.role === r ? 'true' : 'false'}">${esc(t(`main.flexRoleS_${r}`))}</button>`).join('')}</span>`;
-            const aggSeg = `<span class="reg-seg" role="group">${['sum', 'one'].map((a) => `<button type="button" data-fx-aggbtn="${a}" data-fx-for="${c.i}" aria-pressed="${c.agg === a ? 'true' : 'false'}">${esc(t(`main.flexAgg_${a}`))}</button>`).join('')}</span><label class="reg-fx-stamp"><input type="checkbox" data-fx-stamp="${c.i}"${c.stampName ? ' checked' : ''}> <span>${esc(t('main.flexStampName'))}</span></label>`;
-            result = `${tbField(t('main.flexColLoadAs'), roleSeg)}${c.role === 'value' ? tbField(t('main.flexColJoin'), aggSeg) : ''}${tbField(t('main.flexColName'), nameInput)}${tbField(t('main.flexColClass'), classEdit)}`;
-        } else result = '<span class="reg-fx-dash">—</span>';
+            const aggSeg = `<span class="reg-seg" role="group" title="${esc(t('main.flexColJoin'))}">${['sum', 'one'].map((a) => `<button type="button" data-fx-aggbtn="${a}" data-fx-for="${c.i}" aria-pressed="${c.agg === a ? 'true' : 'false'}">${esc(t(`main.flexAgg_${a}`))}</button>`).join('')}</span><label class="reg-fx-stamp"><input type="checkbox" data-fx-stamp="${c.i}"${c.stampName ? ' checked' : ''}> <span>${esc(t('main.flexStampName'))}</span></label>`;
+            how = `<div class="reg-tb-stack">${roleSeg}${c.role === 'value' ? aggSeg : ''}</div>`;
+            nm = nameInput;
+            cl = classEdit;
+        } else how = nm = cl = '<span class="reg-fx-dash">—</span>';
         const sug = pending ? `<div class="reg-cd-sug"><span>${esc(t('main.flexSugAsk', { name: c.sug }))}</span><button type="button" class="btn btn-secondary" data-fx-sug="yes" data-fx-for="${c.i}">${esc(t('main.flexSugYes'))}</button><button type="button" class="btn btn-secondary" data-fx-sug="no" data-fx-for="${c.i}">${esc(t('main.flexSugNo'))}</button></div>` : '';
-        return `<div class="${cls}">${pick}${colCell}${choice}<div class="reg-tb-res">${result}</div>${sug}</div>`;
+        return `<div class="${cls}">${pick}${colCell}${choice}<div class="reg-tb-how">${how}</div><div class="reg-tb-nm">${nm}</div><div class="reg-tb-cl">${cl}</div>${sug}</div>`;
     };
     const inView = (c) => s.view === 'all' || (s.mode === 'roles' && ((s.view === 'new' && c.st === 'new') || (s.view === 'skip' && c.st === 'skip')));
     const tableHtml = () => {
         const roles = s.mode === 'roles';
         const list = s.cols.filter(inView);
-        const head = roles ? ['', t('main.flexTbCol'), t('main.flexTbDo'), t('main.flexTbResult')] : ['', t('main.flexTbCol'), t('main.flexColName'), t('main.flexColClass')];
+        const head = roles ? ['', t('main.flexTbCol'), t('main.flexTbDo'), t('main.flexTbHow'), t('main.flexTbName'), t('main.flexColClass')] : ['', t('main.flexTbCol'), t('main.flexColName'), t('main.flexColClass')];
         return `<div class="reg-tb reg-tb-m-${roles ? 'roles' : 'asis'}"><div class="reg-tb-head">${head.map((h) => `<span>${esc(h)}</span>`).join('')}</div>${list.map(rowHtml).join('') || `<p class="admin-hint reg-tb-empty">${esc(t('main.emptyStateText'))}</p>`}</div>`;
     };
     const mapHtml = () => {
@@ -937,6 +943,8 @@ function openFlexLoadModal() {
             const noLink = s.cols.find((c) => c.st === 'exist' && !c.link);
             if (noLink) return t('main.flexErrNoLink', { name: noLink.text });
         }
+        const noName = s.cols.find((c) => (s.mode === 'asis' || c.st === 'new') && !String(c.name || '').trim());
+        if (noName) return t('main.flexErrNoName', { name: noName.text });
         const used = s.cols.filter((c) => s.mode === 'asis' || c.st !== 'skip').map(effective);
         if (s.mode === 'roles' && !used.some((c) => c.role === 'key')) return t('main.regErr_FLEX_NO_KEY');
         const seen = new Set();
@@ -1055,7 +1063,21 @@ function openFlexLoadModal() {
         else if (el.name === 'fx-mode') { readWhen(); s.mode = el.value; s.error = ''; paint(); }
         else if (el.id === 'fx-day' || el.id === 'fx-time') readWhen();
         else if (el.id === 'reg-i-sheet') { setBusy(true); try { await inspect(el.value); s.busy = false; paint(); } catch (err) { s.error = errorTextOf(err); s.busy = false; paint(); } }
-        else if (el.dataset.fxLink !== undefined) { const c = col('fxLink'); if (c) { readWhen(); c.link = el.value; if (c.link && c.link === c.sug) c.sugState = 'accepted'; s.error = ''; paint(); } }
+        else if (el.dataset.fxLink !== undefined) {
+            const c = col('fxLink');
+            if (c) {
+                readWhen();
+                if (el.value === '__new') {
+                    // «＋ Escribir otro nombre»: la fila pasa a «nueva adicional» con el papel, cómo se junta y la clasificación de la columna a la que estaba unida, y el nombre en blanco para escribirlo
+                    const e = exMap().get(c.link);
+                    if (c.sugState === 'pending') c.sugState = 'rejected';
+                    c.st = 'new'; if (s.info.prevMode) c.isNew = true;
+                    if (e) { c.role = e.role; c.agg = e.agg; c.stampName = e.stampName; c.cls = e.cls || ''; if (c.cls && s.classColors[foldCls(c.cls)] === undefined && Number.isInteger(e.color)) s.classColors[foldCls(c.cls)] = e.color; }
+                    c.name = ''; s.error = ''; paint();
+                    const inp = overlay.querySelector(`[data-fx-name="${c.i}"]`); if (inp) inp.focus();
+                } else { c.link = el.value; if (c.link && c.link === c.sug) c.sugState = 'accepted'; s.error = ''; paint(); }
+            }
+        }
         else if (el.dataset.fxStamp !== undefined) { const c = col('fxStamp'); if (c) c.stampName = el.checked; }
         else if (el.dataset.fxCls !== undefined) { const c = col('fxCls'); if (c) { readWhen(); c.cls = el.value.replace(/\s+/g, ' ').trim(); ensureClassColor(c); paint(); } } // al terminar de escribir: toma el color de la clasificación (el de una que ya existe o el siguiente de la paleta)
     });

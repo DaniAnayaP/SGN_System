@@ -2707,6 +2707,10 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .rg-app-role{ font-size: 0.66rem; font-weight: 600; padding: 0.03rem 0.55rem; border-radius: 999px; background: color-mix(in srgb, var(--home-accent) 16%, var(--home-surface)); color: var(--home-text-primary); white-space: nowrap; }
 .rg-app-cdchoice .rg-app-segfull{ flex: 1 1 100%; }
 .rg-app-cdlink .pm-app-input{ width: auto; flex: 1 1 8rem; min-width: 0; }
+.rg-app-cdro{ flex: 1 1 100%; display: flex; align-items: center; gap: 0.4rem; font-size: 0.74rem; color: var(--home-text-secondary); }
+.rg-app-cdro b{ font-weight: 600; color: var(--home-text-primary); overflow-wrap: anywhere; }
+.rg-app-cdro .rg-app-cdro-none{ font-weight: 400; opacity: 0.65; }
+.rg-app-cdro-dot{ width: 0.75rem; height: 0.75rem; border-radius: 50%; flex: none; }
 .rg-app-segfull{ display: flex; width: 100%; flex-wrap: nowrap; }
 .rg-app-segfull button{ flex: 1; padding: 0.35rem 0.2rem; font-size: 0.72rem; text-align: center; }
 .rg-app-seg button[aria-pressed="true"][data-st="exist"]{ background: #dcefde; color: #2a7a48; }

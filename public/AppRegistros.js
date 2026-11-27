@@ -1359,6 +1359,8 @@ function flexProblem() {
         const noLink = wiz.cols.find((c) => c.st === 'exist' && !c.link);
         if (noLink) return t('main.flexErrNoLink', { name: noLink.text });
     }
+    const noName = wiz.cols.find((c) => (wiz.fmode === 'asis' || c.st === 'new') && !String(c.name || '').trim());
+    if (noName) return t('main.flexErrNoName', { name: noName.text });
     const used = wiz.cols.filter((c) => wiz.fmode === 'asis' || c.st !== 'skip').map(flexEffective);
     if (wiz.fmode === 'roles' && !used.some((c) => c.role === 'key')) return t('main.regErr_FLEX_NO_KEY');
     const seen = new Set();
@@ -1407,6 +1409,15 @@ function stepMapFlex(body, bar) {
     const inView = (c) => wiz.view === 'all' || (roles && ((wiz.view === 'new' && c.st === 'new') || (wiz.view === 'skip' && c.st === 'skip')));
     const segBtn = (label, pressed, onClick, state, title) => { const b = el('button', '', label); b.type = 'button'; b.setAttribute('aria-pressed', pressed ? 'true' : 'false'); if (state) b.dataset.st = state; if (title) b.title = title; b.addEventListener('click', onClick); return b; };
     const seg = (buttons, full) => { const s = el('span', `rg-app-seg${full ? ' rg-app-segfull' : ''}`); s.setAttribute('role', 'group'); buttons.forEach((b) => s.appendChild(b)); return s; };
+    // «＋ Escribir otro nombre»: la fila pasa a «nueva adicional» con el papel, cómo se junta y la clasificación de la columna a la que estaba unida, y el nombre en blanco para escribirlo
+    const writeNewName = (c) => {
+        const e = exMap().get(c.link);
+        if (c.sugState === 'pending') c.sugState = 'rejected';
+        c.st = 'new'; if (wiz.info.prevMode) c.isNew = true;
+        if (e) { c.role = e.role; c.agg = e.agg; c.stampName = e.stampName; c.cls = e.cls || ''; if (c.cls && wiz.classColors[foldCls(c.cls)] === undefined && Number.isInteger(e.color)) wiz.classColors[foldCls(c.cls)] = e.color; }
+        c.name = ''; wiz.error = ''; rerender();
+        const inp = document.querySelector(`[data-name-for="${c.i}"]`); if (inp) inp.focus();
+    };
     const setState = (c, to) => {
         if (to === 'exist') { c.st = 'exist'; if (!c.link) c.link = c.sug && exMap().has(c.sug) ? c.sug : ''; if (c.link && c.link === c.sug) c.sugState = 'accepted'; c.isNew = false; }
         else { if (c.sugState === 'pending') c.sugState = 'rejected'; c.st = to; if (to === 'new' && wiz.info.prevMode) c.isNew = true; }
@@ -1474,11 +1485,17 @@ function stepMapFlex(body, bar) {
                 select.setAttribute('aria-label', t('main.flexLinkTo'));
                 if (!c.link) { const o = el('option', '', t('main.flexLinkPick')); o.value = ''; o.selected = true; select.appendChild(o); }
                 [...ex.values()].forEach((e) => { const o = el('option', '', e.name); o.value = e.name; if (e.name === c.link) o.selected = true; select.appendChild(o); });
-                select.addEventListener('change', () => { c.link = select.value; if (c.link && c.link === c.sug) c.sugState = 'accepted'; wiz.error = ''; rerender(); });
+                { const o = el('option', '', t('main.flexWriteName')); o.value = '__new'; select.appendChild(o); } // «＋ Escribir otro nombre»
+                select.addEventListener('change', () => { if (select.value === '__new') { writeNewName(c); return; } c.link = select.value; if (c.link && c.link === c.sug) c.sugState = 'accepted'; wiz.error = ''; rerender(); });
                 link.appendChild(select);
                 const cur = ex.get(c.link);
                 if (cur) { const chip = el('span', 'rg-app-role', `${t(`main.flexRoleS_${cur.role}`)}${cur.role === 'value' && cur.agg ? ` · ${t(`main.flexAgg_${cur.agg}`)}` : ''}`); chip.title = t(`main.flexRole_${cur.role}`); link.appendChild(chip); }
                 choice.appendChild(link);
+                // la clasificación de lo que ya existe, siempre a la vista (solo para leer)
+                const ro = el('div', 'rg-app-cdro');
+                ro.appendChild(el('span', '', t('main.flexColClass')));
+                if (cur && cur.cls) { if (Number.isInteger(cur.color)) { const dot = el('i', 'rg-app-cdro-dot'); dot.style.background = CLASS_COLORS[cur.color]; ro.appendChild(dot); } ro.appendChild(el('b', '', cur.cls)); } else ro.appendChild(el('b', 'rg-app-cdro-none', t('main.flexClsNone')));
+                choice.appendChild(ro);
             }
             card.appendChild(choice);
             if (c.st === 'new' && c.sugState === 'pending') {
@@ -1510,6 +1527,7 @@ function stepMapFlex(body, bar) {
             const input = el('input', 'pm-app-input');
             input.type = 'text'; input.maxLength = 60; input.value = c.name;
             input.setAttribute('aria-label', t('main.flexColName'));
+            input.setAttribute('data-name-for', c.i); input.placeholder = t('main.flexNamePh');
             input.addEventListener('input', () => { c.name = input.value; });
             nameRow.append(el('b', '', t('main.flexColName')), input);
             det.appendChild(nameRow);
