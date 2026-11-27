@@ -50,6 +50,13 @@ const tableOf = (tableId) => wrapperOf(tableId)?.querySelector('table.data-table
         const role = await Dashboard.initDashboard({ activePage: document.body.dataset.activePage });
         if (!role) return;
         await loadRegistries();
+        // «＋ Agregar nuevo registro» (?nuevo=1): solo la ventana de alta, sin pedir ni dibujar otro registro detrás; al cancelar se abre el registro que se estaba viendo
+        if (new URLSearchParams(location.search).get('nuevo') === '1' && st.canCreateRegistry) {
+            const page = document.querySelector('.page-content');
+            if (page) page.hidden = true;
+            openCreateRegistry(() => location.replace(location.pathname));
+            return;
+        }
         // cada registro agregado tiene su propia pantalla en el menú (?registry=); sin él, el último que se vio
         const wanted = new URLSearchParams(location.search).get('registry') || sessionStorage.getItem('regCurrent');
         st.key = (st.registries.find((r) => r.key === wanted) || st.registries[0] || {}).key || null;
@@ -115,12 +122,12 @@ function regErrorText(body) {
     const code = body && body.code;
     return ['REG_NAME_REQUIRED', 'REG_NAME_TAKEN', 'REG_KIND', 'REG_FORBIDDEN', 'REG_STATUS', 'REG_BUILTIN', 'REG_HAS_DATA', 'REG_OBSOLETE'].includes(code) ? t(`main.regErr_${code}`) : t('admin.saveError');
 }
-function openModal(html, helpKey, onReady) {
+function openModal(html, helpKey, onReady, afterClose) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay exp-overlay';
     overlay.innerHTML = `<div class="modal-panel exp-panel" role="dialog" aria-modal="true" data-help-key="${helpKey}">${html}</div>`;
     document.body.appendChild(overlay);
-    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); if (afterClose) afterClose(); };
     const onKey = (event) => { if (event.key === 'Escape') close(); };
     document.addEventListener('keydown', onKey);
     overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) close(); });
@@ -134,7 +141,7 @@ async function sendRegistry(method, url, body) {
     return out;
 }
 // Registro nuevo: nombre, cada cuánto se carga y qué mide. Siempre lleva las mismas columnas de referencia (Unidad, Descripción Unidad, Código, Descripción, Categoría y UDM); al crearlo se abre su pantalla.
-function openCreateRegistry() {
+function openCreateRegistry(afterClose) {
     openModal(`<h3>${esc(t('main.regNewTitle'))}</h3>
         <label for="reg-n-name">${esc(t('main.regNewName'))}</label><input type="text" id="reg-n-name" maxlength="80" autocomplete="off">
         <p class="reg-field-label">${esc(t('main.regNewKind'))}</p>
@@ -157,7 +164,7 @@ function openCreateRegistry() {
                 location.href = `CmRegistrosInformacion.html?registry=${encodeURIComponent(out.registry.key)}`; // el menú ya la trae como pantalla nueva
             } catch (e) { btn.disabled = false; el.textContent = regErrorText(e.body); el.hidden = false; }
         });
-    });
+    }, afterClose);
 }
 function openRenameRegistry(reg) {
     openModal(`<h3>${esc(t('main.regRename'))}</h3><label for="reg-r-name">${esc(t('main.regNewName'))}</label><input type="text" id="reg-r-name" maxlength="80" value="${esc(reg.name)}" autocomplete="off">
