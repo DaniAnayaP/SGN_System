@@ -25,6 +25,7 @@ const MAX_CONDS = 8;
 const MAX_COND_VALUES = 1000;
 const MAX_VALUE_COLS = 130;
 const COL_KEY_RE = /^[A-Za-z0-9_]{1,40}$/;
+const LIVE_RE = /^(last|v:[a-z0-9 _.\-]{1,80})$/; // «la más reciente»: el último periodo o la familia de columnas de una tabla libre (su nombre sin mayúsculas ni acentos)
 const LINES = ['solid', 'dotted', 'dashed', 'double', 'thick'];
 
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/;
@@ -120,7 +121,8 @@ function normalizeV2(src, registryKeys) {
         if (!registryKeys.includes(registry)) return { error: 'DESIGN_COLUMN_REGISTRY', field: 'columns' };
         const valueCols = [...new Set((Array.isArray(c.valueCols) ? c.valueCols : []).map((v) => cleanText(v, 40)).filter((v) => COL_KEY_RE.test(v)))].slice(0, MAX_VALUE_COLS);
         const agg = AGGS2.includes(c.agg) ? c.agg : 'sum';
-        if (!valueCols.length && agg !== 'count') return { error: 'COL_VALUE', field: 'columns' };
+        const live = [...new Set((Array.isArray(c.live) ? c.live : []).map((v) => cleanText(v, 90)).filter((v) => LIVE_RE.test(v)))].slice(0, MAX_VALUE_COLS);
+        if (!valueCols.length && !live.length && agg !== 'count') return { error: 'COL_VALUE', field: 'columns' };
         const keyMap = (Array.isArray(c.keyMap) ? c.keyMap : []).slice(0, MAX_BASE).map((k) => ({ base: cleanText(k && k.base, 40), file: cleanText(k && k.file, 40) })).filter((k) => COL_KEY_RE.test(k.base) && COL_KEY_RE.test(k.file));
         const conds = [];
         for (const cond of (Array.isArray(c.conds) ? c.conds : []).slice(0, MAX_CONDS)) {
@@ -133,7 +135,7 @@ function normalizeV2(src, registryKeys) {
         if (!id || ids.has(id)) id = `c${columns.length + 1}`;
         while (ids.has(id)) id += '_';
         ids.add(id);
-        const entry = { id, label: cleanText(c.label, 80) || id, registry, valueCols, agg, keyMap, conds };
+        const entry = { id, label: cleanText(c.label, 80) || id, registry, valueCols, agg, keyMap, conds, ...(live.length ? { live } : {}) };
         applyLook(entry, c);
         columns.push(entry);
     }

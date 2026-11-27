@@ -310,7 +310,16 @@ document.addEventListener('click', async (event) => {
         try { await saveDesign(); renderHead(); renderDesign(); Dashboard.showToast(t('main.anSaved'), 'success'); } catch (err) { save.disabled = false; showError(errorText(err.body)); }
     } else if (go) extract();
 });
+function refreshAnalysis() {
+    const btn = document.querySelector('[data-an-refresh]');
+    if (btn) { if (btn.disabled) return; btn.disabled = true; btn.lastChild.textContent = ` ${t('main.anRefreshing')}`; }
+    try { sessionStorage.setItem('anRefreshed', String(st.id)); } catch { /* sin memoria del navegador: solo no sale el aviso */ }
+    // se abre otra vez el análisis En vivo: el servidor arma todo de nuevo con los datos de hoy (como al guardar una columna agregada)
+    const search = `?id=${st.id}&v=0&tab=file`;
+    if (location.search === search) location.reload(); else location.href = `CmAnalisis.html${search}`;
+}
 document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-an-refresh]')) { refreshAnalysis(); return; }
     const addCol = event.target.closest('[data-an-addcol]'); const addKind = event.target.closest('[data-an-addkind]'); const editCol = event.target.closest('[data-an-editcol]'); const delCol = event.target.closest('[data-an-delcol]');
     const menu = document.querySelector('.an-addmenu');
     if (menu) menu.hidden = addCol ? !menu.hidden : true; // «＋ Agregar columna» abre o cierra el menú; cualquier otro clic lo cierra
@@ -405,6 +414,8 @@ function renderAddedBar() {
     bar.innerHTML = `${st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden>${st.extraction && st.extraction.live ? `<button type="button" data-an-addkind="file">${esc(t('main.an2KindFile'))}</button>` : ''}<button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button></span></span>` : ''}`
         + fileCols.map((c) => `<span class="an-addedchip an-filechip"><button type="button" data-an-editfile="${esc(c.id)}" title="${esc(t('main.an2EditFileCol'))}"${st.canCreate && st.extraction.live ? '' : ' disabled'}>⊞ ${esc(c.label)} <small>${esc(letterOfKey(`c_${c.id}`))}</small></button>${st.canCreate && st.extraction.live ? `<button type="button" data-an-delfile="${esc(c.id)}" aria-label="${esc(t('main.an2RemoveFileCol'))}" title="${esc(t('main.an2RemoveFileCol'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</span>`).join('')
         + added.map((a) => `<span class="an-addedchip"><button type="button" data-an-editcol="${esc(a.id)}" title="${esc(t('main.anAddedEditTitle'))}"${st.canCreate ? '' : ' disabled'}>${a.kind === 'criterion' ? '?' : 'ƒ'} ${esc(a.name)} <small>${esc(letterOfKey(`a_${a.id}`))}</small></button>${st.canCreate ? `<button type="button" data-an-delcol="${esc(a.id)}" aria-label="${esc(t('main.anAddedRemove'))}" title="${esc(t('main.anAddedRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</span>`).join('');
+    // «Actualizar» (Daniel, 2026-11-26): vuelve a cargar el análisis En vivo con lo que hay hoy (datos de los registros, fórmulas y columnas agregadas)
+    if (st.extraction && st.extraction.live) bar.insertAdjacentHTML('beforeend', `<button type="button" class="btn btn-secondary" data-an-refresh data-help-key="anRefresh"><i class="bx bx-refresh" aria-hidden="true"></i> ${esc(t('main.anRefresh'))}</button>`);
     if (st.canExtract && st.analysis.status === 'active') bar.insertAdjacentHTML('beforeend', `<button type="button" class="btn" data-an-extract data-help-key="anExtract"><i class="bx bx-export" aria-hidden="true"></i> ${esc(t('main.anExtract'))}</button>`);
     bar.hidden = false;
 }
@@ -729,6 +740,7 @@ function buildHeader(tableId, columns) {
         if (c.group) th.dataset.group = c.group;
         if (c.groupTable) th.dataset.groupTable = c.groupTable; // la clasificación de una columna agregada (banda de arriba, con su color)
         if (c.labelKey) { th.dataset.i18n = c.labelKey; th.textContent = t(c.labelKey); } else th.textContent = c.label;
+        if (c.title) th.title = c.title; // en una columna «la más reciente»: de qué carga son los números de hoy
         if (c.cls) th.className = c.cls;
         row.appendChild(th);
     });
@@ -848,7 +860,7 @@ async function loadFile() {
                 // una columna consultada con clasificación va bajo su propia banda (nombre y color de la persona); sin clasificación, bajo «Consultadas» como siempre
                 let consBand;
                 if (c.cls) { consBand = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(consBand, c.cls, window.AnalysisKit.classColor(c.color)); }
-                return { col: colKeyOf(c.key), group: 'main.anGroupCons', groupTable: consBand, label: c.label, cls: 'an-cons col-num' };
+                return { col: colKeyOf(c.key), group: 'main.anGroupCons', groupTable: consBand, label: c.label, cls: 'an-cons col-num', title: c.liveTitle ? t('main.an2LiveToday', { label: c.liveTitle }) : '' };
             }),
         ];
         const first = buildHeader(FILE_TABLE, columns);
@@ -868,6 +880,7 @@ async function loadFile() {
         if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(FILE_TABLE, { getTitle: () => `${st.analysis.name}_${e.live ? t('main.an2Live') : `v${e.version}`}`, getNotice: () => (st.data && st.data.truncated ? t('main.anDownloadTruncated', { shown: st.data.rows.length, total: num(st.data.total) }) : '') });
         updateFileNote();
         renderAddedBar();
+        try { if (sessionStorage.getItem('anRefreshed') === String(st.id)) { sessionStorage.removeItem('anRefreshed'); Dashboard.showToast(t('main.anRefreshDone'), 'success'); } } catch { /* nada */ }
         window.dispatchEvent(new Event('resize'));
     } catch (err) {
         console.error('Análisis: failed to load the file', err);

@@ -465,7 +465,7 @@ function buildColumns(loads, { tz = 0, lang = 'es' } = {}) {
             const clsF = noteClass(c);
             if (c.role === 'value') {
                 const myK = k; k += 1;
-                if (c.stampName) valueCols.push({ kind: 'value', group: 'value', name: c.name, agg: c.agg === 'one' ? 'one' : 'sum', loadId: load.id, srcKey: `m:${load.id}:${myK}`, label: uniqueLabel(nameHasDate(c.name) ? c.name : `${c.name} ${loadStamp}`), clsF });
+                if (c.stampName) valueCols.push({ kind: 'value', group: 'value', name: c.name, agg: c.agg === 'one' ? 'one' : 'sum', liveId: `v:${f}`, at: load.stamp || '', loadId: load.id, srcKey: `m:${load.id}:${myK}`, label: uniqueLabel(nameHasDate(c.name) ? c.name : `${c.name} ${loadStamp}`), clsF });
                 else if (!namedPlaced.has(f)) { namedPlaced.add(f); valueCols.push({ kind: 'value', group: 'value', name: c.name, agg: c.agg === 'one' ? 'one' : 'sum', srcKey: periodNameKey(c.name), label: c.name, clsF }); }
             } else {
                 const slot = cellAt.get(f);

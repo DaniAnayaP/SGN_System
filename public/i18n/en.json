@@ -5416,6 +5416,14 @@
     "an2NoDataNotice": "This file has no data loaded yet.",
     "an2ValueCols": "Value of which column",
     "an2ValueColsHint": "one or more from the file; each one is a new column",
+    "an2LiveTitle": "The most recent",
+    "an2LiveHint": "updates itself with every load",
+    "an2LiveToday": "Today it brings: {label}",
+    "an2LiveLast": "The last period",
+    "an2FixedTitle": "A specific load or period",
+    "anRefresh": "Refresh",
+    "anRefreshing": "Refreshing…",
+    "anRefreshDone": "Done: data and formulas are up to date.",
     "an2KeyTitle": "Key",
     "an2KeyHint": "each base column links to one from the file",
     "an2PickCol": "Choose the column…",
@@ -10398,6 +10406,14 @@
     "anFiltersBlock": {
       "what": "Makes the file come out with only some of the rows. If you leave it empty, the file has every code of every unit. If you type something, only the matching rows come out (several values separated by commas, case does not matter). They apply when extracting and do not change the records.",
       "example": "Units: GAE, GPA (only those two units). Categories: Food (only food)."
+    },
+    "anFdLive": {
+      "what": "A column marked ⟳ \"The most recent\" always brings the newest load of that column (or, in a monthly or daily record, the last period): when a new load arrives, the column moves to it by itself when you refresh or open the analysis. The ones under \"A specific load or period\" do not move. The header always shows your name; hover it to see which load today's numbers come from.",
+      "example": "⟳ Stock → today it brings Stock 27/nov 06:00"
+    },
+    "anRefresh": {
+      "what": "Reloads the analysis with what exists today: the data of the records, the formulas and the added columns. ⟳ \"The most recent\" columns move to the newest load; the ones pointing to a specific load do not change. Versions already extracted never change.",
+      "example": "Today's load arrived → Refresh"
     },
     "anExtract": {
       "what": "Takes out the file with today's design and saves it as a new version. It is a copy: it does not change even if a record changes later. If the design produces no rows, nothing is saved.",

@@ -42,7 +42,7 @@ function periodicColumns(clientId, isTest, registry, lang) {
 function flexColumns(clientId, isTest, registry, lang) {
     const loads = db.flexVigenteLoads(clientId, isTest, registry.key);
     const built = flex.buildColumns(loads, { tz: 0, lang });
-    return { loads, built, columns: built.columns.map((c) => ({ key: c.sid, label: c.label, kind: c.kind === 'value' ? 'value' : (c.kind === 'carga' ? 'load' : 'text'), group: c.group, cls: c.cls || '' })) };
+    return { loads, built, columns: built.columns.map((c) => ({ key: c.sid, label: c.label, name: c.name, kind: c.kind === 'value' ? 'value' : (c.kind === 'carga' ? 'load' : 'text'), group: c.group, cls: c.cls || '', ...(c.liveId ? { liveId: c.liveId, at: c.at, loadId: c.loadId } : {}) })) };
 }
 function describe(clientId, isTest, registry, lang = 'es') {
     return isFlex(registry) ? flexColumns(clientId, isTest, registry, lang).columns : periodicColumns(clientId, isTest, registry, lang);
@@ -211,6 +211,41 @@ function distinctValues(table, colKey, { limit = 500, query = '' } = {}) {
     return { values: all.slice(0, limit), complete: all.length <= limit && seen.size <= limit * 4 };
 }
 
+// ---- «La más reciente» (Daniel, 2026-11-26) ----
+// Lo que se puede pedir como «la más reciente» de un registro: en una tabla libre, cada familia de columnas con día y hora (Exist, Costo…) con la columna que hoy es la más nueva; en un registro mensual o diario, el último periodo.
+// [{ id, name?, today }]: el id se guarda en la columna del análisis; `today` es la columna que hoy resuelve.
+function liveOptions(clientId, isTest, registry, lang = 'es') {
+    const cols = describe(clientId, isTest, registry, lang);
+    const out = [];
+    if (isFlex(registry)) {
+        const best = new Map();
+        cols.forEach((c) => {
+            if (!c.liveId) return;
+            const cur = best.get(c.liveId);
+            if (!cur || (c.at || '') > (cur.at || '') || ((c.at || '') === (cur.at || '') && (c.loadId || 0) > (cur.loadId || 0))) best.set(c.liveId, c);
+        });
+        best.forEach((c, id) => out.push({ id, name: c.name, today: c.label }));
+    } else {
+        const periodic = cols.filter((c) => c.period);
+        if (periodic.length) { const last = periodic.reduce((a, c) => (c.period > a.period ? c : a)); out.push({ id: 'last', today: last.label }); }
+    }
+    return out;
+}
+// Si se cambia el nombre de una familia de columnas (Columnas del registro), los análisis que la pedían «la más reciente» siguen pidiéndola con el nombre nuevo.
+function renameLive(clientId, isTest, registryKey, oldId, newId) {
+    if (!oldId || !newId || oldId === newId) return 0;
+    let n = 0;
+    for (const row of db.listAnalysisDesigns()) {
+        if (row.clientId !== clientId || row.isTest !== !!isTest) continue;
+        const d = row.design;
+        if (!d || !Array.isArray(d.columns)) continue;
+        let changed = false;
+        d.columns.forEach((c) => { if (c && c.registry === registryKey && Array.isArray(c.live) && c.live.includes(oldId)) { c.live = [...new Set(c.live.map((x) => (x === oldId ? newId : x)))]; changed = true; } });
+        if (changed) { db.setAnalysisDesignRaw(row.id, d); n += 1; }
+    }
+    return n;
+}
+
 // ---- Claves estables (Daniel, 2026-11-26) ----
 // Las columnas de una tabla libre se llamaban c0, c1… (por su posición): una carga con una columna nueva de llave o de dato recorría las de valor y un análisis leía OTRA columna sin avisar.
 // Ahora cada una tiene una clave que sale de su identidad (flexRegistries.stableColumnId). Esto convierte las claves viejas de un diseño según las posiciones de HOY (no se puede saber más); si ya están convertidas no hace nada.
@@ -261,4 +296,4 @@ function upgradeStoredKeys() {
     return n;
 }
 
-module.exports = { refreshCached, warmUp, startBackground, upgradeDesign, upgradeAnalysis, upgradeStoredKeys, DIMS, periodColKey, periodOfColKey, isFlex, describe, loadTable, clearCache, distinctValues, MAX_TABLE_ROWS };
+module.exports = { liveOptions, renameLive, refreshCached, warmUp, startBackground, upgradeDesign, upgradeAnalysis, upgradeStoredKeys, DIMS, periodColKey, periodOfColKey, isFlex, describe, loadTable, clearCache, distinctValues, MAX_TABLE_ROWS };

@@ -6,6 +6,7 @@ const flex = require('./flexRegistries');
 const flexExcel = require('./flexExcel');
 const SearchSyntax = require('./public/SearchSyntax.js');
 const db = require('./db');
+const analysisSources = require('./analysisSources');
 
 const PAGE = 2000;
 const CELL_BUDGET = 20000; // celdas (renglones x columnas) que se mandan para dibujar de una vez
@@ -345,7 +346,10 @@ module.exports = function createFlexApi(deps) {
             if (moved) db.setRegistryFormat(clientId, isTestAccount, registry.key, fmt.format, changedByLabel(req));
             const who = changedByLabel(req);
             plan.entries.forEach((e) => {
-                if (e.name !== undefined) logTableChange({ clientId, tableKey: REG_TABLE, recordId: 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.regColumnaNombre', oldValue: e.now.name, newValue: e.name, changedBy: who });
+                if (e.name !== undefined) {
+                    logTableChange({ clientId, tableKey: REG_TABLE, recordId: 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.regColumnaNombre', oldValue: e.now.name, newValue: e.name, changedBy: who });
+                    analysisSources.renameLive(clientId, isTestAccount, registry.key, e.id, `v:${flex.foldName(e.name)}`); // los análisis que pedían «la más reciente» de esta columna siguen pidiéndola con el nombre nuevo
+                }
                 if (e.cls !== undefined) logTableChange({ clientId, tableKey: REG_TABLE, recordId: 0, recordLabel: `${registry.name || registry.key} · ${e.name !== undefined ? e.name : e.now.name}`, action: 'update', fieldKey: 'main.regColumnaClasificacion', oldValue: e.now.cls || '—', newValue: e.cls || '—', changedBy: who });
             });
         }

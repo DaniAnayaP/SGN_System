@@ -5415,6 +5415,14 @@
     "an2NoDataNotice": "Este archivo todavía no tiene datos cargados.",
     "an2ValueCols": "Valor de qué columna",
     "an2ValueColsHint": "una o varias del archivo; cada una es una columna nueva",
+    "an2LiveTitle": "La más reciente",
+    "an2LiveHint": "se actualiza sola con cada carga",
+    "an2LiveToday": "Hoy trae: {label}",
+    "an2LiveLast": "El último periodo",
+    "an2FixedTitle": "Una carga o periodo en particular",
+    "anRefresh": "Actualizar",
+    "anRefreshing": "Actualizando…",
+    "anRefreshDone": "Listo: datos y fórmulas al día.",
     "an2KeyTitle": "Llave",
     "an2KeyHint": "cada columna base se liga con una del archivo",
     "an2PickCol": "Elige la columna…",
@@ -10397,6 +10405,14 @@
     "anFiltersBlock": {
       "what": "Sirve para que el archivo salga solo con una parte de los renglones. Si lo dejas vacío, el archivo trae todos los códigos de todas las unidades. Si escribes algo, solo salen los renglones que coinciden (varios valores separados por coma, sin importar mayúsculas). Se aplican al extraer, no cambian los registros.",
       "example": "Unidades: GAE, GPA (solo esas dos unidades). Categorías: Alimentos (solo alimentos)."
+    },
+    "anFdLive": {
+      "what": "Una columna marcada con ⟳ «La más reciente» siempre trae la carga más nueva de esa columna (o, en un registro mensual o diario, el último periodo): cuando llega una carga nueva, la columna pasa sola a ella al actualizar o abrir el análisis. Las de «Una carga o periodo en particular» no se mueven. El encabezado siempre dice tu nombre; al pasar el cursor por él se ve de qué carga son los números de hoy.",
+      "example": "⟳ Exist → hoy trae Exist 27/nov 06:00"
+    },
+    "anRefresh": {
+      "what": "Vuelve a cargar el análisis con lo que hay hoy: los datos de los registros, las fórmulas y las columnas agregadas. Las columnas ⟳ «La más reciente» pasan a la carga más nueva; las que apuntan a una carga concreta no cambian. Las versiones ya extraídas no cambian nunca.",
+      "example": "Llegó la carga de hoy → Actualizar"
     },
     "anExtract": {
       "what": "Saca el archivo con el diseño de hoy y lo guarda como una versión nueva. Es una copia: no cambia aunque después cambie un registro. Si el diseño no saca ningún renglón, no se guarda nada.",

@@ -14,6 +14,11 @@ const AGG_LABEL = (a) => t(`main.an2Agg_${a}`);
 const FORMAT_ALL = ['general', ...kit.FORMATS_COMMON];
 const sourceOf = (key) => (st.sources || []).find((r) => r.key === key);
 const colsOf = (reg) => (reg ? reg.columns : []).filter((c) => c.kind !== 'load');
+// «La más reciente» (⟳): lo que el archivo ofrece ({ id, name?, today }); en una tabla libre cada familia de columnas con día y hora, en un registro mensual o diario el último periodo.
+const liveOpts = (regKey) => ((sourceOf(regKey) || {}).live || []);
+const liveName = (o) => (o.id === 'last' ? t('main.an2LiveLast') : (o.name || o.id));
+// al agregar una columna de una tabla libre, lo normal es que sea la más reciente (se actualiza sola); en los demás archivos, el primer periodo de siempre
+const defaultPick = (regKey) => { const reg = sourceOf(regKey); const live = liveOpts(regKey); const firstValue = colsOf(reg).find((c) => c.kind === 'value'); return reg && reg.kind === 'tabla' && live.length ? { valueCols: [], live: [live[0].id] } : { valueCols: firstValue ? [firstValue.key] : [], live: [] }; };
 // Un archivo «sin datos» (Daniel, 2026-11-26): uno de formato fijo (mensual o diario) sin ninguna fecha cargada, o una tabla libre sin cargas vigentes. Solo trae sus columnas de referencia: no hay nada que elegir como valor.
 const noData = (reg) => { if (!reg) return false; const cols = colsOf(reg); return reg.columns.some((c) => c.kind === 'dim') ? !cols.some((c) => c.kind === 'value') : !cols.length; };
 const SYN = { unidad: ['unidad', 'sitio', 'site', 'unit', 'centro de costos', 'clave unidad'], codigo: ['codigo', 'cod', 'code', 'sku', 'item', 'articulo', 'clave articulo'], descripcion: ['descripcion', 'nombre', 'description'], categoria: ['categoria', 'familia', 'category'], udm: ['udm', 'unidad de medida', 'uom'] };
@@ -45,21 +50,26 @@ function initialState(design, editId) {
     if (editing) {
         const keyMap = {};
         (design.base || []).filter((b) => b.key).forEach((b) => { const m = (editing.keyMap || []).find((k) => k.base === b.col); keyMap[b.col] = m ? m.file : (editing.registry === design.baseRegistry ? b.col : ''); });
-        return { editing, registry: editing.registry, valueCols: [...editing.valueCols], agg: editing.agg || 'sum', keyMap, kept: false, conds: (editing.conds || []).map((c) => ({ col: c.col, values: [...c.values], join: c.join === 'or' ? 'or' : 'and' })),
+        return { editing, registry: editing.registry, valueCols: [...editing.valueCols], live: [...(editing.live || [])], agg: editing.agg || 'sum', keyMap, kept: false, conds: (editing.conds || []).map((c) => ({ col: c.col, values: [...c.values], join: c.join === 'or' ? 'or' : 'and' })),
             label: editing.label, labelTouched: true, cls: editing.cls || '', color: kit.hasClassColor(editing.color) ? editing.color : null, colorTouched: false, fmt: editing.fmt || 'general', pat: editing.pat || '', style: JSON.parse(JSON.stringify(editing.style || {})) };
     }
     const other = regs.find((r) => r.key !== design.baseRegistry && r.status === 'active') || regs.find((r) => r.key === design.baseRegistry) || regs[0];
     const regKey = other ? other.key : design.baseRegistry;
     const km = suggestKeyMap(design, regKey, null);
-    const firstValue = colsOf(sourceOf(regKey)).find((c) => c.kind === 'value');
-    return { editing: null, registry: regKey, valueCols: firstValue ? [firstValue.key] : [], agg: 'sum', keyMap: km.map, kept: km.kept, conds: [], label: '', labelTouched: false, cls: '', color: null, colorTouched: false, fmt: 'general', pat: '', style: {} };
+    const pick = defaultPick(regKey);
+    return { editing: null, registry: regKey, valueCols: pick.valueCols, live: pick.live, agg: 'sum', keyMap: km.map, kept: km.kept, conds: [], label: '', labelTouched: false, cls: '', color: null, colorTouched: false, fmt: 'general', pat: '', style: {} };
 }
 const labelOfCol = (regKey, colKey) => { const c = colsOf(sourceOf(regKey)).find((x) => x.key === colKey); return c ? c.label : colKey; };
-function defaultLabel(d) { return d.valueCols.length ? labelOfCol(d.registry, d.valueCols[0]) : ''; }
-function columnFrom(d, id, valueCols) {
+function defaultLabel(d) {
+    if (d.valueCols.length) return labelOfCol(d.registry, d.valueCols[0]);
+    const o = liveOpts(d.registry).find((x) => x.id === (d.live || [])[0]);
+    return o ? liveName(o) : '';
+}
+function columnFrom(d, id, valueCols, live = []) {
     const entry = { id, label: (d.label || '').trim() || (valueCols.length ? labelOfCol(d.registry, valueCols[0]) : t('main.an2ColumnN')), registry: d.registry, valueCols, agg: d.agg,
         keyMap: Object.entries(d.keyMap).filter(([, file]) => file).map(([base, file]) => ({ base, file })),
         conds: d.conds.filter((c) => c.col && c.values.length).map((c, i) => ({ col: c.col, values: c.values, join: i && c.join === 'or' ? 'or' : 'and' })) };
+    if (live.length) entry.live = live;
     if (d.cls.trim()) { entry.cls = d.cls.trim(); if (kit.hasClassColor(d.color)) entry.color = d.color; }
     if (d.fmt && d.fmt !== 'general') { entry.fmt = d.fmt; if (d.fmt === 'pers' && d.pat) entry.pat = d.pat; }
     if (Object.keys(d.style).length) entry.style = d.style;
@@ -72,6 +82,14 @@ function chipsFor(name, items, selected, attr) {
 const swatch = (attr, value, color, on, title) => `<button type="button" class="an-sw${on ? ' on' : ''}${color ? '' : ' none'}" ${attr}="${esc(value)}" style="${color ? `background:${color}` : ''}" aria-pressed="${on ? 'true' : 'false'}" title="${esc(title || '')}" aria-label="${esc(title || '')}"></button>`;
 const hexOf = (c) => (typeof c === 'string' ? c : '#8a3590');
 
+// El renglón «La más reciente» (⟳) encima de las cargas: un botón por cada columna (Exist, Costo…) o, en un registro mensual, «El último periodo»; dice cuál es hoy.
+function liveBlock(d) {
+    const live = liveOpts(d.registry);
+    if (!live.length) return '';
+    const picked = d.live || [];
+    const today = picked.map((id) => (live.find((o) => o.id === id) || {}).today).filter(Boolean).join(' · ');
+    return `<div class="an-live-group" data-help-key="anFdLive"><span class="an-live-title">${esc(t('main.an2LiveTitle'))}</span><div class="an-valcols">${chipsFor('l', live.map((o) => ({ value: o.id, label: `⟳ ${liveName(o)}` })), (v) => picked.includes(v), 'data-fd-live')}</div>${picked.length ? `<span class="an-live-today">${esc(t('main.an2LiveToday', { label: today }))}</span><span class="an-dim">${esc(t('main.an2LiveHint'))}</span>` : ''}</div><span class="an-live-title">${esc(t('main.an2FixedTitle'))}</span>`;
+}
 function formHtml(d, design) {
     const regs = st.sources || [];
     const reg = sourceOf(d.registry);
@@ -88,7 +106,7 @@ function formHtml(d, design) {
     <label for="fd-reg" data-help-key="anFdFile">${esc(t('main.an2File'))}</label>
     <select id="fd-reg">${regs.map((r) => `<option value="${esc(r.key)}"${r.key === d.registry ? ' selected' : ''}>${esc(kit.regName(r))}${r.key === design.baseRegistry ? ` · ${esc(t('main.an2IsBase'))}` : ''}${noData(r) ? ` · ${esc(t('main.an2NoDataTag'))}` : ''}</option>`).join('')}</select>
     <p class="reg-field-label" data-help-key="anFdValue">${esc(t('main.an2ValueCols'))} <small>${esc(t('main.an2ValueColsHint'))}</small></p>
-    <div class="an-valcols">${chipsFor('v', valueFirst.map((c) => ({ value: c.key, label: c.label })), (v) => d.valueCols.includes(v), 'data-fd-val')}</div>
+    ${liveBlock(d)}<div class="an-valcols">${chipsFor('v', valueFirst.map((c) => ({ value: c.key, label: c.label })), (v) => d.valueCols.includes(v), 'data-fd-val')}</div>
     ${noData(reg) ? `<p class="admin-hint">${esc(t('main.an2NoDataNotice'))}</p>` : ''}
     <p class="reg-field-label" data-help-key="anFdKey">${esc(t('main.an2KeyTitle'))} <small>${esc(t('main.an2KeyHint'))}</small></p>
     <div class="an-keymap">${keyBase.map((b) => `<span class="an-kb">${esc(baseLabel(b.col))}</span><span class="an-arrow">←</span><select data-fd-key="${esc(b.col)}" aria-label="${esc(baseLabel(b.col))}"><option value="">${esc(t('main.an2PickCol'))}</option>${cols.map((c) => `<option value="${esc(c.key)}"${d.keyMap[b.col] === c.key ? ' selected' : ''}>${esc(c.label)}</option>`).join('')}</select>`).join('')}</div>
@@ -133,10 +151,11 @@ function openFileColumn(editId) {
             const box = host.querySelector('#fd-prev');
             if (!box) return;
             const vals = d.valueCols.length ? d.valueCols : [];
-            if (!vals.length && d.agg !== 'count') { box.innerHTML = `<span class="an-dim">${esc(t('main.an2PickValue'))}</span>`; return; }
+            const lives = d.live || [];
+            if (!vals.length && !lives.length && d.agg !== 'count') { box.innerHTML = `<span class="an-dim">${esc(t('main.an2PickValue'))}</span>`; return; }
             if (Object.values(d.keyMap).some((v) => !v)) { box.innerHTML = `<span class="an-dim">${esc(t('main.an2PickKey'))}</span>`; return; }
             try {
-                const res = await fetch(`${API}/${st.id}/column-preview`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ column: columnFrom(d, 'preview', vals.slice(0, 1)) }) });
+                const res = await fetch(`${API}/${st.id}/column-preview`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ column: columnFrom(d, 'preview', vals.slice(0, 1), vals.length ? [] : lives.slice(0, 1)) }) });
                 const out = await res.json().catch(() => ({}));
                 if (!res.ok) { box.innerHTML = `<span class="admin-error">${esc(P.errorText(out))}</span>`; return; }
                 const rows = (out.sample || []).slice(0, 6);
@@ -157,10 +176,11 @@ function openFileColumn(editId) {
             const el = event.target;
             if (el.id === 'fd-reg') {
                 d.registry = el.value; refreshKeys(); d.conds = [];
-                const firstValue = colsOf(sourceOf(d.registry)).find((c) => c.kind === 'value'); d.valueCols = firstValue ? [firstValue.key] : [];
+                const pick = defaultPick(d.registry); d.valueCols = pick.valueCols; d.live = pick.live;
                 if (!d.labelTouched) d.label = '';
                 draw(); return;
             }
+            if (el.dataset.fdLive !== undefined) { d.live = el.checked ? [...(d.live || []), el.dataset.fdLive] : (d.live || []).filter((v) => v !== el.dataset.fdLive); draw(); return; }
             if (el.dataset.fdVal !== undefined) { d.valueCols = el.checked ? [...d.valueCols, el.dataset.fdVal] : d.valueCols.filter((v) => v !== el.dataset.fdVal); if (!d.labelTouched) { const ph = host.querySelector('#fd-label'); if (ph) ph.placeholder = defaultLabel(d); } runPreview(); return; }
             if (el.dataset.fdKey !== undefined) { d.keyMap[el.dataset.fdKey] = el.value; d.kept = false; runPreview(); return; }
             if (el.dataset.fdCcol !== undefined) { const c = d.conds[Number(el.dataset.fdCcol)]; c.col = el.value; c.values = []; draw(); return; }
@@ -199,21 +219,23 @@ function openFileColumn(editId) {
         overlay.querySelector('[data-an-go]').addEventListener('click', async (event) => {
             const btn = event.currentTarget;
             err('');
-            if (!d.valueCols.length && d.agg !== 'count') { err(t('main.anErr_COL_VALUE')); return; }
+            if (!d.valueCols.length && !(d.live || []).length && d.agg !== 'count') { err(t('main.anErr_COL_VALUE')); return; }
             if (Object.values(d.keyMap).some((v) => !v)) { err(t('main.anErr_COL_KEY')); return; }
             btn.disabled = true;
             try {
                 const stamp = Date.now().toString(36);
                 let list;
                 if (d.editing) {
-                    const entry = columnFrom(d, d.editing.id, d.valueCols);
+                    const entry = columnFrom(d, d.editing.id, d.valueCols, d.live || []);
                     list = (design.columns || []).map((c) => (c.id === d.editing.id ? entry : c));
                 } else {
-                    const many = d.valueCols.length > 1;
-                    const picked = d.valueCols.length ? d.valueCols : [''];
-                    const added = picked.map((vc, k) => {
-                        const entry = columnFrom(d, `f${stamp}${k}`, vc ? [vc] : []);
-                        if (many) entry.label = `${(d.label || '').trim() ? `${d.label.trim()} ` : ''}${labelOfCol(d.registry, vc)}`.slice(0, 80);
+                    // cada columna de valor elegida (una carga concreta o «la más reciente») es una columna nueva
+                    const picks = [...d.valueCols.map((v) => ({ v })), ...(d.live || []).map((l) => ({ l }))];
+                    if (!picks.length) picks.push({});
+                    const many = picks.length > 1;
+                    const added = picks.map((p, k) => {
+                        const entry = columnFrom(d, `f${stamp}${k}`, p.v ? [p.v] : [], p.l ? [p.l] : []);
+                        if (many) entry.label = `${(d.label || '').trim() ? `${d.label.trim()} ` : ''}${p.v ? labelOfCol(d.registry, p.v) : liveName(liveOpts(d.registry).find((o) => o.id === p.l) || { id: p.l })}`.slice(0, 80);
                         return entry;
                     });
                     list = [...(design.columns || []), ...added];

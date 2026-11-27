@@ -10756,3 +10756,9 @@ th.an-ref-key::after{ content: " ·"; opacity: 0.55; }
 /* «Cargando…» mientras se abre un análisis o un registro (antes la tabla se quedaba en blanco) */
 .reg-loading-note{ display: flex; align-items: center; gap: 0.5rem; margin: 0.4rem 0; font-size: 0.9rem; font-weight: 600; color: var(--color-accent, #b23fb8); }
 .reg-loading-note .bx{ font-size: 1.2rem; }
+
+/* ⟳ «La más reciente» en «De un archivo» (Daniel, 2026-11-26, opción A): un renglón encima de las cargas */
+.an-live-group{ display: flex; flex-direction: column; gap: 0.35rem; padding: 0.5rem 0.7rem; border: 1px dashed color-mix(in srgb, var(--color-accent, #d05bcd) 55%, transparent); border-radius: 0.8rem; background: color-mix(in srgb, var(--color-accent, #d05bcd) 7%, var(--color-surface, #fff)); }
+.an-live-group .an-valcols{ margin: 0; }
+.an-live-title{ font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.7; }
+.an-live-today{ align-self: flex-start; padding: 0.15rem 0.7rem; border-radius: 0.6rem; background: #dcefde; color: #2a7a48; font-size: 0.78rem; font-weight: 600; }

@@ -28,6 +28,29 @@ const cellOf = (v) => (v === null || v === undefined ? '' : v);
 // Las columnas del archivo, por clave → posición.
 const indexOf = (table) => new Map(table.columns.map((c, i) => [c.key, i]));
 
+// «La más reciente» (Daniel, 2026-11-26): una columna de valor puede pedir, en vez de una columna concreta, la más nueva de la tabla de HOY.
+//   · tabla libre: liveId «v:<nombre>» = la columna de ese nombre de la carga más reciente (por su día y hora; si empatan, la última que se cargó);
+//   · registro mensual o diario: «last» = el último periodo.
+function resolveLiveIdx(columns, liveId) {
+    let best = -1;
+    if (liveId === 'last') {
+        columns.forEach((c, i) => { if (c.kind === 'value' && c.period && (best < 0 || c.period > columns[best].period)) best = i; });
+        return best;
+    }
+    columns.forEach((c, i) => {
+        if (c.liveId !== liveId) return;
+        if (best < 0) { best = i; return; }
+        const a = c.at || ''; const b = columns[best].at || '';
+        if (a > b || (a === b && (c.loadId || 0) > (columns[best].loadId || 0))) best = i;
+    });
+    return best;
+}
+// Las posiciones de las columnas de valor de una columna del análisis: las que eligió (por clave) y las «más recientes» de hoy.
+function valueIndexes(col, table, idx) {
+    const out = (col.valueCols || []).map((k) => idx.get(k)).filter((i) => i !== undefined);
+    (col.live || []).forEach((id) => { const i = resolveLiveIdx(table.columns, id); if (i >= 0 && !out.includes(i)) out.push(i); });
+    return out;
+}
 // Los valores de UNA columna nueva, uno por renglón del análisis. rows = [{ tuple }] con la llave de cada renglón (ya normalizada); keyBase = las columnas base llave, en orden.
 // Devuelve { values } o { error, field }.
 function columnValues(col, tables, baseRegistry, keyBase, rows) {
@@ -41,7 +64,7 @@ function columnValues(col, tables, baseRegistry, keyBase, rows) {
         if (!fileCol || !idx.has(fileCol)) return { error: 'COL_KEY', field: col.id };
         keyIdx.push(idx.get(fileCol));
     }
-    const valueIdx = (col.valueCols || []).map((k) => idx.get(k)).filter((i) => i !== undefined);
+    const valueIdx = valueIndexes(col, table, idx);
     if (!valueIdx.length && col.agg !== 'count') return { error: 'COL_VALUE', field: col.id };
     const conds = [];
     for (const c of col.conds || []) {
@@ -111,7 +134,12 @@ function buildExtractionV2(design, tables) {
     for (const col of design.columns || []) {
         const out = columnValues(col, tables, design.baseRegistry, keyBase, rows);
         if (out.error) return out;
-        columns.push({ key: `c_${col.id}`, group: 'consulted', id: col.id, label: col.label, registry: col.registry, agg: col.agg, valueCols: col.valueCols });
+        const table = tables[col.registry];
+        const vIdx = valueIndexes(col, table, indexOf(table));
+        const def = { key: `c_${col.id}`, group: 'consulted', id: col.id, label: col.label, registry: col.registry, agg: col.agg, valueCols: vIdx.map((i) => table.columns[i].key) };
+        // la columna que hoy es «la más reciente» (se ve al pasar el cursor por el encabezado; el encabezado en sí no cambia)
+        if ((col.live || []).length) { def.live = col.live; def.liveTitle = (col.live || []).map((id) => resolveLiveIdx(table.columns, id)).filter((i) => i >= 0).map((i) => table.columns[i].label).join(' · '); }
+        columns.push(def);
         extra.push(out.values);
     }
     const data = rows.map((row, i) => [...row.vals, ...extra.map((vals) => vals[i])]);
@@ -134,4 +162,4 @@ function baseCounts(baseTable, base) {
     return { distinct: seen.size, total };
 }
 
-module.exports = { MAX_ROWS, AGGS2, norm, parseNum, buildExtractionV2, baseCounts, columnValues };
+module.exports = { MAX_ROWS, AGGS2, norm, parseNum, buildExtractionV2, baseCounts, columnValues, resolveLiveIdx };

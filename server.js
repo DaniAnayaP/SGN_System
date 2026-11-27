@@ -7664,6 +7664,7 @@ function anCheckDesign(req, design) {
         const cols = colsFor(c.registry);
         if (!cols) return { error: 'COL_REGISTRY', field: c.id };
         if (c.valueCols.some((v) => !cols.has(v))) return { error: 'COL_NOT_FOUND', field: c.id };
+        if ((c.live || []).length) { const reg = regs.find((r) => r.key === c.registry); const have = new Set(reg ? analysisSources.liveOptions(clientId, isTestAccount, reg).map((o) => o.id) : []); if (c.live.some((id) => !have.has(id))) return { error: 'COL_NOT_FOUND', field: c.id }; }
         if (c.conds.some((x) => !cols.has(x.col))) return { error: 'COL_COND', field: c.id };
         for (const b of keyBase) {
             const mapped = c.keyMap.find((k) => k.base === b.col);
@@ -7714,7 +7715,7 @@ app.get('/api/business/manual-analyses/sources', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     const { clientId, isTestAccount } = req.user;
     const lang = req.query.lang === 'en' ? 'en' : 'es';
-    res.json({ registries: regClientRegistries(clientId, isTestAccount).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, name: r.name, custom: r.custom, status: r.status, obsolete: !!r.obsolete, columns: analysisSources.describe(clientId, isTestAccount, r, lang) })), ...anAbilities(req) });
+    res.json({ registries: regClientRegistries(clientId, isTestAccount).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, name: r.name, custom: r.custom, status: r.status, obsolete: !!r.obsolete, columns: analysisSources.describe(clientId, isTestAccount, r, lang), live: analysisSources.liveOptions(clientId, isTestAccount, r, lang) })), ...anAbilities(req) });
 });
 app.get('/api/business/manual-analyses/source-values', requireAuth, (req, res) => {
     if (!anClient(req, res)) return;
