@@ -6064,6 +6064,8 @@
     "colRegAnularAuth": "Anular carga",
     "colRegCrearAuth": "Agregar nuevo registro",
     "colRegTotalesAuth": "Totales de la tabla",
+    "colRegObsoletosAuth": "Pasar a obsoletos",
+    "colRegVerObsoletosAuth": "Ver registros obsoletos",
     "regNew": "Agregar nuevo registro",
     "regNewAbbr1": "Nuevo registro",
     "regNewAbbr2": "Nuevo reg.",

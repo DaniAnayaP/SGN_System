@@ -6065,6 +6065,8 @@
     "colRegAnularAuth": "Void load",
     "colRegCrearAuth": "Add new record set",
     "colRegTotalesAuth": "Table totals",
+    "colRegObsoletosAuth": "Move to obsolete",
+    "colRegVerObsoletosAuth": "See obsolete record sets",
     "regNew": "Add new record set",
     "regNewAbbr1": "New record set",
     "regNewAbbr2": "New set",

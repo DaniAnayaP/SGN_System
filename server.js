@@ -7241,7 +7241,7 @@ app.post('/api/business/pos-sales/import', requireAuth, posSalesRaw, async (req,
 const manualRegistries = require('./manualRegistries');
 const REG_TABLE = 'registros';
 const REG_LOADS_TABLE = 'registros-cargas';
-const REG_COLS = { plantilla: 'colRegCargarPlantillaAuth', excel: 'colRegCargarExcelAuth', annul: 'colRegAnularAuth', create: 'colRegCrearAuth', totals: 'colRegTotalesAuth' };
+const REG_COLS = { plantilla: 'colRegCargarPlantillaAuth', excel: 'colRegCargarExcelAuth', annul: 'colRegAnularAuth', create: 'colRegCrearAuth', totals: 'colRegTotalesAuth', obsolete: 'colRegObsoletosAuth', viewObsolete: 'colRegVerObsoletosAuth' };
 const regRaw = express.raw({ type: () => true, limit: '60mb' });
 const regLoading = new Set(); // una carga a la vez por registro y por cliente
 const REG_MESSAGES = {
@@ -7251,7 +7251,10 @@ const REG_MESSAGES = {
 function regAbilities(req) {
     const admin = !!req.user.isClientAdmin;
     const grants = admin ? null : getUserEffectiveGrants(req.user.sub);
-    return { canTemplate: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.plantilla), canExcel: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.excel), canAnnul: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.annul), canCreateRegistry: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.create), canTotals: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.totals) };
+    return { canTemplate: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.plantilla), canExcel: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.excel), canAnnul: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.annul), canCreateRegistry: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.create), canTotals: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.totals),
+        // los obsoletos (Daniel, 2026-11-27, «las dos hojas»): «Pasar a obsoletos» es un botón propio, separado de «Agregar nuevo registro»; ver los registros obsoletos es otra hoja. Quien puede pasar a obsoletos también los ve (si no, no podría sacarlos de ahí).
+        canObsolete: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.obsolete),
+        canViewObsolete: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.viewObsolete) || canCreateColumn(grants, REG_TABLE, REG_COLS.obsolete) };
 }
 // Los registros de un cliente: los dos de siempre (nombre por idioma) y los que agregó él (nombre y lo que mide, tal como los escribió). Los desactivados siguen existiendo (sus datos se conservan).
 const regFoldName = (text) => String(text || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -7266,7 +7269,7 @@ function regClientRegistries(clientId, isTestAccount) {
 function regRegistry(req, res, { needActive = false } = {}) {
     if (!req.user.clientId) { res.status(404).json({ message: 'No client for this account.' }); return null; }
     const registry = regClientRegistries(req.user.clientId, req.user.isTestAccount).find((r) => r.key === String(req.params.key || ''));
-    if (!registry) { res.status(404).json({ code: 'REGISTRY_NOT_FOUND', message: 'Ese registro no existe.' }); return null; }
+    if (!registry || (registry.obsolete && !regAbilities(req).canViewObsolete)) { res.status(404).json({ code: 'REGISTRY_NOT_FOUND', message: 'Ese registro no existe.' }); return null; }
     if (needActive && registry.status !== 'active') { res.status(409).json({ code: 'REG_INACTIVE', message: 'Ese registro está desactivado.' }); return null; }
     if (needActive && registry.obsolete) { res.status(409).json({ code: 'REG_OBSOLETE', message: 'Ese registro es obsoleto: ya no recibe cargas.' }); return null; }
     return registry;
@@ -7281,7 +7284,7 @@ app.get('/api/business/manual-registries', requireAuth, (req, res) => {
     const abilities = regAbilities(req);
     res.json({
         // un registro desactivado solo lo ve quien puede crearlos (para volver a activarlo)
-        registries: regClientRegistries(clientId, isTestAccount).filter((r) => r.status === 'active' || abilities.canCreateRegistry).map((r) => ({ ...r, periods: registryPeriods(clientId, isTestAccount, r.key), lastLoad: registryLastLoad(clientId, isTestAccount, r.key) })),
+        registries: regClientRegistries(clientId, isTestAccount).filter((r) => (r.status === 'active' || abilities.canCreateRegistry) && (!r.obsolete || abilities.canViewObsolete)).map((r) => ({ ...r, periods: registryPeriods(clientId, isTestAccount, r.key), lastLoad: registryLastLoad(clientId, isTestAccount, r.key) })),
         ...abilities,
     });
 });
@@ -7289,9 +7292,10 @@ app.get('/api/business/manual-registries', requireAuth, (req, res) => {
 app.get('/api/business/manual-registries/menu', requireAuth, (req, res) => {
     res.set('Cache-Control', 'no-store');
     if (!req.user.clientId) return res.json({ registries: [], canCreateRegistry: false });
-    const canCreateRegistry = regAbilities(req).canCreateRegistry;
+    const abilities = regAbilities(req);
+    const canCreateRegistry = abilities.canCreateRegistry;
     // los de siempre llevan su nombre por idioma (nameKey); los agregados, el nombre que les puso el cliente. Un desactivado solo lo ve quien puede crear (para volver a activarlo).
-    res.json({ registries: regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => r.status === 'active' || canCreateRegistry).map((r) => ({ key: r.key, custom: r.custom, status: r.status, obsolete: !!r.obsolete, ...(r.custom ? { name: r.name } : { nameKey: r.nameKey }) })), canCreateRegistry });
+    res.json({ registries: regClientRegistries(req.user.clientId, req.user.isTestAccount).filter((r) => (r.status === 'active' || canCreateRegistry) && (!r.obsolete || abilities.canViewObsolete)).map((r) => ({ key: r.key, custom: r.custom, status: r.status, obsolete: !!r.obsolete, ...(r.custom ? { name: r.name } : { nameKey: r.nameKey }) })), canCreateRegistry });
 });
 // Agregar un registro nuevo: nombre, periodicidad (mensual o diaria) y lo que mide. Lleva las mismas columnas de referencia que los demás. Del botón «Crear registro» (colRegCrearAuth).
 function regNameTaken(req, name, exceptKey = '') {
@@ -7322,8 +7326,9 @@ app.post('/api/business/manual-registries', requireAuth, (req, res) => {
 app.patch('/api/business/manual-registries/:key', requireAuth, (req, res) => {
     const registry = regRegistry(req, res);
     if (!registry) return;
-    if (!regAbilities(req).canCreateRegistry) return regForbidden(res);
     const body = req.body || {};
+    const abilities = regAbilities(req);
+    if (body.obsolete !== undefined ? !abilities.canObsolete : !abilities.canCreateRegistry) return regForbidden(res); // «Pasar a obsoletos» es de su propio botón; lo demás (nombre, convertir, desactivar), de «Agregar nuevo registro»
     // Obsoletos: vale para los de siempre y para los agregados; los datos y las cargas se conservan
     if (body.obsolete !== undefined) {
         if (typeof body.obsolete !== 'boolean') return res.status(400).json({ code: 'REG_STATUS', message: 'Estado no válido.' });

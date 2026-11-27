@@ -68,7 +68,7 @@ async function loadRegistries() {
     if (!res.ok) throw new Error('load failed');
     const body = await res.json();
     st.registries = body.registries || [];
-    st.canTemplate = !!body.canTemplate; st.canExcel = !!body.canExcel; st.canAnnul = !!body.canAnnul; st.canCreateRegistry = !!body.canCreateRegistry;
+    st.canTemplate = !!body.canTemplate; st.canExcel = !!body.canExcel; st.canAnnul = !!body.canAnnul; st.canCreateRegistry = !!body.canCreateRegistry; st.canObsolete = !!body.canObsolete;
 }
 
 // Cambiar nombre y desactivar/activar: solo para los registros que agregó el cliente (los dos de siempre no se tocan) y para quien tiene el botón «Crear registro».
@@ -76,7 +76,7 @@ function renderManage() {
     let bar = document.getElementById('reg-manage');
     const reg = currentRegistry();
     if (!reg) { if (bar) bar.remove(); return; }
-    const canManage = !!st.canCreateRegistry; // los de siempre solo traen «Pasar a obsoletos»; los agregados, además, cambiar nombre, convertir y desactivar
+    const canManage = !!st.canCreateRegistry; // cambiar nombre, convertir y desactivar (solo los agregados), de «Agregar nuevo registro»; «Pasar a obsoletos» (todos), de su propio botón del árbol
     if (!bar) {
         bar = document.createElement('div');
         bar.id = 'reg-manage';
@@ -97,11 +97,11 @@ function renderManage() {
         btn.addEventListener('click', onClick);
         bar.appendChild(btn);
     };
-    if (!canManage) return; // sin el permiso de administrar registros solo se ve el nombre
-    if (reg.custom) make('bx-edit', 'main.regRename', () => openRenameRegistry(reg));
-    if (reg.custom && reg.kind !== 'tabla' && !reg.lastLoad && !reg.obsolete) make('bx-table', 'main.regToTabla', () => openConvertRegistry(reg)); // solo mientras no tenga cargas
-    make(reg.obsolete ? 'bx-archive-out' : 'bx-archive-in', reg.obsolete ? 'main.regRestoreObsolete' : 'main.regMakeObsolete', () => toggleObsolete(reg));
-    if (reg.custom) make(reg.status === 'active' ? 'bx-hide' : 'bx-show', reg.status === 'active' ? 'main.regDeactivate' : 'main.regActivate', () => toggleRegistry(reg));
+    if (!canManage && !st.canObsolete) return; // sin ningún permiso de administrar registros solo se ve el nombre
+    if (canManage && reg.custom) make('bx-edit', 'main.regRename', () => openRenameRegistry(reg));
+    if (canManage && reg.custom && reg.kind !== 'tabla' && !reg.lastLoad && !reg.obsolete) make('bx-table', 'main.regToTabla', () => openConvertRegistry(reg)); // solo mientras no tenga cargas
+    if (st.canObsolete) make(reg.obsolete ? 'bx-archive-out' : 'bx-archive-in', reg.obsolete ? 'main.regRestoreObsolete' : 'main.regMakeObsolete', () => toggleObsolete(reg));
+    if (canManage && reg.custom) make(reg.status === 'active' ? 'bx-hide' : 'bx-show', reg.status === 'active' ? 'main.regDeactivate' : 'main.regActivate', () => toggleRegistry(reg));
 }
 // La opción «＋ Agregar nuevo registro» del menú lateral abre esta pantalla con ?nuevo=1: se muestra la ventana de alta (solo con el botón «Crear registro») y se limpia la dirección.
 function openNewFromMenu() {
