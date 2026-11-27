@@ -28,7 +28,7 @@ const regName = (r) => (r ? (r.name || t(r.nameKey)) : '');
 const colKeyOf = (key) => `an_${key}`;
 
 const params = new URLSearchParams(location.search);
-const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, sources: [], tab: params.get('tab') || '', extraction: null, data: null, text: '', selMode: false, sel: new Set(), bulkOpen: false, lastPick: -1, entries: [], leaving: false, refreshing: false };
+const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, sources: [], tab: params.get('tab') || '', extraction: null, data: null, text: '', selMode: false, sel: new Set(), bulkOpen: false, lastPick: -1, entries: [], leaving: false, refreshing: false, view: null, sortSpec: null, cf: null };
 const wrapperOf = (id) => document.querySelector(`[data-table-id="${id}"]`);
 const tableOf = (id) => wrapperOf(id)?.querySelector('table.data-table');
 const registryByKey = (k) => st.registries.find((r) => r.key === k) || (st.sources || []).find((r) => r.key === k);
@@ -1101,6 +1101,7 @@ function setupFileFormat(table, cols) {
 function fullDownloadApplies() {
     const table = tableOf(FILE_TABLE);
     if (!st.data || !st.data.truncated || !table) return false;
+    if (st.cf || st.sortSpec) return false; // el filtro y el orden de la pantalla solo existen sobre lo que se ve
     if (table.tBodies[0].querySelector('tr.data-table-row-col-filtered')) return false;
     if (table.querySelector('thead th.data-table-col-sort-asc, thead th.data-table-col-sort-desc')) return false;
     return true;
@@ -1155,10 +1156,10 @@ function fileCellPlan(cols) {
     });
 }
 function fileRowsHtml(from, to) {
-    const rows = st.data.rows; const plan = st.filePlan; const html = [];
+    const rows = st.data.rows; const plan = st.filePlan; const view = st.view; const html = [];
     for (let r = from; r < to; r += 1) {
-        const row = rows[r];
-        let tr = `<tr data-r="${r}">`; // el número del renglón de los datos: la descarga con formato toma de ahí el valor de cada celda
+        const at = view[r]; const row = rows[at]; // st.view = los renglones de los datos que se ven (con el filtro y el orden de la pantalla)
+        let tr = `<tr data-r="${at}">`; // el número del renglón de los datos: la descarga con formato toma de ahí el valor de cada celda
         for (let k = 0; k < plan.length; k += 1) {
             const p = plan[k]; const raw = row[p.i]; const v = p.fmt(raw);
             // el número tal cual (data-v) para poder volver a darle formato sin recargar; con formato, también para ordenar por el número y no por el texto
@@ -1171,8 +1172,8 @@ function fileRowsHtml(from, to) {
 }
 function drawFileRows(count) {
     const table = tableOf(FILE_TABLE);
-    if (!st.data || !st.filePlan || !table) return 0;
-    const to = Math.min(st.data.rows.length, st.drawn + count);
+    if (!st.data || !st.filePlan || !st.view || !table) return 0;
+    const to = Math.min(st.view.length, st.drawn + count);
     if (to <= st.drawn) return 0;
     table.tBodies[0].insertAdjacentHTML('beforeend', fileRowsHtml(st.drawn, to));
     const added = to - st.drawn;
@@ -1180,12 +1181,89 @@ function drawFileRows(count) {
     updateFileNote();
     return added;
 }
+// ---- orden y filtro por columna sobre los datos (Daniel, 2026-11-27, «se pasma»): dibujar los 5,000 renglones × 40 columnas (200,000 celdas) tardaba ≈8 s; ahora se ordena y se filtra lo que ya está en memoria y se dibujan solo los primeros ----
+const FILTER_VALUE_LIMIT = 400; // como en Registros: una columna con más valores distintos no ofrece la lista de casillas, solo se escribe lo buscado
+const ruleNum = (value) => { const s = String(value === null || value === undefined ? '' : value).trim().replace(/[$,\s%]/g, ''); return s === '' || !/^-?\d+(\.\d+)?$/.test(s) ? null : Number(s); };
+const shownText = (v) => (v === null || v === undefined || v === '' ? '—' : String(v));
+const dataColumnIndexes = () => new Map(((st.data && st.data.columns) || []).map((c, i) => [colKeyOf(c.key), i]));
+// lo que la celda muestra (el mismo texto con que se dibuja): el filtro de casillas trabaja con eso
+function cellText(r, i) { const p = st.filePlan && st.filePlan[i]; const raw = st.data.rows[r][i]; return shownText(p ? p.fmt(raw) : raw); }
+// El filtro por columna de la pantalla (spec = { f: { columna: [valores] }, r: { columna: regla } }) como una prueba sobre un renglón de los datos; la misma regla que aplica el servidor en Registros.
+function buildRowFilter(spec) {
+    if (!spec) return null;
+    const at = dataColumnIndexes(); const conds = [];
+    Object.keys({ ...(spec.f || {}), ...(spec.r || {}) }).forEach((key) => {
+        const idx = at.get(key);
+        if (idx === undefined) return;
+        const cond = { idx };
+        const set = spec.f && spec.f[key];
+        if (Array.isArray(set)) cond.set = new Set(set.map(String));
+        const rule = spec.r && spec.r[key];
+        if (rule && typeof rule === 'object') {
+            if (rule.kind === 'text') { const text = String(rule.text || ''); if (SearchSyntax.split(text).length) cond.test = SearchSyntax.compile(['startsWith', 'equals'].includes(rule.mode) ? rule.mode : 'contains', text); }
+            else if (rule.kind === 'range') { const lo = ruleNum(rule.from); const hi = ruleNum(rule.to); if (lo !== null || hi !== null) cond.range = { lo, hi }; }
+        }
+        if (cond.set || cond.test || cond.range) conds.push(cond);
+    });
+    if (!conds.length) return null;
+    return (r) => {
+        for (const c of conds) {
+            const shown = cellText(r, c.idx);
+            if (c.set && !c.set.has(shown)) return false;
+            if (c.test && !c.test(shown)) return false;
+            if (c.range) { const n = ruleNum(shown); if (n === null) return false; if ((c.range.lo !== null && n < c.range.lo) || (c.range.hi !== null && n > c.range.hi)) return false; }
+        }
+        return true;
+    };
+}
+// st.view: los renglones de los datos que se ven, en su orden (los que pasan el filtro y luego el orden de la columna elegida; los vacíos al final).
+function buildView() {
+    const data = st.data;
+    if (!data) { st.view = []; return; }
+    const keep = buildRowFilter(st.cf);
+    const view = [];
+    for (let r = 0; r < data.rows.length; r += 1) if (!keep || keep(r)) view.push(r);
+    const at = st.sortSpec ? dataColumnIndexes().get(st.sortSpec.key) : undefined;
+    if (at !== undefined) {
+        const dir = st.sortSpec.dir === 'desc' ? -1 : 1;
+        const collator = new Intl.Collator(lang() === 'en' ? 'en' : 'es', { sensitivity: 'base', numeric: true });
+        const val = (r) => { const v = data.rows[r][at]; return v === null || v === undefined || v === '' ? null : v; };
+        const keys = new Map(view.map((r) => [r, val(r)]));
+        view.sort((a, b) => {
+            const x = keys.get(a); const y = keys.get(b);
+            if (x === null || y === null) return x === y ? 0 : (x === null ? 1 : -1);
+            return (typeof x === 'number' && typeof y === 'number' ? x - y : collator.compare(String(x), String(y))) * dir;
+        });
+    }
+    st.view = view;
+}
+// Vuelve a dibujar los primeros renglones del resultado (el resto sigue por partes al bajar o con «Mostrar más»).
+function applyFileView() {
+    const table = tableOf(FILE_TABLE);
+    if (!table || !st.data) return;
+    buildView();
+    table.tBodies[0].innerHTML = '';
+    st.drawn = 0;
+    drawFileRows(FIRST_ROWS);
+    ensureEmpty(FILE_TABLE, st.data.columns.length);
+    const wrapper = wrapperOf(FILE_TABLE); if (wrapper) wrapper.scrollTop = 0;
+    updateFileNote();
+}
+function setFileSort(key, dir) { st.sortSpec = dir ? { key, dir } : null; applyFileView(); }
+// La lista de casillas del filtro de una columna: los valores distintos que muestra (de los datos que trae la pantalla).
+async function fileColumnValues(key) {
+    const at = dataColumnIndexes().get(key);
+    if (at === undefined || !st.data) return { values: [], complete: true };
+    const seen = new Set();
+    for (let r = 0; r < st.data.rows.length; r += 1) { seen.add(cellText(r, at)); if (seen.size > FILTER_VALUE_LIMIT) return { values: [], complete: false }; }
+    return { values: [...seen].sort((a, b) => a.localeCompare(b, lang() === 'en' ? 'en' : 'es', { numeric: true, sensitivity: 'base' })), complete: true };
+}
 function drawAllFileRows() { drawFileRows(Infinity); return Promise.resolve(true); }
 function watchFileScroll(wrapper) {
     if (!wrapper || wrapper.dataset.anScroll) return;
     wrapper.dataset.anScroll = '1';
     wrapper.addEventListener('scroll', () => {
-        if (st.data && st.drawn < st.data.rows.length && wrapper.scrollTop + wrapper.clientHeight >= wrapper.scrollHeight - 800) drawFileRows(NEXT_ROWS);
+        if (st.view && st.drawn < st.view.length && wrapper.scrollTop + wrapper.clientHeight >= wrapper.scrollHeight - 800) drawFileRows(NEXT_ROWS);
     }, { passive: true });
 }
 // El aviso de abajo: «Mostrando X de Y» con los botones para dibujar más mientras falten renglones; si ya están todos los que llegaron pero el análisis tiene más, avisa que son los primeros.
@@ -1193,15 +1271,17 @@ function updateFileNote() {
     const body = st.data;
     const wrapper = wrapperOf(FILE_TABLE);
     let note = document.getElementById('an-truncated');
-    const partial = !!body && st.drawn < body.rows.length;
+    const partial = !!body && !!st.view && st.drawn < st.view.length;
     if (!body || !wrapper || (!partial && !body.truncated)) { if (note) note.remove(); return; }
     if (!note) { note = document.createElement('p'); note.id = 'an-truncated'; note.className = 'admin-hint reg-more'; wrapper.after(note); }
     note.textContent = '';
     const text = document.createElement('span');
-    text.textContent = partial ? t('main.regShowing', { shown: num(st.drawn), total: num(body.total) }) : t('main.anTruncated', { shown: body.rows.length, total: num(body.total) });
+    text.textContent = partial ? t('main.regShowing', { shown: num(st.drawn), total: num(st.cf ? st.view.length : body.total) }) : t('main.anTruncated', { shown: body.rows.length, total: num(body.total) });
     note.appendChild(text);
     if (partial) {
-        [['main.regShowMore', () => drawFileRows(NEXT_ROWS)], ['main.regShowAll', () => drawAllFileRows()]].forEach(([key, action]) => {
+        // «Mostrar todos» dibuja de golpe lo que falta (con 40 columnas, 5,000 renglones son 200,000 celdas y la página se congelaba): solo se ofrece cuando es poco; si no, quedan «Mostrar más», el orden, el filtro y la descarga
+        const heavy = st.view.length * ((st.data && st.data.columns.length) || 1) > 60000;
+        [['main.regShowMore', () => drawFileRows(NEXT_ROWS)], ...(heavy ? [] : [['main.regShowAll', () => drawAllFileRows()]])].forEach(([key, action]) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'btn btn-secondary reg-more-btn';
@@ -1254,11 +1334,14 @@ async function loadFile() {
         const tbody = tableOf(FILE_TABLE).tBodies[0];
         tbody.innerHTML = '';
         st.filePlan = fileCellPlan(cols);
+        buildView(); // el filtro y el orden que ya estaban puestos se conservan al volver a leer
         st.drawn = 0;
         drawFileRows(FIRST_ROWS); // el resto se dibuja por partes: dibujar los 5,000 renglones de golpe tardaba más de 5 segundos en el navegador
         ensureEmpty(FILE_TABLE, columns.length);
         if (first && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 1);
-        if (first && Dashboard.registerPartialTable) Dashboard.registerPartialTable(FILE_TABLE, { isComplete: () => !st.data || st.drawn >= st.data.rows.length, loadAll: drawAllFileRows });
+        if (first && Dashboard.registerPartialTable) Dashboard.registerPartialTable(FILE_TABLE, { isComplete: () => !st.data || !st.view || st.drawn >= st.view.length, loadAll: drawAllFileRows, dataMode: true, sortRows: setFileSort, rowIndexes: () => (st.view || []).slice() });
+        // el filtro por columna y sus listas de valores salen de los datos que ya trae la pantalla (no de las celdas dibujadas)
+        if (first && Dashboard.registerServerFilteredTable) Dashboard.registerServerFilteredTable(FILE_TABLE, { onChange: (spec) => { st.cf = spec; applyFileView(); }, getValues: fileColumnValues });
         watchFileScroll(wrapper);
         // el aspecto de cada columna (negrita, colores, bordes…) se pone después de armar la tabla
         cols.forEach((c) => { if (c.group === 'consulted' && c.style) window.AnalysisKit.applyLook(tableOf(FILE_TABLE), colKeyOf(c.key), c.style); });

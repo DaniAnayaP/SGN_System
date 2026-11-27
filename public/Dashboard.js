@@ -4361,6 +4361,7 @@ function applySortIndicators(tableId) {
 function applyTableSort(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
+    if (partialTableLoaders.get(tableId)?.dataMode) return; // el orden lo lleva la pantalla sobre sus datos (ver registerPartialTable), no las filas dibujadas
     const tbody = state.table.tBodies[0];
     if (!tbody) return;
     const rows = Array.from(tbody.rows).filter((r) => !r.querySelector('td.data-table-empty-cell'));
@@ -4396,6 +4397,8 @@ function sortTableByColumn(tableId, key) {
     state.sortKey = nextDir ? key : null;
     state.sortDir = nextDir;
     applySortIndicators(tableId);
+    const loader = partialTableLoaders.get(tableId);
+    if (loader && loader.dataMode && loader.sortRows) { loader.sortRows(state.sortKey, state.sortDir); return; } // la pantalla ordena sus datos y dibuja los primeros
     applyTableSort(tableId);
 }
 function attachSortHandler(th, tableId) {
@@ -4406,6 +4409,9 @@ function attachSortHandler(th, tableId) {
         if (event.target.closest('.data-table-col-resize-handle') || event.target.closest('.data-table-col-filter-trigger')) return;
         if (!hasColumnSearchGrant(tableId, th.dataset.col, 'sort')) return;
         // ordenar mueve las filas dibujadas: una tabla que dibuja solo una parte de sus filas (registerPartialTable) dibuja primero el resto
+        // (salvo una con dataMode: esa ordena sus datos y no necesita dibujar todo)
+        const sortLoader = partialTableLoaders.get(tableId);
+        if (sortLoader && sortLoader.dataMode) { sortTableByColumn(tableId, th.dataset.col); return; }
         const pending = needAllTableRows(tableId);
         if (pending) { pending.then(() => sortTableByColumn(tableId, th.dataset.col)); return; }
         sortTableByColumn(tableId, th.dataset.col);
@@ -5557,7 +5563,8 @@ function attachColumnFilterTrigger(th, tableId) {
     btn.addEventListener('click', (event) => {
         event.stopPropagation();
         // los valores del menú salen de las filas dibujadas: con una tabla parcial (registerPartialTable) se dibuja primero el resto
-        const pending = needAllTableRows(tableId);
+        const filterLoader = partialTableLoaders.get(tableId);
+        const pending = filterLoader && filterLoader.dataMode ? null : needAllTableRows(tableId); // con dataMode los valores los da la pantalla (registerServerFilteredTable), sin dibujar todo
         if (pending) { pending.then(() => openColumnFilterMenu(th, tableId, th.dataset.col)); return; }
         openColumnFilterMenu(th, tableId, th.dataset.col);
     });
@@ -5864,9 +5871,14 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownlo
             document.body.appendChild(link); link.click(); link.remove();
             return;
         }
-        const pendingRows = needAllTableRows(tableId); // una tabla que dibuja por partes dibuja primero el resto: se baja todo lo que tiene, no solo lo dibujado
+        // un Excel con formato de una tabla con dataMode se arma con los renglones de sus datos (loader.rowIndexes), sin dibujarlos todos; el CSV y el PDF sí leen lo dibujado
+        const dataLoader = partialTableLoaders.get(tableId);
+        const direct = !!(dataLoader && dataLoader.dataMode && dataLoader.rowIndexes && format === 'xlsx' && buildXlsx);
+        const pendingRows = direct ? null : needAllTableRows(tableId); // una tabla que dibuja por partes dibuja primero el resto: se baja todo lo que tiene, no solo lo dibujado
         if (pendingRows) await pendingRows;
-        const { columns, rows, trs } = getVisibleTableSnapshot(tableId);
+        const snapshot = getVisibleTableSnapshot(tableId);
+        const { columns, rows } = snapshot;
+        const trs = direct ? dataLoader.rowIndexes().map((r) => ({ dataset: { r: String(r) } })) : snapshot.trs;
         if (!columns.length) return;
         const title = String((getTitle && getTitle()) || tableId).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
         const notice = getNotice && getNotice(format); // el aviso puede depender del formato (Análisis: el Excel baja todo, el CSV y el PDF solo lo que se ve)
@@ -15728,6 +15740,8 @@ async function renderTableRowsInChunks({ tableKey, tbody, records, buildRow, isS
 
 // Tablas que dibujan solo una parte de sus filas al entrar (con miles de registros, cada fila trae más de cien piezas y dibujarlas todas congelaba la pantalla por minutos): la pantalla registra aquí cómo saber si ya
 // están todas (isComplete) y cómo dibujar las que faltan (loadAll, devuelve una promesa). Lo que lee todas las filas del DOM (ordenar y filtrar por columna) pide primero el resto con needAllTableRows.
+// dataMode (Daniel, 2026-11-27, Análisis con 40 columnas: dibujar 200,000 celdas congelaba la página): la pantalla lleva el orden y los filtros sobre sus propios datos y dibuja solo los primeros renglones del resultado.
+// Con dataMode registra también sortRows(columna, 'asc' | 'desc' | null) y rowIndexes() (los renglones de sus datos que se ven, en orden, para el Excel con formato); los filtros se registran con registerServerFilteredTable.
 const partialTableLoaders = new Map();
 function registerPartialTable(tableId, loader) { partialTableLoaders.set(tableId, loader); }
 function needAllTableRows(tableId) {
