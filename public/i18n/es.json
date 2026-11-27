@@ -9584,6 +9584,10 @@
     "categorySoonTag": "Pronto",
     "calCached": "Sin señal: se muestran los certificados guardados en tu celular.",
     "regCached": "Sin señal: se muestran los registros guardados en tu celular.",
+    "regTotals": "Totales",
+    "regTotalsOf": "de {n} renglones",
+    "regTotalsSaved": " · de lo guardado en el teléfono",
+    "regTotalsHint": "Toca Σ para sumar o contar",
     "regNoData": "Sin señal y todavía no hay registros guardados en este celular.",
     "regLast": "Última carga:",
     "regLastLoad": "Última carga",
@@ -10036,6 +10040,10 @@
     "appRegStrip": {
       "what": "Un cuadro por periodo, de más viejo a más nuevo: verde = ya se cargó, ámbar punteado = falta en medio. En un registro diario son los últimos 45 días.",
       "example": "dic-25 a nov-26 con ago-26 en ámbar: falta ago-26."
+    },
+    "appRegTotales": {
+      "what": "La barra de abajo suma o cuenta lo que muestra la lista (lo que buscas). Toca Σ para ver todas las columnas: un toque en una columna pone el dato al momento (suma en las de números, contar en las de texto) y un toque en un dato ya puesto abre los cálculos: suma, promedio, mínimo, máximo, contar con dato, vacíos, sin repetir, los que salen una sola vez, o solo los que cumplan lo que escribas. «Sumar las de números» y «Quitar todo» lo hacen de golpe. Con señal, en una tabla libre lo calcula el servidor sobre todo lo que encuentra la búsqueda; sin señal (el ícono ⌂) se calcula con lo guardado en tu teléfono. Lo que eliges se queda guardado en el teléfono.",
+      "example": "Busco «FAR» → Σ → Exist 27 Nov → 211,340."
     },
     "appRegBuscar": {
       "what": "Busca en unidad, código, descripción, categoría y UDM con la sintaxis de siempre: $ pone una palabra antes, @ una después y la coma separa búsquedas.",
@@ -10555,7 +10563,7 @@
       "example": "⟳ Exist → hoy trae Exist 27/nov 06:00"
     },
     "anColumnas": {
-      "what": "Las columnas que traes de tus archivos (registros) se ordenan por Archivo → Categoría → Columna: primero el archivo de donde salen, luego su categoría (la clasificación) y al abrirla ves la ficha de cada columna. Las que tú creas en el análisis (operación, criterio, comentarios) no vienen de un archivo y van en «Columnas agregadas». Con pocas columnas se ven sueltas. Un clic en un archivo o categoría la abre o la cierra y lo que abres se recuerda en tu navegador; «Contraer todo» y «Expandir todo» lo hacen de golpe. Los botones de arriba (agregar, seleccionar, actualizar, extraer) van en una sola fila.",
+      "what": "Las columnas que traes de tus archivos (registros) se ordenan por Archivo → Categoría → Columna: una pestaña por archivo; dentro, sus categorías (la clasificación) en una fila y, al abrir una, las fichas de sus columnas. Las pestañas de los otros archivos avisan si tienen columnas nuevas, quitadas o con cambios sin aplicar. Las que tú creas en el análisis (operación, criterio, comentarios) no vienen de un archivo y van en una línea aparte, «Columnas agregadas». Con pocas columnas se ven sueltas. Un clic en una categoría la abre o la cierra y lo que abres se recuerda en tu navegador; «Contraer todo» y «Expandir todo» lo hacen de golpe. Los botones de arriba (agregar, seleccionar, actualizar, extraer) van en una sola fila.",
       "example": "Archivo «Existencias Globales» → categoría «Existencias» → Exist Total Hospital, FAR."
     },
     "anCategorias": {

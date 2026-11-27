@@ -2757,3 +2757,39 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .rg-app-opening .rg-app-top::after{ content: ''; flex: none; width: 0.95rem; height: 0.95rem; margin-left: auto; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: rg-app-spin 0.8s linear infinite; }
 @keyframes rg-app-spin{ to{ transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce){ .rg-app-opening .rg-app-top::after{ animation: none; } }
+/* Totales en Registros Información (AppRegistros.js): una barra pegada al pie con los totales elegidos, la Σ y la hoja con todas las columnas */
+.rg-app-has-totals .home-subscreen-body{ padding-bottom: 5.6rem; }
+.rg-app-tbar{ position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.8rem calc(0.6rem + env(safe-area-inset-bottom, 0px)); background: var(--home-surface); border-top: 1px solid var(--home-border); box-shadow: 0 -8px 20px var(--home-shadow); }
+.rg-app-tbar[hidden]{ display: none; }
+.rg-app-tcount{ position: absolute; right: 0.8rem; top: -0.6rem; padding: 0 0.55rem; border-radius: 999px; font-size: 0.62rem; font-weight: 600; background: var(--home-surface-2); border: 1px solid var(--home-border); color: var(--home-text-secondary); font-variant-numeric: tabular-nums; }
+.rg-app-tsig{ flex: none; width: 2.4rem; height: 2.4rem; border: 0; border-radius: 0.8rem; background: linear-gradient(135deg, var(--home-accent-strong-1), var(--home-accent-strong-2)); color: var(--home-on-accent); font-size: 1.05rem; font-weight: 700; font-family: inherit; cursor: pointer; }
+.rg-app-thint{ font-size: 0.74rem; color: var(--home-text-tertiary); }
+.rg-app-tscroll{ display: flex; gap: 0.4rem; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: none; }
+.rg-app-tscroll::-webkit-scrollbar{ display: none; }
+.rg-app-tchip{ flex: none; display: flex; flex-direction: column; text-align: left; padding: 0.15rem 0.65rem; border: 1px solid var(--home-border); border-radius: 0.8rem; background: var(--home-surface-2); color: var(--home-text-primary); font-family: inherit; cursor: pointer; line-height: 1.2; }
+.rg-app-tchip small{ font-size: 0.6rem; color: var(--home-text-tertiary); white-space: nowrap; }
+.rg-app-tchip b{ font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+.rg-app-sheet.rg-app-sheet-top{ z-index: 61; }
+.rg-app-tsheet h3, .rg-app-sheet-panel h3 .rg-app-tinfo{ display: inline; }
+.rg-app-tinfo{ font-size: 0.7rem; font-weight: 500; color: var(--home-text-tertiary); margin-left: 0.3rem; }
+.rg-app-tacts{ display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.rg-app-tpill{ padding: 0.35rem 0.8rem; border: 1px solid var(--home-border); border-radius: 999px; background: var(--home-surface); color: var(--home-text-secondary); font-family: inherit; font-size: 0.74rem; font-weight: 600; cursor: pointer; }
+.rg-app-tpill-pri{ background: var(--home-surface-2); color: var(--home-accent-strong-2); }
+.rg-app-tlist{ display: flex; flex-direction: column; gap: 0.4rem; overflow: auto; max-height: 52vh; }
+.rg-app-trow{ display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.7rem; border: 1px solid var(--home-border); border-radius: 0.8rem; background: var(--home-surface); }
+.rg-app-tname{ flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.rg-app-tname b{ font-size: 0.84rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rg-app-tname span{ font-size: 0.64rem; color: var(--home-text-muted); }
+.rg-app-trs{ min-width: 3.6rem; padding: 0.25rem 0.6rem; border: 1px solid var(--home-border); border-radius: 0.6rem; background: var(--home-surface-2); color: var(--home-text-primary); font-family: inherit; font-size: 0.86rem; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; cursor: pointer; }
+.rg-app-trs small{ display: block; font-size: 0.56rem; font-weight: 500; color: var(--home-text-tertiary); line-height: 1.1; }
+.rg-app-trs.is-empty{ background: var(--home-surface); border-style: dashed; color: var(--home-text-muted); font-weight: 500; }
+.rg-app-tgl{ padding: 0.3rem 0.4rem 0; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--home-text-muted); }
+.rg-app-topt{ display: flex; align-items: flex-start; gap: 0.6rem; width: 100%; padding: 0.5rem 0.5rem; border: 0; border-radius: 0.7rem; background: transparent; color: var(--home-text-primary); font-family: inherit; text-align: left; cursor: pointer; }
+.rg-app-topt:disabled{ opacity: 0.45; cursor: default; }
+.rg-app-topt i{ flex: none; width: 0.95rem; height: 0.95rem; margin-top: 0.1rem; border: 2px solid var(--home-border); border-radius: 50%; box-sizing: border-box; }
+.rg-app-topt b{ font-size: 0.86rem; font-weight: 600; }
+.rg-app-topt small{ display: block; font-size: 0.66rem; color: var(--home-text-muted); }
+.rg-app-topt.is-on{ background: var(--home-surface-2); }
+.rg-app-topt.is-on i{ border-color: var(--home-accent-strong-2); background: radial-gradient(circle, var(--home-accent-strong-2) 0 42%, transparent 48%); }
+.rg-app-tcond{ display: flex; flex-direction: column; gap: 0.4rem; margin: 0 0.4rem 0.3rem 1.7rem; padding: 0.6rem; border: 1px solid var(--home-border); border-radius: 0.8rem; background: var(--home-bg); }
+.rg-app-tcond[hidden]{ display: none; }

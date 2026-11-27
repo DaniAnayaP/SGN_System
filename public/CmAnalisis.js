@@ -330,7 +330,7 @@ document.addEventListener('click', (event) => {
     const cmCell = event.target.closest('td.an-cm');
     if (cmCell && cmCell.closest(`[data-table-id="${FILE_TABLE}"]`)) { openCommentsPanel(cmCell); return; } // un clic en una celda de comentarios abre su lista
     const q = (sel) => event.target.closest(sel);
-    if (q('[data-an-selmode],[data-an-pick],[data-an-selall],[data-an-selnone],[data-an-seldone],[data-an-bulkedit],[data-an-bulkclose],[data-an-bulkfmt],[data-an-bulkapply],[data-an-bulkremove],[data-an-undo],[data-an-discard],[data-an-cat],[data-an-file],[data-an-catmark],[data-an-catcollapse],[data-an-catexpand]')) {
+    if (q('[data-an-selmode],[data-an-pick],[data-an-selall],[data-an-selnone],[data-an-seldone],[data-an-bulkedit],[data-an-bulkclose],[data-an-bulkfmt],[data-an-bulkapply],[data-an-bulkremove],[data-an-undo],[data-an-discard],[data-an-cat],[data-an-filetab],[data-an-catmark],[data-an-catcollapse],[data-an-catexpand]')) {
         const m = document.querySelector('.an-addmenu'); if (m) m.hidden = true;
         if (q('[data-an-selmode]')) { if (st.selMode) endSelection(); else { st.selMode = true; renderAddedBar(); } }
         else if (q('[data-an-pick]')) toggleSel(q('[data-an-pick]').dataset.anPick, event.shiftKey);
@@ -345,7 +345,7 @@ document.addEventListener('click', (event) => {
         else if (q('[data-an-undo]')) stageUndo(q('[data-an-undo]').dataset.anUndo);
         else if (q('[data-an-discard]')) discardPending();
         else if (q('[data-an-cat]')) toggleCat(q('[data-an-cat]').dataset.anCat);
-        else if (q('[data-an-file]')) toggleFile(q('[data-an-file]').dataset.anFile);
+        else if (q('[data-an-filetab]')) setFileTab(q('[data-an-filetab]').dataset.anFiletab);
         else if (q('[data-an-catmark]')) markCat(q('[data-an-catmark]').dataset.anCatmark);
         else if (q('[data-an-catcollapse]')) setAllCats(false);
         else if (q('[data-an-catexpand]')) setAllCats(true);
@@ -692,7 +692,7 @@ const CAT_NONE = '__none';
 const CAT_NONE_COLOR = '#8a7d94';
 const catKeyOf = (e) => foldCls(e.item.cls) || CAT_NONE;
 const catsStorageKey = () => `anCats:${st.id}`;
-const filesStorageKey = () => `anFiles:${st.id}`;
+const filesStorageKey = () => `anFileTab:${st.id}`;
 function loadFlags(key) { try { const o = JSON.parse(localStorage.getItem(key) || '{}'); return o && typeof o === 'object' ? o : {}; } catch { return {}; } }
 function saveFlags(key, flags) {
     try {
@@ -701,7 +701,8 @@ function saveFlags(key, flags) {
     } catch { /* sin memoria del navegador: lo abierto no se recuerda */ }
 }
 const catOpenFlags = () => { if (!st.catOpen) st.catOpen = loadFlags(catsStorageKey()); return st.catOpen; }; // categorías abiertas
-const fileClosedFlags = () => { if (!st.fileClosed) st.fileClosed = loadFlags(filesStorageKey()); return st.fileClosed; }; // archivos cerrados (de fábrica están abiertos)
+const fileTabKey = () => { if (st.fileTab === undefined) { try { st.fileTab = localStorage.getItem(filesStorageKey()) || ''; } catch { st.fileTab = ''; } } return st.fileTab; }; // el archivo que se ve (su pestaña); de fábrica, el primero
+function setFileTab(k) { st.fileTab = k; try { localStorage.setItem(filesStorageKey(), k); } catch { /* sin memoria del navegador */ } renderAddedBar(); }
 // las columnas consultadas por archivo y, dentro, por categoría; la llave de una categoría lleva su archivo (la misma clasificación puede estar en dos archivos)
 function groupFiles(list) {
     const order = []; const map = new Map();
@@ -719,13 +720,11 @@ function groupFiles(list) {
 const consultedEntries = () => (st.entries || []).filter((e) => e.kind === 'f');
 const isNested = () => consultedEntries().length >= CAT_MIN_CHIPS;
 const allCats = () => groupFiles(consultedEntries()).flatMap((f) => f.cats);
-function toggleFile(k) { const f = fileClosedFlags(); f[k] = !f[k]; saveFlags(filesStorageKey(), f); renderAddedBar(); }
 function toggleCat(k) { const f = catOpenFlags(); f[k] = !f[k]; saveFlags(catsStorageKey(), f); renderAddedBar(); }
 function setAllCats(open) {
-    const f = catOpenFlags(); const closed = fileClosedFlags();
+    const f = catOpenFlags();
     allCats().forEach((g) => { f[g.k] = open; });
-    if (open) groupFiles(consultedEntries()).forEach((x) => { closed[x.key] = false; }); // «Expandir todo» abre también los archivos
-    saveFlags(catsStorageKey(), f); saveFlags(filesStorageKey(), closed); renderAddedBar();
+    saveFlags(catsStorageKey(), f); renderAddedBar();
 }
 function markCat(k) { // «Marcar todas» de una categoría (o «Quitar marcas» si ya están todas), también con la categoría contraída
     const g = allCats().find((x) => x.k === k); if (!g) return;
@@ -741,32 +740,32 @@ function catBadges(list) {
     return bit(count('new'), 'is-new', 'main.anCatNew1', 'main.anCatNewN') + bit(count('removed'), 'is-removed', 'main.anCatRemoved1', 'main.anCatRemovedN') + bit(count('edited'), 'is-edited', 'main.anCatEdited1', 'main.anCatEditedN');
 }
 const colsText = (n) => (n === 1 ? t('main.anCatCount1') : t('main.anCatCountN', { n }));
+// Una pestaña por archivo (Daniel eligió la forma C de la maqueta); dentro, sus categorías en una fila y, debajo, las fichas de las categorías abiertas (cada grupo con el punto de su color).
 function renderConsultedPanel(list, chip, pick) {
     if (!list.length) return '';
-    const open = catOpenFlags(); const closed = fileClosedFlags();
+    const open = catOpenFlags();
     const nested = list.length >= CAT_MIN_CHIPS;
     const files = nested ? groupFiles(list) : [];
     const count = nested ? `${colsText(list.length)} · ${esc(files.length === 1 ? t('main.anPanelFile1') : t('main.anPanelFilesN', { n: files.length }))}` : colsText(list.length);
     const head = `<header class="an-panel-h" data-help-key="anColumnas"><b>${esc(t('main.anPanelConsulted'))}</b><small>${count}</small></header>`;
     if (!nested) return `<section class="an-panel">${head}<div class="an-panel-chips">${list.map(chip).join('')}</div></section>`;
-    const catBlock = (g) => {
-        const isOpen = !!open[g.k]; const n = g.list.length;
-        const selectable = g.list.filter((e) => e.status !== 'removed'); const picked = selectable.filter((e) => st.sel.has(e.key)).length;
+    const wanted = fileTabKey();
+    const active = files.find((f) => f.key === wanted) || files[0];
+    const tabs = `<div class="an-ftabs" role="tablist">${files.map((f) => { const on = f === active; return `<button type="button" class="an-ftab${on ? ' is-on' : ''}" role="tab" aria-selected="${on ? 'true' : 'false'}" data-an-filetab="${esc(f.key)}">${esc(f.name)}<small>${f.list.length}</small>${on ? '' : catBadges(f.list)}</button>`; }).join('')}</div>`;
+    const pills = active.cats.map((g) => {
+        const isOpen = !!open[g.k]; const selectable = g.list.filter((e) => e.status !== 'removed'); const picked = selectable.filter((e) => st.sel.has(e.key)).length;
         const name = g.none ? t('main.anCatNone') : g.name;
-        const h = `<button type="button" class="an-cath" data-an-cat="${esc(g.k)}" aria-expanded="${isOpen ? 'true' : 'false'}" data-help-key="anCategorias"><span class="an-car" aria-hidden="true">▶</span><i class="an-dot" style="background:${esc(g.color)}" aria-hidden="true"></i><b>${esc(name)}</b><span class="an-catn">${esc(colsText(n))}${pick && picked ? ` · ${esc(t('main.anCatPicked', { n: picked }))}` : ''}</span>${isOpen ? '' : catBadges(g.list)}</button>`;
+        const pill = `<button type="button" class="an-cpill${isOpen ? ' is-on' : ''}" data-an-cat="${esc(g.k)}" aria-expanded="${isOpen ? 'true' : 'false'}" data-help-key="anCategorias"><i class="an-dot" style="background:${esc(g.color)}" aria-hidden="true"></i>${esc(name)}<small>${g.list.length}${pick && picked ? ` · ${esc(t('main.anCatPicked', { n: picked }))}` : ''}</small>${isOpen ? '' : catBadges(g.list)}</button>`;
         const mark = pick && selectable.length ? `<button type="button" class="btn btn-secondary an-sm" data-an-catmark="${esc(g.k)}">${esc(t(picked === selectable.length ? 'main.anCatUnmark' : 'main.anCatMark'))}</button>` : '';
-        return `<div class="an-cat${isOpen ? ' is-open' : ''}"><div class="an-cat-row">${h}${mark}</div>${isOpen ? `<div class="an-catchips">${g.list.map(chip).join('')}</div>` : ''}</div>`;
-    };
-    const fileBlock = (f) => {
-        const isOpen = !closed[f.key];
-        const h = `<button type="button" class="an-fileh" data-an-file="${esc(f.key)}" aria-expanded="${isOpen ? 'true' : 'false'}"><span class="an-car" aria-hidden="true">▶</span><span class="an-kind">${esc(t('main.anFileKind'))}</span><b>${esc(f.name)}</b><small>${esc(colsText(f.list.length))}</small>${isOpen ? '' : catBadges(f.list)}</button>`;
-        return `<div class="an-file${isOpen ? ' is-open' : ''}">${h}${isOpen ? `<div class="an-cats">${f.cats.map(catBlock).join('')}</div>` : ''}</div>`;
-    };
-    return `<section class="an-panel">${head}${files.map(fileBlock).join('')}</section>`;
+        return `<span class="an-cpillwrap">${pill}${mark}</span>`;
+    }).join('');
+    const blocks = active.cats.filter((g) => open[g.k]).map((g) => `<div class="an-copen"><i class="an-dot" style="background:${esc(g.color)}" aria-hidden="true"></i><span class="an-catchips">${g.list.map(chip).join('')}</span></div>`).join('');
+    return `<section class="an-panel">${head}${tabs}<div class="an-ftab-body"><div class="an-cpills">${pills}</div>${blocks}</div></section>`;
 }
+// las columnas agregadas (operación, criterio, comentarios): una sola línea, sin recuadro
 function renderAddedPanel(list, chip) {
     if (!list.length) return '';
-    return `<section class="an-panel"><header class="an-panel-h" data-help-key="anColumnas"><b>${esc(t('main.anPanelAdded'))}</b><small>${esc(colsText(list.length))}</small></header><div class="an-panel-chips">${list.map(chip).join('')}</div></section>`;
+    return `<section class="an-panel an-panel-inline"><span class="an-panel-h-inline" data-help-key="anColumnas"><b>${esc(t('main.anPanelAdded'))}</b><small>${esc(colsText(list.length))}</small></span><span class="an-catchips">${list.map(chip).join('')}</span></section>`;
 }
 // la franja de arriba del Archivo: «＋ Agregar columna», «Seleccionar» y las columnas ya agregadas (un clic las edita; ✕ las quita; los cambios esperan al «Actualizar»)
 function renderAddedBar() {

@@ -48,7 +48,7 @@ const FILES = [
     'AppSoporte.html', 'AppSoporte.js', 'SupportRules.js',
     'AppSoportesCerrados.html', 'AppSoportesCerrados.js',
     'AppCasosSoporte.html', 'AppCasosSoporte.js',
-    'AppRegistros.html', 'AppRegistros.js', 'FlexFormat.js',
+    'AppRegistros.html', 'AppRegistros.js', 'FlexFormat.js', 'TotalsCalc.js',
     'AppPlanesTrabajo.html', 'AppPlanesTrabajo.js',
     'AppEquipoTrabajo.html', 'AppEquipoTrabajo.js',
     'AppCapacidadAlmacenamiento.html', 'AppCapacidadAlmacenamiento.js',

@@ -9585,6 +9585,10 @@
     "categorySoonTag": "Soon",
     "calCached": "No signal: showing the certificates saved on your phone.",
     "regCached": "No signal: showing the records saved on your phone.",
+    "regTotals": "Totals",
+    "regTotalsOf": "of {n} rows",
+    "regTotalsSaved": " · from what is saved on the phone",
+    "regTotalsHint": "Tap Σ to sum or count",
     "regNoData": "No signal and there are no records saved on this phone yet.",
     "regLast": "Last upload:",
     "regLastLoad": "Last upload",
@@ -10037,6 +10041,10 @@
     "appRegStrip": {
       "what": "One square per period, oldest to newest: green = already uploaded, amber dashed = missing in between. A daily record covers the last 45 days.",
       "example": "Dec-25 to Nov-26 with Aug-26 in amber: Aug-26 is missing."
+    },
+    "appRegTotales": {
+      "what": "The bar at the bottom adds up or counts what the list shows (what you search for). Tap Σ to see all the columns: one tap on a column shows the figure right away (sum on number columns, count on text ones) and a tap on a figure already shown opens the calculations: sum, average, minimum, maximum, count with data, empty, without repeats, the ones that appear only once, or only the ones that match what you type. \"Sum all number columns\" and \"Remove all\" do it at once. With signal, on a free table the server calculates it over everything the search finds; without signal (the ⌂ icon) it is calculated from what is saved on your phone. What you pick is kept on the phone.",
+      "example": "I search \"FAR\" → Σ → Exist 27 Nov → 211,340."
     },
     "appRegBuscar": {
       "what": "Searches unit, code, description, category and UOM with the usual syntax: $ puts a word before, @ a word after and the comma separates searches.",
@@ -10556,7 +10564,7 @@
       "example": "⟳ Stock → today it brings Stock 27/nov 06:00"
     },
     "anColumnas": {
-      "what": "The columns you bring from your files (record sets) are ordered by File → Category → Column: first the file they come from, then their category (the classification) and when you open it you see each column's chip. The ones you create in the analysis (operation, criterion, comments) do not come from a file and go under \"Added columns\". With few columns they show loose. A click on a file or category opens or closes it and what you open is remembered in your browser; \"Collapse all\" and \"Expand all\" do it at once. The buttons on top (add, select, refresh, extract) sit in a single row.",
+      "what": "The columns you bring from your files (record sets) are ordered by File → Category → Column: one tab per file; inside, its categories (the classification) in a row and, when you open one, the chips of its columns. The tabs of the other files warn you if they have new, removed or changed columns that are not applied yet. The ones you create in the analysis (operation, criterion, comments) do not come from a file and go on a separate line, \"Added columns\". With few columns they show loose. A click on a category opens or closes it and what you open is remembered in your browser; \"Collapse all\" and \"Expand all\" do it at once. The buttons on top (add, select, refresh, extract) sit in a single row.",
       "example": "File \"Existencias Globales\" → category \"Existencias\" → Exist Total Hospital, FAR."
     },
     "anCategorias": {

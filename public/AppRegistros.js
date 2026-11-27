@@ -335,6 +335,7 @@ function render() {
     else if (view === 'code') renderCode();
     else if (view === 'registry') renderRegistry();
     else renderList();
+    if (totalsOk()) refreshTotals(); else paintTotals(); // la barra de totales (ver más abajo)
 }
 // La tira de periodos: uno verde por cada periodo cargado y uno ámbar con borde punteado por cada uno que falta en medio.
 function stripNode(reg, periods) {
@@ -485,6 +486,7 @@ function visibleRows() {
     });
 }
 function drawRows(listEl) {
+    refreshTotals();
     listEl.innerHTML = '';
     const items = visibleRows();
     if (!items.length) { listEl.appendChild(el('p', 'home-carga-empty-note', t(search.trim() || catFilter || unitFilter ? 'home.regNoMatch' : 'main.emptyStateText'))); return; }
@@ -646,6 +648,7 @@ function renderFlexRegistry(reg, data) {
     if (search.trim()) flexSearch(search, listEl); else drawFlexRows(listEl);
 }
 function drawFlexRows(listEl) {
+    refreshTotals();
     listEl.innerHTML = '';
     const body = flexSource();
     const rows = body.rows || [];
@@ -1900,6 +1903,247 @@ function stepDone(body, bar) {
     const loadId = wiz.result.loadId;
     if (loadId) bar.appendChild(wizBtn('rg-app-btn-pri', t('home.regSeeLoad'), () => { wiz = null; tab = 'loads'; openLoad(loadId); }));
     bar.appendChild(wizBtn('rg-app-btn-tx', t('home.regBackToRegistry'), leaveWizard));
+}
+
+// --- Totales (Daniel, 2026-11-27, «Hazme la versión de la App móvil de los totales»; maqueta con las recomendadas): una barra pegada al pie con los totales elegidos y la Σ que abre una hoja con todas las columnas ---
+// Lo mismo que en la Web (public/TotalsCalc.js): un toque en una columna pone el dato (suma en las de números, contar en las de texto) y un toque en un dato ya puesto abre todos los cálculos. Se calcula sobre lo que muestra la lista
+// (la búsqueda): en un registro de tabla libre con señal lo hace el servidor sobre TODOS los renglones que encuentra el texto; sin señal, y en los registros mensuales y diarios, con los renglones que hay en el teléfono
+// (con el aviso «de lo guardado» cuando es sin señal). Lo elegido se guarda en el teléfono, por empresa y por registro. Solo para quien tiene el botón «Totales de la tabla» del árbol (canTotals).
+let totalsCalcs = {};
+let totalsVals = {};
+let totalsInfo = { rows: 0, total: 0, saved: false, partial: false };
+let totalsSeq = 0;
+let totalsKey = '';
+let totalsBarNode = null;
+let totalsSheet = null;
+const totalsOk = () => view === 'registry' && tab === 'data' && !!currentReg() && !!currentData() && !!currentData().canTotals && !!window.TotalsCalc;
+const totalsStoreKey = () => `appRegTotals:${currentUser ? (currentUser.clientId ?? 0) : 0}:${regKey}`;
+function loadTotalsCalcs() {
+    const out = {};
+    try {
+        const raw = JSON.parse(localStorage.getItem(totalsStoreKey()) || '{}');
+        Object.keys(raw || {}).forEach((k) => { const spec = window.TotalsCalc.normalizeSpec(raw[k]); if (spec) out[k] = spec; });
+    } catch { /* sin lo guardado: sin cálculos */ }
+    return out;
+}
+function saveTotalsCalcs() {
+    try { if (Object.keys(totalsCalcs).length) localStorage.setItem(totalsStoreKey(), JSON.stringify(totalsCalcs)); else localStorage.removeItem(totalsStoreKey()); } catch { /* sin almacenamiento */ }
+}
+// Las columnas del registro con la forma de leer cada una de un renglón (tabla libre: una lista de celdas; mensual y diario: unidad, código…, y un periodo por columna).
+const FIXED_DIMS = [['colRegUnidad', 'unidad'], ['colRegUnidadNombre', 'unidadNombre'], ['colRegCodigo', 'codigo'], ['colRegDescripcion', 'descripcion'], ['colRegCategoria', 'categoria'], ['colRegUdm', 'udm']];
+function totalsColumns() {
+    const reg = currentReg(); const data = currentData();
+    if (!reg || !data) return [];
+    if (reg.kind === 'tabla') return (data.columns || []).map((c, i) => ({ key: c.key, label: c.label || c.name || c.key, num: !!c.num || c.group === 'value', get: (row) => row[i] }));
+    return [
+        ...FIXED_DIMS.map(([key, field]) => ({ key, label: t(`main.regDim_${field}`), num: false, get: (row) => row[field] })),
+        ...(data.periods || []).map((p) => ({ key: `p_${String(p).replace(/-/g, '_')}`, label: periodLabel(p), num: true, get: (row) => (row.values ? row.values[p] : undefined) })),
+    ];
+}
+const totalsRowsNow = () => { const reg = currentReg(); return reg && reg.kind === 'tabla' ? (flexSource().rows || []) : visibleRows(); };
+function localTotals(cols, specs, rows) {
+    const at = new Map(cols.map((c, i) => [c.key, i]));
+    return window.TotalsCalc.compute(new Map(Object.entries(specs)), (k) => at.get(k), (onRow) => rows.forEach((row) => onRow((i) => cols[i].get(row))));
+}
+const totalsFmt = (v) => window.TotalsCalc.formatValue(v, localeOf());
+function totalsSpecLabel(spec) {
+    if (spec.fn !== 'where') return t(`main.totalsLabel_${spec.fn}`);
+    const r = spec.rule;
+    if (r.kind === 'range') {
+        if (r.from !== null && r.to !== null) return t('main.totalsLabel_range', { from: totalsFmt(r.from), to: totalsFmt(r.to) });
+        return r.from !== null ? t('main.totalsLabel_from', { from: totalsFmt(r.from) }) : t('main.totalsLabel_to', { to: totalsFmt(r.to) });
+    }
+    return t(`main.totalsLabel_${r.mode}`, { text: r.text });
+}
+const totalsInfoText = () => `${t('home.regTotalsOf', { n: num(totalsInfo.rows) })}${totalsInfo.saved ? t('home.regTotalsSaved') : ''}${totalsInfo.partial ? t('main.totalsPartial', { total: num(totalsInfo.total) }) : ''}`;
+// Vuelve a calcular lo de la barra (solo si cambió la búsqueda, un filtro o los datos; force: también si no cambió nada).
+async function refreshTotals(force) {
+    if (!totalsOk()) { paintTotals(); return; }
+    const key = [regKey, search.trim(), catFilter, unitFilter, dataState, flexFound ? 1 : 0, (currentData().lastLoad || {}).id || 0].join('|');
+    if (!force && key === totalsKey) { paintTotals(); return; } // lo mismo de antes: solo se vuelve a mostrar la barra
+    totalsKey = key;
+    totalsCalcs = loadTotalsCalcs();
+    const reg = currentReg(); const data = currentData(); const cols = totalsColumns();
+    const specs = {};
+    cols.forEach((c) => { if (totalsCalcs[c.key]) specs[c.key] = totalsCalcs[c.key]; });
+    const seq = ++totalsSeq;
+    const rows = totalsRowsNow();
+    const src = reg.kind === 'tabla' ? flexSource() : data;
+    const localInfo = { rows: rows.length, total: src.total || rows.length, saved: dataState !== 'online', partial: !!src.truncated };
+    if (!Object.keys(specs).length) { totalsVals = {}; totalsInfo = localInfo; paintTotals(); return; }
+    if (reg.kind === 'tabla' && dataState === 'online') {
+        try {
+            const params = new URLSearchParams({ lang: currentLang(), tz: String(new Date().getTimezoneOffset()), calcs: JSON.stringify(specs) });
+            if (search.trim()) params.set('text', search.trim());
+            const res = await fetch(apiUrl(`${API}/${encodeURIComponent(regKey)}/totals?${params}`), { credentials: 'include' });
+            if (res.status === 401) { window.location.replace('Login.html'); return; }
+            if (!res.ok) throw new Error('totals failed');
+            const body = await res.json();
+            if (seq !== totalsSeq) return;
+            totalsVals = body.values || {};
+            totalsInfo = { rows: body.rows, total: body.rows, saved: false, partial: false };
+            paintTotals();
+            return;
+        } catch { /* sin señal o el servidor no pudo: se calcula con lo guardado */ }
+    }
+    if (seq !== totalsSeq) return;
+    totalsVals = localTotals(cols, specs, rows).values;
+    totalsInfo = { ...localInfo, saved: localInfo.saved || (reg.kind === 'tabla') };
+    paintTotals();
+}
+function setTotalsCalc(key, spec) {
+    if (spec) totalsCalcs[key] = spec; else delete totalsCalcs[key];
+    saveTotalsCalcs();
+    refreshTotals(true);
+}
+function totalsShortcut(kind) {
+    const cols = totalsColumns();
+    if (kind === 'clear') totalsCalcs = {}; else cols.forEach((c) => { if (c.num && !totalsCalcs[c.key]) totalsCalcs[c.key] = { fn: 'sum' }; });
+    saveTotalsCalcs();
+    refreshTotals(true);
+}
+const totalsDefault = (col) => ({ fn: col.num ? 'sum' : 'count' });
+// La barra de abajo: cuántos renglones, el botón Σ y un cuadrito por cada cálculo elegido (un toque lo cambia).
+function totalsBar() {
+    if (!totalsBarNode) {
+        totalsBarNode = el('div', 'rg-app-tbar');
+        totalsBarNode.setAttribute('data-help-key', 'appRegTotales');
+        document.querySelector('.home-subscreen').appendChild(totalsBarNode);
+    }
+    return totalsBarNode;
+}
+function paintTotals() {
+    const screen = document.querySelector('.home-subscreen');
+    const bar = totalsBar();
+    if (!totalsOk()) { bar.hidden = true; if (screen) screen.classList.remove('rg-app-has-totals'); if (totalsSheet) totalsSheet.close(); return; }
+    bar.hidden = false;
+    screen.classList.add('rg-app-has-totals');
+    bar.textContent = '';
+    const cols = totalsColumns();
+    const chosen = cols.filter((c) => totalsCalcs[c.key]);
+    if (chosen.length) bar.appendChild(el('span', 'rg-app-tcount', `${num(totalsInfo.rows)}${totalsInfo.saved ? ' ⌂' : ''}`));
+    const sig = el('button', 'rg-app-tsig', 'Σ');
+    sig.type = 'button';
+    sig.setAttribute('aria-label', t('home.regTotals'));
+    sig.addEventListener('click', openTotalsSheet);
+    bar.appendChild(sig);
+    if (!chosen.length) { bar.appendChild(el('span', 'rg-app-thint', t('home.regTotalsHint'))); } else {
+        const scroll = el('div', 'rg-app-tscroll');
+        chosen.forEach((c) => {
+            const chip = el('button', 'rg-app-tchip');
+            chip.type = 'button';
+            chip.title = `${c.label} · ${totalsSpecLabel(totalsCalcs[c.key])}`;
+            chip.append(el('small', '', c.label), el('b', '', c.key in totalsVals ? totalsFmt(totalsVals[c.key]) : '…'));
+            chip.addEventListener('click', () => openCalcPicker(c));
+            scroll.appendChild(chip);
+        });
+        bar.appendChild(scroll);
+    }
+    if (totalsSheet) totalsSheet.paint();
+}
+function totalsBackdrop(extraClass) {
+    const backdrop = el('div', `rg-app-sheet${extraClass ? ` ${extraClass}` : ''}`);
+    const panel = el('div', 'rg-app-sheet-panel');
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('data-help-key', 'appRegTotales');
+    backdrop.appendChild(panel);
+    const onKey = (event) => { if (event.key === 'Escape') close(); };
+    const close = () => { backdrop.remove(); document.removeEventListener('keydown', onKey); };
+    document.addEventListener('keydown', onKey);
+    backdrop.addEventListener('click', (event) => { if (event.target === backdrop) close(); });
+    document.body.appendChild(backdrop);
+    return { backdrop, panel, close };
+}
+// La hoja «Totales»: todas las columnas; un toque pone el dato (o abre los cálculos si ya lo tiene).
+function openTotalsSheet() {
+    if (totalsSheet) totalsSheet.close();
+    const { panel, close } = totalsBackdrop();
+    panel.classList.add('rg-app-tsheet');
+    const head = el('h3');
+    const info = el('small', 'rg-app-tinfo');
+    head.append(document.createTextNode(`${t('home.regTotals')} `), info);
+    const acts = el('div', 'rg-app-tacts');
+    const sum = el('button', 'rg-app-tpill rg-app-tpill-pri', t('main.totalsSumAll'));
+    const clear = el('button', 'rg-app-tpill', t('main.totalsClearAll'));
+    [sum, clear].forEach((b) => { b.type = 'button'; });
+    sum.addEventListener('click', () => totalsShortcut('sum'));
+    clear.addEventListener('click', () => totalsShortcut('clear'));
+    acts.append(sum, clear);
+    const list = el('div', 'rg-app-tlist');
+    const done = el('button', 'home-carga-secondary-btn', t('main.regCancel'));
+    done.type = 'button';
+    done.addEventListener('click', close);
+    panel.append(head, acts, list, done);
+    const paint = () => {
+        info.textContent = totalsInfoText();
+        list.textContent = '';
+        totalsColumns().forEach((c) => {
+            const row = el('div', 'rg-app-trow');
+            const name = el('span', 'rg-app-tname');
+            name.append(el('b', '', c.label), el('span', '', t(c.num ? 'main.totalsKindNum' : 'main.totalsKindText')));
+            const spec = totalsCalcs[c.key];
+            const res = el('button', `rg-app-trs${spec ? '' : ' is-empty'}`);
+            res.type = 'button';
+            if (spec) { res.append(el('small', '', totalsSpecLabel(spec)), document.createTextNode(c.key in totalsVals ? totalsFmt(totalsVals[c.key]) : '…')); res.addEventListener('click', () => openCalcPicker(c)); }
+            else { res.textContent = 'Σ'; res.addEventListener('click', () => setTotalsCalc(c.key, totalsDefault(c))); }
+            row.append(name, res);
+            list.appendChild(row);
+        });
+    };
+    totalsSheet = { close: () => { close(); totalsSheet = null; }, paint };
+    paint();
+}
+// Los cálculos de UNA columna.
+function openCalcPicker(col) {
+    const { panel, close } = totalsBackdrop('rg-app-sheet-top');
+    const current = totalsCalcs[col.key] || null;
+    panel.append(el('h3', '', `${col.label} `));
+    panel.firstChild.appendChild(el('small', 'rg-app-tinfo', t(col.num ? 'main.totalsKindNum' : 'main.totalsKindText')));
+    const apply = (spec) => { close(); setTotalsCalc(col.key, spec); };
+    const group = (text) => panel.appendChild(el('div', 'rg-app-tgl', text));
+    const opt = (fn, label, { hint, disabled } = {}) => {
+        const b = el('button', `rg-app-topt${current && current.fn === fn ? ' is-on' : ''}`);
+        b.type = 'button'; b.disabled = !!disabled;
+        const text = el('span'); text.append(el('b', '', label)); if (hint) text.appendChild(el('small', '', hint));
+        b.append(el('i'), text);
+        panel.appendChild(b);
+        return b;
+    };
+    group(t('main.totalsGroupCount'));
+    [['count'], ['empty'], ['distinct', t('main.totalsHint_distinct')], ['once', t('main.totalsHint_once')]].forEach(([fn, hint]) => opt(fn, t(`main.totalsFn_${fn}`), { hint }).addEventListener('click', () => apply({ fn })));
+    const whereBtn = opt('where', t('main.totalsFn_where'));
+    const cond = el('div', 'rg-app-tcond');
+    cond.hidden = !(current && current.fn === 'where');
+    const rule = current && current.fn === 'where' ? current.rule : null;
+    let mode = null; let text = null; let from = null; let to = null;
+    if (col.num) {
+        from = el('input', 'pm-app-input'); to = el('input', 'pm-app-input');
+        [[from, 'main.totalsFrom', rule && rule.kind === 'range' ? rule.from : null], [to, 'main.totalsTo', rule && rule.kind === 'range' ? rule.to : null]].forEach(([i, k, v]) => { i.type = 'text'; i.inputMode = 'decimal'; i.placeholder = t(k); i.setAttribute('aria-label', t(k)); i.value = v === null || v === undefined ? '' : String(v); cond.appendChild(i); });
+    } else {
+        mode = el('select', 'pm-app-input');
+        [['startsWith', 'main.filterModeStartsWith'], ['contains', 'main.filterModeContains'], ['equals', 'main.filterModeEquals']].forEach(([v, k]) => { const o = el('option', '', t(k)); o.value = v; mode.appendChild(o); });
+        mode.value = rule && rule.kind === 'text' ? rule.mode : 'startsWith';
+        text = el('input', 'pm-app-input'); text.type = 'text'; text.maxLength = 200; text.placeholder = t('main.totalsTextPlaceholder'); text.setAttribute('aria-label', t('main.totalsTextPlaceholder')); text.value = rule && rule.kind === 'text' ? rule.text : '';
+        cond.append(mode, text);
+    }
+    const go = el('button', 'home-carga-new-btn', t('main.totalsApply'));
+    go.type = 'button';
+    cond.appendChild(go);
+    const whereSpec = () => window.TotalsCalc.normalizeSpec({ fn: 'where', rule: col.num ? { kind: 'range', from: from.value, to: to.value } : { kind: 'text', mode: mode.value, text: text.value } });
+    const sync = () => { go.disabled = !whereSpec(); };
+    cond.addEventListener('input', sync); cond.addEventListener('change', sync); sync();
+    go.addEventListener('click', () => { const s = whereSpec(); if (s) apply(s); });
+    whereBtn.addEventListener('click', () => { cond.hidden = false; (text || from).focus(); });
+    panel.appendChild(cond);
+    group(t('main.totalsGroupNum'));
+    ['sum', 'avg', 'min', 'max'].forEach((fn) => opt(fn, t(`main.totalsFn_${fn}`), { disabled: !col.num }).addEventListener('click', () => apply({ fn })));
+    const none = opt('none', t('main.totalsNone'));
+    none.addEventListener('click', () => apply(null));
+    const cancel = el('button', 'home-carga-secondary-btn', t('main.regCancel'));
+    cancel.type = 'button';
+    cancel.addEventListener('click', close);
+    panel.appendChild(cancel);
 }
 
 document.getElementById('carga-back').addEventListener('click', () => {
