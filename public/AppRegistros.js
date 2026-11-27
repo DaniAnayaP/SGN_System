@@ -142,7 +142,7 @@ let currentUser = null;
 let registries = [];          // los registros de la empresa (con sus periodos y su última carga)
 let dataByKey = {};           // registro -> lo que el servidor contestó de sus datos
 let dataState = 'loading';    // 'online' | 'cached' | 'none'
-let view = 'list';            // 'list' | 'registry' | 'code' | 'load' | 'wizard' (Cargar registro)
+let view = 'list';            // 'list' | 'registry' | 'code' | 'load' | 'wizard' (Cargar registro) | 'columns' (Columnas del registro)
 let regKey = null;
 let rowId = null;
 let search = '';
@@ -331,6 +331,7 @@ function render() {
     if (view !== 'wizard') setProgress(null);
     if (view === 'wizard') { titleEl.textContent = t('main.regImport'); if (siteBlocked) window.AppSiteGate.show(bodyEl, t); else renderWizard(); }
     else if (view === 'load') renderLoad();
+    else if (view === 'columns') renderColumns();
     else if (view === 'code') renderCode();
     else if (view === 'registry') renderRegistry();
     else renderList();
@@ -946,8 +947,197 @@ function appendActions() {
     tpl.setAttribute('data-help-key', 'appRegPlantilla');
     tpl.innerHTML = `<i class="bx bx-download" aria-hidden="true"></i> <span>${esc(t('home.regTemplateShort'))}</span>`;
     tpl.addEventListener('click', () => shareTemplate(tpl));
-    if (reg.kind === 'tabla') row.append(load); else row.append(load, tpl); // un registro libre no tiene plantilla: se carga tu propio Excel
+    // «Columnas del registro»: cambiar el nombre y la clasificación de las columnas que ya existen (solo con permiso de cargar y con algo ya cargado)
+    const cols = el('button', 'rg-app-act');
+    cols.type = 'button';
+    cols.setAttribute('data-help-key', 'regColumnas');
+    cols.innerHTML = `<i class="bx bx-columns" aria-hidden="true"></i> <span>${esc(t('main.regColsBtn'))}</span>`;
+    cols.addEventListener('click', openColumns);
+    if (reg.kind === 'tabla') { row.append(load); if (a.excel && loadsByKey[regKey] && loadsByKey[regKey].loads.length) row.append(cols); } else row.append(load, tpl); // un registro libre no tiene plantilla: se carga tu propio Excel
     bodyEl.appendChild(row);
+}
+// --- Columnas del registro (Daniel, 2026-11-26, opción B) -----------------------------------------------------------------------------------------
+// Cambiar el nombre y la clasificación de las columnas que YA existen, una sola vez y para todas las cargas. El nombre solo se cambia en los valores con día y hora; en llaves, datos y valores de nombre fijo está fijo.
+// El color es de la clasificación (todas las columnas que la llevan lo comparten). No toca ningún dato.
+let colsState = null;
+function openColumns() {
+    regScroll = getScroll();
+    const mine = { data: null, draft: new Map(), clsColor: {}, busy: false, error: '', saved: '', changed: false };
+    colsState = mine;
+    view = 'columns';
+    render();
+    setScroll(0);
+    fetch(apiUrl(`${API}/${encodeURIComponent(regKey)}/columns?lang=${currentLang()}`), { credentials: 'include' })
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error('failed'))))
+        .then((data) => { mine.data = data; })
+        .catch(() => { mine.error = t('admin.saveError'); mine.data = { columns: [], classes: [], loads: 0, rows: 0, canEdit: false }; })
+        .then(() => { if (colsState === mine && view === 'columns') render(); });
+}
+async function leaveColumns() {
+    if (colsState && colsState.busy) return;
+    const changed = !!(colsState && colsState.changed);
+    colsState = null;
+    if (changed) await Promise.all([loadRegistryData(regKey), loadRegistryLoads(regKey)]);
+    view = 'registry';
+    tab = 'data';
+    render();
+    setScroll(regScroll);
+}
+const colsEff = (c) => { const d = colsState.draft.get(c.id); return { name: d ? d.name : c.name, cls: d ? d.cls : (c.cls || '') }; };
+// el color de una clasificación: el que se eligió aquí, el que ya tiene, o el primero libre
+function colsColorOf(cls) {
+    const f = foldCls(cls);
+    if (!f) return null;
+    if (colsState.clsColor[f] !== undefined) return colsState.clsColor[f];
+    const known = (colsState.data.classes || []).find((x) => foldCls(x.name) === f);
+    if (known && Number.isInteger(known.color)) return known.color;
+    const used = new Set([...(colsState.data.classes || []).map((x) => x.color), ...Object.values(colsState.clsColor)]);
+    for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i;
+    return 0;
+}
+function colsDirty(c) {
+    const e = colsEff(c);
+    const cls = e.cls.trim();
+    if (c.editName && e.name.trim() !== c.name) return true;
+    if (cls !== (c.cls || '')) return true;
+    return !!cls && colsColorOf(cls) !== c.color;
+}
+function renderColumns() {
+    titleEl.textContent = t('main.regColsBtn');
+    const s = colsState;
+    if (!s) { view = 'registry'; render(); return; }
+    const body = el('div', 'rg-app-wiz');
+    const bar = el('div', 'rg-app-bar');
+    if (!s.data) {
+        body.appendChild(el('p', 'rg-app-note', t('main.regColsLoading')));
+        bar.appendChild(wizBtn('rg-app-btn-tx', t('main.regColsClose'), leaveColumns));
+        bodyEl.append(body, bar);
+        return;
+    }
+    const cols = s.data.columns || [];
+    const canEdit = !!s.data.canEdit;
+    if (s.data.loads) body.appendChild(el('p', 'rg-app-sub', s.data.loads === 1 ? t('main.regColsMeta1', { rows: num(s.data.rows) }) : t('main.regColsMeta', { loads: num(s.data.loads), rows: num(s.data.rows) })));
+    if (s.saved) { const ok = el('p', 'rg-app-flash', s.saved); ok.setAttribute('role', 'status'); body.appendChild(ok); }
+    if (!cols.length) body.appendChild(el('p', 'rg-app-note', t('main.regColsEmpty')));
+    const refs = [];
+    const saveBtnRef = { node: null, discard: null };
+    const labelOf = () => { const n = cols.filter(colsDirty).length; return n === 0 ? t('main.regColsSave') : (n === 1 ? t('main.regColsSave1') : t('main.regColsSaveN', { n: num(n) })); };
+    const fillDots = (box, c) => {
+        box.innerHTML = '';
+        const cls = colsEff(c).cls.trim();
+        if (!cls) return;
+        const color = colsColorOf(cls);
+        CLASS_COLORS.forEach((hex, i) => {
+            const dot = el('button', 'rg-app-dot');
+            dot.type = 'button';
+            dot.style.background = hex;
+            dot.setAttribute('aria-pressed', color === i ? 'true' : 'false');
+            dot.setAttribute('aria-label', t(`main.flexColor_${i}`));
+            dot.addEventListener('click', () => { if (s.busy) return; s.clsColor[foldCls(cls)] = i; s.saved = ''; refresh(); });
+            box.appendChild(dot);
+        });
+    };
+    // lo que cambia al escribir o elegir sin volver a dibujar la lista (así no se pierde el cursor ni el toque en un punto de color)
+    const refresh = () => {
+        refs.forEach(({ c, card, state, dots }) => {
+            const dirty = colsDirty(c);
+            card.classList.toggle('rg-app-cd-dirty', dirty);
+            state.textContent = dirty ? t('main.regColChanged') : '';
+            state.hidden = !dirty;
+            fillDots(dots, c);
+        });
+        const n = cols.filter(colsDirty).length;
+        if (saveBtnRef.node) { saveBtnRef.node.querySelector('span').textContent = labelOf(); saveBtnRef.node.disabled = s.busy || n === 0; }
+        if (saveBtnRef.discard) saveBtnRef.discard.disabled = s.busy || n === 0;
+    };
+    const list = el('div', 'rg-app-cdlist');
+    list.setAttribute('data-help-key', 'regColumnasVentana');
+    cols.forEach((c) => {
+        const card = el('div', 'rg-app-cd');
+        // el nombre: se escribe en los valores con día y hora; en los demás está fijo
+        const nameRow = el('div', 'rg-app-cdrow');
+        if (c.editName && canEdit) {
+            const input = el('input', 'pm-app-input');
+            input.type = 'text'; input.maxLength = 60; input.value = c.name;
+            input.setAttribute('aria-label', t('main.regColName'));
+            const strip = el('button', 'rg-app-cdlinkbtn', t('main.regColStrip'));
+            strip.type = 'button';
+            const showStrip = () => { strip.hidden = !c.nameNoDate || input.value.trim() === c.nameNoDate; };
+            input.addEventListener('input', () => { const cur = colsEff(c); s.draft.set(c.id, { name: input.value, cls: cur.cls }); s.error = ''; s.saved = ''; showStrip(); refresh(); });
+            strip.addEventListener('click', () => { const cur = colsEff(c); input.value = c.nameNoDate; s.draft.set(c.id, { name: c.nameNoDate, cls: cur.cls }); showStrip(); refresh(); });
+            showStrip();
+            nameRow.append(input, strip);
+        } else {
+            const ro = el('div', 'rg-app-cdro');
+            ro.appendChild(el('b', '', c.name));
+            if (!c.editName) { const lock = el('span', 'rg-app-role'); lock.setAttribute('data-help-key', 'regColumnasFijo'); lock.innerHTML = `<i class="bx bx-lock-alt" aria-hidden="true"></i> ${esc(t('main.regColFixed'))}`; ro.appendChild(lock); }
+            nameRow.appendChild(ro);
+        }
+        card.appendChild(nameRow);
+        const info = el('div', 'rg-app-cdchoice');
+        info.appendChild(el('span', 'rg-app-role', `${t(`main.flexRoleS_${c.role}`)}${c.role === 'value' && c.agg ? ` · ${t(`main.flexAgg_${c.agg}`)}` : ''}`));
+        info.appendChild(el('small', 'rg-app-sub', c.loads === 1 ? t('main.regColLoad1') : t('main.regColLoads', { n: num(c.loads) })));
+        const state = el('span', 'rg-app-pill rg-app-pill-warn');
+        state.hidden = true;
+        info.appendChild(state);
+        card.appendChild(info);
+        // la clasificación y su color
+        const clsRow = el('div', 'rg-app-clsrow');
+        const clsInput = el('input', 'pm-app-input');
+        clsInput.type = 'text'; clsInput.maxLength = 40; clsInput.value = c.cls || ''; clsInput.disabled = !canEdit;
+        clsInput.placeholder = t('main.flexClsNone');
+        clsInput.setAttribute('aria-label', t('main.regColClass'));
+        clsInput.setAttribute('list', 'rg-app-cls-list');
+        const dots = el('span', 'rg-app-dots');
+        clsInput.addEventListener('input', () => { const cur = colsEff(c); s.draft.set(c.id, { name: cur.name, cls: clsInput.value }); s.error = ''; s.saved = ''; refresh(); });
+        // al terminar de escribir una clasificación nueva se le guarda su color (así no cambia sola al seguir escribiendo otras)
+        clsInput.addEventListener('change', () => { const f = foldCls(clsInput.value); if (f && s.clsColor[f] === undefined) s.clsColor[f] = colsColorOf(clsInput.value); refresh(); });
+        clsRow.append(clsInput, dots);
+        card.appendChild(clsRow);
+        refs.push({ c, card, state, dots });
+        list.appendChild(card);
+    });
+    if (cols.length) body.appendChild(list);
+    // las clasificaciones que ya existen, para elegirlas al escribir
+    const datalist = el('datalist');
+    datalist.id = 'rg-app-cls-list';
+    ((s.data && s.data.classes) || []).forEach((x) => { const o = el('option'); o.value = x.name; datalist.appendChild(o); });
+    body.appendChild(datalist);
+    if (s.error) { const err = el('p', 'rg-app-error', s.error); err.setAttribute('role', 'alert'); body.appendChild(err); }
+    const save = async () => {
+        const changes = [];
+        for (const c of cols) {
+            if (!colsDirty(c)) continue;
+            const e = colsEff(c);
+            const name = e.name.trim();
+            if (c.editName && !name) { s.error = t('main.regColsErr_FLEX_NO_NAME'); s.saved = ''; render(); return; }
+            const cls = e.cls.trim();
+            const change = { id: c.id, cls, color: cls ? colsColorOf(cls) : null };
+            if (c.editName && name !== c.name) change.name = name;
+            changes.push(change);
+        }
+        if (!changes.length) return;
+        s.busy = true; s.error = ''; s.saved = ''; refresh();
+        try {
+            const res = await fetch(apiUrl(`${API}/${encodeURIComponent(regKey)}/columns`), { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ changes }) });
+            const out = await res.json().catch(() => ({}));
+            if (!res.ok) { const code = out && out.code; throw Object.assign(new Error('failed'), { code }); }
+            s.data = out; s.draft.clear(); s.clsColor = {}; s.changed = true;
+            s.saved = out.changed === 1 ? t('main.regColsSaved1') : t('main.regColsSaved', { n: num(out.changed) });
+        } catch (e) {
+            s.error = ['FLEX_DUP_NAME', 'FLEX_NO_NAME', 'FLEX_NAME_LOCKED', 'REG_BUSY'].includes(e.code) ? t(`main.regColsErr_${e.code}`) : t('admin.saveError');
+        }
+        s.busy = false;
+        render();
+    };
+    if (canEdit && cols.length) {
+        saveBtnRef.node = wizBtn('rg-app-btn-ok', labelOf(), save, true, 'bx-save');
+        saveBtnRef.discard = wizBtn('rg-app-btn-tx', t('main.regColsDiscard'), () => { s.draft.clear(); s.clsColor = {}; s.error = ''; render(); }, true);
+        bar.append(saveBtnRef.node, saveBtnRef.discard);
+    }
+    bar.appendChild(wizBtn('rg-app-btn-tx', t('main.regColsClose'), leaveColumns));
+    bodyEl.append(body, bar);
+    refresh();
 }
 async function startLoad() {
     const reg = currentReg();
@@ -1707,6 +1897,7 @@ function stepDone(body, bar) {
 }
 
 document.getElementById('carga-back').addEventListener('click', () => {
+    if (view === 'columns') { leaveColumns(); return; }
     if (view === 'wizard') { wizardBack(); return; }
     if (view === 'load') { view = 'registry'; tab = 'loads'; render(); setScroll(loadsScroll); return; }
     if (view === 'code') { view = 'registry'; render(); setScroll(regScroll); return; }

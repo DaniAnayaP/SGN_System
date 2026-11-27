@@ -12,7 +12,7 @@ const CELL_BUDGET = 20000; // celdas (renglones x columnas) que se mandan para d
 const DISTINCT_LIMIT = 150;
 const MESSAGES = {
     FLEX_CONFIG: 'La elección de columnas no es válida.', FLEX_DUP_NAME: 'Dos columnas se llaman igual: cambia el nombre de una.', FLEX_NO_KEY: 'Elige al menos una columna como llave (va hacia abajo).',
-    IMPORT_TOO_MANY_COLUMNS: 'El archivo trae demasiadas columnas.', IMPORT_STAMP: 'El día y la hora no son válidos.', BAD_FILTER: 'El filtro no es válido.', BAD_COLUMN: 'Esa columna no existe.',
+    IMPORT_TOO_MANY_COLUMNS: 'El archivo trae demasiadas columnas.', IMPORT_STAMP: 'El día y la hora no son válidos.', BAD_FILTER: 'El filtro no es válido.', BAD_COLUMN: 'Esa columna no existe.', FLEX_NO_NAME: 'La columna necesita un nombre.', FLEX_NAME_LOCKED: 'El nombre de una llave o de un dato no se puede cambiar.',
 };
 const compareText = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
 const stampToDb = (iso) => {
@@ -319,6 +319,38 @@ module.exports = function createFlexApi(deps) {
         logTableChange({ clientId, tableKey: REG_TABLE, recordId: 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.regFormatoColumna', oldValue: name, newValue: out.fmt ? 'con formato' : 'sin formato', changedBy: changedByLabel(req) });
         return res.json({ name, key, fmt: out.fmt });
     }
+    // ---- «Columnas del registro» (Daniel, 2026-11-26): GET la lista de columnas que ya existen; PUT { changes: [{ id, name?, cls?, color? }] } cambia su nombre (solo valores con día y hora) y su clasificación en TODAS las cargas.
+    // Lo puede hacer quien puede cargar un Excel (la misma persona que ya elige esos nombres al cargar). No toca ningún dato: solo la elección de columnas guardada con cada carga.
+    function columnsRoute(req, res, registry) {
+        const { clientId, isTestAccount } = req.user;
+        const abilities = regAbilities(req);
+        const lang = req.query && req.query.lang === 'en' ? 'en' : 'es';
+        res.set('Cache-Control', 'no-store');
+        const listing = () => { const loads = db.flexVigenteLoads(clientId, isTestAccount, registry.key); return { loads, ...flex.registryColumns(loads, { tz: 0, lang }) }; };
+        const view = (l) => { const roles = l.loads.filter((x) => x.config.mode === 'roles').map((x) => x.id); return { columns: l.columns, classes: l.classes, colors: flex.CLASS_COLORS, loads: l.loads.length, rows: roles.length ? db.flexCountRows(clientId, isTestAccount, registry.key, roles) : 0, canEdit: abilities.canExcel }; };
+        if (req.method === 'GET') return res.json(view(listing()));
+        if (!abilities.canExcel) return regForbidden(res);
+        const lockKey = `${clientId}:${isTestAccount ? 1 : 0}:${registry.key}`;
+        if (regLoading.has(lockKey)) return res.status(409).json({ code: 'REG_BUSY', message: 'Ya hay una carga de este registro en curso. Espera a que termine.' });
+        const before = listing();
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const plan = flex.planColumnChanges(db.flexConfigLoads(clientId, isTestAccount, registry.key), body.changes, before);
+        if (plan.error) return res.status(plan.error === 'BAD_COLUMN' ? 404 : (plan.error === 'FLEX_NAME_LOCKED' ? 409 : 400)).json({ code: plan.error, message: MESSAGES[plan.error] || REG_MESSAGES[plan.error] || REG_MESSAGES.IMPORT_FILE, detail: plan.detail });
+        if (plan.updates.length) {
+            db.updateFlexConfigs(clientId, isTestAccount, registry.key, plan.updates);
+            // el formato que la columna tenía guardado la sigue cuando cambia de nombre
+            let fmt = db.getRegistryFormat(clientId, isTestAccount, registry.key);
+            let moved = false;
+            plan.entries.forEach((e) => { if (e.name !== undefined && fmt) { const next = flexExcel.renameColumnFormat(fmt.format, e.now.name, e.name); if (next) { fmt = { ...fmt, format: next }; moved = true; } } });
+            if (moved) db.setRegistryFormat(clientId, isTestAccount, registry.key, fmt.format, changedByLabel(req));
+            const who = changedByLabel(req);
+            plan.entries.forEach((e) => {
+                if (e.name !== undefined) logTableChange({ clientId, tableKey: REG_TABLE, recordId: 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.regColumnaNombre', oldValue: e.now.name, newValue: e.name, changedBy: who });
+                if (e.cls !== undefined) logTableChange({ clientId, tableKey: REG_TABLE, recordId: 0, recordLabel: `${registry.name || registry.key} · ${e.name !== undefined ? e.name : e.now.name}`, action: 'update', fieldKey: 'main.regColumnaClasificacion', oldValue: e.now.cls || '—', newValue: e.cls || '—', changedBy: who });
+            });
+        }
+        return res.json({ changed: plan.entries.length, loadsTouched: plan.updates.length, ...view(listing()) });
+    }
     // ---- Cargas: «Sí considerar» y «Eliminar los datos» de una carga (Daniel, 2026-11-26) ---------------------------------------------------------------------------
     // «No considerar» es la ruta de siempre /annul (la carga queda en el historial y sus datos dejan de contar). Aquí: volver a considerarla, o eliminar sus datos (solo si ya no se considera; el registro y la línea del historial se quedan).
     async function loadActionRoute(req, res, registry, action) {
@@ -354,5 +386,5 @@ module.exports = function createFlexApi(deps) {
             regLoading.delete(lockKey);
         }
     }
-    return { dataRoute, valuesRoute, exportRoute, inspectRoute, importRoute, formatRoute, columnFormatRoute, loadActionRoute };
+    return { dataRoute, valuesRoute, exportRoute, inspectRoute, importRoute, formatRoute, columnFormatRoute, columnsRoute, loadActionRoute };
 };

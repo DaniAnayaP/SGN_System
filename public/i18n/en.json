@@ -5644,6 +5644,35 @@
     "flexSumNewRows": "New rows: {n}",
     "flexSumFilled": "{cells} values completed in {rows} rows that already existed",
     "flexDoneFilled": "Also {cells} values were completed in {rows} rows that already existed (where they were empty).",
+    "regColsBtn": "Record columns",
+    "regColsTitle": "Record columns · {name}",
+    "regColsMeta": "{loads} loads · {rows} rows",
+    "regColsMeta1": "1 load · {rows} rows",
+    "regColName": "Name",
+    "regColHow": "How it loads",
+    "regColIn": "In",
+    "regColClass": "Classification",
+    "regColLoads": "{n} loads",
+    "regColLoad1": "1 load",
+    "regColFixed": "fixed",
+    "regColStrip": "Remove the date from the name",
+    "regColChanged": "changed",
+    "regColsSave": "Save",
+    "regColsSave1": "Save (1 change)",
+    "regColsSaveN": "Save ({n} changes)",
+    "regColsDiscard": "Discard",
+    "regColsClose": "Close",
+    "regColsSaved": "Done: {n} changes were saved in every load of the record.",
+    "regColsSaved1": "Done: 1 change was saved in every load of the record.",
+    "regColsEmpty": "This record has no columns yet: load a file first.",
+    "regColsLoading": "Loading…",
+    "regColsLink": "Record columns: change name or classification",
+    "regColsErr_FLEX_DUP_NAME": "Another column already uses that name: pick another.",
+    "regColsErr_FLEX_NO_NAME": "The column needs a name.",
+    "regColsErr_FLEX_NAME_LOCKED": "The name of a key or a data column cannot be changed.",
+    "regColsErr_REG_BUSY": "A load of this record is in progress. Wait for it to finish.",
+    "regColumnaNombre": "Column name",
+    "regColumnaClasificacion": "Column classification",
     "regToTabla": "Convert to free table",
     "regToTablaTitle": "Convert to free table",
     "regToTablaText": "“{name}” will become a free table: you will be able to load any Excel and choose the role of its columns on every load. It can only be done while it has no loads.",
@@ -10195,6 +10224,26 @@
     "regFlexMap": {
       "what": "For each column of your Excel you pick its role: Key (identifies the row and goes down the list), Row data, New column on every load (stock, cost…) or Not loaded. If several rows land on the same key, the new column is added up or one is taken (for example, the cost). Every column can be renamed. Each column is a row of the table, in the order of your Excel and fully visible, with a single decision: \"Already exists\" (it joins a column the record already has; you pick which one there), \"New additional\" (in the same row you define its role, name, classification and color) or \"Not loaded\". A \"Row data\" column also completes the rows that already existed with the same key, but only where their cell was empty: it never changes what was already loaded, and if the load stops being considered, what it completed stops counting. Columns that already exist are recognized by the title they had; if one comes with another name but looks like one that already exists, its row is highlighted and you are asked whether it is that one. The table always shows the name and the classification of every column: for the ones that already exist they are shown (read only) and for new ones you type them in the same row. If you want another name for one that shows as \"Already exists\", pick \"＋ Write another name\" at the end of its list: the row becomes \"New additional\". This way columns are not duplicated.",
       "example": "ON_HAND_QTY → New column, Add up, \"Stock\""
+    },
+    "regColumnas": {
+      "what": "Opens the list of columns this record already has, to change their name and classification once and for every load.",
+      "example": "New site → classification \"Search data\""
+    },
+    "regColumnasVentana": {
+      "what": "Every column that already exists in the record is here, with its role (Key, Data or Value) and how many loads carry it. What you change is saved in every load, even the ones no longer considered, and it touches no data. The classification can be set, changed or removed on any column; the color belongs to the classification, so every column that carries it shares it. The name can only be changed on values with a day and time (Stock, Cost…); the name of a key, a data column or a fixed-name value stays fixed.",
+      "example": "Exist → Stock · New site → \"Search data\""
+    },
+    "regColumnasNombre": {
+      "what": "The column name in the table and in the downloaded Excel. If the name has a date written in it, \"Remove the date from the name\" removes it and the system adds each load's own. If another column already has that name, it is not saved.",
+      "example": "Exist 26-Nov 06:00 → Exist"
+    },
+    "regColumnasClasificacion": {
+      "what": "Groups columns under a colored title in the table. Type a new classification or pick one that already exists (it takes its color). Leave it empty to remove it.",
+      "example": "Search data"
+    },
+    "regColumnasFijo": {
+      "what": "The name of a key, a data column or a fixed-name value (like a month) cannot be changed: it is used to recognize each row and its values, and changing it would force rewriting the whole record. Its classification can be changed.",
+      "example": "Site, Description"
     },
     "regFormatoColumna": {
       "what": "Tap the ⋮ in a column header to format it: number (decimals, currency, thousands, percentage, dates…), font (bold, italic, underline, color), alignment, cell shading and header color. It shows right away, is saved for everyone and applies to every load of that column; the downloaded Excel comes out with the same format.",

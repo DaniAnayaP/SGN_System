@@ -5440,6 +5440,16 @@ function flexVigenteLoads(clientId, forTestAccount, registryKey) {
     return db.prepare("SELECT id, stamp, created_at, file_name, loaded_by, config_json FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND status = 'vigente' AND config_json <> '' ORDER BY id")
         .all(clientId, forTestAccount ? 1 : 0, registryKey).map((r) => ({ id: r.id, stamp: r.stamp || String(r.created_at || '').slice(0, 19), createdAt: r.created_at, fileName: r.file_name, loadedBy: r.loaded_by, config: parseJsonObject(r.config_json) }));
 }
+// TODAS las cargas de un registro libre que tienen su elección de columnas guardada (vigentes y no consideradas), en orden: sirve para cambiar el nombre y la clasificación de una columna en todas.
+function flexConfigLoads(clientId, forTestAccount, registryKey) {
+    return db.prepare("SELECT id, status, stamp, created_at, config_json FROM manual_registry_loads WHERE client_id = ? AND is_test_data = ? AND registry_key = ? AND status IN ('vigente', 'anulada') AND config_json <> '' ORDER BY id")
+        .all(clientId, forTestAccount ? 1 : 0, registryKey).map((r) => ({ id: r.id, status: r.status, stamp: r.stamp || String(r.created_at || '').slice(0, 19), config: parseJsonObject(r.config_json) }));
+}
+// Guarda la elección nueva de varias cargas de un registro (todas o ninguna). Los valores ya guardados no se tocan: solo cambia el texto de la elección.
+function updateFlexConfigs(clientId, forTestAccount, registryKey, updates) {
+    const upd = db.prepare("UPDATE manual_registry_loads SET config_json = ? WHERE id = ? AND client_id = ? AND is_test_data = ? AND registry_key = ? AND config_json <> ''");
+    return db.transaction((items) => items.reduce((n, u) => { const changed = upd.run(JSON.stringify(u.config), u.id, clientId, forTestAccount ? 1 : 0, registryKey).changes; flexSlotCache.delete(u.id); return n + changed; }, 0))(updates);
+}
 // Un bloque «tal cual»: { columns: [nombres], rows: [[celdas…]] }
 function flexBlock(loadId) {
     const row = db.prepare('SELECT data FROM manual_flex_blocks WHERE load_id = ?').get(loadId);
@@ -23360,7 +23370,7 @@ module.exports = {
     listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
-    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, reconsiderRegistryLoad, deleteFlexLoadData, flexConfigHistory, diskSpace, getRegistryFormat, setRegistryFormat, clearRegistryFormat, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, reconsiderRegistryLoad, deleteFlexLoadData, flexConfigHistory, diskSpace, getRegistryFormat, setRegistryFormat, clearRegistryFormat, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexConfigLoads, updateFlexConfigs, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,

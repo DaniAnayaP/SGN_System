@@ -5643,6 +5643,35 @@
     "flexSumNewRows": "Renglones nuevos: {n}",
     "flexSumFilled": "{cells} datos completados en {rows} renglones que ya existían",
     "flexDoneFilled": "Además se completaron {cells} datos en {rows} renglones que ya existían (donde estaban vacíos).",
+    "regColsBtn": "Columnas del registro",
+    "regColsTitle": "Columnas del registro · {name}",
+    "regColsMeta": "{loads} cargas · {rows} renglones",
+    "regColsMeta1": "1 carga · {rows} renglones",
+    "regColName": "Nombre",
+    "regColHow": "Cómo se carga",
+    "regColIn": "En",
+    "regColClass": "Clasificación",
+    "regColLoads": "{n} cargas",
+    "regColLoad1": "1 carga",
+    "regColFixed": "fijo",
+    "regColStrip": "Quitar la fecha del nombre",
+    "regColChanged": "cambió",
+    "regColsSave": "Guardar",
+    "regColsSave1": "Guardar (1 cambio)",
+    "regColsSaveN": "Guardar ({n} cambios)",
+    "regColsDiscard": "Descartar",
+    "regColsClose": "Cerrar",
+    "regColsSaved": "Listo: se guardaron {n} cambios en todas las cargas del registro.",
+    "regColsSaved1": "Listo: se guardó 1 cambio en todas las cargas del registro.",
+    "regColsEmpty": "Este registro todavía no tiene columnas: carga un archivo primero.",
+    "regColsLoading": "Cargando…",
+    "regColsLink": "Columnas del registro: cambiar nombre o clasificación",
+    "regColsErr_FLEX_DUP_NAME": "Ese nombre ya lo usa otra columna: elige otro.",
+    "regColsErr_FLEX_NO_NAME": "La columna necesita un nombre.",
+    "regColsErr_FLEX_NAME_LOCKED": "El nombre de una llave o de un dato no se puede cambiar.",
+    "regColsErr_REG_BUSY": "Hay una carga de este registro en curso. Espera a que termine.",
+    "regColumnaNombre": "Nombre de columna",
+    "regColumnaClasificacion": "Clasificación de columna",
     "regToTabla": "Convertir a tabla libre",
     "regToTablaTitle": "Convertir a tabla libre",
     "regToTablaText": "«{name}» pasará a ser una tabla libre: podrás cargar cualquier Excel y elegir el papel de sus columnas en cada carga. Solo se puede mientras no tenga cargas.",
@@ -10194,6 +10223,26 @@
     "regFlexMap": {
       "what": "Para cada columna de tu Excel eliges su papel: Llave (identifica el renglón y va hacia abajo), Dato del renglón, Columna nueva en cada carga (existencia, costo…) o No se carga. Si varios renglones caen en la misma llave, la columna nueva se suma o se toma uno (por ejemplo, el costo). Todas las columnas se pueden renombrar. Cada columna es una fila de la tabla, en el orden de tu Excel y con todo a la vista, con una sola decisión: «Ya existe» (se une a una columna que el registro ya tiene; ahí eliges a cuál), «Nueva adicional» (en la misma fila defines su papel, nombre, clasificación y color) o «No se carga». Un «Dato del renglón» también completa los renglones que ya existían con la misma llave, pero solo donde su celda estaba vacía: nunca cambia lo que ya estaba cargado, y si la carga se deja de considerar, lo que completó deja de contar. Las que ya existen se reconocen solas por el título que traían; si una trae otro nombre pero se parece a una que ya existe, su fila sale resaltada y se te pregunta si es esa. La tabla muestra siempre el nombre y la clasificación de cada columna: en las que ya existen se ven (solo para leer) y en las nuevas se escriben en la misma fila. Si quieres otro nombre para una que figura como «Ya existe», elige «＋ Escribir otro nombre» al final de su lista: la fila pasa a «Nueva adicional». Así no se duplican columnas.",
       "example": "ON_HAND_QTY → Columna nueva, Sumar, «Existencia»"
+    },
+    "regColumnas": {
+      "what": "Abre la lista de las columnas que ya tiene este registro, para cambiar su nombre y su clasificación una sola vez y que valga para todas las cargas.",
+      "example": "Sitio nuevo → clasificación «Datos búsqueda»"
+    },
+    "regColumnasVentana": {
+      "what": "Aquí están todas las columnas que ya existen en el registro, con su papel (Llave, Dato o Valor) y en cuántas cargas aparecen. Lo que cambies se guarda en todas las cargas, incluso las que ya no se consideran, y no toca ningún dato. La clasificación se puede poner, cambiar o quitar en cualquier columna; el color es de la clasificación, así que todas las columnas que la llevan lo comparten. El nombre solo se cambia en los valores con día y hora (Existencia, Costo…); el de una llave, un dato o un valor de nombre fijo queda fijo.",
+      "example": "Exist → Existencia · Sitio nuevo → «Datos búsqueda»"
+    },
+    "regColumnasNombre": {
+      "what": "El nombre de la columna en la tabla y en el Excel que se descarga. Si el nombre trae una fecha escrita, «Quitar la fecha del nombre» la quita y el sistema le pone la de cada carga. Si ya existe otra columna con ese nombre, no se guarda.",
+      "example": "Exist 26-Nov 06:00 → Exist"
+    },
+    "regColumnasClasificacion": {
+      "what": "Agrupa las columnas bajo un título de color en la tabla. Escribe una clasificación nueva o elige una que ya existe (toma su color). Déjala vacía para quitarla.",
+      "example": "Datos búsqueda"
+    },
+    "regColumnasFijo": {
+      "what": "El nombre de una llave, de un dato o de un valor de nombre fijo (como un mes) no se puede cambiar: se usa para reconocer cada renglón y sus valores, y cambiarlo obligaría a reescribir todo el registro. Su clasificación sí se puede cambiar.",
+      "example": "Sitio, Descripción"
     },
     "regFormatoColumna": {
       "what": "Toca el ⋮ del encabezado de una columna para darle formato: número (decimales, moneda, miles, porcentaje, fechas…), letra (negritas, cursiva, subrayado, color), alineación, sombreado de las celdas y color del encabezado. Se ve al momento, se guarda para todos y vale para todas las cargas de esa columna; el Excel que se descarga sale con el mismo formato.",

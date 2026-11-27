@@ -689,7 +689,9 @@ function renderButtons() {
     };
     toolbar.classList.add('ven-toolbar');
     if (!reg || reg.kind !== 'tabla') toolbar.prepend(make('reg-template-btn', 'bx-download', 'main.regTemplate', 'regTemplate', downloadTemplate)); // un registro libre no tiene plantilla: se carga tu propio Excel
-    toolbar.prepend(make('reg-import-btn', 'bx-upload', 'main.regImport', 'regImport', openLoadModal));
+    const importBtn = make('reg-import-btn', 'bx-upload', 'main.regImport', 'regImport', openLoadModal);
+    toolbar.prepend(importBtn);
+    if (reg && reg.kind === 'tabla' && st.canExcel) importBtn.after(make('reg-columns-btn', 'bx-columns', 'main.regColsBtn', 'regColumnas', openFlexColumnsModal)); // las columnas que ya existen: nombre y clasificación
 }
 function wireStatic() {
     document.querySelectorAll('[data-reg-tab]').forEach((btn) => btn.addEventListener('click', () => showTab(btn.dataset.regTab)));
@@ -774,6 +776,153 @@ function errorTextOf(err) {
 // ---- Registros de TABLA LIBRE: cada carga lleva su propia elección de columnas (no se recuerda de una carga a otra) ------------------------------------------------------------------------------
 // «Guardar tal cual» (todas las columnas del Excel, con su orden y nombres) o «Elegir el papel de cada columna»: llave (va hacia abajo), dato del renglón, columna nueva en cada carga (se suma o se toma uno) o no se carga.
 // Cada columna se puede renombrar. El día y la hora de la carga se eligen aquí (el archivo no los trae); cada carga es su propia columna aunque tenga el mismo día y hora.
+// «Columnas del registro» (Daniel, 2026-11-26, opción B): cambiar el nombre y la clasificación de las columnas que YA existen, una sola vez y para todas las cargas. El nombre solo se cambia en los valores con día y hora;
+// en las llaves, los datos y los valores de nombre fijo está fijo. El color es de la clasificación (todas las columnas que la llevan lo comparten). No toca ningún dato.
+function openFlexColumnsModal() {
+    const reg = currentRegistry();
+    if (!reg || reg.kind !== 'tabla') return;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay exp-overlay';
+    document.body.appendChild(overlay);
+    const s = { data: null, draft: new Map(), clsColor: {}, busy: false, error: "", saved: "", changed: false };
+    const foldCls = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+    const url = `${API}/${encodeURIComponent(reg.key)}/columns`;
+    const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); if (s.changed) location.reload(); }; // con algo guardado, la tabla se arma de nuevo con los nombres y colores nuevos
+    const onKey = (event) => { if (event.key === 'Escape' && !s.busy) close(); };
+    document.addEventListener('keydown', onKey);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay && !s.busy) close(); });
+    const eff = (c) => { const d = s.draft.get(c.id); return { name: d ? d.name : c.name, cls: d ? d.cls : (c.cls || '') }; };
+    // el color de una clasificación: el que se eligió aquí, el que ya tiene, o el primero libre
+    const colorOfClass = (cls) => {
+        const f = foldCls(cls);
+        if (!f) return null;
+        if (s.clsColor[f] !== undefined) return s.clsColor[f];
+        const known = (s.data.classes || []).find((x) => foldCls(x.name) === f);
+        if (known && Number.isInteger(known.color)) return known.color;
+        const used = new Set([...(s.data.classes || []).map((x) => x.color), ...Object.values(s.clsColor)]);
+        for (let i = 0; i < CLASS_COLORS.length; i += 1) if (!used.has(i)) return i;
+        return 0;
+    };
+    const isDirty = (c) => {
+        const e = eff(c);
+        const cls = e.cls.trim();
+        if (c.editName && e.name.trim() !== c.name) return true;
+        if (cls !== (c.cls || '')) return true;
+        return !!cls && colorOfClass(cls) !== c.color;
+    };
+    const dotsHtml = (c) => {
+        const cls = eff(c).cls.trim();
+        if (!cls) return '';
+        const color = colorOfClass(cls);
+        return CLASS_COLORS.map((hex, i) => `<button type="button" class="reg-fx-dot" data-cm="color" data-id="${esc(c.id)}" data-k="${i}" style="background:${hex}" aria-pressed="${color === i ? 'true' : 'false'}" aria-label="${esc(t(`main.flexColor_${i}`))}"></button>`).join('');
+    };
+    const rowHtml = (c) => {
+        const e = eff(c);
+        const canEdit = !!s.data.canEdit;
+        const nameCell = c.editName && canEdit
+            ? `<div class="reg-cm-nm"><input type="text" class="reg-cm-in" data-cm="name" data-id="${esc(c.id)}" maxlength="60" value="${esc(e.name)}" aria-label="${esc(t('main.regColName'))}">${c.nameNoDate && e.name.trim() !== c.nameNoDate ? `<button type="button" class="reg-cm-chip" data-cm="strip" data-id="${esc(c.id)}">${esc(t('main.regColStrip'))}</button>` : ''}</div>`
+            : `<div class="reg-cm-nmf"><span class="reg-tb-ro"><span>${esc(c.name)}</span></span>${c.editName ? '' : `<span class="reg-cm-lock" data-help-key="regColumnasFijo"><i class="bx bx-lock-alt" aria-hidden="true"></i> ${esc(t('main.regColFixed'))}</span>`}</div>`;
+        const how = `<span class="reg-tb-role">${esc(t(`main.flexRoleS_${c.role}`))}${c.role === 'value' && c.agg ? ` · ${esc(t(`main.flexAgg_${c.agg}`))}` : ''}</span>`;
+        const inn = esc(c.loads === 1 ? t('main.regColLoad1') : t('main.regColLoads', { n: num(c.loads) }));
+        const clsCell = `<div class="reg-cm-cl"><input type="text" class="reg-cm-in" data-cm="cls" data-id="${esc(c.id)}" list="cm-cls-list" maxlength="40" value="${esc(e.cls)}" placeholder="${esc(t('main.flexClsNone'))}" aria-label="${esc(t('main.regColClass'))}"${canEdit ? '' : ' disabled'}><div class="reg-fx-dots" data-dots="${esc(c.id)}">${dotsHtml(c)}</div></div>`;
+        return `<div class="reg-cm-row${isDirty(c) ? ' reg-cm-dirty' : ''}" data-row="${esc(c.id)}"><div class="reg-cm-c-nm">${nameCell}</div><div>${how}</div><div class="reg-cm-in-n">${inn}</div><div>${clsCell}</div><div class="reg-cm-state" data-state="${esc(c.id)}">${isDirty(c) ? esc(t('main.regColChanged')) : ''}</div></div>`;
+    };
+    const classList = () => {
+        const names = new Map();
+        ((s.data && s.data.classes) || []).forEach((x) => names.set(foldCls(x.name), x.name));
+        s.draft.forEach((d) => { const f = foldCls(d.cls); if (f && !names.has(f)) names.set(f, d.cls.trim()); });
+        return `<datalist id="cm-cls-list">${[...names.values()].map((n) => `<option value="${esc(n)}"></option>`).join('')}</datalist>`;
+    };
+    const dirtyCount = () => (s.data ? s.data.columns.filter(isDirty).length : 0);
+    const saveLabel = () => { const n = dirtyCount(); return n === 0 ? t('main.regColsSave') : (n === 1 ? t('main.regColsSave1') : t('main.regColsSaveN', { n: num(n) })); };
+    // lo que cambia al escribir o elegir sin volver a dibujar la lista (así no se pierde el cursor): la marca «cambió» de cada fila, los puntos de color y el botón Guardar
+    const refreshState = () => {
+        if (!s.data) return;
+        s.data.columns.forEach((c) => {
+            const row = overlay.querySelector(`[data-row="${CSS.escape(c.id)}"]`);
+            if (!row) return;
+            row.classList.toggle('reg-cm-dirty', isDirty(c));
+            const st2 = row.querySelector('[data-state]');
+            if (st2) st2.textContent = isDirty(c) ? t('main.regColChanged') : '';
+            const dots = row.querySelector('[data-dots]');
+            if (dots) dots.innerHTML = dotsHtml(c);
+        });
+        const save = overlay.querySelector('[data-cm="save"]');
+        if (save) { save.textContent = saveLabel(); save.disabled = s.busy || dirtyCount() === 0; }
+        const discard = overlay.querySelector('[data-cm="discard"]');
+        if (discard) discard.disabled = s.busy || dirtyCount() === 0;
+    };
+    const meta = () => (s.data.loads === 1 ? t('main.regColsMeta1', { rows: num(s.data.rows) }) : t('main.regColsMeta', { loads: num(s.data.loads), rows: num(s.data.rows) }));
+    const paint = () => {
+        const body = !s.data
+            ? `<p>${esc(t('main.regColsLoading'))}</p>`
+            : (!s.data.columns.length
+                ? `<p>${esc(t('main.regColsEmpty'))}</p>`
+                : `<div class="reg-cm-wrap" data-help-key="regColumnasVentana"><div class="reg-cm-head"><div data-help-key="regColumnasNombre">${esc(t('main.regColName'))}</div><div>${esc(t('main.regColHow'))}</div><div>${esc(t('main.regColIn'))}</div><div data-help-key="regColumnasClasificacion">${esc(t('main.regColClass'))}</div><div></div></div>${s.data.columns.map(rowHtml).join('')}</div>${classList()}`);
+        overlay.innerHTML = `<div class="modal-panel exp-panel wp-modal wp-imp wp-imp-wide reg-cm" role="dialog" aria-modal="true" aria-labelledby="reg-cm-title" data-help-key="regColumnasVentana"><h3 id="reg-cm-title">${esc(t('main.regColsTitle', { name: regName(reg) }))}${s.data ? ` <small>${esc(meta())}</small>` : ''}</h3>${s.saved ? `<p class="reg-cm-flash" role="status">${esc(s.saved)}</p>` : ''}<p class="admin-error" role="alert"${s.error ? '' : ' hidden'}>${esc(s.error)}</p>${body}<div class="admin-form-actions">${s.data && s.data.canEdit && s.data.columns.length ? `<button type="button" class="btn" data-cm="save">${esc(saveLabel())}</button><button type="button" class="btn btn-secondary" data-cm="discard">${esc(t('main.regColsDiscard'))}</button>` : ''}<button type="button" class="btn btn-secondary" data-cm="close">${esc(t('main.regColsClose'))}</button></div></div>`;
+        refreshState();
+    };
+    const save = async () => {
+        const changes = [];
+        for (const c of s.data.columns) {
+            if (!isDirty(c)) continue;
+            const e = eff(c);
+            const name = e.name.trim();
+            if (c.editName && !name) { s.error = t('main.regColsErr_FLEX_NO_NAME'); s.saved = ''; paint(); return; }
+            const cls = e.cls.trim();
+            const change = { id: c.id, cls, color: cls ? colorOfClass(cls) : null };
+            if (c.editName && name !== c.name) change.name = name;
+            changes.push(change);
+        }
+        if (!changes.length) return;
+        s.busy = true; s.error = ''; s.saved = ''; refreshState();
+        try {
+            const res = await sendRegistry('PUT', url, { changes });
+            s.data = res; s.draft.clear(); s.clsColor = {}; s.changed = true;
+            s.saved = res.changed === 1 ? t('main.regColsSaved1') : t('main.regColsSaved', { n: num(res.changed) });
+        } catch (e) {
+            const code = e.body && e.body.code;
+            s.error = ['FLEX_DUP_NAME', 'FLEX_NO_NAME', 'FLEX_NAME_LOCKED', 'REG_BUSY'].includes(code) ? t(`main.regColsErr_${code}`) : t('admin.saveError');
+        }
+        s.busy = false; paint();
+    };
+    overlay.addEventListener('input', (event) => {
+        const el = event.target.closest('[data-cm]');
+        if (!el || !s.data) return;
+        const id = el.dataset.id;
+        const c = s.data.columns.find((x) => x.id === id);
+        if (!c) return;
+        const cur = eff(c);
+        if (el.dataset.cm === 'name') s.draft.set(id, { name: el.value, cls: cur.cls });
+        else if (el.dataset.cm === 'cls') s.draft.set(id, { name: cur.name, cls: el.value });
+        else return;
+        s.error = ''; s.saved = '';
+        refreshState();
+    });
+    // al terminar de escribir una clasificación nueva se le guarda su color (así no cambia sola al seguir escribiendo otras)
+    overlay.addEventListener('change', (event) => {
+        const el = event.target.closest('[data-cm="cls"]');
+        if (!el || !s.data) return;
+        const f = foldCls(el.value);
+        if (f && s.clsColor[f] === undefined) s.clsColor[f] = colorOfClass(el.value);
+        refreshState();
+    });
+    overlay.addEventListener('click', (event) => {
+        const el = event.target.closest('[data-cm]');
+        if (!el) return;
+        const op = el.dataset.cm;
+        if (op === 'close') { if (!s.busy) close(); return; }
+        if (s.busy || !s.data) return;
+        if (op === 'save') { save(); return; }
+        if (op === 'discard') { s.draft.clear(); s.clsColor = {}; s.error = ''; paint(); return; }
+        const c = s.data.columns.find((x) => x.id === el.dataset.id);
+        if (!c) return;
+        if (op === 'strip') { const cur = eff(c); s.draft.set(c.id, { name: c.nameNoDate, cls: cur.cls }); s.error = ''; s.saved = ''; const row = overlay.querySelector(`[data-row="${CSS.escape(c.id)}"]`); if (row) row.outerHTML = rowHtml(c); refreshState(); return; }
+        if (op === 'color') { const cls = eff(c).cls.trim(); if (cls) { s.clsColor[foldCls(cls)] = Number(el.dataset.k); s.saved = ''; refreshState(); } }
+    });
+    paint();
+    fetch(`${url}?lang=${lang()}`, { credentials: 'include' }).then((res) => (res.ok ? res.json() : Promise.reject(new Error('failed')))).then((data) => { s.data = data; paint(); }).catch(() => { s.error = t('admin.saveError'); paint(); });
+}
 function openFlexLoadModal() {
     const reg = currentRegistry();
     if (!reg) return;
@@ -800,7 +949,7 @@ function openFlexLoadModal() {
         s.cols.forEach((c) => { if (c.cls && !names.has(foldCls(c.cls))) names.set(foldCls(c.cls), c.cls); });
         return `<datalist id="fx-cls-list">${[...names.values()].map((n) => `<option value="${esc(n)}"></option>`).join('')}</datalist>`;
     };
-    const startHtml = () => `<h3 id="reg-i-title">${esc(t('main.flexImpTitle', { name: regName(reg) }))}</h3>
+    const startHtml = () => `<h3 id="reg-i-title">${esc(t('main.flexImpTitle', { name: regName(reg) }))}</h3> ${st.canExcel && st.data && (st.data.columns || []).some((c) => c.kind !== 'carga') ? `<p class="reg-cm-link"><button type="button" class="reg-cd-link-btn" data-reg-i="open-columns" data-help-key="regColumnas">${esc(t('main.regColsLink'))}</button></p>` : ''}
         <div class="tpl-seg" role="group"><button type="button" data-reg-i="mode-file" aria-pressed="${s.inputMode === 'file'}" data-help-key="tplUpload"${s.busy ? ' disabled' : ''}>${esc(t('main.tplModeFile'))}</button><button type="button" data-reg-i="mode-paste" aria-pressed="${s.inputMode === 'paste'}" data-help-key="tplPaste"${s.busy ? ' disabled' : ''}>${esc(t('main.tplModePaste'))}</button></div>
         ${s.inputMode === 'paste' ? `<div class="reg-paste"><textarea id="reg-i-paste" spellcheck="false" placeholder="${esc(t('main.tplPastePlaceholder'))}"${s.busy ? ' disabled' : ''}>${esc(s.pasteText)}</textarea><button type="button" class="btn btn-secondary" data-reg-i="paste-go"${s.busy ? ' disabled' : ''}>${esc(s.busy ? t('main.regReading') : t('main.tplPasteGo'))}</button></div>` : `<label class="wp-imp-drop" id="reg-i-drop" for="reg-i-file" data-help-key="regDrop"><b>${esc(s.busy ? t('main.regReading') : t('main.regDrop'))}</b><span>${esc(t('main.regDropOr'))}</span></label>
         <input type="file" id="reg-i-file" class="wp-imp-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"${s.busy ? ' disabled' : ''}>`}
@@ -1097,6 +1246,7 @@ function openFlexLoadModal() {
         if (!btn || s.busy) return;
         const op = btn.dataset.regI;
         if (op === 'cancel') close();
+        else if (op === 'open-columns') openFlexColumnsModal();
         else if (op === 'mode-file' || op === 'mode-paste') { s.inputMode = op === 'mode-paste' ? 'paste' : 'file'; s.error = ''; paint(); }
         else if (op === 'paste-go') pasteGo();
         else if (op === 'review') review();

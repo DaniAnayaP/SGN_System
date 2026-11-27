@@ -457,8 +457,8 @@ function buildColumns(loads, { tz = 0, lang = 'es' } = {}) {
             const clsF = noteClass(c);
             if (c.role === 'value') {
                 const myK = k; k += 1;
-                if (c.stampName) valueCols.push({ kind: 'value', group: 'value', name: c.name, loadId: load.id, srcKey: `m:${load.id}:${myK}`, label: uniqueLabel(nameHasDate(c.name) ? c.name : `${c.name} ${loadStamp}`), clsF });
-                else if (!namedPlaced.has(f)) { namedPlaced.add(f); valueCols.push({ kind: 'value', group: 'value', name: c.name, srcKey: periodNameKey(c.name), label: c.name, clsF }); }
+                if (c.stampName) valueCols.push({ kind: 'value', group: 'value', name: c.name, agg: c.agg === 'one' ? 'one' : 'sum', loadId: load.id, srcKey: `m:${load.id}:${myK}`, label: uniqueLabel(nameHasDate(c.name) ? c.name : `${c.name} ${loadStamp}`), clsF });
+                else if (!namedPlaced.has(f)) { namedPlaced.add(f); valueCols.push({ kind: 'value', group: 'value', name: c.name, agg: c.agg === 'one' ? 'one' : 'sum', srcKey: periodNameKey(c.name), label: c.name, clsF }); }
             } else {
                 const slot = cellAt.get(f);
                 if (!slot) { const made = { kind: 'cell', group: c.role === 'key' ? 'key' : 'data', name: c.name, srcKey: `c:${f}`, label: c.name, clsF }; cellAt.set(f, made); cellSlots.push(made); } else if (!slot.clsF && clsF) slot.clsF = clsF;
@@ -472,6 +472,108 @@ function buildColumns(loads, { tz = 0, lang = 'es' } = {}) {
     const byFold = new Map(classes.map((x) => [x.fold, x]));
     flat.forEach((c) => { const x = c.clsF ? byFold.get(c.clsF) : null; c.cls = x ? x.name : ''; c.color = x ? x.color : null; delete c.clsF; });
     return { columns: flat, hasAsis, labels: loadLabels, classes: classes.map(({ name, color }) => ({ name, color })) };
+}
+
+// ---- «Columnas del registro» (Daniel, 2026-11-26): cambiar el nombre y la clasificación de las columnas que YA existen, una sola vez y para todas las cargas ----
+// Cada columna tiene un id: «c:<nombre>» (llave o dato: el nombre se usa para reconocer cada renglón, no se cambia), «v:<nombre>» (valor con día y hora: cada carga guarda sus valores aparte, así que el nombre sí se puede cambiar)
+// y «n:<nombre>» (valor de nombre fijo, como un mes: sus valores se guardan POR el nombre, no se cambia). La clasificación se cambia en todas.
+const colIdOf = (c) => `${c.role === 'value' ? (c.stampName ? 'v' : 'n') : 'c'}:${foldText(c.name)}`;
+const FOLD_MONTH_DATE = new RegExp(`\\s*\\d{1,2}\\s*[-/. ]\\s*${MONTH_WORD}\\.?(?:\\s+\\d{2,4})?(?:\\s+\\d{1,2}:\\d{2})?\\s*$`, 'i');
+// El nombre sin la fecha o la hora que trae escrita («EXIST 26-NOV 06:00» → «EXIST»); null si no trae o si no se puede quitar.
+function stripNameDate(name) {
+    const text = trim(name);
+    if (!nameHasDate(text)) return null;
+    let out = text.replace(FOLD_MONTH_DATE, '').replace(/\s*\b\d{4}-\d{1,2}-\d{1,2}(?:\s+\d{1,2}:\d{2})?\s*$/, '').replace(/\s*\b\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}(?:\s+\d{1,2}:\d{2})?\s*$/, '').replace(/\s*\b\d{1,2}:\d{2}\s*$/, '');
+    out = trim(out);
+    return out && out !== text && !nameHasDate(out) ? out : null;
+}
+// La lista de la ventana: las columnas de la tabla (lo vigente), cada una con su papel, cuántas cargas la traen, su clasificación y color, y si su nombre se puede cambiar.
+function registryColumns(loads, opts) {
+    const built = buildColumns(loads, opts);
+    const counts = new Map();
+    loads.forEach((load) => {
+        const cfg = load.config;
+        if (!cfg || !Array.isArray(cfg.columns)) return;
+        const mine = new Set(cfg.columns.filter((c) => c.role !== 'skip').map(colIdOf));
+        mine.forEach((id) => counts.set(id, (counts.get(id) || 0) + 1));
+    });
+    const order = [];
+    const byId = new Map();
+    built.columns.forEach((c) => {
+        if (c.kind === 'carga') return;
+        const id = c.kind === 'cell' ? c.srcKey : (c.srcKey.startsWith('m:') ? `v:${foldText(c.name)}` : c.srcKey);
+        let g = byId.get(id);
+        if (!g) { g = { id, name: c.name, role: c.group, agg: c.kind === 'value' ? c.agg : '', editName: id.startsWith('v:'), cls: '', color: null, loads: counts.get(id) || 0 }; byId.set(id, g); order.push(g); }
+        g.name = c.name; g.cls = c.cls || ''; g.color = c.color; // la más reciente manda, igual que en la tabla
+    });
+    order.forEach((g) => { if (g.editName) { const bare = stripNameDate(g.name); if (bare) g.nameNoDate = bare; } });
+    return { columns: order, classes: built.classes };
+}
+// Revisa los cambios y arma la elección nueva de cada carga que se toca. loads = TODAS las cargas con elección guardada (vigentes y no consideradas: así, si una vuelve a considerarse, trae lo nuevo);
+// changes = [{ id, name?, cls?, color? }]; listing = lo que devolvió registryColumns. Devuelve { error, detail } o { updates: [{ id, config }], entries }.
+function planColumnChanges(loads, changes, listing) {
+    if (!Array.isArray(changes) || !changes.length || changes.length > 400) return { error: 'FLEX_CONFIG' };
+    const current = new Map(listing.columns.map((c) => [c.id, c]));
+    const classByFold = new Map(listing.classes.map((k) => [foldText(k.name), k]));
+    const wanted = new Map();
+    for (const ch of changes) {
+        if (!ch || typeof ch !== 'object') return { error: 'FLEX_CONFIG' };
+        const id = String(ch.id || '');
+        const now = current.get(id);
+        if (!now) return { error: 'BAD_COLUMN' };
+        const entry = { id, now };
+        if (ch.name !== undefined) {
+            const name = trim(ch.name).replace(/\s+/g, ' ').slice(0, MAX_NAME);
+            if (!name) return { error: 'FLEX_NO_NAME' };
+            if (name !== now.name) { if (!now.editName) return { error: 'FLEX_NAME_LOCKED', detail: now.name }; entry.name = name; }
+        }
+        if (ch.cls !== undefined) { const cls = trim(ch.cls).replace(/\s+/g, ' ').slice(0, MAX_CLASS); if (cls !== now.cls) entry.cls = cls; }
+        if (ch.color !== undefined) { const color = Number.isInteger(ch.color) && ch.color >= 0 && ch.color < CLASS_COLORS ? ch.color : null; if (color !== now.color || entry.cls !== undefined) entry.color = color; }
+        if (entry.name === undefined && entry.cls === undefined && entry.color === undefined) continue;
+        wanted.set(id, entry); // si una columna viene dos veces, manda la última
+    }
+    if (!wanted.size) return { updates: [], entries: [] };
+    const configs = loads.filter((l) => l.config && Array.isArray(l.config.columns)).map((l) => ({ id: l.id, config: JSON.parse(JSON.stringify(l.config)), touched: false }));
+    // los nombres que no se pueden usar: los de llave, dato y valor de nombre fijo de cualquier carga (cambiar a uno de esos mezclaría columnas)
+    const fixed = new Set();
+    configs.forEach((l) => l.config.columns.forEach((c) => { if (c.role !== 'skip' && !colIdOf(c).startsWith('v:')) fixed.add(foldText(c.name)); }));
+    for (const e of wanted.values()) if (e.name !== undefined && fixed.has(foldText(e.name))) return { error: 'FLEX_DUP_NAME', detail: e.name };
+    // la clasificación que queda y su color: sin clasificación no hay color; una clasificación que ya existe trae su color
+    wanted.forEach((e) => {
+        const cls = e.cls !== undefined ? e.cls : e.now.cls;
+        if (!cls) { e.cls = ""; e.color = null; return; }
+        if (e.color === undefined && e.cls !== undefined) { const known = classByFold.get(foldText(cls)); e.color = known ? known.color : null; }
+    });
+    const classColor = new Map();
+    wanted.forEach((e) => { const cls = e.cls !== undefined ? e.cls : e.now.cls; if (cls && Number.isInteger(e.color)) classColor.set(foldText(cls), e.color); });
+    configs.forEach((l) => {
+        l.config.columns.forEach((c) => {
+            if (c.role === 'skip') return;
+            const e = wanted.get(colIdOf(c));
+            if (!e) return;
+            if (e.name !== undefined && c.name !== e.name) { c.name = e.name; l.touched = true; }
+            if (e.cls !== undefined && trim(c.cls) !== e.cls) { c.cls = e.cls; l.touched = true; }
+            if (e.color !== undefined && (Number.isInteger(c.color) ? c.color : null) !== e.color) { c.color = e.color; l.touched = true; }
+        });
+    });
+    // el color es de la clasificación: todas las columnas que la llevan quedan con el mismo
+    configs.forEach((l) => l.config.columns.forEach((c) => {
+        if (c.role === "skip" || !trim(c.cls)) return;
+        const color = classColor.get(foldText(c.cls));
+        if (color !== undefined && c.color !== color) { c.color = color; l.touched = true; }
+    }));
+    // dentro de una carga no puede haber dos columnas con el mismo nombre
+    for (const l of configs) {
+        if (!l.touched) continue;
+        const seen = new Set();
+        for (const c of l.config.columns) {
+            if (c.role === 'skip') continue;
+            const k = foldText(c.name);
+            if (seen.has(k)) return { error: 'FLEX_DUP_NAME', detail: c.name };
+            seen.add(k);
+        }
+    }
+    return { updates: configs.filter((l) => l.touched).map((l) => ({ id: l.id, config: l.config })), entries: [...wanted.values()] };
 }
 
 // ---- el filtro por columna de la pantalla (cf = { f: { columna: [valores] }, r: { columna: regla } }), aplicado a TODOS los renglones: la misma regla de la pantalla (SearchSyntax) sobre lo que se ve ----
@@ -533,4 +635,4 @@ function parseFilter(raw, columns) {
 }
 
 const foldName = (name) => foldText(name);
-module.exports = { nameHasDate, suggestLinks, nameScore, packValues, unpackValues, unpackSlot, valueSlotKeys, prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };
+module.exports = { nameHasDate, suggestLinks, nameScore, packValues, unpackValues, unpackSlot, valueSlotKeys, prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, registryColumns, planColumnChanges, stripNameDate, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };

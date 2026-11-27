@@ -98,6 +98,18 @@ function setColumnFormat(savedFormat, name, rawColumnFormat) {
     return { format: cleanFormat(full), key, fmt: Object.keys(clean).length ? clean : null };
 }
 
+// Cuando a una columna se le cambia el nombre, su formato guardado la sigue (si el nombre nuevo no tiene ya uno). Devuelve el formato nuevo, o null si no hay nada que mover.
+function renameColumnFormat(savedFormat, oldName, newName) {
+    if (!savedFormat) return null;
+    const full = mergeFormat(savedFormat);
+    const from = columnKey(oldName);
+    const to = columnKey(newName);
+    if (!from || !to || from === to || !full.columns[from] || full.columns[to]) return null;
+    full.columns[to] = full.columns[from];
+    delete full.columns[from];
+    return cleanFormat(full);
+}
+
 // ---- cómo se escribe cada cosa en Excel ---------------------------------------------------------------------------------------------------------------------
 const zeros = (n) => (n > 0 ? `.${'0'.repeat(n)}` : '');
 function numFmtOf(f) {
@@ -321,4 +333,4 @@ async function writeWorkbook({ stream, batches, columns, format, meta }) {
     await wb.commit();
 }
 
-module.exports = { DEFAULTS, FONTS, NUMBER_FORMATS, CURRENCIES, cleanFormat, cleanColumnFormat, mergeFormat, columnKey, screenFormats, setColumnFormat, numFmtOf, styleOf, writeWorkbook, daysInMonth, effectiveColumns };
+module.exports = { DEFAULTS, FONTS, NUMBER_FORMATS, CURRENCIES, cleanFormat, cleanColumnFormat, mergeFormat, columnKey, screenFormats, setColumnFormat, renameColumnFormat, numFmtOf, styleOf, writeWorkbook, daysInMonth, effectiveColumns };

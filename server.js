@@ -7481,6 +7481,15 @@ app.get('/api/business/manual-registries/:key/template', requireAuth, async (req
         return flexApi.columnFormatRoute(req, res, registry);
     });
 });
+// «Columnas del registro» (Daniel, 2026-11-26): la lista de columnas que ya existen en un registro de tabla libre y el cambio de su nombre (solo valores con día y hora) y su clasificación, para todas las cargas.
+['get', 'put'].forEach((method) => {
+    app[method]('/api/business/manual-registries/:key/columns', requireAuth, (req, res) => {
+        const registry = regRegistry(req, res);
+        if (!registry) return;
+        if (registry.kind !== 'tabla') return res.status(400).json({ code: 'FORMAT_NOT_FREE', message: 'Las columnas del registro son de los registros de tabla libre.' });
+        return flexApi.columnsRoute(req, res, registry);
+    });
+});
 // El archivo a la vista antes de cargar: sus hojas, el renglón de títulos, las columnas y su emparejamiento propuesto, y unos renglones de ejemplo (no escribe nada).
 app.post('/api/business/manual-registries/:key/inspect', requireAuth, regRaw, async (req, res) => {
     const registry = regRegistry(req, res, { needActive: true });

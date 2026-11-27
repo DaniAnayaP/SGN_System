@@ -22,7 +22,7 @@ const isFlex = (registry) => registry && registry.kind === 'tabla';
 
 // Lo que cambia cuando cambian los datos del registro (cargas vigentes y sus periodos).
 function signatureOf(clientId, isTest, registry) {
-    if (isFlex(registry)) return JSON.stringify(db.flexVigenteLoads(clientId, isTest, registry.key).map((l) => [l.id, l.stamp]));
+    if (isFlex(registry)) return JSON.stringify(db.flexVigenteLoads(clientId, isTest, registry.key).map((l) => [l.id, l.stamp, JSON.stringify(l.config)]));
     const last = db.registryLastLoad(clientId, isTest, registry.key);
     return JSON.stringify([last ? last.id : 0, db.registryPeriods(clientId, isTest, registry.key)]);
 }

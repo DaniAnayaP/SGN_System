@@ -2745,3 +2745,9 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .rg-app-cnt-warn b{ color: #8a5a00; }
 .rg-app-okbig{ width: 5rem; height: 5rem; margin: 2rem auto 0.5rem; display: grid; place-items: center; border-radius: 50%; background: #dff3e6; color: #2f7d4f; font-size: 2.6rem; }
 .rg-app-center{ text-align: center; }
+
+/* «Columnas del registro» (App): una tarjeta por columna que ya existe; lo cambiado se marca */
+.rg-app-cd-dirty{ background: #fff8ec; }
+.rg-app-cd .rg-app-pill[hidden]{ display: none; }
+.rg-app-flash{ margin: 0; padding: 0.45rem 0.8rem; border-radius: 0.7rem; background: #dcefde; color: #2a7a48; font-size: 0.82rem; font-weight: 600; }
+.rg-app-cdro .rg-app-role{ display: inline-flex; align-items: center; gap: 0.2rem; }
