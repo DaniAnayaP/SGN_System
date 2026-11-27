@@ -157,7 +157,7 @@ function normalizeV2(src, registryKeys) {
             const col = cleanText(cond && cond.col, 40);
             const values = [...new Set((Array.isArray(cond && cond.values) ? cond.values : []).map((v) => cleanText(v, 120)).filter((v) => v !== ''))].slice(0, MAX_COND_VALUES);
             if (!COL_KEY_RE.test(col) || !values.length) continue;
-            conds.push({ col, values, join: conds.length && cond.join === 'or' ? 'or' : 'and' });
+            conds.push({ col, values, ...(cond.not === true ? { not: true } : {}), join: conds.length && cond.join === 'or' ? 'or' : 'and' }); // not: true = «no es» (todo menos esas opciones)
         }
         let id = cleanText(c.id, 20).replace(/[^a-zA-Z0-9_]/g, '');
         if (!id || ids.has(id)) id = `c${columns.length + 1}`;

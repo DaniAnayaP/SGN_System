@@ -83,10 +83,10 @@ function groupsOf(table, keyIdx) {
     m.groups.set(sig, g);
     return g;
 }
-// Qué renglones de la tabla cumplen las condiciones (1 = cumple). conds = [{ i: posición de la columna, set: opciones ya normalizadas, or: se une a la anterior con «o» }].
+// Qué renglones de la tabla cumplen las condiciones (1 = cumple). conds = [{ i: posición de la columna, set: opciones ya normalizadas, or: se une a la anterior con «o», not: «no es» (cumple lo que NO está en las opciones) }].
 function maskOf(table, conds) {
     const m = memoOf(table);
-    const sig = JSON.stringify(conds.map((c) => [c.i, c.or, [...c.set].sort()]));
+    const sig = JSON.stringify(conds.map((c) => [c.i, c.or, !!c.not, [...c.set].sort()]));
     let mask = m.masks.get(sig);
     if (mask) return mask;
     if (m.masks.size >= 40) m.masks.clear();
@@ -100,7 +100,7 @@ function maskOf(table, conds) {
             const c = conds[n];
             const raw = r[c.i];
             let hit = seen[n].get(raw);
-            if (hit === undefined) { hit = c.set.has(norm(raw)); seen[n].set(raw, hit); }
+            if (hit === undefined) { hit = c.set.has(norm(raw)); if (c.not) hit = !hit; seen[n].set(raw, hit); }
             ok = n === 0 ? hit : (c.or ? ok || hit : ok && hit);
         }
         mask[i] = ok ? 1 : 0;
@@ -127,7 +127,7 @@ function columnValues(col, tables, baseRegistry, keyBase, rows, ctx) {
     const conds = [];
     for (const c of col.conds || []) {
         if (!idx.has(c.col)) return { error: 'COL_COND', field: col.id };
-        conds.push({ i: idx.get(c.col), set: new Set((c.values || []).map(norm)), or: c.join === 'or' });
+        conds.push({ i: idx.get(c.col), set: new Set((c.values || []).map(norm)), or: c.join === 'or', not: c.not === true });
     }
     const agg = AGGS2.includes(col.agg) ? col.agg : 'sum';
     const g = groupsOf(table, keyIdx);

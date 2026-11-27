@@ -5579,6 +5579,8 @@
     "an2Or": "o",
     "an2CondCol": "Columna de la condición",
     "an2Is": "es",
+    "an2IsNot": "no es",
+    "an2IsOrNot": "es o no es",
     "an2RemoveCond": "Quitar condición",
     "an2NoConds": "Sin condiciones: se toman todos los renglones del archivo.",
     "an2AddCond": "Agregar condición",
@@ -10596,8 +10598,8 @@
       "example": "Sitio ← Sitio, Código ← Código."
     },
     "anFdConds": {
-      "what": "Condiciones para tomar solo algunos renglones del archivo: «columna es alguna de estas opciones». Entre dos condiciones eliges «y» u «o» (de izquierda a derecha). Puede haber ninguna.",
-      "example": "Subinventario es FAR."
+      "what": "Condiciones para tomar solo algunos renglones del archivo: «columna es alguna de estas opciones» o «columna NO es ninguna de ellas» (todo menos lo elegido: si después llega un valor nuevo, entra solo). Entre dos condiciones eliges «y» u «o» (de izquierda a derecha). Puede haber ninguna.",
+      "example": "Subinventario es FAR. · Subinventario no es FAR (entra cualquier otro, aunque se agregue después)."
     },
     "anFdAgg": {
       "what": "Cómo juntar los valores cuando la llave (con sus condiciones) se repite en el archivo: la suma, el promedio, el mínimo, el máximo, cuántos renglones hay o el primero.",

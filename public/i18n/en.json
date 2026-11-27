@@ -5580,6 +5580,8 @@
     "an2Or": "or",
     "an2CondCol": "Condition column",
     "an2Is": "is",
+    "an2IsNot": "is not",
+    "an2IsOrNot": "is or is not",
     "an2RemoveCond": "Remove condition",
     "an2NoConds": "No conditions: every row of the file is taken.",
     "an2AddCond": "Add condition",
@@ -10597,8 +10599,8 @@
       "example": "Site ← Site, Code ← Code."
     },
     "anFdConds": {
-      "what": "Conditions to take only some rows of the file: “column is any of these options”. Between two conditions you choose “and” or “or” (left to right). There can be none.",
-      "example": "Subinventory is FAR."
+      "what": "Conditions to take only some rows of the file: “column is any of these options” or “column is NOT any of them” (everything except what you chose: a new value that arrives later is included on its own). Between two conditions you choose “and” or “or” (left to right). There can be none.",
+      "example": "Subinventory is FAR. · Subinventory is not FAR (any other one is taken, even if it is added later)."
     },
     "anFdAgg": {
       "what": "How to combine the values when the key (with its conditions) repeats in the file: the sum, the average, the minimum, the maximum, how many rows there are or the first one.",

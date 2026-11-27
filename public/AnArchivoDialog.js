@@ -50,7 +50,7 @@ function initialState(design, editId) {
     if (editing) {
         const keyMap = {};
         (design.base || []).filter((b) => b.key).forEach((b) => { const m = (editing.keyMap || []).find((k) => k.base === b.col); keyMap[b.col] = m ? m.file : (editing.registry === design.baseRegistry ? b.col : ''); });
-        return { editing, registry: editing.registry, valueCols: [...editing.valueCols], live: [...(editing.live || [])], agg: editing.agg || 'sum', keyMap, kept: false, conds: (editing.conds || []).map((c) => ({ col: c.col, values: [...c.values], join: c.join === 'or' ? 'or' : 'and' })),
+        return { editing, registry: editing.registry, valueCols: [...editing.valueCols], live: [...(editing.live || [])], agg: editing.agg || 'sum', keyMap, kept: false, conds: (editing.conds || []).map((c) => ({ col: c.col, values: [...c.values], not: c.not === true, join: c.join === 'or' ? 'or' : 'and' })),
             label: editing.label, labelTouched: true, cls: editing.cls || '', color: kit.hasClassColor(editing.color) ? editing.color : null, colorTouched: false, fmt: editing.fmt || 'general', pat: editing.pat || '', style: JSON.parse(JSON.stringify(editing.style || {})) };
     }
     const other = regs.find((r) => r.key !== design.baseRegistry && r.status === 'active') || regs.find((r) => r.key === design.baseRegistry) || regs[0];
@@ -68,7 +68,7 @@ function defaultLabel(d) {
 function columnFrom(d, id, valueCols, live = []) {
     const entry = { id, label: (d.label || '').trim() || (valueCols.length ? labelOfCol(d.registry, valueCols[0]) : t('main.an2ColumnN')), registry: d.registry, valueCols, agg: d.agg,
         keyMap: Object.entries(d.keyMap).filter(([, file]) => file).map(([base, file]) => ({ base, file })),
-        conds: d.conds.filter((c) => c.col && c.values.length).map((c, i) => ({ col: c.col, values: c.values, join: i && c.join === 'or' ? 'or' : 'and' })) };
+        conds: d.conds.filter((c) => c.col && c.values.length).map((c, i) => ({ col: c.col, values: c.values, ...(c.not ? { not: true } : {}), join: i && c.join === 'or' ? 'or' : 'and' })) };
     if (live.length) entry.live = live;
     if (d.cls.trim()) { entry.cls = d.cls.trim(); if (kit.hasClassColor(d.color)) entry.color = d.color; }
     if (d.fmt && d.fmt !== 'general') { entry.fmt = d.fmt; if (d.fmt === 'pers' && d.pat) entry.pat = d.pat; }
@@ -113,7 +113,7 @@ function formHtml(d, design) {
     ${d.kept ? `<p class="an-kept">${esc(t('main.an2KeyKept'))}</p>` : ''}
     <p class="reg-field-label" data-help-key="anFdConds">${esc(t('main.an2CondsTitle'))} <small>${esc(t('main.an2CondsHint'))}</small></p>
     <div class="an-conds">${d.conds.length ? d.conds.map((c, i) => `${i ? `<div class="an-conn"><span>${esc(t('main.an2Between'))}</span><button type="button" class="an-conn-btn${c.join !== 'or' ? ' on' : ''}" data-fd-join="${i}" data-v="and">${esc(t('main.an2And'))}</button><button type="button" class="an-conn-btn${c.join === 'or' ? ' on' : ''}" data-fd-join="${i}" data-v="or">${esc(t('main.an2Or'))}</button></div>` : ''}
-        <div class="an-cond2"><select data-fd-ccol="${i}" aria-label="${esc(t('main.an2CondCol'))}">${cols.map((x) => `<option value="${esc(x.key)}"${c.col === x.key ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select><span>${esc(t('main.an2Is'))}</span><div class="an-msh" data-fd-cval="${i}"></div><button type="button" class="admin-icon-btn" data-fd-delcond="${i}" aria-label="${esc(t('main.an2RemoveCond'))}" title="${esc(t('main.an2RemoveCond'))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>`).join('') : `<p class="admin-hint">${esc(t('main.an2NoConds'))}</p>`}</div>
+        <div class="an-cond2"><select data-fd-ccol="${i}" aria-label="${esc(t('main.an2CondCol'))}">${cols.map((x) => `<option value="${esc(x.key)}"${c.col === x.key ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select><select data-fd-cnot="${i}" aria-label="${esc(t('main.an2IsOrNot'))}"><option value="is"${c.not ? '' : ' selected'}>${esc(t('main.an2Is'))}</option><option value="not"${c.not ? ' selected' : ''}>${esc(t('main.an2IsNot'))}</option></select><div class="an-msh" data-fd-cval="${i}"></div><button type="button" class="admin-icon-btn" data-fd-delcond="${i}" aria-label="${esc(t('main.an2RemoveCond'))}" title="${esc(t('main.an2RemoveCond'))}"><i class="bx bx-x" aria-hidden="true"></i></button></div>`).join('') : `<p class="admin-hint">${esc(t('main.an2NoConds'))}</p>`}</div>
     <p><button type="button" class="btn btn-secondary btn-small" data-fd-addcond><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.an2AddCond'))}</button></p>
     <label for="fd-agg" data-help-key="anFdAgg">${esc(t('main.an2AggTitle'))} <small>${esc(t('main.an2AggHint'))}</small></label>
     <select id="fd-agg">${kit.AGGS.map((a) => `<option value="${a}"${d.agg === a ? ' selected' : ''}>${esc(AGG_LABEL(a))}</option>`).join('')}</select>
@@ -183,6 +183,7 @@ function openFileColumn(editId) {
             if (el.dataset.fdLive !== undefined) { d.live = el.checked ? [...(d.live || []), el.dataset.fdLive] : (d.live || []).filter((v) => v !== el.dataset.fdLive); draw(); return; }
             if (el.dataset.fdVal !== undefined) { d.valueCols = el.checked ? [...d.valueCols, el.dataset.fdVal] : d.valueCols.filter((v) => v !== el.dataset.fdVal); if (!d.labelTouched) { const ph = host.querySelector('#fd-label'); if (ph) ph.placeholder = defaultLabel(d); } runPreview(); return; }
             if (el.dataset.fdKey !== undefined) { d.keyMap[el.dataset.fdKey] = el.value; d.kept = false; runPreview(); return; }
+            if (el.dataset.fdCnot !== undefined) { d.conds[Number(el.dataset.fdCnot)].not = el.value === 'not'; draw(); return; } // «es» / «no es»
             if (el.dataset.fdCcol !== undefined) { const c = d.conds[Number(el.dataset.fdCcol)]; c.col = el.value; c.values = []; draw(); return; }
             if (el.id === 'fd-agg') { d.agg = el.value; runPreview(); return; }
             if (el.id === 'fd-fmt-more') { if (el.value) { d.fmt = el.value; draw(); } return; }
@@ -204,7 +205,7 @@ function openFileColumn(editId) {
         host.addEventListener('click', (event) => {
             const b = event.target.closest('button');
             if (!b) return;
-            if (b.dataset.fdAddcond !== undefined) { const cols = colsOf(sourceOf(d.registry)); d.conds.push({ col: (cols.find((c) => c.kind !== 'value') || cols[0] || {}).key || '', values: [], join: 'and' }); draw(); return; }
+            if (b.dataset.fdAddcond !== undefined) { const cols = colsOf(sourceOf(d.registry)); d.conds.push({ col: (cols.find((c) => c.kind !== 'value') || cols[0] || {}).key || '', values: [], not: false, join: 'and' }); draw(); return; }
             if (b.dataset.fdDelcond !== undefined) { d.conds.splice(Number(b.dataset.fdDelcond), 1); draw(); return; }
             if (b.dataset.fdJoin !== undefined) { d.conds[Number(b.dataset.fdJoin)].join = b.dataset.v; draw(); return; }
             if (b.dataset.fdFmt) { d.fmt = b.dataset.fdFmt; draw(); return; }
