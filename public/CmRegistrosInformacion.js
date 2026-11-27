@@ -75,8 +75,8 @@ async function loadRegistries() {
 function renderManage() {
     let bar = document.getElementById('reg-manage');
     const reg = currentRegistry();
-    const show = !!(reg && st.canCreateRegistry); // los de siempre solo traen «Pasar a obsoletos»; los agregados, además, cambiar nombre, convertir y desactivar
-    if (!show) { if (bar) bar.remove(); return; }
+    if (!reg) { if (bar) bar.remove(); return; }
+    const canManage = !!st.canCreateRegistry; // los de siempre solo traen «Pasar a obsoletos»; los agregados, además, cambiar nombre, convertir y desactivar
     if (!bar) {
         bar = document.createElement('div');
         bar.id = 'reg-manage';
@@ -86,6 +86,8 @@ function renderManage() {
         if (row) row.before(bar); else document.querySelector('.page-content').prepend(bar);
     }
     bar.textContent = '';
+    // el nombre del registro al inicio de la fila, antes de «Cambiar nombre» (Daniel, 2026-11-27), como el título de un análisis; lo ve todo el que abre el registro
+    const title = document.createElement('h2'); title.className = 'an-title'; title.textContent = regName(reg); bar.appendChild(title);
     if (reg.status !== 'active') { const off = document.createElement('span'); off.className = 'reg-pill reg-pill-off'; off.textContent = t('main.regStatus_inactive'); bar.appendChild(off); }
     if (reg.obsolete) { const ob = document.createElement('span'); ob.className = 'reg-pill reg-pill-off'; ob.textContent = t('main.regStatus_obsolete'); bar.appendChild(ob); }
     const make = (icon, key, onClick) => {
@@ -95,6 +97,7 @@ function renderManage() {
         btn.addEventListener('click', onClick);
         bar.appendChild(btn);
     };
+    if (!canManage) return; // sin el permiso de administrar registros solo se ve el nombre
     if (reg.custom) make('bx-edit', 'main.regRename', () => openRenameRegistry(reg));
     if (reg.custom && reg.kind !== 'tabla' && !reg.lastLoad && !reg.obsolete) make('bx-table', 'main.regToTabla', () => openConvertRegistry(reg)); // solo mientras no tenga cargas
     make(reg.obsolete ? 'bx-archive-out' : 'bx-archive-in', reg.obsolete ? 'main.regRestoreObsolete' : 'main.regMakeObsolete', () => toggleObsolete(reg));
