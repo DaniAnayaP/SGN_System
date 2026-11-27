@@ -342,6 +342,9 @@ async function run(buffer, options, cfg, store, loadId, { dryRun = false } = {})
     const named = new Map();
     read.valueCols.forEach((c) => { if (!c.stampName) named.set(c.name, store.namedValues(periodNameKey(c.name))); });
     let newRows = 0; let valuesAdded = 0; let untouched = 0; let different = read.different;
+    // «Dato del renglón» completa los renglones que ya existían (la llave coincide) cuando su celda está vacía; nunca cambia lo ya cargado
+    const dataFolds = read.cellCols.filter((c) => c.role === 'data').map((c) => foldText(c.name));
+    let filledCells = 0; const filledRows = new Set();
     const issues = read.issues.slice();
     let issuesTotal = read.issuesTotal;
     const colKeyOf = (c, k) => (c.stampName ? `m:${loadId}:${k}` : periodNameKey(c.name));
@@ -361,9 +364,21 @@ async function run(buffer, options, cfg, store, loadId, { dryRun = false } = {})
         const slice = groups.slice(at, at + BATCH);
         slice.forEach(([keyText, g]) => {
             let rowId = existing.get(keyText);
-            if (rowId === undefined) { newRows += 1; pendingRows.push({ keyText, cells: g.cells, group: g }); } else g.rowId = rowId;
+            if (rowId === undefined) { newRows += 1; pendingRows.push({ keyText, cells: g.cells, group: g }); } else { g.rowId = rowId; g.existed = true; }
         });
         flushRows();
+        if (dataFolds.length && typeof store.cellsOf === 'function') {
+            const matched = slice.filter(([, g]) => g.existed && dataFolds.some((f) => g.cells[f] !== undefined && g.cells[f] !== ''));
+            if (matched.length) {
+                const current = store.cellsOf(matched.map(([, g]) => g.rowId));
+                const fills = [];
+                matched.forEach(([, g]) => {
+                    const cur = current.get(g.rowId) || {};
+                    dataFolds.forEach((f) => { const v = g.cells[f]; if (v === undefined || v === '') return; if (cur[f] === undefined || cur[f] === '') { fills.push([g.rowId, f, v]); filledCells += 1; filledRows.add(g.rowId); } });
+                });
+                if (!dryRun && fills.length) store.addFills(fills);
+            }
+        }
         slice.forEach(([, g]) => {
             const mine = new Array(read.valueCols.length).fill(null); // lo que ESTA carga agrega a este renglón, por posición
             let any = false;
@@ -389,7 +404,7 @@ async function run(buffer, options, cfg, store, loadId, { dryRun = false } = {})
         if (!dryRun && packedOps.length) store.addPacked(packedOps.splice(0, packedOps.length));
         if (!dryRun && valueOps.length) store.addValues(valueOps.splice(0, valueOps.length));
     }
-    Object.assign(summary, { newRows, valuesAdded, added: newRows + valuesAdded, untouched, different, errors: read.errors, merged: read.merged, groups: groups.length, columns: read.cellCols.map((c) => c.name), valueColumns: read.valueCols.map((c) => c.name), issuesTotal });
+    Object.assign(summary, { newRows, valuesAdded, filledCells, filledRows: filledRows.size, added: newRows + valuesAdded + filledCells, untouched, different, errors: read.errors, merged: read.merged, groups: groups.length, columns: read.cellCols.map((c) => c.name), valueColumns: read.valueCols.map((c) => c.name), issuesTotal });
     return { summary, issues };
 }
 

@@ -1623,7 +1623,7 @@ function stepReviewFlex(body, bar) {
     grid.setAttribute('data-help-key', 'appRegWizRevision');
     const cnt = (value, label, cls) => { const box = el('div', `rg-app-cnt${cls ? ` rg-app-cnt-${cls}` : ''}`); box.append(el('b', '', num(value)), el('span', '', label)); return box; };
     grid.append(cnt(sum.newRows, t('main.colRegCargaNuevos'), sum.newRows ? 'ok' : ''));
-    if (roles) grid.append(cnt(sum.valuesAdded, t('home.regToAdd'), sum.valuesAdded ? 'ok' : ''), cnt(sum.merged, t('home.flexMerged')), cnt(sum.untouched, t('main.colRegCargaYaEstaba')), cnt(sum.different, t('main.colRegCargaDistintos'), sum.different ? 'warn' : ''));
+    if (roles) grid.append(cnt(sum.valuesAdded, t('home.regToAdd'), sum.valuesAdded ? 'ok' : ''), cnt(sum.merged, t('home.flexMerged')), cnt(sum.untouched, t('main.colRegCargaYaEstaba')), cnt(sum.different, t('main.colRegCargaDistintos'), sum.different ? 'warn' : ''), cnt(sum.filledCells || 0, t('home.flexFilled'), sum.filledCells ? 'ok' : ''));
     grid.append(cnt(sum.errors, t('main.colRegCargaErrores'), sum.errors ? 'bad' : 'ok'));
     body.appendChild(grid);
     if (sum.blank) body.appendChild(el('p', 'rg-app-sub', t('main.flexSumBlank', { n: num(sum.blank) })));
@@ -1698,6 +1698,7 @@ function stepDone(body, bar) {
     const big = el('div', 'rg-app-okbig');
     big.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
     body.append(big, el('h3', 'rg-app-center', t('main.regDoneTitle')), el('p', 'rg-app-sub rg-app-center', (currentReg().kind === 'tabla' ? t('main.flexDoneText', { rows: num(sum.newRows), values: num(sum.mode === 'roles' ? sum.valuesAdded : 0) }) : t('main.regDoneText', { n: num(sum.valuesAdded), rows: num(sum.newRows) }))));
+    if (sum.filledCells) body.appendChild(el('p', 'rg-app-sub rg-app-center', t('main.flexDoneFilled', { cells: num(sum.filledCells), rows: num(sum.filledRows) })));
     if (sum.newPeriods && sum.newPeriods.length) body.appendChild(el('p', 'rg-app-sub rg-app-center', t('main.regDoneNewPeriods', { periods: sum.newPeriods.map(periodLabel).join(', ') })));
     if (sum.different || sum.errors) body.appendChild(el('p', 'rg-app-sub rg-app-center', t('main.regDoneKept', { n: num(sum.different + sum.errors) })));
     const loadId = wiz.result.loadId;

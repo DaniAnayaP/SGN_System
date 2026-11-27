@@ -5641,6 +5641,8 @@
     "regErr_IMPORT_STAMP": "El día y la hora no son válidos (no pueden ser futuros).",
     "regErr_IMPORT_TOO_MANY_COLUMNS": "El archivo trae demasiadas columnas.",
     "flexSumNewRows": "Renglones nuevos: {n}",
+    "flexSumFilled": "{cells} datos completados en {rows} renglones que ya existían",
+    "flexDoneFilled": "Además se completaron {cells} datos en {rows} renglones que ya existían (donde estaban vacíos).",
     "regToTabla": "Convertir a tabla libre",
     "regToTablaTitle": "Convertir a tabla libre",
     "regToTablaText": "«{name}» pasará a ser una tabla libre: podrás cargar cualquier Excel y elegir el papel de sus columnas en cada carga. Solo se puede mientras no tenga cargas.",
@@ -9433,6 +9435,7 @@
     "flexWithRoles": "Con papeles",
     "flexLoadOf": "Carga del {when}",
     "flexMerged": "Renglones que se juntaron",
+    "flexFilled": "Datos completados",
     "regObsoleteTitle": "Obsoletos",
     "regTemplateShort": "Plantilla",
     "regWizHow": "¿Cómo la quieres cargar?",
@@ -10189,7 +10192,7 @@
       "example": "3 cargas viejas → Eliminar datos (3)"
     },
     "regFlexMap": {
-      "what": "Para cada columna de tu Excel eliges su papel: Llave (identifica el renglón y va hacia abajo), Dato del renglón, Columna nueva en cada carga (existencia, costo…) o No se carga. Si varios renglones caen en la misma llave, la columna nueva se suma o se toma uno (por ejemplo, el costo). Todas las columnas se pueden renombrar. Cada columna es una fila de la tabla, en el orden de tu Excel y con todo a la vista, con una sola decisión: «Ya existe» (se une a una columna que el registro ya tiene; ahí eliges a cuál), «Nueva adicional» (en la misma fila defines su papel, nombre, clasificación y color) o «No se carga». Las que ya existen se reconocen solas por el título que traían; si una trae otro nombre pero se parece a una que ya existe, su fila sale resaltada y se te pregunta si es esa. La tabla muestra siempre el nombre y la clasificación de cada columna: en las que ya existen se ven (solo para leer) y en las nuevas se escriben en la misma fila. Si quieres otro nombre para una que figura como «Ya existe», elige «＋ Escribir otro nombre» al final de su lista: la fila pasa a «Nueva adicional». Así no se duplican columnas.",
+      "what": "Para cada columna de tu Excel eliges su papel: Llave (identifica el renglón y va hacia abajo), Dato del renglón, Columna nueva en cada carga (existencia, costo…) o No se carga. Si varios renglones caen en la misma llave, la columna nueva se suma o se toma uno (por ejemplo, el costo). Todas las columnas se pueden renombrar. Cada columna es una fila de la tabla, en el orden de tu Excel y con todo a la vista, con una sola decisión: «Ya existe» (se une a una columna que el registro ya tiene; ahí eliges a cuál), «Nueva adicional» (en la misma fila defines su papel, nombre, clasificación y color) o «No se carga». Un «Dato del renglón» también completa los renglones que ya existían con la misma llave, pero solo donde su celda estaba vacía: nunca cambia lo que ya estaba cargado, y si la carga se deja de considerar, lo que completó deja de contar. Las que ya existen se reconocen solas por el título que traían; si una trae otro nombre pero se parece a una que ya existe, su fila sale resaltada y se te pregunta si es esa. La tabla muestra siempre el nombre y la clasificación de cada columna: en las que ya existen se ven (solo para leer) y en las nuevas se escriben en la misma fila. Si quieres otro nombre para una que figura como «Ya existe», elige «＋ Escribir otro nombre» al final de su lista: la fila pasa a «Nueva adicional». Así no se duplican columnas.",
       "example": "ON_HAND_QTY → Columna nueva, Sumar, «Existencia»"
     },
     "regFormatoColumna": {

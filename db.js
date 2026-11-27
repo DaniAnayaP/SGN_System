@@ -1218,6 +1218,19 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_mf_packed_load ON manual_flex_packed(load_id);
 `);
 
+// Los DATOS COMPLETADOS (Daniel, 2026-11-26, «Sí, hazlo A»): una carga cuyo «Dato del renglón» llega a un renglón que ya existía (la llave coincide) lo completa SOLO si esa celda estaba vacía; nunca cambia lo ya cargado.
+// Se guardan por carga (no dentro del renglón): así, si la carga se deja de considerar o se eliminan sus datos, lo que completó deja de contar (flexListRows solo suma los de cargas vigentes; si dos cargas completan lo mismo manda la más vieja).
+db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_flex_fills (
+        row_id  INTEGER NOT NULL REFERENCES manual_flex_rows(id) ON DELETE CASCADE,
+        load_id INTEGER NOT NULL,
+        col     TEXT NOT NULL,
+        value   TEXT NOT NULL,
+        PRIMARY KEY (row_id, load_id, col)
+    ) WITHOUT ROWID;
+    CREATE INDEX IF NOT EXISTS idx_mf_fills_load ON manual_flex_fills(load_id, row_id);
+`);
+
 // El FORMATO DE LA DESCARGA de un registro de tabla libre (Daniel, 2026-11-26): un formato por registro (encabezado, fila de apoyo, formato de cada columna, paneles fijos, portada). Sin fila = el formato de siempre.
 db.exec(`
     CREATE TABLE IF NOT EXISTS manual_registry_formats (
@@ -5259,6 +5272,7 @@ function flexStore({ clientId, isTestData = false, registryKey, loadId }) {
     const insRow = db.prepare('INSERT INTO manual_flex_rows (client_id, is_test_data, registry_key, load_id, key_text, cells) VALUES (?, ?, ?, ?, ?, ?)');
     const insVal = db.prepare('INSERT OR IGNORE INTO manual_flex_values (row_id, load_id, col, value) VALUES (?, ?, ?, ?)');
     const insPacked = db.prepare('INSERT OR REPLACE INTO manual_flex_packed (row_id, load_id, data) VALUES (?, ?, ?)');
+    const insFill = db.prepare('INSERT OR IGNORE INTO manual_flex_fills (row_id, load_id, col, value) VALUES (?, ?, ?, ?)');
     // los valores de nombre fijo (p. ej. un mes) que ya hay en bloques empaquetados de cargas vigentes: Map(columna → Map(renglón → valor)); se arma una sola vez, de un solo recorrido
     let packedNamed = null;
     const buildPackedNamed = () => {
@@ -5296,6 +5310,20 @@ function flexStore({ clientId, isTestData = false, registryKey, loadId }) {
         addRows: (list) => db.transaction((items) => items.map((it) => Number(insRow.run(clientId, lane, registryKey, loadId, it.keyText, JSON.stringify(it.cells)).lastInsertRowid)))(list),
         addValues: (ops) => { db.transaction((items) => { items.forEach(([rowId, col, value]) => insVal.run(rowId, loadId, col, value)); })(ops); },
         addPacked: (ops) => { db.transaction((items) => { items.forEach(([rowId, data]) => insPacked.run(rowId, loadId, data)); })(ops); },
+        // Los datos de varios renglones que ya existen (lo que traen y lo que otras cargas vigentes completaron): Map(rowId → { nombre plegado: texto }). Sirve para saber qué celdas están vacías.
+        cellsOf: (rowIds) => {
+            const out = new Map();
+            for (let at = 0; at < rowIds.length; at += 500) {
+                const part = rowIds.slice(at, at + 500);
+                db.prepare(`SELECT id, cells FROM manual_flex_rows WHERE id IN (${flexIn(part)})`).all(...part).forEach((r) => out.set(r.id, parseJsonObject(r.cells)));
+                db.prepare(`SELECT f.row_id, f.col, f.value FROM manual_flex_fills f JOIN manual_registry_loads l ON l.id = f.load_id WHERE l.status = 'vigente' AND f.row_id IN (${flexIn(part)}) ORDER BY f.load_id`).all(...part).forEach((f) => {
+                    const cells = out.get(f.row_id);
+                    if (cells && (cells[f.col] === undefined || cells[f.col] === '')) cells[f.col] = f.value;
+                });
+            }
+            return out;
+        },
+        addFills: (ops) => { db.transaction((items) => { items.forEach(([rowId, col, value]) => insFill.run(rowId, loadId, col, value)); })(ops); },
         saveBlock: (rows, columns) => {
             const gz = zlib.gzipSync(Buffer.from(JSON.stringify({ c: columns, r: rows })), { level: 6 });
             db.prepare('INSERT OR REPLACE INTO manual_flex_blocks (load_id, n, data) VALUES (?, ?, ?)').run(loadId, rows.length, gz);
@@ -5321,9 +5349,11 @@ function diskSpace() {
 async function deleteFlexLoadData(loadId, { maxMs = 900000 } = {}) {
     const started = Date.now();
     const yieldTurn = () => new Promise((resolve) => setImmediate(resolve));
-    const out = { values: 0, rows: 0 };
+    const out = { values: 0, rows: 0, fills: 0 };
     const steps = [
         ['values', db.prepare('DELETE FROM manual_flex_values WHERE (row_id, col, load_id) IN (SELECT row_id, col, load_id FROM manual_flex_values WHERE load_id = ? LIMIT 20000)'), (st) => st.run(loadId).changes],
+        // los datos que esta carga completó en renglones que ya existían
+        ['fills', db.prepare('DELETE FROM manual_flex_fills WHERE (row_id, load_id, col) IN (SELECT row_id, load_id, col FROM manual_flex_fills WHERE load_id = ? LIMIT 20000)'), (st) => st.run(loadId).changes],
         // los valores empaquetados: se cuentan los valores que traía cada bloque antes de quitarlo (para decir cuántos se eliminaron)
         ['values', db.prepare('SELECT row_id, data FROM manual_flex_packed WHERE load_id = ? LIMIT 5000'), (st) => {
             const list = st.all(loadId);
@@ -5355,8 +5385,10 @@ async function discardFlexLoadData(loadId, { maxMs = 180000 } = {}) {
     const del = db.prepare('DELETE FROM manual_flex_rows WHERE id IN (SELECT id FROM manual_flex_rows WHERE load_id = ? LIMIT 2000)');
     const delVals = db.prepare('DELETE FROM manual_flex_values WHERE (row_id, col, load_id) IN (SELECT row_id, col, load_id FROM manual_flex_values WHERE load_id = ? LIMIT 20000)');
     const delPacked = db.prepare('DELETE FROM manual_flex_packed WHERE (row_id, load_id) IN (SELECT row_id, load_id FROM manual_flex_packed WHERE load_id = ? LIMIT 5000)');
+    const delFills = db.prepare('DELETE FROM manual_flex_fills WHERE (row_id, load_id, col) IN (SELECT row_id, load_id, col FROM manual_flex_fills WHERE load_id = ? LIMIT 20000)');
     const yieldTurn = () => new Promise((resolve) => setImmediate(resolve)); // entre tandas los demás usuarios siguen siendo atendidos
     while (delPacked.run(loadId).changes > 0) { if (Date.now() - started > maxMs) break; await yieldTurn(); }
+    while (delFills.run(loadId).changes > 0) { if (Date.now() - started > maxMs) break; await yieldTurn(); }
     while (delVals.run(loadId).changes > 0) { if (Date.now() - started > maxMs) break; await yieldTurn(); }
     while (del.run(loadId).changes > 0) { if (Date.now() - started > maxMs) break; await yieldTurn(); }
     db.prepare('DELETE FROM manual_flex_blocks WHERE load_id = ?').run(loadId);
@@ -5367,9 +5399,9 @@ async function cleanupFailedFlexLoads() {
     try {
         db.prepare("UPDATE manual_registry_loads SET status = 'anulada', annulled_at = datetime('now'), annulled_by = 'sistema', annul_note = 'ERROR' WHERE status = 'en_proceso' AND config_json <> '' AND created_at < datetime('now', '-30 minutes')").run();
         const failed = db.prepare("SELECT id FROM manual_registry_loads WHERE config_json <> '' AND status = 'anulada' AND annulled_by = 'sistema' AND annul_note IN ('ERROR', 'DISK_FULL') ORDER BY id").all();
-        const left = db.prepare('SELECT (EXISTS (SELECT 1 FROM manual_flex_rows WHERE load_id = ?) OR EXISTS (SELECT 1 FROM manual_flex_values WHERE load_id = ?) OR EXISTS (SELECT 1 FROM manual_flex_packed WHERE load_id = ?) OR EXISTS (SELECT 1 FROM manual_flex_blocks WHERE load_id = ?)) AS n');
+        const left = db.prepare('SELECT (EXISTS (SELECT 1 FROM manual_flex_rows WHERE load_id = ?) OR EXISTS (SELECT 1 FROM manual_flex_values WHERE load_id = ?) OR EXISTS (SELECT 1 FROM manual_flex_packed WHERE load_id = ?) OR EXISTS (SELECT 1 FROM manual_flex_fills WHERE load_id = ?) OR EXISTS (SELECT 1 FROM manual_flex_blocks WHERE load_id = ?)) AS n');
         for (const f of failed) {
-            if (!left.get(f.id, f.id, f.id, f.id).n) continue;
+            if (!left.get(f.id, f.id, f.id, f.id, f.id).n) continue;
             await discardFlexLoadData(f.id);
             console.log(`[db] Tabla libre: se limpió la carga fallida #${f.id} (renglones y valores a medias).`);
         }
@@ -5428,8 +5460,17 @@ function flexCountRows(clientId, forTestAccount, registryKey, loadIds) {
 // Los renglones con llave (en el orden en que se fueron agregando), desde afterId, hasta limit.
 function flexListRows(clientId, forTestAccount, registryKey, loadIds, { afterId = 0, limit = 2000 } = {}) {
     const alive = flexAliveSql(loadIds);
-    return db.prepare(`SELECT r.id, r.cells FROM manual_flex_rows r WHERE r.client_id = ? AND r.is_test_data = ? AND r.registry_key = ? AND r.id > ? AND ${alive.sql} ORDER BY r.id LIMIT ?`)
+    const rows = db.prepare(`SELECT r.id, r.cells FROM manual_flex_rows r WHERE r.client_id = ? AND r.is_test_data = ? AND r.registry_key = ? AND r.id > ? AND ${alive.sql} ORDER BY r.id LIMIT ?`)
         .all(clientId, forTestAccount ? 1 : 0, registryKey, afterId, ...alive.params, limit).map((r) => ({ id: r.id, cells: parseJsonObject(r.cells) }));
+    // los datos que otras cargas VIGENTES completaron en renglones que ya existían (solo donde la celda está vacía; si dos cargas completan lo mismo manda la más vieja)
+    if (rows.length && loadIds.length) {
+        const fills = db.prepare(`SELECT row_id, col, value FROM manual_flex_fills WHERE load_id IN (${flexIn(loadIds)}) AND row_id BETWEEN ? AND ? ORDER BY load_id`).all(...loadIds, rows[0].id, rows[rows.length - 1].id);
+        if (fills.length) {
+            const byId = new Map(rows.map((r) => [r.id, r]));
+            fills.forEach((f) => { const row = byId.get(f.row_id); if (row && (row.cells[f.col] === undefined || row.cells[f.col] === '')) row.cells[f.col] = f.value; });
+        }
+    }
+    return rows;
 }
 // Los valores de algunos renglones: Map(rowId → Map(col → valor)), solo de cargas vigentes.
 function flexValuesFor(rowIds, loadIds) {

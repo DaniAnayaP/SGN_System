@@ -896,6 +896,7 @@ function openFlexLoadModal() {
         const pills = [
             nothing ? pill('warn', t('main.regSumNothing')) : '',
             sum.newRows ? pill('ok', t('main.flexSumNewRows', { n: num(sum.newRows) })) : '',
+            roles && sum.filledCells ? pill('ok', t('main.flexSumFilled', { cells: num(sum.filledCells), rows: num(sum.filledRows) })) : '',
             roles && sum.valuesAdded ? pill('ok', t('main.regSumAdded', { n: num(sum.valuesAdded) })) : '',
             roles && sum.merged ? pill('keep', t('main.flexSumMerged', { n: num(sum.merged) })) : '',
             sum.untouched ? pill('keep', t('main.regSumUntouched', { n: num(sum.untouched) })) : '',
@@ -916,6 +917,7 @@ function openFlexLoadModal() {
         const sum = s.result.summary;
         return `<h3 id="reg-i-title">${esc(t('main.regDoneTitle'))}</h3>
             <p>${esc(t('main.flexDoneText', { rows: num(sum.newRows), values: num(sum.mode === 'roles' ? sum.valuesAdded : 0) }))}</p>
+            ${sum.filledCells ? `<p>${esc(t('main.flexDoneFilled', { cells: num(sum.filledCells), rows: num(sum.filledRows) }))}</p>` : ''}
             ${sum.different || sum.errors ? `<p class="admin-hint">${esc(t('main.regDoneKept', { n: num(sum.different + sum.errors) }))}</p>` : ''}
             <div class="admin-form-actions"><button type="button" class="btn" data-reg-i="done">${esc(t('main.regDone'))}</button></div>`;
     };

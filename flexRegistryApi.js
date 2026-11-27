@@ -252,7 +252,8 @@ module.exports = function createFlexApi(deps) {
                 db.discardEmptyRegistryLoad(loadId);
                 return res.json({ mode: 'commit', loadId: null, sheet, headerRow, summary: result.summary, issues: result.issues });
             }
-            db.finishRegistryLoad(loadId, { ...result.summary, periods: [], newPeriods: [] });
+            // en el historial, «Agregados» cuenta también los datos que la carga completó en renglones que ya existían (si no, una carga que solo completa saldría con 0)
+            db.finishRegistryLoad(loadId, { ...result.summary, valuesAdded: (result.summary.valuesAdded || 0) + (result.summary.filledCells || 0), periods: [], newPeriods: [] });
             logTableChange({ clientId, tableKey: REG_LOADS_TABLE, recordId: loadId, recordLabel: fileName || registry.key, action: 'create', fieldKey: 'main.regCargaArchivo', newValue: fileName, changedBy: changedByLabel(req) });
             notifyButtonAction(req, REG_TABLE, 'importExcel', `${result.summary.added} renglones y valores`);
             return res.json({ mode: 'commit', loadId, sheet, headerRow, summary: result.summary, issues: result.issues });
