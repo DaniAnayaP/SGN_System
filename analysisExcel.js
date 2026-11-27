@@ -44,41 +44,48 @@ const toDate = (text) => { const m = ISO.exec(String(text)); return m ? new Date
 const isDateFormat = (f) => f.nf === 'fcorta' || f.nf === 'flarga' || f.nf === 'hora';
 const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
 
-// Escribe el libro en `stream` (la respuesta). columns: [{ label, ff?, fmt?, style?, decimals? }]; rows: [[valor]] (números como números, textos, null).
-async function writeWorkbook(stream, { columns, rows, title }) {
+// Excel guarda 1,048,576 renglones por hoja (uno es el encabezado): si el análisis trae más, sigue en otra hoja («Análisis», «Análisis 2»…), cada una con su encabezado, su filtro y su formato.
+const MAX_SHEET_ROWS = 1048575;
+// Escribe el libro en `stream` (la respuesta). columns: [{ label, ff?, fmt?, style?, decimals? }]; rows: [[valor]] (números como números, textos, null). sheetRows: renglones de datos por hoja (solo para probar).
+async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHEET_ROWS }) {
     const wb = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
     wb.creator = 'SGN';
     const name = String(title || 'Análisis').replace(/[\\/*?:[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31) || 'Análisis';
-    const sheet = wb.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 1 }] });
     const fmts = columns.map(formatOf);
-    sheet.columns = columns.map((c, i) => {
+    const dateAt = fmts.map(isDateFormat);
+    const sheetColumns = columns.map((c, i) => {
         let max = String(c.label).length + 3;
         for (let r = 0; r < rows.length && r < 60; r += 1) { const v = rows[r][i]; if (v !== null && v !== undefined) max = Math.max(max, String(typeof v === 'number' ? v.toFixed(2) : v).length + 1); }
         return { key: `c${i}`, width: Math.min(60, Math.max(10, Math.round(max * 1.1 + 2))), style: flexExcel.styleOf(fmts[i]) };
     });
-    // el encabezado de cada columna: el de siempre del sistema y, encima, el que la persona le puso a esa columna
-    const head = sheet.addRow(columns.map((c) => String(c.label)));
-    columns.forEach((c, i) => {
-        const f = fmts[i];
-        head.getCell(i + 1).style = {
-            font: { bold: f.hb !== false, color: { argb: argb(f.hink || HEADER.ink) } },
-            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(f.hfill || HEADER.fill) } },
-            alignment: { vertical: 'middle' },
-        };
-    });
-    head.commit();
-    if (columns.length) sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
-    const dateAt = fmts.map(isDateFormat);
-    for (let n = 0; n < rows.length; n += 1) {
-        sheet.addRow(rows[n].map((v, i) => (dateAt[i] && typeof v === 'string' ? toDate(v) || v : v))).commit();
-        if (n % 1000 === 999) await nextTurn(); // cada tanda deja atender a los demás usuarios (un análisis grande son muchos renglones)
+    const parts = Math.max(1, Math.ceil(rows.length / sheetRows));
+    for (let p = 0; p < parts; p += 1) {
+        const suffix = p === 0 ? '' : ` ${p + 1}`;
+        const sheet = wb.addWorksheet(`${name.slice(0, 31 - suffix.length)}${suffix}`, { views: [{ state: 'frozen', ySplit: 1 }] });
+        sheet.columns = sheetColumns.map((c) => ({ ...c }));
+        // el encabezado de cada columna: el de siempre del sistema y, encima, el que la persona le puso a esa columna
+        const head = sheet.addRow(columns.map((c) => String(c.label)));
+        columns.forEach((c, i) => {
+            const f = fmts[i];
+            head.getCell(i + 1).style = {
+                font: { bold: f.hb !== false, color: { argb: argb(f.hink || HEADER.ink) } },
+                fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(f.hfill || HEADER.fill) } },
+                alignment: { vertical: 'middle' },
+            };
+        });
+        head.commit();
+        if (columns.length) sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
+        const from = p * sheetRows;
+        const to = Math.min(rows.length, from + sheetRows);
+        for (let n = from; n < to; n += 1) {
+            sheet.addRow(rows[n].map((v, i) => (dateAt[i] && typeof v === 'string' ? toDate(v) || v : v))).commit();
+            if (n % 1000 === 999) await nextTurn(); // cada tanda deja atender a los demás usuarios (un análisis grande son muchos renglones)
+        }
+        sheet.commit();
     }
-    sheet.commit();
     await wb.commit();
 }
-
-const MAX_ROWS = 20000; // lo que puede mandar la pantalla (hoy ≤ 5,000); la descarga completa la arma el servidor
-const MAX_COLUMNS = 200;
+const MAX_COLUMNS = 1000; // sin tope de renglones: solo se cuidan las columnas por seguridad (un análisis trae muchas menos)
 const MAX_TEXT = 2000;
 const cleanColumn = (c) => {
     const x = c && typeof c === 'object' ? c : {};
@@ -88,11 +95,11 @@ const cleanColumn = (c) => {
 function cleanPayload(body) {
     const b = body && typeof body === 'object' ? body : {};
     if (!Array.isArray(b.columns) || !b.columns.length || !Array.isArray(b.rows)) return { error: 'columns and rows are required.' };
-    if (b.columns.length > MAX_COLUMNS || b.rows.length > MAX_ROWS) return { error: 'Too many rows or columns to export.' };
+    if (b.columns.length > MAX_COLUMNS) return { error: 'Too many columns to export.' };
     const columns = b.columns.map(cleanColumn);
     const clean = (v) => (typeof v === 'number' ? (Number.isFinite(v) ? v : null) : (typeof v === 'string' ? v.slice(0, MAX_TEXT) : (typeof v === 'boolean' ? v : null)));
     const rows = b.rows.map((r) => (Array.isArray(r) ? columns.map((_, i) => clean(r[i])) : columns.map(() => null)));
     return { columns, rows, title: String(b.title || '').slice(0, 100) };
 }
 
-module.exports = { writeWorkbook, cleanPayload, cleanColumn, formatOf, legacyFormat, MAX_ROWS, MAX_COLUMNS };
+module.exports = { writeWorkbook, cleanPayload, cleanColumn, formatOf, legacyFormat, MAX_SHEET_ROWS, MAX_COLUMNS };

@@ -188,7 +188,7 @@ function aggregate(agg, periods, values) {
 }
 // sources: { [registryKey]: Map(unidad\u0001codigo → { dims: {unidad, unidadNombre, codigo, descripcion, categoria, udm}, values: {periodo: valor} }) }
 // Devuelve { columns: [{ key, group, dim?|id?, label?, registry?, agg?, periods? }], rows: [[...]], truncated }. Solo del diseño anterior.
-function buildExtraction(design, sources) {
+function buildExtraction(design, sources, { maxRows = MAX_ROWS } = {}) {
     const columns = [
         ...design.reference.map((dim) => ({ key: `ref_${dim}`, group: 'reference', dim })),
         ...design.consulted.map((c) => ({ key: `c_${c.id}`, group: 'consulted', id: c.id, label: c.label, registry: c.registry, agg: c.agg, periods: c.periods })),
@@ -201,8 +201,8 @@ function buildExtraction(design, sources) {
         (sources[k] || new Map()).forEach((entry, key) => { if (!keys.has(key)) keys.set(key, entry.dims); });
     });
     const ordered = [...keys.entries()].sort((a, b) => (a[1].unidad < b[1].unidad ? -1 : a[1].unidad > b[1].unidad ? 1 : (a[1].codigo < b[1].codigo ? -1 : a[1].codigo > b[1].codigo ? 1 : 0)));
-    const truncated = ordered.length > MAX_ROWS;
-    const rows = ordered.slice(0, MAX_ROWS).map(([key, dims]) => [
+    const truncated = ordered.length > maxRows;
+    const rows = (Number.isFinite(maxRows) ? ordered.slice(0, maxRows) : ordered).map(([key, dims]) => [
         ...design.reference.map((dim) => dims[dim] || ''),
         ...design.consulted.map((c) => { const entry = (sources[c.registry] || new Map()).get(key); return entry ? aggregate(c.agg, c.periods, entry.values) : null; }),
     ]);

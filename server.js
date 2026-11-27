@@ -7905,14 +7905,14 @@ function anLiveBuilt(req, analysis) {
     if (manualAnalyses.isV2(design)) {
         const bad = anCheckDesign(req, design);
         if (bad) return { error: bad.error, field: bad.field, status: 400 };
-        built = analysisBuild.buildExtractionV2(design, anTablesFor(req, design));
+        built = analysisBuild.buildExtractionV2(design, anTablesFor(req, design), { maxRows: Infinity }); // En vivo y la descarga no tienen tope (solo guardar una versión: 300,000)
         if (built.error) return { error: built.error, field: built.field, status: 400 };
     } else {
         if (!design.consulted.length) return { error: 'AN_NO_COLUMNS', status: 400 };
         const needed = manualAnalyses.periodsNeeded(design);
         const sources = {};
         design.registries.forEach((key) => { sources[key] = registrySources(clientId, isTestAccount, key, needed[key] || [], design.filters); });
-        built = manualAnalyses.buildExtraction(design, sources);
+        built = manualAnalyses.buildExtraction(design, sources, { maxRows: Infinity });
     }
     return { built, design };
 }
@@ -7976,7 +7976,7 @@ app.post('/api/business/manual-analyses/:id/column-preview', requireAuth, (req, 
 // La descarga del Análisis en Excel con el formato de pantalla (Daniel, 2026-11-26): la pantalla manda lo que se ve (las columnas visibles, los renglones que pasan los filtros, en su orden) y el formato de cada columna;
 // aquí se revisa y se escribe el Excel (analysisExcel.js): números como números con su formato real de Excel, estilos de celdas y encabezados.
 // Con `full: true` la pantalla NO manda los renglones: pide TODO el análisis (los renglones que trae la pantalla son solo los primeros 5,000 de En vivo o 2,000 de una versión): el servidor lo arma de nuevo con lo de hoy
-// (En vivo) o lo guardado (una versión), con las columnas que se ven (keys, en su orden) y la búsqueda de arriba (text); cada columna con su formato. Hasta 300,000 renglones (el máximo del análisis).
+// (En vivo) o lo guardado (una versión), con las columnas que se ven (keys, en su orden) y la búsqueda de arriba (text); cada columna con su formato. SIN tope de renglones (si pasan de lo que cabe en una hoja de Excel, siguen en otra).
 app.post('/api/business/manual-analyses/:id/export-xlsx', requireAuth, async (req, res) => {
     const analysis = anLoad(req, res);
     if (!analysis) return;
@@ -7997,7 +7997,7 @@ app.post('/api/business/manual-analyses/:id/export-xlsx', requireAuth, async (re
         } else {
             const extraction = getExtraction(eid, analysis.id);
             if (!extraction || extraction.status === 'en_proceso') return res.status(404).json({ code: 'EXTRACTION_NOT_FOUND', message: 'Esa versión no existe.' });
-            const { rows } = listExtractionRows(extraction.id, { text, limit: 300000 });
+            const { rows } = listExtractionRows(extraction.id, { text, limit: 2147483647 }); // todos los renglones de la versión
             shown = anPresent(analysis, extraction.columns, rows);
         }
         const at = new Map(shown.columns.map((c, i) => [c.key, i]));

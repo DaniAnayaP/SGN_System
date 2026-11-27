@@ -111,7 +111,8 @@ function columnValues(col, tables, baseRegistry, keyBase, rows) {
 }
 
 // Arma la versión: { columns, rows, truncated } (el mismo formato que usan la pantalla y las columnas agregadas) o { error, field }.
-function buildExtractionV2(design, tables) {
+// maxRows: cuántos renglones se arman como máximo (por omisión MAX_ROWS, que es lo que cabe en una versión guardada); En vivo y la descarga piden Infinity.
+function buildExtractionV2(design, tables, { maxRows = MAX_ROWS } = {}) {
     const baseTable = tables[design.baseRegistry];
     if (!baseTable) return { error: 'BASE_MISSING', field: 'baseRegistry' };
     const idx = indexOf(baseTable);
@@ -126,7 +127,7 @@ function buildExtractionV2(design, tables) {
         if (tuple.every((t) => t === '')) continue;
         const tk = tuple.join('\u0001');
         if (design.dedupe !== 'con') { if (seen.has(tk)) continue; seen.add(tk); }
-        if (rows.length >= MAX_ROWS) { truncated = true; break; }
+        if (rows.length >= maxRows) { truncated = true; break; }
         rows.push({ vals: base.map((b) => cellOf(r[idx.get(b.col)])), tuple: tk });
     }
     const columns = base.map((b) => ({ key: `ref_${b.col}`, group: 'reference', ...(DIM_KEYS.includes(b.col) ? { dim: b.col } : {}), label: baseTable.columns[idx.get(b.col)].label, isKey: true === b.key, srcCol: b.col }));

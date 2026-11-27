@@ -12,7 +12,6 @@ const manual = require('./manualRegistries');
 const flex = require('./flexRegistries');
 
 const DIMS = manual.DIMS;
-const MAX_TABLE_ROWS = 400000;
 const CACHE_MAX = 10;
 const CACHE_CELLS = 16000000; // ≈ 460 MB: una tabla de 140 mil renglones × 15 columnas ocupa ≈ 58 MB
 const CACHE_IDLE_MS = 12 * 3600 * 1000; // una tabla que nadie abre en 12 horas se suelta
@@ -55,7 +54,6 @@ function loadPeriodic(clientId, isTest, registry, lang) {
     const map = periods.length ? db.registrySources(clientId, isTest, registry.key, periods, {}) : new Map();
     const rows = [];
     for (const entry of map.values()) {
-        if (rows.length >= MAX_TABLE_ROWS) break;
         rows.push([...DIMS.map((d) => entry.dims[d] || ''), ...periods.map((p) => (entry.values[p] === undefined ? null : entry.values[p]))]);
     }
     return { columns, rows, truncated: map.size > rows.length };
@@ -78,7 +76,6 @@ function* flexSteps(clientId, isTest, registry, lang, batchSize = 5000) {
             afterId = batch[batch.length - 1].id;
             const vals = db.flexValuesFor(batch.map((x) => x.id), loadIds);
             for (const r of batch) {
-                if (rows.length >= MAX_TABLE_ROWS) { truncated = true; break outer; }
                 const mine = vals.get(r.id);
                 rows.push(cols.map((c) => {
                     if (c.kind === 'cell') { const v = r.cells[c.srcKey.slice(2)]; return v === undefined || v === '' ? null : v; }
@@ -98,7 +95,6 @@ function* flexSteps(clientId, isTest, registry, lang, batchSize = 5000) {
         const label = built.labels.get(load.id);
         const map = block.columns.map((name) => colByName.get(flex.foldName(name)));
         for (const row of block.rows) {
-            if (rows.length >= MAX_TABLE_ROWS) { truncated = true; break; }
             const cells = new Array(cols.length).fill(null);
             map.forEach((ci, k) => { if (ci !== undefined) cells[ci] = row[k] === undefined ? null : row[k]; });
             if (cargaIdx >= 0) cells[cargaIdx] = label;
@@ -296,4 +292,4 @@ function upgradeStoredKeys() {
     return n;
 }
 
-module.exports = { liveOptions, renameLive, refreshCached, warmUp, startBackground, upgradeDesign, upgradeAnalysis, upgradeStoredKeys, DIMS, periodColKey, periodOfColKey, isFlex, describe, loadTable, clearCache, distinctValues, MAX_TABLE_ROWS };
+module.exports = { liveOptions, renameLive, refreshCached, warmUp, startBackground, upgradeDesign, upgradeAnalysis, upgradeStoredKeys, DIMS, periodColKey, periodOfColKey, isFlex, describe, loadTable, clearCache, distinctValues };
