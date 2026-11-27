@@ -37,7 +37,7 @@ function periodicColumns(clientId, isTest, registry, lang) {
 function flexColumns(clientId, isTest, registry, lang) {
     const loads = db.flexVigenteLoads(clientId, isTest, registry.key);
     const built = flex.buildColumns(loads, { tz: 0, lang });
-    return { loads, built, columns: built.columns.map((c) => ({ key: c.key, label: c.label, kind: c.kind === 'value' ? 'value' : (c.kind === 'carga' ? 'load' : 'text'), group: c.group, cls: c.cls || '' })) };
+    return { loads, built, columns: built.columns.map((c) => ({ key: c.sid, label: c.label, kind: c.kind === 'value' ? 'value' : (c.kind === 'carga' ? 'load' : 'text'), group: c.group, cls: c.cls || '' })) };
 }
 function describe(clientId, isTest, registry, lang = 'es') {
     return isFlex(registry) ? flexColumns(clientId, isTest, registry, lang).columns : periodicColumns(clientId, isTest, registry, lang);
@@ -132,4 +132,54 @@ function distinctValues(table, colKey, { limit = 500, query = '' } = {}) {
     return { values: all.slice(0, limit), complete: all.length <= limit && seen.size <= limit * 4 };
 }
 
-module.exports = { DIMS, periodColKey, periodOfColKey, isFlex, describe, loadTable, clearCache, distinctValues, MAX_TABLE_ROWS };
+// ---- Claves estables (Daniel, 2026-11-26) ----
+// Las columnas de una tabla libre se llamaban c0, c1… (por su posición): una carga con una columna nueva de llave o de dato recorría las de valor y un análisis leía OTRA columna sin avisar.
+// Ahora cada una tiene una clave que sale de su identidad (flexRegistries.stableColumnId). Esto convierte las claves viejas de un diseño según las posiciones de HOY (no se puede saber más); si ya están convertidas no hace nada.
+const LEGACY_KEY = /^c\d+$/;
+function legacyMapFor(clientId, isTest, regKey, memo) {
+    if (memo.has(regKey)) return memo.get(regKey);
+    let map = null;
+    if (!memo.has('\u0000defs')) memo.set('\u0000defs', db.listRegistryDefs(clientId, isTest));
+    if (memo.get('\u0000defs').some((d) => d.key === regKey && d.kind === 'tabla')) {
+        const built = flex.buildColumns(db.flexVigenteLoads(clientId, isTest, regKey), { tz: 0, lang: 'es' });
+        map = new Map(built.columns.map((c) => [c.key, c.sid]));
+    }
+    memo.set(regKey, map);
+    return map;
+}
+// Cambia el diseño que recibe (si trae claves viejas) y dice si cambió.
+function upgradeDesign(clientId, isTest, design, memo = new Map()) {
+    if (!design || !Array.isArray(design.columns) || !design.baseRegistry) return false;
+    let changed = false;
+    const conv = (reg, key) => {
+        if (!LEGACY_KEY.test(String(key))) return key;
+        const map = legacyMapFor(clientId, isTest, reg, memo);
+        const to = map && map.get(key);
+        if (to && to !== key) { changed = true; return to; }
+        return key;
+    };
+    (Array.isArray(design.base) ? design.base : []).forEach((b) => { if (b) b.col = conv(design.baseRegistry, b.col); });
+    design.columns.forEach((c) => {
+        if (!c) return;
+        if (Array.isArray(c.valueCols)) c.valueCols = c.valueCols.map((k) => conv(c.registry, k));
+        if (Array.isArray(c.keyMap)) c.keyMap.forEach((k) => { if (k) { k.base = conv(design.baseRegistry, k.base); k.file = conv(c.registry, k.file); } });
+        if (Array.isArray(c.conds)) c.conds.forEach((x) => { if (x) x.col = conv(c.registry, x.col); });
+    });
+    return changed;
+}
+// Convierte (y guarda) el análisis que se acaba de leer.
+function upgradeAnalysis(analysis, clientId, isTest) {
+    if (analysis && upgradeDesign(clientId, isTest, analysis.design)) db.setAnalysisDesignRaw(analysis.id, analysis.design);
+    return analysis;
+}
+// Al arrancar: convierte todos los análisis que todavía traen claves viejas.
+function upgradeStoredKeys() {
+    let n = 0;
+    for (const row of db.listAnalysisDesigns()) {
+        if (upgradeDesign(row.clientId, row.isTest, row.design)) { db.setAnalysisDesignRaw(row.id, row.design); n += 1; }
+    }
+    if (n) console.log(`[análisis] Claves de columna estables: se convirtieron ${n} análisis.`);
+    return n;
+}
+
+module.exports = { upgradeDesign, upgradeAnalysis, upgradeStoredKeys, DIMS, periodColKey, periodOfColKey, isFlex, describe, loadTable, clearCache, distinctValues, MAX_TABLE_ROWS };

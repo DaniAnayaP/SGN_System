@@ -422,6 +422,14 @@ function stampLabel(stamp, tz = 0, lang = 'es', withYear = false) {
 // carga juntas, en el orden de su Excel; la siguiente carga agrega su bloque al lado): nombre + día y hora, y si dos cargas tienen la misma etiqueta, la segunda lleva «(2)»; una columna de nombre fijo (p. ej. un mes) es una sola
 // y entra en el bloque de la primera carga que la trae. Si hay cargas «tal cual» se agrega al final la columna «Carga».
 // Cada columna puede traer su clasificación (nombre y color que puso la persona): el color es de la CLASIFICACIÓN (el último que se eligió para ese nombre; sin elegir, uno de la paleta según el orden en que apareció).
+// La clave ESTABLE de una columna (Daniel, 2026-11-26): sale de lo que la identifica (su srcKey: «c:<nombre>» llave o dato, «m:<carga>:<posición>» valor con día y hora, «n:<nombre>» valor de nombre fijo), no de su posición;
+// así una carga que trae columnas nuevas no la mueve. Un hash corto de solo letras, números y guion bajo (cabe en las claves de los análisis y en los atributos de la pantalla).
+function stableColumnId(srcKey) {
+    let h = 0x811c9dc5;
+    const text = String(srcKey);
+    for (let i = 0; i < text.length; i += 1) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return `k_${(h >>> 0).toString(16).padStart(8, '0')}`;
+}
 // loads: [{ id, stamp, config: { mode, columns } }] en orden de carga. Devuelve { columns: [{ key, label, group, kind, name, cls, color, loadId?, srcKey? }], hasAsis, labels: Map(loadId → etiqueta), classes: [{ name, color }] }.
 function buildColumns(loads, { tz = 0, lang = 'es' } = {}) {
     const years = new Set(loads.map((l) => String(l.stamp || '').slice(0, 4)).filter(Boolean));
@@ -467,7 +475,15 @@ function buildColumns(loads, { tz = 0, lang = 'es' } = {}) {
     });
     const flat = [...cellSlots, ...valueCols];
     if (hasAsis) flat.push({ kind: 'carga', group: 'load', name: 'Carga', srcKey: 'carga', label: 'Carga', clsF: '' });
-    flat.forEach((c, i) => { c.key = `c${i}`; });
+    flat.forEach((c, i) => { c.key = `c${i}`; }); // la clave de POSICIÓN: solo para la pantalla del registro (filtros y descarga de esa vista); los análisis usan `sid`
+    const usedSid = new Set();
+    flat.forEach((c) => {
+        const base = c.kind === 'carga' ? 'k_carga' : stableColumnId(c.srcKey);
+        let sid = base;
+        for (let n = 2; usedSid.has(sid); n += 1) sid = `${base}_${n}`;
+        usedSid.add(sid);
+        c.sid = sid;
+    });
     const classes = classOrder.map((f, n) => ({ fold: f, name: classDisplay.get(f), color: classColor.has(f) ? classColor.get(f) : n % CLASS_COLORS }));
     const byFold = new Map(classes.map((x) => [x.fold, x]));
     flat.forEach((c) => { const x = c.clsF ? byFold.get(c.clsF) : null; c.cls = x ? x.name : ''; c.color = x ? x.color : null; delete c.clsF; });
@@ -635,4 +651,4 @@ function parseFilter(raw, columns) {
 }
 
 const foldName = (name) => foldText(name);
-module.exports = { nameHasDate, suggestLinks, nameScore, packValues, unpackValues, unpackSlot, valueSlotKeys, prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, registryColumns, planColumnChanges, stripNameDate, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };
+module.exports = { nameHasDate, suggestLinks, nameScore, packValues, unpackValues, unpackSlot, valueSlotKeys, prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, stableColumnId, registryColumns, planColumnChanges, stripNameDate, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };

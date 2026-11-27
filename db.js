@@ -5637,6 +5637,14 @@ function updateAnalysis(id, clientId, forTestAccount, patch) {
     db.prepare(`UPDATE manual_analyses SET ${sets.join(', ')} WHERE id = ? AND client_id = ? AND is_test_data = ?`).run(...params, id, clientId, forTestAccount ? 1 : 0);
     return getAnalysis(id, clientId, forTestAccount);
 }
+// Todos los diseños de análisis (de todos los clientes): para convertir las claves de columna viejas al arrancar.
+function listAnalysisDesigns() {
+    return db.prepare('SELECT id, client_id, is_test_data, design_json FROM manual_analyses').all().map((r) => ({ id: r.id, clientId: r.client_id, isTest: !!r.is_test_data, design: parseJsonObject(r.design_json) }));
+}
+// Guarda el diseño tal cual (sin cambiar la fecha de modificación: es una conversión interna, no una edición de la persona).
+function setAnalysisDesignRaw(id, design) {
+    db.prepare('UPDATE manual_analyses SET design_json = ? WHERE id = ?').run(JSON.stringify(design), id);
+}
 function listExtractions(analysisId) {
     return db.prepare("SELECT * FROM manual_analysis_extractions WHERE analysis_id = ? AND status <> 'en_proceso' ORDER BY version DESC").all(analysisId).map(mapExtraction);
 }
@@ -23370,7 +23378,7 @@ module.exports = {
     listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
-    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, reconsiderRegistryLoad, deleteFlexLoadData, flexConfigHistory, diskSpace, getRegistryFormat, setRegistryFormat, clearRegistryFormat, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexConfigLoads, updateFlexConfigs, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
+    createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, reconsiderRegistryLoad, deleteFlexLoadData, flexConfigHistory, diskSpace, getRegistryFormat, setRegistryFormat, clearRegistryFormat, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexConfigLoads, updateFlexConfigs, listAnalysisDesigns, setAnalysisDesignRaw, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
     posSaleLocalTime,

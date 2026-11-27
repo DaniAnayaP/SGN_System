@@ -7634,6 +7634,8 @@ const anExtracting = new Set();
 const analysisAdded = require('./analysisAdded');
 const analysisSources = require('./analysisSources');
 const analysisBuild = require('./analysisBuild');
+// Las claves de columna de las tablas libres ya no son su posición (c0, c1…): se convierten, una vez, los análisis que todavía las traen.
+try { analysisSources.upgradeStoredKeys(); } catch (err) { console.error('[análisis] No se pudieron convertir las claves de columna:', err && err.message); }
 function anAbilities(req) {
     const admin = !!req.user.isClientAdmin;
     const grants = admin ? null : getUserEffectiveGrants(req.user.sub);
@@ -7645,6 +7647,7 @@ const anRegistryKeys = (req) => regClientRegistries(req.user.clientId, req.user.
 function anCheckDesign(req, design) {
     if (!manualAnalyses.isV2(design)) return null;
     const { clientId, isTestAccount } = req.user;
+    analysisSources.upgradeDesign(clientId, isTestAccount, design); // una pantalla abierta con claves viejas (c0, c1…) se convierte aquí al guardar
     const regs = regClientRegistries(clientId, isTestAccount);
     const colsOf = new Map();
     const colsFor = (key) => {
@@ -7693,7 +7696,7 @@ function anLoad(req, res) {
     if (!anClient(req, res)) return null;
     const analysis = getAnalysis(Number(req.params.id) || 0, req.user.clientId, req.user.isTestAccount);
     if (!analysis) { res.status(404).json({ code: 'AN_NOT_FOUND', message: 'Ese análisis no existe.' }); return null; }
-    return analysis;
+    return analysisSources.upgradeAnalysis(analysis, req.user.clientId, req.user.isTestAccount);
 }
 const anRegistriesInfo = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).map((r) => ({ key: r.key, kind: r.kind, nameKey: r.nameKey, valueNameKey: r.valueNameKey, name: r.name, valueName: r.valueName, custom: r.custom, status: r.status, periods: registryPeriods(req.user.clientId, req.user.isTestAccount, r.key) }));
 // Para el menú lateral: los análisis activos (cualquier persona del cliente; el menú ya decide quién ve la pantalla).
