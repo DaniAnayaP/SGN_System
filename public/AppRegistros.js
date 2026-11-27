@@ -580,6 +580,8 @@ function renderCode() {
 let flexFound = null;   // lo que trajo el servidor para lo que se buscó
 let flexRow = null;     // el renglón abierto: { columns, row }
 const flexText = (v) => (v === null || v === undefined || v === '' ? '' : String(v));
+// el valor con el formato de número que la persona le puso a la columna en la Web (Moneda, decimales, fechas…); null = sin formato
+const flexFormatted = (c, v) => { const out = window.FlexFormat && c && c.fmt ? window.FlexFormat.formatValue(v, c.fmt, currentLang()) : null; return out ? out.text : null; };
 const flexModeText = (l) => t(l.flexMode === 'roles' ? 'home.flexWithRoles' : 'main.flexRole_asis');
 const flexStampText = (l) => [dayText(l.stamp), timeText(l.stamp)].filter(Boolean).join(' · ');
 function flexSource() { return search.trim() && flexFound ? flexFound : currentData(); }
@@ -667,7 +669,7 @@ function flexCard(columns, row) {
     if (rest.length) main.appendChild(el('span', 'rg-app-sub', rest.join(' · ')));
     const val = el('span', 'rg-app-val');
     const last = valueIdx[valueIdx.length - 1];
-    val.append(el('b', '', last === undefined ? '—' : num(row[last])), el('span', '', last === undefined ? '' : columns[last].label));
+    val.append(el('b', '', last === undefined ? '—' : (flexFormatted(columns[last], row[last]) || num(row[last]))), el('span', '', last === undefined ? '' : columns[last].label));
     card.append(main, val);
     card.addEventListener('click', () => { regScroll = getScroll(); flexRow = { columns, row }; view = 'code'; render(); setScroll(0); });
     return card;
@@ -687,7 +689,7 @@ function renderFlexRow() {
         }
         const v = row[i];
         const div = el('div', v === null || v === undefined || v === '' ? 'rg-app-none' : '');
-        div.append(el('span', '', c.label), el('b', '', v === null || v === undefined || v === '' ? '—' : (typeof v === 'number' ? String(v) : v)));
+        div.append(el('span', '', c.label), el('b', '', v === null || v === undefined || v === '' ? '—' : (flexFormatted(c, v) || (typeof v === 'number' ? String(v) : v))));
         meta.appendChild(div);
     });
     bodyEl.appendChild(meta);

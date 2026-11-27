@@ -120,11 +120,14 @@ module.exports = function createFlexApi(deps) {
         }
         const num = ctx.columns.map((c, i) => c.kind === 'value' || (rows.length > 0 && rows.every((r) => r[i] === null || typeof r[i] === 'number') && rows.some((r) => typeof r[i] === 'number')));
         const lastLoad = ctx.loads.length ? ctx.loads[ctx.loads.length - 1] : null;
+        // el formato que la persona dejó guardado para cada columna (número, sombreado, letra, encabezado): la tabla lo aplica y el Excel sale igual
+        const savedFmt = db.getRegistryFormat(ctx.clientId, ctx.isTestAccount, registry.key);
+        const screenFmts = flexExcel.screenFormats(ctx.columns, savedFmt && savedFmt.format);
         res.set('Cache-Control', 'no-store');
         res.json({
             registry: { key: registry.key, kind: registry.kind, name: registry.name, custom: registry.custom, status: registry.status },
             periods: [], lastLoad: lastLoad ? { id: lastLoad.id, createdAt: lastLoad.createdAt, stamp: lastLoad.stamp, fileName: lastLoad.fileName, loadedBy: lastLoad.loadedBy } : null,
-            columns: ctx.columns.map((c, i) => ({ key: c.key, label: c.label, name: c.name, group: c.group, kind: c.kind, cls: c.cls, color: c.color, num: num[i] })), classes: ctx.classes,
+            columns: ctx.columns.map((c, i) => ({ key: c.key, label: c.label, name: c.name, group: c.group, kind: c.kind, cls: c.cls, color: c.color, num: num[i], ...(screenFmts[i] ? { fmt: screenFmts[i] } : {}) })), classes: ctx.classes,
             rows, total, truncated: total > rows.length, scope: { asis: ctx.scopeAsis.map((l) => ctx.labels.get(l.id)), hasAsis: ctx.asisLoads.length > 0 }, ...regAbilities(req),
         });
     }
@@ -297,6 +300,24 @@ module.exports = function createFlexApi(deps) {
         logTableChange({ clientId, tableKey: REG_TABLE, recordId: 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.regFormatoDescarga', oldValue: before ? 'personalizado' : 'de siempre', newValue: 'personalizado', changedBy: changedByLabel(req) });
         return res.json({ format: clean, effective: flexExcel.mergeFormat(clean) });
     }
+    // El formato de UNA columna (el menú ⋮ del encabezado, Daniel, 2026-11-26): PUT { name, format } lo guarda, DELETE { name } lo borra. Se guarda con el formato del registro, así que vale para todas las cargas de esa columna
+    // (se empareja por el nombre) y el Excel que se descarga sale igual. Lo puede hacer quien puede modificar registros (igual que el formato de la descarga).
+    function columnFormatRoute(req, res, registry) {
+        const { clientId, isTestAccount } = req.user;
+        if (!regAbilities(req).canCreateRegistry) return regForbidden(res);
+        res.set('Cache-Control', 'no-store');
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const name = String(body.name || '').trim();
+        const key = flexExcel.columnKey(name);
+        if (!key) return fail(res, 400, 'BAD_COLUMN');
+        const ctx = context(req, registry, {});
+        if (!ctx.columns.some((c) => c.kind !== 'carga' && flexExcel.columnKey(c.name) === key)) return fail(res, 400, 'BAD_COLUMN');
+        const before = db.getRegistryFormat(clientId, isTestAccount, registry.key);
+        const out = flexExcel.setColumnFormat(before && before.format, name, req.method === 'DELETE' ? {} : body.format);
+        db.setRegistryFormat(clientId, isTestAccount, registry.key, out.format, changedByLabel(req));
+        logTableChange({ clientId, tableKey: REG_TABLE, recordId: 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.regFormatoColumna', oldValue: name, newValue: out.fmt ? 'con formato' : 'sin formato', changedBy: changedByLabel(req) });
+        return res.json({ name, key, fmt: out.fmt });
+    }
     // ---- Cargas: «Sí considerar» y «Eliminar los datos» de una carga (Daniel, 2026-11-26) ---------------------------------------------------------------------------
     // «No considerar» es la ruta de siempre /annul (la carga queda en el historial y sus datos dejan de contar). Aquí: volver a considerarla, o eliminar sus datos (solo si ya no se considera; el registro y la línea del historial se quedan).
     async function loadActionRoute(req, res, registry, action) {
@@ -332,5 +353,5 @@ module.exports = function createFlexApi(deps) {
             regLoading.delete(lockKey);
         }
     }
-    return { dataRoute, valuesRoute, exportRoute, inspectRoute, importRoute, formatRoute, loadActionRoute };
+    return { dataRoute, valuesRoute, exportRoute, inspectRoute, importRoute, formatRoute, columnFormatRoute, loadActionRoute };
 };

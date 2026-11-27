@@ -7472,6 +7472,15 @@ app.get('/api/business/manual-registries/:key/template', requireAuth, async (req
         return flexApi.formatRoute(req, res, registry);
     });
 });
+// El formato de UNA columna de un registro de tabla libre (el menú ⋮ del encabezado): se guarda con el formato del registro y vale para el Excel también.
+['put', 'delete'].forEach((method) => {
+    app[method]('/api/business/manual-registries/:key/format/column', requireAuth, (req, res) => {
+        const registry = regRegistry(req, res);
+        if (!registry) return;
+        if (registry.kind !== 'tabla') return res.status(400).json({ code: 'FORMAT_NOT_FREE', message: 'El formato de la columna es de los registros de tabla libre.' });
+        return flexApi.columnFormatRoute(req, res, registry);
+    });
+});
 // El archivo a la vista antes de cargar: sus hojas, el renglón de títulos, las columnas y su emparejamiento propuesto, y unos renglones de ejemplo (no escribe nada).
 app.post('/api/business/manual-registries/:key/inspect', requireAuth, regRaw, async (req, res) => {
     const registry = regRegistry(req, res, { needActive: true });

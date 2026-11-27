@@ -273,6 +273,52 @@ function dataColumns(periods) {
         ...periods.map((p) => ({ col: periodKey(p), group: 'menu.cmRegistrosInformacion', label: periodLabel(p), cls: 'col-num' })),
     ];
 }
+// ---- el formato de cada columna en pantalla (menú ⋮ del encabezado; ver FlexFormat.js): vale para todas las cargas de esa columna (se empareja por el nombre) y el Excel que se descarga sale igual ----
+const fmtKey = (name) => String(name == null ? '' : name).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 80);
+const fmtSaveTimers = new Map();
+function saveColumnFormat(col, f) {
+    const key = fmtKey(col.name);
+    clearTimeout(fmtSaveTimers.get(key));
+    fmtSaveTimers.set(key, setTimeout(async () => {
+        try {
+            const res = await fetch(`${API}/${encodeURIComponent(st.key)}/format/column`, { method: window.FlexFormat.hasFormat(f) ? 'PUT' : 'DELETE', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: col.name, format: f }) });
+            if (!res.ok) throw new Error('save failed');
+        } catch (err) { Dashboard.showToast(t('main.fmtSaveError'), 'error'); }
+    }, 350));
+}
+function setupFlexFormat(table, body) {
+    const FF = window.FlexFormat;
+    if (!FF || !table || !table.tHead) return;
+    body.columns.forEach((c) => { const th = table.querySelector(`thead th[data-col="${c.key}"]`); if (th) FF.applyHeader(th, c.fmt); });
+    if (!st.canCreateRegistry) return;
+    body.columns.forEach((c) => {
+        if (c.kind === 'carga') return;
+        const th = table.querySelector(`thead th[data-col="${c.key}"]`);
+        if (!th || th.querySelector('.reg-fm-btn')) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'reg-fm-btn';
+        btn.textContent = '⋮';
+        btn.title = t('main.fmtOpen', { name: c.label });
+        btn.setAttribute('aria-label', t('main.fmtOpen', { name: c.label }));
+        ['mousedown', 'mouseup', 'pointerdown', 'pointerup'].forEach((ev) => btn.addEventListener(ev, (event) => event.stopPropagation())); // tocar el ⋮ no ordena ni mueve la columna
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const current = (st.data && st.data.columns.find((x) => x.key === c.key)) || c;
+            FF.openMenu({
+                anchor: btn,
+                title: t('main.fmtTitle', { name: current.label }),
+                f: current.fmt,
+                onChange: (f) => {
+                    const key = fmtKey(current.name);
+                    st.data.columns.forEach((x) => { if (fmtKey(x.name) === key) { if (FF.hasFormat(f)) x.fmt = { ...f }; else delete x.fmt; FF.restyleColumn(table, x, lang()); } });
+                    saveColumnFormat(current, f);
+                },
+            });
+        });
+        th.appendChild(btn);
+    });
+}
 function drawData() {
     const body = st.data;
     if (!body) return;
@@ -291,6 +337,7 @@ function drawData() {
     if (first && Dashboard.registerServerFilteredTable) Dashboard.registerServerFilteredTable(DATA_TABLE, { onChange: (spec) => { st.cf = spec; refreshData(); }, getValues: fetchColumnValues });
     if (first && Dashboard.registerPartialTable) Dashboard.registerPartialTable(DATA_TABLE, { isComplete: () => !st.data || st.drawn >= st.data.rows.length, loadAll: drawAllRows });
     watchScroll(wrapper);
+    if (flex) setupFlexFormat(table, body); // el encabezado con el formato de cada columna y su menú ⋮
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(DATA_TABLE);
     wrapper.setAttribute('data-help-key', flex ? 'regTableLibre' : 'regTable');
     if (Dashboard.attachTableDownloadButton) {
@@ -315,7 +362,7 @@ function rowsHtml(body, from, to) {
         for (let i = from; i < to; i += 1) {
             const row = body.rows[i];
             let tr = '<tr>';
-            body.columns.forEach((c, k) => { tr += td(c.key, row[k], c.num ? 'col-num' : ''); });
+            body.columns.forEach((c, k) => { tr += window.FlexFormat ? window.FlexFormat.cellHtml(c, row[k], esc, c.num ? 'col-num' : '', lang()) : td(c.key, row[k], c.num ? 'col-num' : ''); }); // con el formato que la persona le puso a la columna
             html.push(`${tr}</tr>`);
         }
         return html.join('');

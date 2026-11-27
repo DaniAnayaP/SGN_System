@@ -46,6 +46,10 @@ function cleanColumnFormat(raw) {
     ['b', 'i', 'u', 'bd', 'miles'].forEach((k) => { if (raw[k] === true) f[k] = true; });
     if (pickColor(raw.fill)) f.fill = pickColor(raw.fill);
     if (pickColor(raw.ink)) f.ink = pickColor(raw.ink);
+    // el encabezado de ESTA columna (Daniel, 2026-11-26): relleno, letra y negritas; sin esto toma el encabezado de todo el registro
+    if (pickColor(raw.hfill)) f.hfill = pickColor(raw.hfill);
+    if (pickColor(raw.hink)) f.hink = pickColor(raw.hink);
+    if (raw.hb === true) f.hb = true;
     if (ALIGNS.includes(raw.al)) f.al = raw.al;
     if (NUMBER_FORMATS.includes(raw.nf) && raw.nf !== 'general') f.nf = raw.nf;
     if (Number.isInteger(raw.dec) && raw.dec >= 0 && raw.dec <= 6) f.dec = raw.dec;
@@ -78,6 +82,21 @@ function cleanFormat(raw) {
     return out;
 }
 const mergeFormat = (saved) => cleanFormat(saved || DEFAULTS);
+// El formato que se ve en la PANTALLA (Daniel, 2026-11-26, «menú en el encabezado»): solo lo que la persona dejó guardado para cada columna (las columnas se emparejan por el nombre sin mayúsculas ni acentos, como en el Excel).
+// Lo automático del Excel (montos como Moneda, fechas como Fecha corta, llave en lila) no se aplica en pantalla: así la tabla no cambia sola. Devuelve un arreglo del mismo largo que `columns`, con null donde no hay formato.
+const columnKey = (name) => fold(name).slice(0, 80);
+function screenFormats(columns, savedFormat) {
+    const fmt = mergeFormat(savedFormat);
+    return columns.map((c) => { const f = fmt.columns[columnKey(c.name)]; return f && Object.keys(f).length ? { ...f } : null; });
+}
+// Guarda (o borra, con un formato vacío) el formato de UNA columna dentro del formato completo del registro. Devuelve { format, key, fmt } con lo que de verdad quedó.
+function setColumnFormat(savedFormat, name, rawColumnFormat) {
+    const full = mergeFormat(savedFormat);
+    const key = columnKey(name);
+    const clean = cleanColumnFormat(rawColumnFormat);
+    if (Object.keys(clean).length) full.columns[key] = clean; else delete full.columns[key];
+    return { format: cleanFormat(full), key, fmt: Object.keys(clean).length ? clean : null };
+}
 
 // ---- cómo se escribe cada cosa en Excel ---------------------------------------------------------------------------------------------------------------------
 const zeros = (n) => (n > 0 ? `.${'0'.repeat(n)}` : '');
@@ -238,7 +257,8 @@ async function writeWorkbook({ stream, batches, columns, format, meta }) {
     }
     const head = sheet.addRow(columns.map((c) => c.label));
     columns.forEach((c, i) => {
-        head.getCell(i + 1).style = { font: { bold: fmt.header.bold, color: { argb: argb(fmt.header.ink) } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(fmt.header.fill) } }, alignment: { horizontal: c.group === 'value' ? 'center' : 'left', vertical: 'middle' } };
+        const mine = eff[i].f; // el encabezado de esta columna (si la persona le puso uno) manda sobre el de todo el registro
+        head.getCell(i + 1).style = { font: { bold: mine.hb === true || fmt.header.bold, color: { argb: argb(mine.hink || fmt.header.ink) } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(mine.hfill || fmt.header.fill) } }, alignment: { horizontal: c.group === 'value' ? 'center' : 'left', vertical: 'middle' } };
     });
     head.commit();
     if (fmt.header.filter) sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: headerRow, column: columns.length } };
@@ -301,4 +321,4 @@ async function writeWorkbook({ stream, batches, columns, format, meta }) {
     await wb.commit();
 }
 
-module.exports = { DEFAULTS, FONTS, NUMBER_FORMATS, CURRENCIES, cleanFormat, cleanColumnFormat, mergeFormat, numFmtOf, styleOf, writeWorkbook, daysInMonth, effectiveColumns };
+module.exports = { DEFAULTS, FONTS, NUMBER_FORMATS, CURRENCIES, cleanFormat, cleanColumnFormat, mergeFormat, columnKey, screenFormats, setColumnFormat, numFmtOf, styleOf, writeWorkbook, daysInMonth, effectiveColumns };
