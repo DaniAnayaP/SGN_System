@@ -2093,7 +2093,16 @@ const dataTableAbbrQueued = new Set();
 function tableAbbrSpec(el) {
     const cs = getComputedStyle(el);
     const spacing = parseFloat(cs.letterSpacing) || 0;
-    const avail = el.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    // un encabezado lleva botones dentro de su línea (el ⋮ del formato): el texto solo dispone de lo que ellos dejan (los que van flotando, como el embudo, ya tienen su lugar en el relleno)
+    let reserved = 0;
+    if (el.tagName === 'TH') {
+        Array.from(el.children).forEach((c) => {
+            const p = getComputedStyle(c);
+            if (p.position === 'absolute' || p.position === 'fixed' || p.display === 'none') return;
+            reserved += c.offsetWidth + (parseFloat(p.marginLeft) || 0) + (parseFloat(p.marginRight) || 0);
+        });
+    }
+    const avail = el.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0) - reserved;
     // solo donde el texto de verdad se corta con «…»: una línea, escondiendo lo que sobra (el historial, por ejemplo, parte sus textos en líneas)
     const skip = cs.whiteSpace !== 'nowrap' || cs.overflowX !== 'hidden' || avail <= 0;
     return { skip, avail, spacing, upper: cs.textTransform === 'uppercase', font: `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}` };
@@ -2187,10 +2196,12 @@ function abbreviateDataTableTexts(tableId) {
         if (step === null) delete el.dataset.abbr; else el.dataset.abbr = step;
         if (wantTitle) {
             el.dataset.abbrFull = text;
-            if (!el.hasAttribute('title') || el.dataset.abbrTitle) { el.title = text; el.dataset.abbrTitle = '1'; }
+            if (!el.hasAttribute('title') || el.dataset.abbrTitle) { const own = el.dataset.abbrOwn; el.title = own ? text + '\n' + own : text; el.dataset.abbrTitle = '1'; }
+            // un encabezado que ya traía su propio texto al sobreponer (una columna «la más reciente»: «Hoy trae…») lo conserva y le suma el nombre completo (Daniel, 2026-11-27)
+            else if (el.tagName === 'TH') { el.dataset.abbrOwn = el.title; el.title = text + '\n' + el.title; el.dataset.abbrTitle = '1'; }
         } else {
             delete el.dataset.abbrFull;
-            if (el.dataset.abbrTitle) { el.removeAttribute('title'); delete el.dataset.abbrTitle; }
+            if (el.dataset.abbrTitle) { if (el.dataset.abbrOwn !== undefined) { el.title = el.dataset.abbrOwn; delete el.dataset.abbrOwn; } else el.removeAttribute('title'); delete el.dataset.abbrTitle; }
         }
     });
 }
