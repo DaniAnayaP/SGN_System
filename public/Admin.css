@@ -10515,6 +10515,20 @@ th.data-table-col-filter-loading{ cursor: progress; opacity: 0.6; }
 .an-cons-table .an-label{ width: 100%; min-width: 12rem; }
 /* columnas agregadas en el Archivo: la franja de arriba, los pasos de la operación y la fórmula de Excel */
 .an-added-bar{ display: flex; flex-direction: column; gap: 0.6rem; margin: 0.4rem 0 0.7rem; }
+.an-added-bar:empty{ display: none; }
+/* Análisis, pestaña Archivo: la barra de iconos de la tabla va en la MISMA fila que los botones (Daniel, 2026-11-27): la página es una fila que envuelve; los botones (#an-tools) y los iconos comparten el renglón y todo lo demás ocupa su propio renglón en su orden de siempre */
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout{ display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.6rem; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > *{ flex: 0 0 100%; min-width: 0; order: 10; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .an-head{ order: 1; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .reg-tabs{ order: 2; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .an-design{ order: 3; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-tools{ order: 4; flex: 1 1 22rem; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .an-file-toolbar{ order: 4; flex: 0 0 auto; border-bottom: 0; padding-bottom: 0; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-added-bar{ order: 5; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--color-border); }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-selbar, body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-editpanel, body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-pending{ order: 6; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .filter-bar{ order: 7; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .data-table-wrapper{ margin-top: 0.4rem; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > [hidden]{ display: none; }
 .an-addedchip{ display: inline-flex; align-items: stretch; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); overflow: hidden; }
 .an-addedchip button{ border: 0; background: transparent; color: inherit; font: inherit; font-size: 0.8rem; padding: 0.3rem 0.7rem; cursor: pointer; }
 .an-addedchip button + button{ padding-left: 0.1rem; padding-right: 0.5rem; opacity: 0.7; }
@@ -10591,6 +10605,8 @@ td.an-cons, th.an-cons{ background: color-mix(in srgb, #f7d9f5 45%, transparent)
    1 márgenes de los lados de 56 a 12 px · 2 tarjeta y franja de «última carga» como un solo bloque · 3 «Cargar registro» y «Descargar plantilla» a mitad de ancho en su renglón
    4 iconos de la barra grandes para el dedo y en renglones. La «copia» de la barra que se veía abajo de la tabla era la barra oculta de la pestaña Cargas (el display ganaba al hidden): ya no se ve, en ningún ancho. */
 body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom[hidden]{ display: none; }
+/* Análisis: la barra de iconos de la pestaña Extracciones (oculta) se veía abajo de la tabla del Archivo porque el display ganaba al hidden (Daniel, 2026-11-27, «¿esta parte de acá abajo qué es?») */
+body[data-active-page="cat-analisis-manuales-lista"] .data-table-zoom[hidden]{ display: none; }
 @media (max-width: 600px){
     body.sgn-scroll-shell[data-active-page="cat-cargas-manuales-registros"] > main > .page-scroll{ margin-right: -0.75rem; padding-right: 0.75rem; }
     body[data-active-page="cat-cargas-manuales-registros"] > main{ padding-left: 0.75rem; padding-right: 0.75rem; }
@@ -10773,7 +10789,7 @@ th.an-ref-key::after{ content: " ·"; opacity: 0.55; }
 .an-live-today{ align-self: flex-start; padding: 0.15rem 0.7rem; border-radius: 0.6rem; background: #dcefde; color: #2a7a48; font-size: 0.78rem; font-weight: 600; }
 
 /* Análisis: seleccionar varias columnas, cambios sin aplicar y menú ⋮ con nombre / clasificación (Daniel, 2026-11-27) */
-.an-added-bar .btn.an-on{ background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface)); border-color: var(--color-accent); }
+.an-tools .btn.an-on{ background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface)); border-color: var(--color-accent); }
 .an-addedchip.an-chip-picked{ border-style: solid; background: color-mix(in srgb, var(--color-accent) 22%, var(--color-surface)); font-weight: 600; }
 .an-addedchip.an-chip-removed{ opacity: 0.7; border-color: #c4473a; background: color-mix(in srgb, #c4473a 12%, var(--color-surface)); }
 .an-addedchip.an-chip-removed button:first-child{ text-decoration: line-through; }
@@ -10785,9 +10801,9 @@ th.an-ref-key::after{ content: " ·"; opacity: 0.55; }
 /* el apartado «Columnas consultadas» y «Columnas agregadas» (CmAnalisis.js: renderConsultedPanel / renderAddedPanel): botones en una fila chica y las fichas ordenadas por archivo y categoría */
 .an-tools{ display: flex; flex-wrap: wrap; gap: 0.4rem 0.45rem; align-items: center; }
 .an-tools-sp{ flex: 1 1 1rem; }
-.an-added-bar .btn.an-sm{ padding: 0.22rem 0.8rem; font-size: 0.76rem; }
-.an-added-bar .btn.an-ghost{ border-color: transparent; background: transparent; color: var(--color-text-secondary); font-weight: 500; }
-.an-added-bar .btn.an-ghost:hover{ background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
+.an-tools .btn.an-sm, .an-added-bar .btn.an-sm{ padding: 0.22rem 0.8rem; font-size: 0.76rem; }
+.an-tools .btn.an-ghost{ border-color: transparent; background: transparent; color: var(--color-text-secondary); font-weight: 500; }
+.an-tools .btn.an-ghost:hover{ background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
 .an-panel{ display: flex; flex-direction: column; gap: 0.45rem; }
 .an-panel-h{ display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.6rem; padding: 0 0 0.25rem; border-bottom: 1px solid var(--color-border); }
 .an-panel-h b{ font-size: 0.88rem; font-weight: 700; }

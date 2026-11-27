@@ -7668,6 +7668,7 @@ const AN_MESSAGES = {
     ADDED_NAME: 'Ponle un nombre a la columna.', ADDED_STEPS: 'Revisa los pasos de la operación.', ADDED_RULES: 'Revisa las reglas: cada una necesita su condición y su resultado.', ADDED_KIND: 'Ese tipo de columna todavía no se puede agregar.', ADDED_TOO_MANY: 'Un análisis admite hasta 40 columnas agregadas.',
     BASE_KEY: 'Elige al menos una columna como llave.', BASE_MISSING: 'El archivo base no existe.', COL_REGISTRY: 'Una columna usa un archivo que no existe.', COL_KEY: 'Falta ligar la llave de una columna con una columna del archivo.', COL_VALUE: 'Elige qué columna del archivo se trae.', COL_COND: 'Una condición usa una columna que el archivo no tiene.', COL_NOT_FOUND: 'Esa columna no existe.',
     COMMENT_COLUMN: 'Esa columna de comentarios no existe.', COMMENT_KEY: 'No se sabe a qué renglón va el comentario.', COMMENT_EMPTY: 'Escribe el comentario.', COMMENT_TOO_LONG: 'El comentario es muy largo (máximo 1,000 letras).',
+    BAD_FILTER: 'El filtro no es válido.', BAD_COLUMN: 'Esa columna no existe.', BAD_CALCS: 'Los cálculos de la fila de totales no son válidos.',
     AN_INACTIVE: 'El análisis está desactivado.', AN_BUSY: 'Ya se está extrayendo este análisis. Espera a que termine.', AN_FORBIDDEN: 'No tienes permiso para esto.',
 };
 const anExtracting = new Set();
@@ -7954,24 +7955,76 @@ function anPresent(analysis, extractionColumns, rows, opts = {}) {
     }
     return result;
 }
+// Filtrar, ordenar y calcular totales en el SERVIDOR sobre TODOS los renglones (Daniel, 2026-11-27, «pasa el filtro del Análisis al servidor»): antes la pantalla solo traía los primeros 5,000 de En vivo (2,000 de una versión) y filtraba y ordenaba esos.
+// La pantalla manda cf (el filtro por columna, el mismo de Registros), sort + dir (la columna del orden), text (la búsqueda de arriba), lang y v (0 = En vivo, o el número de una versión); analysisQuery.js hace el filtro y el orden.
+const analysisQuery = require('./analysisQuery');
+const AN_VERSION_LIMIT = 2000;
+const anQ = (q) => ({ cf: q.cf, sort: q.sort ? String(q.sort).slice(0, 80) : '', dir: q.dir === 'desc' ? 'desc' : 'asc', lang: q.lang === 'en' ? 'en' : 'es' });
+// Los renglones de En vivo (eid = 0) o de una versión, con la búsqueda de arriba ya aplicada y todavía sin las columnas agregadas. null si ya se contestó el error. full: todos los renglones de una versión (si no, los primeros 2,000).
+// reuse: sirve lo armado hace unos segundos (filtrar, ordenar y los totales no arman el Análisis de nuevo en cada clic).
+function anSource(req, res, analysis, eid, { text, full = false, reuse = false } = {}) {
+    const needle = String(text || '').trim().toLowerCase().slice(0, 200);
+    if (!eid) {
+        const live = anLiveBuilt(req, analysis, { reuse });
+        if (live.error) { anFail(res, live.error, live.status, { field: live.field }); return null; }
+        const { built, design } = live;
+        const refCount = built.columns.filter((c) => c.group === 'reference').length;
+        const rows = needle ? built.rows.filter((r) => r.slice(0, refCount).join(' ').toLowerCase().includes(needle)) : built.rows;
+        return { analysis: { ...analysis, design }, columns: built.columns, rows, opts: {}, built };
+    }
+    const extraction = getExtraction(eid, analysis.id);
+    if (!extraction || extraction.status === 'en_proceso') { res.status(404).json({ code: 'EXTRACTION_NOT_FOUND', message: 'Esa versión no existe.' }); return null; }
+    const listed = listExtractionRows(extraction.id, { text: needle, ...(full ? { limit: 2147483647 } : {}) });
+    return { analysis, columns: extraction.columns, rows: listed.rows, total: listed.total, opts: { extractionId: extraction.id }, extraction };
+}
+// Los renglones ya presentados que se quedan: positions = sus lugares (null = todos)
+function anSubset(presented, positions) {
+    if (!positions) return presented;
+    const out = { ...presented, rows: positions.map((i) => presented.rows[i]) };
+    if (presented.keys) out.keys = positions.map((i) => presented.keys[i]);
+    if (presented.cm) { out.cm = {}; Object.keys(presented.cm).forEach((k) => { const c = presented.cm[k]; out.cm[k] = { n: positions.map((i) => c.n[i]), ...(c.all ? { all: positions.map((i) => c.all[i]) } : {}) }; }); }
+    return out;
+}
+// Filtra, ordena, corta (limit; null = todos) y arma lo que contesta la pantalla. Si el filtro o el orden tocan una columna agregada, primero se arman las columnas agregadas de TODOS los renglones.
+// Devuelve { shown, total } (total = los que pasan el filtro) o { error }.
+function anRun(src, q, { limit = null, joined = false, tz = 0 } = {}) {
+    const popts = { ...src.opts, ...(joined ? { joined: true, tz } : {}) };
+    const head = anPresent(src.analysis, src.columns, [], popts);
+    const parsed = analysisQuery.parse(head.columns, q);
+    if (parsed.error) return { error: parsed.error };
+    const needAdded = [...analysisQuery.touched(parsed)].some((i) => i >= head.baseColumns);
+    const presented = needAdded ? anPresent(src.analysis, src.columns, src.rows, popts) : null;
+    const rows = presented ? presented.rows : src.rows;
+    const idx = analysisQuery.select(rows, parsed, q.lang);
+    const total = idx ? idx.length : (src.total !== undefined ? src.total : rows.length);
+    const positions = idx ? (limit ? idx.slice(0, limit) : idx) : (limit ? Array.from({ length: Math.min(limit, rows.length) }, (_, i) => i) : null);
+    const shown = presented ? anSubset(presented, positions) : anPresent(src.analysis, src.columns, positions ? positions.map((i) => rows[i]) : rows, popts);
+    return { shown, total };
+}
 app.get('/api/business/manual-analyses/:id/extractions/:eid/data', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
     if (!analysis) return;
-    const extraction = getExtraction(Number(req.params.eid) || 0, analysis.id);
-    if (!extraction || extraction.status === 'en_proceso') return res.status(404).json({ code: 'EXTRACTION_NOT_FOUND', message: 'Esa versión no existe.' });
-    const { rows, total } = listExtractionRows(extraction.id, { text: req.query.text });
+    const q = anQ(req.query);
+    const src = anSource(req, res, analysis, Number(req.params.eid) || 0, { text: req.query.text, full: !!(q.cf || q.sort), reuse: true });
+    if (!src) return;
+    const run = anRun(src, q, { limit: AN_VERSION_LIMIT });
+    if (run.error) return anFail(res, run.error);
+    const shown = run.shown;
     res.set('Cache-Control', 'no-store');
-    const shown = anPresent(analysis, extraction.columns, rows, { extractionId: extraction.id });
-    res.json({ extraction, columns: shown.columns, rows: shown.rows, total, truncated: total > rows.length, baseColumns: shown.baseColumns, ...(shown.cm ? { keys: shown.keys, cm: shown.cm } : {}) });
+    res.json({ extraction: src.extraction, columns: shown.columns, rows: shown.rows, total: run.total, truncated: run.total > shown.rows.length, baseColumns: shown.baseColumns, ...(shown.cm ? { keys: shown.keys, cm: shown.cm } : {}) });
 });
 // «En vivo» (Daniel, 2026-11-26): el Análisis con el diseño de hoy y los datos de hoy, sin guardar una versión; «Extraer análisis» guarda una copia con fecha.
 const AN_LIVE_LIMIT = 5000;
-// El Análisis armado con el diseño y los datos de hoy: { built, design } o { error, field, status }.
-function anLiveBuilt(req, analysis) {
+// El Análisis armado con el diseño y los datos de hoy: { built, design } o { error, field, status }. Lo armado se recuerda unos segundos: filtrar, ordenar y los totales (reuse) lo reutilizan; abrir o «Actualizar» siempre arma de nuevo.
+const anBuiltCache = new Map();
+const AN_BUILT_TTL = 20000;
+function anLiveBuilt(req, analysis, { reuse = false } = {}) {
     const checked = manualAnalyses.normalizeDesign(analysis.design, anRegistryKeys(req));
     if (checked.error) return { error: checked.error, status: 400 };
     const design = checked.design;
     const { clientId, isTestAccount } = req.user;
+    const cacheKey = `${clientId}|${isTestAccount ? 1 : 0}|${analysis.id}|${JSON.stringify(design)}`;
+    if (reuse) { const hit = anBuiltCache.get(cacheKey); if (hit && Date.now() - hit.at < AN_BUILT_TTL) return hit.value; }
     let built;
     if (manualAnalyses.isV2(design)) {
         const bad = anCheckDesign(req, design);
@@ -7985,21 +8038,61 @@ function anLiveBuilt(req, analysis) {
         design.registries.forEach((key) => { sources[key] = registrySources(clientId, isTestAccount, key, needed[key] || [], design.filters); });
         built = manualAnalyses.buildExtraction(design, sources, { maxRows: Infinity });
     }
-    return { built, design };
+    const value = { built, design };
+    anBuiltCache.set(cacheKey, { at: Date.now(), value });
+    while (anBuiltCache.size > 3) anBuiltCache.delete(anBuiltCache.keys().next().value);
+    return value;
 }
 app.get('/api/business/manual-analyses/:id/live', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
     if (!analysis) return;
-    const live = anLiveBuilt(req, analysis);
-    if (live.error) return anFail(res, live.error, live.status, { field: live.field });
-    const { built, design } = live;
-    const refCount = built.columns.filter((c) => c.group === 'reference').length;
-    const text = String(req.query.text || '').trim().toLowerCase().slice(0, 200);
-    const all = text ? built.rows.filter((r) => r.slice(0, refCount).join(' ').toLowerCase().includes(text)) : built.rows;
-    const rows = all.slice(0, AN_LIVE_LIMIT);
-    const shown = anPresent({ ...analysis, design }, built.columns, rows);
+    const q = anQ(req.query);
+    const src = anSource(req, res, analysis, 0, { text: req.query.text, reuse: req.query.cached === '1' });
+    if (!src) return;
+    const run = anRun(src, q, { limit: AN_LIVE_LIMIT });
+    if (run.error) return anFail(res, run.error);
+    const shown = run.shown;
     res.set('Cache-Control', 'no-store');
-    res.json({ extraction: { id: 0, version: 0, live: true, status: 'vigente', createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '), createdBy: '', rowsCount: built.rows.length }, columns: shown.columns, rows: shown.rows, total: all.length, truncated: all.length > rows.length || !!built.truncated, baseColumns: shown.baseColumns, ...(shown.cm ? { keys: shown.keys, cm: shown.cm } : {}) });
+    res.json({ extraction: { id: 0, version: 0, live: true, status: 'vigente', createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '), createdBy: '', rowsCount: src.built.rows.length }, columns: shown.columns, rows: shown.rows, total: run.total, truncated: run.total > shown.rows.length || !!src.built.truncated, baseColumns: shown.baseColumns, ...(shown.cm ? { keys: shown.keys, cm: shown.cm } : {}) });
+});
+// La lista de casillas del filtro de una columna: los valores distintos de TODOS los renglones (con la búsqueda de arriba); con demasiados solo se avisa (complete: false).
+app.get('/api/business/manual-analyses/:id/column-values', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    const src = anSource(req, res, analysis, Number(req.query.v) || 0, { text: req.query.text, full: true, reuse: true });
+    if (!src) return;
+    const q = anQ(req.query);
+    const head = anPresent(src.analysis, src.columns, [], src.opts);
+    const at = head.columns.findIndex((c) => c.key === String(req.query.col || ''));
+    if (at < 0) return anFail(res, 'BAD_COLUMN');
+    const rows = at >= head.baseColumns ? anPresent(src.analysis, src.columns, src.rows, src.opts).rows : src.rows;
+    res.set('Cache-Control', 'no-store');
+    res.json({ col: head.columns[at].key, ...analysisQuery.distinct(rows, at, q.lang) });
+});
+// La fila de totales del pie (public/TotalsCalc.js) sobre TODOS los renglones que pasan el filtro y la búsqueda. Del botón «Totales de la tabla» (colAnTotalesAuth).
+app.get('/api/business/manual-analyses/:id/totals', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    if (!anAbilities(req).canTotals) return anForbidden(res);
+    const parsedCalcs = totalsCalc.parseCalcs(req.query.calcs);
+    if (parsedCalcs.error) return anFail(res, parsedCalcs.error);
+    res.set('Cache-Control', 'no-store');
+    if (!parsedCalcs.specs.size) return res.json({ rows: 0, values: {} });
+    const q = anQ(req.query);
+    const src = anSource(req, res, analysis, Number(req.query.v) || 0, { text: req.query.text, full: true, reuse: true });
+    if (!src) return;
+    const head = anPresent(src.analysis, src.columns, [], src.opts);
+    const parsed = analysisQuery.parse(head.columns, q);
+    if (parsed.error) return anFail(res, parsed.error);
+    const at = new Map(head.columns.map((c, i) => [c.key, i]));
+    const need = analysisQuery.touched(parsed);
+    parsedCalcs.specs.forEach((spec, key) => { if (at.has(key)) need.add(at.get(key)); });
+    const rows = [...need].some((i) => i >= head.baseColumns) ? anPresent(src.analysis, src.columns, src.rows, src.opts).rows : src.rows;
+    const idx = analysisQuery.select(rows, parsed, q.lang);
+    const out = totalsCalc.compute(parsedCalcs.specs, (key) => at.get(key), (onRow) => {
+        if (idx) idx.forEach((i) => { const row = rows[i]; onRow((c) => row[c]); }); else rows.forEach((row) => onRow((c) => row[c]));
+    });
+    res.json(out);
 });
 // Guardar las columnas que se traen de archivos (la lista completa, en orden) y, si se mandan, las columnas base y los duplicados. Un análisis anterior pasa a ser del tipo nuevo al guardarse aquí.
 app.put('/api/business/manual-analyses/:id/columns', requireAuth, (req, res) => {
@@ -8057,20 +8150,13 @@ app.post('/api/business/manual-analyses/:id/export-xlsx', requireAuth, async (re
         const text = String(body.text || '').trim().toLowerCase().slice(0, 200);
         const keys = Array.isArray(body.keys) ? body.keys.map((k) => String(k)).slice(0, analysisExcel.MAX_COLUMNS) : [];
         const eid = Number(body.v) || 0;
-        let shown;
-        if (!eid) {
-            const live = anLiveBuilt(req, analysis);
-            if (live.error) return anFail(res, live.error, live.status, { field: live.field });
-            const { built, design } = live;
-            const refCount = built.columns.filter((c) => c.group === 'reference').length;
-            const all = text ? built.rows.filter((r) => r.slice(0, refCount).join(' ').toLowerCase().includes(text)) : built.rows;
-            shown = anPresent({ ...analysis, design }, built.columns, all, { joined: true, tz: Number(body.tz) || 0 });
-        } else {
-            const extraction = getExtraction(eid, analysis.id);
-            if (!extraction || extraction.status === 'en_proceso') return res.status(404).json({ code: 'EXTRACTION_NOT_FOUND', message: 'Esa versión no existe.' });
-            const { rows } = listExtractionRows(extraction.id, { text, limit: 2147483647 }); // todos los renglones de la versión
-            shown = anPresent(analysis, extraction.columns, rows, { extractionId: extraction.id, joined: true, tz: Number(body.tz) || 0 });
-        }
+        // el filtro por columna y el orden de la pantalla (cf, sort, dir) también valen aquí: se baja TODO lo que pasa el filtro, en su orden
+        const q = { cf: typeof body.cf === 'string' ? body.cf : undefined, sort: body.sort ? String(body.sort).slice(0, 80) : '', dir: body.dir === 'desc' ? 'desc' : 'asc', lang: body.lang === 'en' ? 'en' : 'es' };
+        const src = anSource(req, res, analysis, eid, { text, full: true });
+        if (!src) return;
+        const run = anRun(src, q, { joined: true, tz: Number(body.tz) || 0 });
+        if (run.error) return anFail(res, run.error);
+        const shown = run.shown;
         const at = new Map(shown.columns.map((c, i) => [c.key, i]));
         const idx = (keys.length ? keys.map((k) => at.get(k)) : shown.columns.map((c, i) => i)).filter((i) => i !== undefined);
         if (!idx.length) return res.status(400).json({ message: 'columns are required.' });

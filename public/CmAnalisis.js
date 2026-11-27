@@ -106,6 +106,10 @@ function showTab(tab) {
     if (verBar && verBar.classList.contains('data-table-zoom')) verBar.hidden = tab !== 'versions';
     const note = document.getElementById('an-truncated'); if (note) note.hidden = tab !== 'file';
     const addedBar = document.getElementById('an-added-bar'); if (addedBar && tab !== 'file') addedBar.hidden = true;
+    const toolsRow = document.getElementById('an-tools'); if (toolsRow && tab !== 'file') toolsRow.hidden = true;
+    // en la pestaña Archivo los iconos de la tabla van en la misma fila que los botones (ver Admin.css: .an-file-layout)
+    const pageContent = document.querySelector('.page-content'); if (pageContent) pageContent.classList.toggle('an-file-layout', tab === 'file');
+    if (fileBar && fileBar.classList.contains('data-table-zoom')) fileBar.classList.add('an-file-toolbar');
     ['an-selbar', 'an-editpanel', 'an-pending'].forEach((id) => { const el = document.getElementById(id); if (el && tab !== 'file') el.hidden = true; });
     renderFileInfo();
     if (tab === 'design') renderDesign();
@@ -769,9 +773,9 @@ function renderAddedPanel(list, chip) {
 }
 // la franja de arriba del Archivo: «＋ Agregar columna», «Seleccionar» y las columnas ya agregadas (un clic las edita; ✕ las quita; los cambios esperan al «Actualizar»)
 function renderAddedBar() {
-    const bar = document.getElementById('an-added-bar');
-    if (!bar) return;
-    if (st.tab !== 'file' || !st.extraction || !st.data) { bar.hidden = true; renderSelBar(); renderPendingBar(); return; }
+    const bar = document.getElementById('an-added-bar'); const tools = document.getElementById('an-tools');
+    if (!bar || !tools) return;
+    if (st.tab !== 'file' || !st.extraction || !st.data) { bar.hidden = true; tools.hidden = true; renderSelBar(); renderPendingBar(); return; }
     const live = !!(st.extraction && st.extraction.live);
     const editable = st.canCreate && live;
     const cols = st.data.columns || [];
@@ -803,7 +807,9 @@ function renderAddedBar() {
     // «Actualizar» (Daniel, 2026-11-26): vuelve a cargar el análisis En vivo con lo que hay hoy (datos de los registros, fórmulas, columnas agregadas y, desde 2026-11-27, los cambios sin aplicar)
     const refreshBtn = live ? `<button type="button" class="btn btn-secondary an-sm" data-an-refresh data-help-key="anRefresh"><i class="bx bx-refresh" aria-hidden="true"></i> <span data-an-refresh-label>${esc(t('main.anRefresh'))}</span>${pend && pend.total ? ` <span class="an-badge">${pend.total}</span>` : ''}</button>` : '';
     const extractBtn = st.canExtract && st.analysis.status === 'active' ? `<button type="button" class="btn an-sm" data-an-extract data-help-key="anExtract"><i class="bx bx-export" aria-hidden="true"></i> ${esc(t('main.anExtract'))}</button>` : '';
-    bar.innerHTML = `<div class="an-tools">${addMenu}${selBtn}${ghost}<span class="an-tools-sp"></span>${refreshBtn}${extractBtn}</div>${renderConsultedPanel(entries.filter((e) => e.kind === 'f'), chip, pick)}${renderAddedPanel(entries.filter((e) => e.kind === 'a'), chip)}`;
+    tools.innerHTML = `${addMenu}${selBtn}${ghost}<span class="an-tools-sp"></span>${refreshBtn}${extractBtn}`;
+    bar.innerHTML = `${renderConsultedPanel(entries.filter((e) => e.kind === 'f'), chip, pick)}${renderAddedPanel(entries.filter((e) => e.kind === 'a'), chip)}`;
+    tools.hidden = false;
     bar.hidden = false;
     renderSelBar();
     renderPendingBar();
@@ -1192,15 +1198,10 @@ function setupFileFormat(table, cols) {
 }
 // La descarga en Excel con el MISMO formato de la pantalla (Daniel, 2026-11-26): la tabla manda lo que se ve (columnas visibles en su orden y renglones que pasan los filtros y el orden) con el valor de cada celda
 // (el número tal cual, no el texto con formato) y el formato de cada columna; el servidor escribe el Excel (analysisExcel.js).
-// ¿Se baja TODO el análisis desde el servidor? Sí cuando trae más renglones de los que se ven aquí (En vivo manda 5,000, una versión 2,000) y no hay filtros por columna ni un orden elegido en la pantalla
-// (esos solo existen sobre lo que se ve: entonces se baja lo que se ve, con su aviso).
+// ¿Se baja TODO desde el servidor? Sí cuando trae más renglones de los que se ven aquí (En vivo manda 5,000, una versión 2,000): el servidor aplica también el filtro por columna y el orden de la pantalla.
 function fullDownloadApplies() {
     const table = tableOf(FILE_TABLE);
-    if (!st.data || !st.data.truncated || !table) return false;
-    if (st.cf || st.sortSpec) return false; // el filtro y el orden de la pantalla solo existen sobre lo que se ve
-    if (table.tBodies[0].querySelector('tr.data-table-row-col-filtered')) return false;
-    if (table.querySelector('thead th.data-table-col-sort-asc, thead th.data-table-col-sort-desc')) return false;
-    return true;
+    return !!(st.data && st.data.truncated && table); // el servidor aplica el filtro y el orden de la pantalla: se baja TODO lo que pasa el filtro
 }
 function buildAnalysisXlsx({ columns, trs }) {
     if (!st.data || !trs) return null;
@@ -1211,7 +1212,7 @@ function buildAnalysisXlsx({ columns, trs }) {
     const rows = trs.map((tr) => { const row = st.data.rows[Number(tr.dataset.r)] || []; return idx.map((i) => (row[i] === undefined ? null : row[i])); });
     if (fullDownloadApplies()) {
         Dashboard.showToast(t('main.downloadFullPreparing'), 'info');
-        return { url: `${API}/${st.id}/export-xlsx`, body: { full: true, v: st.extraction && !st.extraction.live ? st.extraction.id : 0, text: st.text || '', keys: idx.map((i) => defs[i].key), tz: new Date().getTimezoneOffset() } };
+        return { url: `${API}/${st.id}/export-xlsx`, body: { full: true, v: fileVersion(), text: st.text || '', keys: idx.map((i) => defs[i].key), tz: new Date().getTimezoneOffset(), lang: lang(), ...(serverCf(st.cf) ? { cf: JSON.stringify(serverCf(st.cf)) } : {}), ...(st.sortSpec ? { sort: dataKeyOf(st.sortSpec.key), dir: st.sortSpec.dir } : {}) } };
     }
     // las columnas de comentarios: el Excel lleva todos los comentarios de cada renglón (el servidor los arma con la llave del renglón)
     const commentCols = [];
@@ -1282,96 +1283,94 @@ function drawFileRows(count) {
     updateFileNote();
     return added;
 }
-// ---- orden y filtro por columna sobre los datos (Daniel, 2026-11-27, «se pasma»): dibujar los 5,000 renglones × 40 columnas (200,000 celdas) tardaba ≈8 s; ahora se ordena y se filtra lo que ya está en memoria y se dibujan solo los primeros ----
-const FILTER_VALUE_LIMIT = 400; // como en Registros: una columna con más valores distintos no ofrece la lista de casillas, solo se escribe lo buscado
-const ruleNum = (value) => { const s = String(value === null || value === undefined ? '' : value).trim().replace(/[$,\s%]/g, ''); return s === '' || !/^-?\d+(\.\d+)?$/.test(s) ? null : Number(s); };
-const shownText = (v) => (v === null || v === undefined || v === '' ? '—' : String(v));
+// ---- orden, filtro por columna y totales EN EL SERVIDOR (Daniel, 2026-11-27, «pasa el filtro del Análisis al servidor»): antes solo se filtraba y se ordenaba lo que la pantalla traía (los primeros 5,000 renglones de En vivo, 2,000 de una versión);
+// ahora el servidor lo hace sobre TODOS los renglones y la pantalla recibe los primeros del resultado (y el total de los que pasan el filtro). Lo que se manda: cf (el filtro por columna con las llaves de los datos), sort + dir, text y lang. ----
 const dataColumnIndexes = () => new Map(((st.data && st.data.columns) || []).map((c, i) => [colKeyOf(c.key), i]));
-// lo que la celda muestra (el mismo texto con que se dibuja): el filtro de casillas trabaja con eso
-function cellText(r, i) { const p = st.filePlan && st.filePlan[i]; const raw = st.data.rows[r][i]; return shownText(p ? p.fmt(raw) : raw); }
-// El filtro por columna de la pantalla (spec = { f: { columna: [valores] }, r: { columna: regla } }) como una prueba sobre un renglón de los datos; la misma regla que aplica el servidor en Registros.
-function buildRowFilter(spec) {
+const dataKeyOf = (colKey) => String(colKey || '').replace(/^an_/, ''); // la llave de la columna en los datos (la que conoce el servidor)
+function serverCf(spec) {
     if (!spec) return null;
-    const at = dataColumnIndexes(); const conds = [];
-    Object.keys({ ...(spec.f || {}), ...(spec.r || {}) }).forEach((key) => {
-        const idx = at.get(key);
-        if (idx === undefined) return;
-        const cond = { idx };
-        const set = spec.f && spec.f[key];
-        if (Array.isArray(set)) cond.set = new Set(set.map(String));
-        const rule = spec.r && spec.r[key];
-        if (rule && typeof rule === 'object') {
-            if (rule.kind === 'text') { const text = String(rule.text || ''); if (SearchSyntax.split(text).length) cond.test = SearchSyntax.compile(['startsWith', 'equals'].includes(rule.mode) ? rule.mode : 'contains', text); }
-            else if (rule.kind === 'range') { const lo = ruleNum(rule.from); const hi = ruleNum(rule.to); if (lo !== null || hi !== null) cond.range = { lo, hi }; }
-        }
-        if (cond.set || cond.test || cond.range) conds.push(cond);
+    const out = {};
+    ['f', 'r'].forEach((part) => {
+        if (!spec[part]) return;
+        const o = {};
+        Object.keys(spec[part]).forEach((k) => { o[dataKeyOf(k)] = spec[part][k]; });
+        if (Object.keys(o).length) out[part] = o;
     });
-    if (!conds.length) return null;
-    return (r) => {
-        for (const c of conds) {
-            const shown = cellText(r, c.idx);
-            if (c.set && !c.set.has(shown)) return false;
-            if (c.test && !c.test(shown)) return false;
-            if (c.range) { const n = ruleNum(shown); if (n === null) return false; if ((c.range.lo !== null && n < c.range.lo) || (c.range.hi !== null && n > c.range.hi)) return false; }
-        }
-        return true;
-    };
+    return Object.keys(out).length ? out : null;
 }
-// st.view: los renglones de los datos que se ven, en su orden (los que pasan el filtro y luego el orden de la columna elegida; los vacíos al final).
+const fileVersion = () => (st.extraction && !st.extraction.live ? st.extraction.id : 0);
+// noSort: los totales y las listas de valores no necesitan el orden
+function fileQuery(extra = {}, { noSort = false } = {}) {
+    const p = new URLSearchParams();
+    if (st.text) p.set('text', st.text);
+    const cf = serverCf(st.cf); if (cf) p.set('cf', JSON.stringify(cf));
+    if (st.sortSpec && !noSort) { p.set('sort', dataKeyOf(st.sortSpec.key)); p.set('dir', st.sortSpec.dir); }
+    p.set('lang', lang());
+    Object.keys(extra).forEach((k) => p.set(k, extra[k]));
+    return p;
+}
+// La pantalla ya trae solo lo que pasó el filtro y en su orden: la vista son todos los renglones que llegaron.
 function buildView() {
-    const data = st.data;
-    if (!data) { st.view = []; return; }
-    const keep = buildRowFilter(st.cf);
-    const view = [];
-    for (let r = 0; r < data.rows.length; r += 1) if (!keep || keep(r)) view.push(r);
-    const at = st.sortSpec ? dataColumnIndexes().get(st.sortSpec.key) : undefined;
-    if (at !== undefined) {
-        const dir = st.sortSpec.dir === 'desc' ? -1 : 1;
-        const collator = new Intl.Collator(lang() === 'en' ? 'en' : 'es', { sensitivity: 'base', numeric: true });
-        const val = (r) => { const v = data.rows[r][at]; return v === null || v === undefined || v === '' ? null : v; };
-        const keys = new Map(view.map((r) => [r, val(r)]));
-        view.sort((a, b) => {
-            const x = keys.get(a); const y = keys.get(b);
-            if (x === null || y === null) return x === y ? 0 : (x === null ? 1 : -1);
-            return (typeof x === 'number' && typeof y === 'number' ? x - y : collator.compare(String(x), String(y))) * dir;
-        });
-    }
-    st.view = view;
+    const n = st.data ? st.data.rows.length : 0;
+    st.view = new Array(n);
+    for (let r = 0; r < n; r += 1) st.view[r] = r;
 }
-// Vuelve a dibujar los primeros renglones del resultado (el resto sigue por partes al bajar o con «Mostrar más»).
+let querySeq = 0;
+// Vuelve a pedir al servidor los renglones con el filtro y el orden de ahora y dibuja los primeros (el resto sigue por partes al bajar o con «Mostrar más»).
 // sameRows: ordenar no cambia qué renglones cuentan, así que la fila de totales no se vuelve a calcular
-function applyFileView(sameRows) {
-    const table = tableOf(FILE_TABLE);
-    if (!table || !st.data) return;
-    buildView();
-    table.tBodies[0].innerHTML = '';
-    st.drawn = 0;
-    drawFileRows(FIRST_ROWS);
-    ensureEmpty(FILE_TABLE, st.data.columns.length);
-    const wrapper = wrapperOf(FILE_TABLE); if (wrapper) wrapper.scrollTop = 0;
-    updateFileNote();
-    if (!sameRows && Dashboard.refreshTotalsRow) Dashboard.refreshTotalsRow(FILE_TABLE);
+async function queryRows(sameRows) {
+    const e = st.extraction; const table = tableOf(FILE_TABLE); const wrapper = wrapperOf(FILE_TABLE);
+    if (!e || !table || !st.data) return;
+    const seq = ++querySeq;
+    setFileBusy(wrapper, true);
+    try {
+        const res = await fetch(`${API}/${st.id}/${e.live ? 'live' : `extractions/${e.id}/data`}?${fileQuery({ cached: '1' })}`, { credentials: 'include' });
+        if (!res.ok) throw new Error('query failed');
+        const body = await res.json();
+        if (seq !== querySeq) return; // llegó una consulta más nueva
+        st.data = body;
+        st.filePlan = fileCellPlan(body.columns);
+        buildView();
+        table.tBodies[0].innerHTML = '';
+        st.drawn = 0;
+        drawFileRows(FIRST_ROWS);
+        ensureEmpty(FILE_TABLE, body.columns.length);
+        if (wrapper) wrapper.scrollTop = 0;
+        updateFileNote();
+        if (!sameRows && Dashboard.refreshTotalsRow) Dashboard.refreshTotalsRow(FILE_TABLE);
+    } catch (err) {
+        console.error('Análisis: failed to query the rows', err);
+        Dashboard.showToast(t('main.anLoadError'), 'error');
+    } finally {
+        if (seq === querySeq) setFileBusy(wrapper, false);
+    }
 }
-function setFileSort(key, dir) { st.sortSpec = dir ? { key, dir } : null; applyFileView(true); }
-// ---- fila de totales: a cuántos renglones se refiere y el cálculo sobre los que pasan el filtro (st.view) ----
+function setFileSort(key, dir) { st.sortSpec = dir ? { key, dir } : null; queryRows(true); }
+// ---- fila de totales: el servidor cuenta TODOS los renglones que pasan el filtro y la búsqueda ----
 function fileTotalsInfo() {
-    const count = (st.view || []).length;
-    return { count, total: st.data && st.data.truncated ? st.data.total : count, filtered: !!(st.cf || st.text) };
+    const n = st.data ? st.data.total : 0;
+    return { count: n, total: n, filtered: !!(st.cf || st.text) };
 }
-function computeFileTotals(specs) {
-    const at = dataColumnIndexes(); const view = st.view || []; const rows = st.data ? st.data.rows : [];
-    const out = window.TotalsCalc.compute(new Map(Object.entries(specs)), (key) => at.get(key), (onRow) => {
-        for (let k = 0; k < view.length; k += 1) { const r = view[k]; const row = rows[r]; onRow((i) => row[i], (i) => cellText(r, i)); }
-    });
-    return Promise.resolve(out);
+async function computeFileTotals(specs) {
+    const byKey = {};
+    Object.keys(specs).forEach((k) => { byKey[dataKeyOf(k)] = specs[k]; });
+    const p = fileQuery({ calcs: JSON.stringify(byKey), cached: '1' }, { noSort: true });
+    if (fileVersion()) p.set('v', String(fileVersion()));
+    const res = await fetch(`${API}/${st.id}/totals?${p}`, { credentials: 'include' });
+    if (!res.ok) throw new Error('totals failed');
+    const body = await res.json();
+    const values = {};
+    Object.keys(body.values || {}).forEach((k) => { values[colKeyOf(k)] = body.values[k]; });
+    return { rows: body.rows, values };
 }
-// La lista de casillas del filtro de una columna: los valores distintos que muestra (de los datos que trae la pantalla).
+// La lista de casillas del filtro de una columna: los valores distintos de TODOS los renglones (los pide al servidor).
 async function fileColumnValues(key) {
-    const at = dataColumnIndexes().get(key);
-    if (at === undefined || !st.data) return { values: [], complete: true };
-    const seen = new Set();
-    for (let r = 0; r < st.data.rows.length; r += 1) { seen.add(cellText(r, at)); if (seen.size > FILTER_VALUE_LIMIT) return { values: [], complete: false }; }
-    return { values: [...seen].sort((a, b) => a.localeCompare(b, lang() === 'en' ? 'en' : 'es', { numeric: true, sensitivity: 'base' })), complete: true };
+    const p = new URLSearchParams({ col: dataKeyOf(key), lang: lang() });
+    if (st.text) p.set('text', st.text);
+    if (fileVersion()) p.set('v', String(fileVersion()));
+    const res = await fetch(`${API}/${st.id}/column-values?${p}`, { credentials: 'include' });
+    if (!res.ok) throw new Error('values failed');
+    return res.json();
 }
 // ---- columna «Comentarios» (Daniel, 2026-11-27): la lista de comentarios de cada renglón, con fecha y autor; escribe quien tenga el permiso del árbol; una versión trae los de su momento ----
 const canWriteComments = () => !!(st.canComment && st.extraction && st.extraction.live && st.analysis && st.analysis.status === 'active');
@@ -1495,7 +1494,7 @@ function updateFileNote() {
     if (!note) { note = document.createElement('p'); note.id = 'an-truncated'; note.className = 'admin-hint reg-more'; wrapper.after(note); }
     note.textContent = '';
     const text = document.createElement('span');
-    text.textContent = partial ? t('main.regShowing', { shown: num(st.drawn), total: num(st.cf ? st.view.length : body.total) }) : t('main.anTruncated', { shown: body.rows.length, total: num(body.total) });
+    text.textContent = partial ? t('main.regShowing', { shown: num(st.drawn), total: num(body.total) }) : t('main.anTruncated', { shown: body.rows.length, total: num(body.total) });
     note.appendChild(text);
     if (partial) {
         // «Mostrar todos» dibuja de golpe lo que falta (con 40 columnas, 5,000 renglones son 200,000 celdas y la página se congelaba): solo se ofrece cuando es poco; si no, quedan «Mostrar más», el orden, el filtro y la descarga
@@ -1530,7 +1529,7 @@ async function loadFile() {
     if (!e) { buildHeader(FILE_TABLE, [{ col: 'ref_unidad', group: 'main.anGroupRef', labelKey: 'main.regDim_unidad', cls: 'an-ref' }]); ensureEmpty(FILE_TABLE, 1, 'main.anFileNone'); return; }
     setFileBusy(wrapper, true);
     try {
-        const qs = st.text ? `?text=${encodeURIComponent(st.text)}` : '';
+        const qs = `?${fileQuery()}`; // el filtro y el orden que ya estaban puestos se conservan al volver a leer
         const res = await fetch(e.live ? `${API}/${st.id}/live${qs}` : `${API}/${st.id}/extractions/${e.id}/data${qs}`, { credentials: 'include' });
         if (!res.ok) throw new Error('load failed');
         st.data = await res.json();
@@ -1554,15 +1553,15 @@ async function loadFile() {
         tbody.innerHTML = '';
         st.filePlan = fileCellPlan(cols);
         st.numCols = new Set(st.filePlan.filter((p) => p.numeric || /col-num/.test(p.cls)).map((p) => p.key)); // las columnas con números (la fila de totales ofrece suma, promedio…)
-        buildView(); // el filtro y el orden que ya estaban puestos se conservan al volver a leer
+        buildView();
         st.drawn = 0;
         drawFileRows(FIRST_ROWS); // el resto se dibuja por partes: dibujar los 5,000 renglones de golpe tardaba más de 5 segundos en el navegador
         ensureEmpty(FILE_TABLE, columns.length);
         if (first && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 1);
         if (first && Dashboard.registerPartialTable) Dashboard.registerPartialTable(FILE_TABLE, { isComplete: () => !st.data || !st.view || st.drawn >= st.view.length, loadAll: drawAllFileRows, dataMode: true, sortRows: setFileSort, rowIndexes: () => (st.view || []).slice() });
-        // el filtro por columna y sus listas de valores salen de los datos que ya trae la pantalla (no de las celdas dibujadas)
-        if (first && Dashboard.registerServerFilteredTable) Dashboard.registerServerFilteredTable(FILE_TABLE, { onChange: (spec) => { st.cf = spec; applyFileView(); }, getValues: fileColumnValues });
-        // la fila de totales (Daniel, 2026-11-27): suma y cuenta los renglones que pasan el filtro de entre los que ya trae la pantalla (En vivo manda hasta 5,000; si hay más, la franja lo dice)
+        // el filtro por columna y sus listas de valores los resuelve el servidor sobre todos los renglones (queryRows, fileColumnValues)
+        if (first && Dashboard.registerServerFilteredTable) Dashboard.registerServerFilteredTable(FILE_TABLE, { onChange: (spec) => { st.cf = spec; queryRows(); }, getValues: fileColumnValues });
+        // la fila de totales (Daniel, 2026-11-27): el servidor suma y cuenta TODOS los renglones que pasan el filtro y la búsqueda
         if (first && Dashboard.registerTotalsRow) Dashboard.registerTotalsRow(FILE_TABLE, { scope: () => String(st.id), canUse: () => !!st.canTotals, isNumeric: (key) => st.numCols.has(key), rowsInfo: fileTotalsInfo, compute: computeFileTotals });
         watchFileScroll(wrapper);
         // el aspecto de cada columna (negrita, colores, bordes…) se pone después de armar la tabla
