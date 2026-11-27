@@ -5432,6 +5432,11 @@
     "anCmDupWarn": "Este análisis deja renglones con la misma llave: sus comentarios se van a compartir.",
     "anCmAdd": "Comentar",
     "anCatNone": "Sin clasificación",
+    "anPanelConsulted": "Columnas consultadas",
+    "anPanelAdded": "Columnas agregadas",
+    "anPanelFile1": "1 archivo",
+    "anPanelFilesN": "{n} archivos",
+    "anFileKind": "Archivo",
     "anCatCount1": "1 columna",
     "anCatCountN": "{n} columnas",
     "anCatPicked": "{n} marcadas",
@@ -5445,10 +5450,9 @@
     "anCatRemovedN": "{n} quitadas",
     "anCatEdited1": "1 con cambios",
     "anCatEditedN": "{n} con cambios",
-    "totalsTitle": "Σ Totales · de {n} renglones",
+    "totalsTitle": "De {n} renglones",
     "totalsFiltered": " · los que cumplen el filtro",
     "totalsPartial": " · solo los cargados, de {total}",
-    "totalsPick": "＋ elegir cálculo",
     "totalsMenuLabel": "Cálculo de {name}",
     "totalsKindText": "columna de texto",
     "totalsKindNum": "columna de números",
@@ -5487,6 +5491,10 @@
     "totalsTextPlaceholder": "Lo que buscas",
     "totalsApply": "Aplicar",
     "totalsError": "No se pudieron calcular los totales.",
+    "totalsSumAll": "Sumar todas las de números",
+    "totalsClearAll": "Quitar todos los cálculos",
+    "totalsGroupShortcuts": "Atajos",
+    "totalsEmptyTip": "Un clic pone el dato (suma en números, contar en texto); clic derecho elige otro cálculo",
     "anCmCount": "Comentarios: {n}",
     "anCmLoading": "Cargando…",
     "anCmEmpty": "Todavía no hay comentarios.",
@@ -10546,12 +10554,16 @@
       "what": "Una columna marcada con ⟳ «La más reciente» siempre trae la carga más nueva de esa columna (o, en un registro mensual o diario, el último periodo): cuando llega una carga nueva, la columna pasa sola a ella al actualizar o abrir el análisis. Las de «Una carga o periodo en particular» no se mueven. El encabezado siempre dice tu nombre; al pasar el cursor por él se ve de qué carga son los números de hoy.",
       "example": "⟳ Exist → hoy trae Exist 27/nov 06:00"
     },
+    "anColumnas": {
+      "what": "Las columnas que traes de tus archivos (registros) se ordenan por Archivo → Categoría → Columna: primero el archivo de donde salen, luego su categoría (la clasificación) y al abrirla ves la ficha de cada columna. Las que tú creas en el análisis (operación, criterio, comentarios) no vienen de un archivo y van en «Columnas agregadas». Con pocas columnas se ven sueltas. Un clic en un archivo o categoría la abre o la cierra y lo que abres se recuerda en tu navegador; «Contraer todo» y «Expandir todo» lo hacen de golpe. Los botones de arriba (agregar, seleccionar, actualizar, extraer) van en una sola fila.",
+      "example": "Archivo «Existencias Globales» → categoría «Existencias» → Exist Total Hospital, FAR."
+    },
     "anCategorias": {
       "what": "Las columnas se juntan por su clasificación (la misma de la banda de color del encabezado); las que no tienen caen en «Sin clasificación». Un clic en el nombre de una categoría la abre o la contrae; entran contraídas y lo que abres se recuerda en tu navegador. Aunque esté contraída, su encabezado avisa si tiene columnas nuevas, quitadas o con cambios sin aplicar. En «Seleccionar», «Marcar todas» marca las de esa categoría de una vez. Para armar las categorías: Seleccionar → marca las columnas → Editar → Clasificación.",
       "example": "Marco las 12 columnas de 2024 → Editar → clasificación «2024»: quedan en una sola ficha «2024 · 12 columnas»."
     },
     "dataTableTotals": {
-      "what": "La franja de abajo suma o cuenta lo que dejó el filtro, aunque no se vea todo en pantalla. Toca la celda de una columna y elige el cálculo: suma, promedio, mínimo o máximo (columnas de números) o contar (con dato, vacíos, sin repetir, los que salen una sola vez, o solo los que cumplan lo que escribas, por ejemplo los que inician con «A»). Si cambias el filtro, los números se recalculan. Lo que eliges se queda guardado en tu navegador.",
+      "what": "La franja de abajo suma o cuenta lo que dejó el filtro, aunque no se vea todo en pantalla. Toca la celda de una columna y el dato sale al momento (suma en las de números, contar en las de texto); al pasar el ratón por el dato dice qué cálculo es y de cuántos renglones. Para otro cálculo, toca el dato (o clic derecho en una celda vacía): suma, promedio, mínimo o máximo (columnas de números) o contar (con dato, vacíos, sin repetir, los que salen una sola vez, o solo los que cumplan lo que escribas, por ejemplo los que inician con «A»). Al final del menú hay atajos: sumar todas las de números y quitar todos los cálculos. Si cambias el filtro, los números se recalculan. Lo que eliges se queda guardado en tu navegador.",
       "example": "Filtro Sub inventario = FAR → en la columna Exist toco «Suma» y veo el total de existencias de FAR."
     },
     "anSelect": {

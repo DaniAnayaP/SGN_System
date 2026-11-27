@@ -15832,26 +15832,30 @@ function renderTotalsRow(tableId) {
         tfoot = table.createTFoot();
         tfoot.className = 'data-table-totals';
         tfoot.setAttribute('data-help-key', 'dataTableTotals');
+        // sin cálculo, un clic pone el que más se usa (suma en las columnas de números, contar en las de texto) y el dato sale al momento; con cálculo, abre el menú para cambiarlo (clic derecho lo abre también en una celda vacía)
         tfoot.addEventListener('click', (event) => {
             const btn = event.target.closest('button[data-col]');
-            if (btn) openTotalsMenu(tableId, btn.dataset.col, btn);
+            if (!btn) return;
+            const e = totalsRows.get(tableId); const key = btn.dataset.col;
+            if (e && e.calcs && !e.calcs[key]) setTotalsCalc(tableId, key, { fn: e.opts.isNumeric(key) ? 'sum' : 'count' }); else openTotalsMenu(tableId, key, btn);
+        });
+        tfoot.addEventListener('contextmenu', (event) => {
+            const btn = event.target.closest('button[data-col]');
+            if (!btn) return;
+            event.preventDefault();
+            openTotalsMenu(tableId, btn.dataset.col, btn);
         });
     }
     tfoot.textContent = '';
     const info = entry.opts.rowsInfo ? entry.opts.rowsInfo() : { count: 0, total: 0, filtered: false };
     const loc = totalsLocale();
-    const titleRow = tfoot.insertRow();
-    titleRow.className = 'data-table-totals-title';
-    const titleCell = titleRow.insertCell();
-    titleCell.colSpan = state.columnKeys.length;
-    const titleInner = document.createElement('span');
-    titleInner.className = 'data-table-totals-title-text';
-    titleInner.textContent = `${t('main.totalsTitle', { n: window.TotalsCalc.formatValue(info.count, loc) })}${info.filtered ? t('main.totalsFiltered') : ''}${info.total > info.count ? t('main.totalsPartial', { total: window.TotalsCalc.formatValue(info.total, loc) }) : ''}`;
-    titleCell.appendChild(titleInner);
+    // la franja es un solo renglón de celdas con SOLO el resultado (Daniel, 2026-11-27); de cuántos renglones es, y qué cálculo, sale al pasar el ratón (y en Modo ayuda)
+    const rowsText = `${t('main.totalsTitle', { n: window.TotalsCalc.formatValue(info.count, loc) })}${info.filtered ? t('main.totalsFiltered') : ''}${info.total > info.count ? t('main.totalsPartial', { total: window.TotalsCalc.formatValue(info.total, loc) }) : ''}`;
     const row = tfoot.insertRow();
     row.className = 'data-table-totals-cells';
     state.columnKeys.forEach((key) => {
         const spec = entry.calcs[key];
+        const name = state.labels[key] || key;
         const td = row.insertCell();
         td.dataset.col = key;
         if (entry.opts.isNumeric(key)) td.classList.add('col-num');
@@ -15859,21 +15863,37 @@ function renderTotalsRow(tableId) {
         btn.type = 'button';
         btn.dataset.col = key;
         btn.className = `data-table-totals-btn${spec ? '' : ' is-empty'}`;
-        const small = document.createElement('small');
-        const big = document.createElement('b');
         if (!spec) {
-            small.textContent = 'Σ';
-            big.textContent = t('main.totalsPick');
+            btn.textContent = 'Σ';
+            btn.title = `${name} · ${t('main.totalsEmptyTip')}`;
         } else {
-            small.textContent = totalsSpecLabel(spec);
-            big.textContent = entry.error ? '—' : (key in entry.values ? window.TotalsCalc.formatValue(entry.values[key], loc) : '…');
+            btn.textContent = entry.error ? '—' : (key in entry.values ? window.TotalsCalc.formatValue(entry.values[key], loc) : '…');
+            btn.title = `${name} · ${totalsSpecLabel(spec)} · ${rowsText}`;
         }
-        btn.title = `${state.labels[key] || key} · ${spec ? totalsSpecLabel(spec) : t('main.totalsPick')}`;
+        btn.setAttribute('aria-label', btn.title);
         btn.setAttribute('aria-haspopup', 'dialog');
-        btn.append(small, big);
         td.appendChild(btn);
     });
     applyRowColumnState(row, tableId);
+}
+// Pone (o quita, con spec = null) el cálculo de UNA columna y recalcula solo esa.
+function setTotalsCalc(tableId, key, spec) {
+    const entry = totalsRows.get(tableId);
+    if (!entry) return;
+    if (spec) entry.calcs[key] = spec; else delete entry.calcs[key];
+    saveTotalsCalcs(tableId, entry);
+    refreshTotalsRow(tableId, { only: [key] });
+}
+// Atajos del menú: 'sum' = la suma en todas las columnas de números que todavía no tienen cálculo; 'clear' = quita todos los cálculos.
+function setTotalsShortcut(tableId, kind) {
+    const entry = totalsRows.get(tableId);
+    const state = dataTableColumnState.get(tableId);
+    if (!entry || !state) return;
+    if (kind === 'clear') { entry.calcs = {}; entry.values = {}; saveTotalsCalcs(tableId, entry); refreshTotalsRow(tableId); return; }
+    const keys = state.columnKeys.filter((k) => entry.opts.isNumeric(k) && !entry.calcs[k]);
+    keys.forEach((k) => { entry.calcs[k] = { fn: 'sum' }; });
+    saveTotalsCalcs(tableId, entry);
+    if (keys.length) refreshTotalsRow(tableId, { only: keys });
 }
 // Cuando cambian las columnas (orden, ocultas, fijas) las celdas de la franja se acomodan igual.
 function applyTotalsRowLayout(tableId) {
@@ -15952,10 +15972,8 @@ function openTotalsMenu(tableId, key, anchor) {
     list.className = 'data-table-totals-list';
     menu.appendChild(list);
     const apply = (spec) => {
-        if (spec) entry.calcs[key] = spec; else delete entry.calcs[key];
-        saveTotalsCalcs(tableId, entry);
         closeTotalsMenu();
-        refreshTotalsRow(tableId, { only: [key] });
+        setTotalsCalc(tableId, key, spec);
     };
     const group = (text, disabledNote) => {
         const g = document.createElement('div');
@@ -16049,9 +16067,21 @@ function openTotalsMenu(tableId, key, anchor) {
     list.appendChild(cond);
     group(t('main.totalsGroupNum'), numeric ? '' : t('main.totalsNumOnly'));
     ['sum', 'avg', 'min', 'max'].forEach((fn) => option(fn, { disabled: !numeric }));
+    group(t('main.totalsGroupShortcuts'));
+    [['sum', 'main.totalsSumAll'], ['clear', 'main.totalsClearAll']].forEach(([kind, labelKey]) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'data-table-totals-opt';
+        b.dataset.shortcut = kind;
+        const text = document.createElement('span');
+        text.textContent = t(labelKey);
+        b.appendChild(text);
+        list.appendChild(b);
+    });
     list.addEventListener('click', (event) => {
         const btn = event.target.closest('button.data-table-totals-opt');
         if (!btn || btn.disabled) return;
+        if (btn.dataset.shortcut) { closeTotalsMenu(); setTotalsShortcut(tableId, btn.dataset.shortcut); return; }
         const fn = btn.dataset.fn;
         if (fn === 'none') { apply(null); return; }
         if (fn === 'where') { cond.hidden = false; Object.values(options).forEach((b) => b.classList.toggle('is-on', b === btn)); (textInput || fromInput).focus(); placeTotalsMenu(menu, anchor); return; }

@@ -3470,81 +3470,47 @@
     }
     .data-table tfoot.data-table-totals td{
         background-color: color-mix(in srgb, var(--color-accent, #8a3590) 12%, var(--color-surface));
-        border-top: 0;
+        border-top: 2px solid color-mix(in srgb, var(--color-accent, #8a3590) 45%, var(--color-border));
         border-bottom: 0;
-        vertical-align: top;
-        padding-top: 0.15rem;
-        padding-bottom: 0.45rem;
+        padding: 0.3rem 0.5rem;
         overflow: hidden;
     }
-    .data-table tfoot.data-table-totals tr.data-table-totals-title td{
-        border-top: 2px solid color-mix(in srgb, var(--color-accent, #8a3590) 45%, var(--color-border));
-        padding-top: 0.3rem;
-        padding-bottom: 0.05rem;
-        overflow: visible;
-    }
-    .data-table-totals-title-text{
-        position: sticky;
-        left: 0;
-        display: inline-block;
-        font-size: calc(var(--data-table-font-size, 0.85rem) * 0.8);
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--color-text-secondary);
-        white-space: nowrap;
-    }
+    /* La celda: se ve siempre (borde fino y fondo claro) y muestra SOLO el resultado, con la misma letra que las celdas de la tabla (hereda el tamaño que tenga la tabla). Sin cálculo muestra una Σ tenue. */
     .data-table-totals-btn{
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0;
+        display: block;
         width: 100%;
         min-width: 0;
-        padding: 0.1rem 0.2rem;
-        border: 1px solid transparent;
+        min-height: 1.75em;
+        padding: 0.15rem 0.45rem;
+        border: 1px solid color-mix(in srgb, var(--color-accent, #8a3590) 35%, var(--color-border));
         border-radius: 0.4rem;
-        background: transparent;
+        background: color-mix(in srgb, var(--color-surface) 60%, transparent);
         color: var(--color-text-primary);
         font: inherit;
-        line-height: 1.25;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.3;
         text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         cursor: pointer;
     }
     .data-table-totals-btn:hover,
     .data-table-totals-btn:focus-visible{
         border-color: var(--color-accent, #8a3590);
+        background: var(--color-surface);
         outline: none;
     }
-    .data-table-totals-btn small{
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        font-size: calc(var(--data-table-font-size, 0.85rem) * 0.7);
-        font-weight: 600;
-        letter-spacing: 0.03em;
-        text-transform: uppercase;
-        color: var(--color-text-secondary);
-    }
-    .data-table-totals-btn b{
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        font-size: var(--data-table-font-size, 0.85rem);
-        font-weight: 700;
-        font-variant-numeric: tabular-nums;
-    }
     .data-table-totals-btn.is-empty{
-        border: 1px dashed color-mix(in srgb, var(--color-accent, #8a3590) 50%, var(--color-border));
+        font-weight: 400;
+        color: color-mix(in srgb, var(--color-text-secondary) 55%, transparent);
     }
-    .data-table-totals-btn.is-empty b{
-        font-weight: 500;
+    .data-table-totals-btn.is-empty:hover,
+    .data-table-totals-btn.is-empty:focus-visible{
         color: var(--color-text-secondary);
     }
     .data-table tfoot.data-table-totals td.col-num .data-table-totals-btn{
-        align-items: flex-end;
         text-align: right;
     }
     /* El menú de un cálculo flota sobre la página (no lo recorta el desplazamiento de la tabla) y se abre hacia arriba de la franja. */

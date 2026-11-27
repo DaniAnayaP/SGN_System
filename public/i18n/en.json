@@ -5433,6 +5433,11 @@
     "anCmDupWarn": "This analysis keeps rows with the same key: their comments will be shared.",
     "anCmAdd": "Comment",
     "anCatNone": "No classification",
+    "anPanelConsulted": "Queried columns",
+    "anPanelAdded": "Added columns",
+    "anPanelFile1": "1 file",
+    "anPanelFilesN": "{n} files",
+    "anFileKind": "File",
     "anCatCount1": "1 column",
     "anCatCountN": "{n} columns",
     "anCatPicked": "{n} marked",
@@ -5446,10 +5451,9 @@
     "anCatRemovedN": "{n} removed",
     "anCatEdited1": "1 changed",
     "anCatEditedN": "{n} changed",
-    "totalsTitle": "Σ Totals · of {n} rows",
+    "totalsTitle": "Of {n} rows",
     "totalsFiltered": " · the ones that match the filter",
     "totalsPartial": " · only the loaded ones, out of {total}",
-    "totalsPick": "＋ choose a calculation",
     "totalsMenuLabel": "Calculation for {name}",
     "totalsKindText": "text column",
     "totalsKindNum": "number column",
@@ -5488,6 +5492,10 @@
     "totalsTextPlaceholder": "What you are looking for",
     "totalsApply": "Apply",
     "totalsError": "The totals could not be calculated.",
+    "totalsSumAll": "Sum all number columns",
+    "totalsClearAll": "Remove all calculations",
+    "totalsGroupShortcuts": "Shortcuts",
+    "totalsEmptyTip": "One click shows the figure (sum on numbers, count on text); right click picks another calculation",
     "anCmCount": "Comments: {n}",
     "anCmLoading": "Loading…",
     "anCmEmpty": "There are no comments yet.",
@@ -10547,12 +10555,16 @@
       "what": "A column marked ⟳ \"The most recent\" always brings the newest load of that column (or, in a monthly or daily record, the last period): when a new load arrives, the column moves to it by itself when you refresh or open the analysis. The ones under \"A specific load or period\" do not move. The header always shows your name; hover it to see which load today's numbers come from.",
       "example": "⟳ Stock → today it brings Stock 27/nov 06:00"
     },
+    "anColumnas": {
+      "what": "The columns you bring from your files (record sets) are ordered by File → Category → Column: first the file they come from, then their category (the classification) and when you open it you see each column's chip. The ones you create in the analysis (operation, criterion, comments) do not come from a file and go under \"Added columns\". With few columns they show loose. A click on a file or category opens or closes it and what you open is remembered in your browser; \"Collapse all\" and \"Expand all\" do it at once. The buttons on top (add, select, refresh, extract) sit in a single row.",
+      "example": "File \"Existencias Globales\" → category \"Existencias\" → Exist Total Hospital, FAR."
+    },
     "anCategorias": {
       "what": "Columns are grouped by their classification (the same as the colored band in the header); the ones without it go under \"No classification\". Click a category name to open or collapse it; they start collapsed and what you open is remembered in your browser. Even when collapsed, its header tells you if it has new, removed or changed columns that are not applied yet. In \"Select\", \"Mark all\" marks that category at once. To build the categories: Select → mark the columns → Edit → Classification.",
       "example": "I mark the 12 columns of 2024 → Edit → classification \"2024\": they become a single \"2024 · 12 columns\" chip."
     },
     "dataTableTotals": {
-      "what": "The strip at the bottom adds up or counts what the filter left, even if not all of it is on screen. Tap a column's cell and pick the calculation: sum, average, minimum or maximum (number columns) or count (with data, empty, without repeats, the ones that appear only once, or only the ones that match what you type, for example the ones that start with \"A\"). When you change the filter, the numbers are recalculated. What you pick is kept in your browser.",
+      "what": "The strip at the bottom adds up or counts what the filter left, even if not all of it is on screen. Click a column's cell and the figure shows right away (sum on number columns, count on text ones); hover the figure to see which calculation it is and how many rows it covers. For another calculation, click the figure (or right-click an empty cell): sum, average, minimum or maximum (number columns) or count (with data, empty, without repeats, the ones that appear only once, or only the ones that match what you type, for example the ones that start with \"A\"). At the end of the menu there are shortcuts: sum all number columns and remove all calculations. When you change the filter, the numbers are recalculated. What you pick is kept in your browser.",
       "example": "Filter Sub inventory = FAR → in the Exist column I tap \"Sum\" and see the total stock of FAR."
     },
     "anSelect": {
