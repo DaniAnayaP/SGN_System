@@ -4224,6 +4224,21 @@ function reorderColumn(tableId, sourceKey, targetKey, before) {
     applyDataTableColumnLayout(tableId);
 }
 
+// Mueve varias columnas juntas (una clasificación entera) antes o después de otra, conservando su orden de hoy.
+function reorderColumnBlock(tableId, keys, targetKey, before) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const moving = new Set(keys);
+    const block = state.config.order.filter((k) => moving.has(k));
+    const rest = state.config.order.filter((k) => !moving.has(k));
+    let idx = rest.indexOf(targetKey);
+    if (idx === -1) idx = rest.length;
+    rest.splice(before ? idx : idx + 1, 0, ...block);
+    state.config.order = rest;
+    saveDataTableConfig(tableId, state.config);
+    applyDataTableColumnLayout(tableId);
+}
+
 // Horizontal drag-reorder across the header row. Pinned columns are
 // excluded as both source AND drop target — their order only changes via
 // the pin picker's own (vertical, separate) drag-reorder below, avoiding
@@ -4233,6 +4248,62 @@ function enableHeaderDragReorder(table, tableId) {
     if (headerRow.dataset.dragBound) return;
     headerRow.dataset.dragBound = '1';
     let draggedKey = null;
+    // Arrastrar una CLASIFICACIÓN (la banda de arriba) mueve todas sus columnas juntas (Daniel, 2026-11-27): se puede soltar antes o después de otra columna o de otra clasificación.
+    const thead = table.tHead;
+    let draggedBlock = null; // { keys, th }
+    const blockDropTarget = (event, block) => {
+        const th = event.target.closest && event.target.closest('th');
+        const state = dataTableColumnState.get(tableId);
+        if (!th || !state || !block || th.classList.contains('data-table-col-pinned')) return null;
+        const rect = th.getBoundingClientRect();
+        const left = (event.clientX - rect.left) < rect.width / 2;
+        let key;
+        if (th.dataset.startKey) key = left ? th.dataset.startKey : th.dataset.endKey; // otra clasificación: antes de su primera columna o después de la última
+        else if (th.dataset.col) { key = th.dataset.col; if (state.config.pinned.includes(key)) return null; } // una columna
+        else return null;
+        if (block.keys.includes(key)) return null;
+        return { th, key, before: left };
+    };
+    thead.addEventListener('dragstart', (event) => {
+        const band = event.target.closest && event.target.closest('th.data-table-group-band-draggable');
+        const state = dataTableColumnState.get(tableId);
+        if (!band || !state) return;
+        const order = getVisualColumnOrder(state.config);
+        const a = order.indexOf(band.dataset.startKey); const b = order.indexOf(band.dataset.endKey);
+        if (a < 0 || b < a) return;
+        draggedBlock = { keys: order.slice(a, b + 1), th: band };
+        band.classList.add('data-table-col-dragging');
+        event.dataTransfer.effectAllowed = 'move';
+        try { event.dataTransfer.setData('text/plain', band.textContent || ''); } catch { /* sin datos */ }
+    });
+    thead.addEventListener('dragover', (event) => {
+        if (!draggedBlock) return;
+        const target = blockDropTarget(event, draggedBlock);
+        if (!target) return;
+        event.preventDefault();
+        showDataTableDropIndicator(target.th, target.before);
+    });
+    thead.addEventListener('drop', (event) => {
+        if (!draggedBlock) return;
+        event.preventDefault();
+        hideDataTableDropIndicator();
+        const block = draggedBlock;
+        draggedBlock = null;
+        block.th.classList.remove('data-table-col-dragging');
+        const target = blockDropTarget(event, block);
+        const state = dataTableColumnState.get(tableId);
+        if (!target || !state) return;
+        state.wrapper.classList.add('data-table-reordering');
+        setTimeout(() => {
+            try { reorderColumnBlock(tableId, block.keys, target.key, target.before); } finally { state.wrapper.classList.remove('data-table-reordering'); }
+        }, 30);
+    });
+    thead.addEventListener('dragend', () => {
+        if (!draggedBlock) return;
+        draggedBlock.th.classList.remove('data-table-col-dragging');
+        hideDataTableDropIndicator();
+        draggedBlock = null;
+    });
     headerRow.addEventListener('dragstart', (event) => {
         const th = event.target.closest('th');
         if (!th || th.draggable !== true) return;
@@ -5850,7 +5921,7 @@ function initDataTableColumns(wrapper, index) {
 // table it was chosen for, not just the tree's own preview. Classifications
 // never explicitly colored keep rendering exactly as before (columnGroupColor
 // itself falls back to COLUMN_GROUP_META's own static swatch, or neutral).
-function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey, state, applyOwnColor) {
+function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey, state, applyOwnColor, tableId) {
     bandRow.innerHTML = '';
     const pinnedSet = new Set(state?.visiblePinned || []);
     const lastPinnedKey = pinnedSet.size ? state.visiblePinned[state.visiblePinned.length - 1] : null;
@@ -5899,6 +5970,16 @@ function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey, state, applyOw
             th.classList.add('data-table-col-pinned');
             if (s.endKey === lastPinnedKey) th.classList.add('data-table-col-pinned-edge');
             th.style.left = `${state.pinnedLeft[s.startKey]}px`;
+        } else if (s.groupKey && tableId) {
+            // arrastrar una clasificación mueve todas sus columnas juntas (ver enableHeaderDragReorder)
+            const from = visualOrder.indexOf(s.startKey); const to = visualOrder.indexOf(s.endKey);
+            if (from >= 0 && to >= from && visualOrder.slice(from, to + 1).every((k) => hasColumnSearchGrant(tableId, k, 'reorder'))) {
+                th.draggable = true;
+                th.classList.add('data-table-group-band-draggable');
+                th.dataset.startKey = s.startKey;
+                th.dataset.endKey = s.endKey;
+                th.dataset.helpKey = 'groupBandDrag';
+            }
         }
         bandRow.appendChild(th);
     });
@@ -6049,9 +6130,9 @@ function renderColumnGroupBand(tableId) {
     // renders at 0 width either way, so there's no need to special-case it.
     const visualOrder = getVisualColumnOrder(state.config);
     const tableBandRow = state.table.tHead.querySelector('tr.data-table-group-band-table');
-    if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map(), null, state, true); // el color propio solo lo trae una clasificación registrada (setColumnClassMeta); las demás bandas de tabla siguen igual
+    if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map(), null, state, true, tableId); // el color propio solo lo trae una clasificación registrada (setColumnClassMeta); las demás bandas de tabla siguen igual
     const classBandRow = state.table.tHead.querySelector('tr.data-table-group-band-classification');
-    if (classBandRow) fillBandRow(classBandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending', state, true);
+    if (classBandRow) fillBandRow(classBandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending', state, true, tableId);
 }
 
 function wireModalDismiss(overlay, onClose) {

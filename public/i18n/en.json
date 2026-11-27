@@ -10654,6 +10654,10 @@
       "what": "In “Criterion”: a single rule that goes through a block of columns, left to right or the other way, and keeps the first one where the condition is met. It can put the name of that column, its value or a text. So you do not need one rule per column. “Has no value (empty or 0)” joins empty cells with those that are zero.",
       "example": "First month with consumption: from Jun-24 to Oct-26, the first column greater than 0 → “jun-24”"
     },
+    "groupBandDrag": {
+      "what": "Drag the name of a classification (the colored strip above the headers) and drop it before or after another column or another classification: all its columns move together, in the order they have. It is the same as dragging a column, but in one go. Pinned columns do not move.",
+      "example": "Drag “CHARGES YEAR 2025” before “CHARGES YEAR 2024”"
+    },
     "anRefresh": {
       "what": "Reloads the analysis with what exists today: the data of the records, the formulas and the added columns. ⟳ \"The most recent\" columns move to the newest load; the ones pointing to a specific load do not change. If there are pending column changes (adding, removing or changing), it saves them together before rebuilding. Versions already extracted never change.",
       "example": "Today's load arrived → Refresh"

@@ -10653,6 +10653,10 @@
       "what": "En «Criterio»: una sola regla que recorre un bloque de columnas, de izquierda a derecha o al revés, y se queda con la primera donde se cumple la condición. Puede poner el nombre de esa columna, su valor o un texto. Así no hace falta una regla por cada columna. «No tiene valor (vacío o 0)» junta las celdas vacías con las que valen cero.",
       "example": "Primer mes con consumo: de jun-24 a oct-26, la primera columna mayor que 0 → «jun-24»"
     },
+    "groupBandDrag": {
+      "what": "Arrastra el nombre de una clasificación (la franja de color sobre los encabezados) y suéltalo antes o después de otra columna o de otra clasificación: se mueven juntas todas sus columnas, en el orden que tienen. Es lo mismo que arrastrar una columna, pero de un jalón. Las columnas fijas no se mueven.",
+      "example": "Arrastrar «CARGOS AÑO 2025» antes de «CARGOS AÑO 2024»"
+    },
     "anRefresh": {
       "what": "Vuelve a cargar el análisis con lo que hay hoy: los datos de los registros, las fórmulas y las columnas agregadas. Las columnas ⟳ «La más reciente» pasan a la carga más nueva; las que apuntan a una carga concreta no cambian. Si hay cambios de columnas sin aplicar (agregar, quitar o cambiar), los guarda juntos antes de volver a armar. Las versiones ya extraídas no cambian nunca.",
       "example": "Llegó la carga de hoy → Actualizar"

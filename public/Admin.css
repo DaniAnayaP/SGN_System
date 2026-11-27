@@ -5089,6 +5089,9 @@ button.data-table-layout-item{
     cursor: pointer;
 }
 .data-table-layout-original{ display: flex; flex-direction: column; }
+/* una clasificación (la banda de arriba de los encabezados) se arrastra para mover todas sus columnas juntas */
+th.data-table-group-band-draggable{ cursor: grab; user-select: none; }
+th.data-table-group-band-draggable:active{ cursor: grabbing; }
 .data-table-layout-set{ color: var(--color-accent); font-weight: 600; }
 .data-table-layout-add{
     color: var(--color-accent);
