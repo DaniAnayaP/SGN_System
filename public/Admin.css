@@ -10311,7 +10311,7 @@ td.col-num{ text-align: right; font-variant-numeric: tabular-nums; white-space: 
 
 /* Registros Información: las tarjetas de registros, las pestañas y la ventana de carga */
 .data-table-wrapper.reg-busy{ opacity: 0.55; cursor: progress; transition: opacity 0.15s; }
-th.data-table-col-filter-loading{ cursor: progress; opacity: 0.6; }
+th.data-table-col-filter-loading, .filter-col-ctl.data-table-col-filter-loading{ cursor: progress; opacity: 0.6; }
 .reg-fx-modes{ display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.2rem 0 0.6rem; }
 .reg-fx-mode{ display: inline-flex; align-items: center; gap: 0.5rem; border: 1px solid var(--color-border, #e3d4e6); border-radius: 999px; padding: 0.35rem 1rem; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
 .reg-fx-mode-on{ background: var(--color-accent-soft, #f7d9f5); border-color: transparent; }
@@ -10522,11 +10522,11 @@ body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layou
 body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .an-head{ order: 1; }
 body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .reg-tabs{ order: 2; }
 body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .an-design{ order: 3; }
-body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-tools{ order: 4; flex: 1 1 22rem; }
-body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .an-file-toolbar{ order: 4; flex: 0 0 auto; border-bottom: 0; padding-bottom: 0; }
-body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-added-bar{ order: 5; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--color-border); }
-body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-selbar, body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-editpanel, body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-pending{ order: 6; }
-body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .filter-bar{ order: 7; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-added-bar{ order: 4; margin-top: 0.4rem; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .filter-bar{ order: 5; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-tools{ order: 6; flex: 1 1 22rem; margin-top: 0.5rem; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .an-file-toolbar{ order: 6; flex: 0 0 auto; border-bottom: 0; padding-bottom: 0; margin-top: 0.5rem; }
+body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-selbar, body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-editpanel, body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > #an-pending{ order: 7; }
 body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > .data-table-wrapper{ margin-top: 0.4rem; }
 body[data-active-page="cat-analisis-manuales-lista"] .page-content.an-file-layout > [hidden]{ display: none; }
 .an-addedchip{ display: inline-flex; align-items: stretch; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); overflow: hidden; }

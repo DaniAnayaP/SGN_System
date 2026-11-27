@@ -4907,6 +4907,20 @@ function registerServerFilteredTable(tableId, opts) {
     state.serverFilter = { onChange: opts.onChange, getValues: opts.getValues, lastKey: JSON.stringify(serverFilterSpec(state)), values: new Map(), pending: new Set(), timer: null };
 }
 // Las listas de valores guardadas ya no valen (llegaron datos nuevos): la próxima vez que se abra un filtro se vuelven a pedir.
+// Pide al servidor la lista de valores de una columna (todos los renglones) y la guarda; si falla se guarda «sin lista» para no pedirla en bucle (se vuelve a pedir cuando lleguen datos nuevos).
+// El campo del panel «Filtro» que no se tocó y no filtra vuelve a ser «Todos» sobre TODOS los valores, no solo los de los renglones dibujados.
+function fetchServerColumnValues(tableId, state, key) {
+    const sf = state.serverFilter;
+    sf.pending.add(key);
+    return Promise.resolve().then(() => sf.getValues(key))
+        .then((info) => { sf.values.set(key, { values: Array.isArray(info?.values) ? info.values : [], complete: info?.complete !== false }); })
+        .catch(() => { sf.values.set(key, { values: [], complete: false }); })
+        .finally(() => {
+            sf.pending.delete(key);
+            const draft = state.panelDrafts?.get(key);
+            if (draft && !draft.touched && !state.columnFilters.has(key)) draft.selected = new Set(getColumnDistinctValues(tableId, key));
+        });
+}
 function resetServerFilterValues(tableId) { dataTableColumnState.get(tableId)?.serverFilter?.values.clear(); }
 function applyServerColumnFilters(tableId, state) {
     const sf = state.serverFilter;
@@ -5200,12 +5214,9 @@ function openColumnFilterMenu(th, tableId, key) {
     if (sf && !sf.values.has(key)) {
         // los valores de esta columna salen del servidor (los de todo el registro, no los de las filas dibujadas): se piden antes de abrir el menú
         if (sf.pending.has(key)) return;
-        sf.pending.add(key);
         th.classList.add('data-table-col-filter-loading');
-        Promise.resolve().then(() => sf.getValues(key))
-            .then((info) => { sf.values.set(key, { values: Array.isArray(info?.values) ? info.values : [], complete: info?.complete !== false }); })
-            .catch(() => { sf.values.set(key, { values: [], complete: false }); })
-            .finally(() => { sf.pending.delete(key); th.classList.remove('data-table-col-filter-loading'); if (th.isConnected) openColumnFilterMenu(th, tableId, key); });
+        fetchServerColumnValues(tableId, state, key)
+            .finally(() => { th.classList.remove('data-table-col-filter-loading'); if (th.isConnected) openColumnFilterMenu(th, tableId, key); });
         return;
     }
     const distinctValues = getColumnDistinctValues(tableId, key);
@@ -9800,6 +9811,15 @@ function togglePanelFieldPopover(ctl, tableId, draft, onChange) {
     closePanelPopover();
     closeColumnFilterMenu();
     const state = dataTableColumnState.get(tableId);
+    const sf = state.serverFilter;
+    if (sf && !sf.values.has(draft.key)) {
+        // una tabla con filtros del servidor: la lista del campo son los valores de TODOS los renglones, no los dibujados; se piden antes de abrirla
+        if (sf.pending.has(draft.key)) return;
+        ctl.classList.add('data-table-col-filter-loading');
+        fetchServerColumnValues(tableId, state, draft.key)
+            .finally(() => { ctl.classList.remove('data-table-col-filter-loading'); if (ctl.isConnected) { onChange(); togglePanelFieldPopover(ctl, tableId, draft, onChange); } });
+        return;
+    }
     // Sin filtro puesto, "Todos" son los valores de HOY (pueden haber llegado nuevos).
     if (!draft.touched && !state.columnFilters.has(draft.key)) {
         draft.selected = new Set(getColumnDistinctValues(tableId, draft.key));
