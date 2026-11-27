@@ -680,12 +680,14 @@ function showTab(tab) {
     if (tab === 'loads') refreshLoads().then(() => window.dispatchEvent(new Event('resize')));
     else window.dispatchEvent(new Event('resize'));
 }
-// «Cargar registro» y «Descargar plantilla» (junto a las herramientas de la tabla de datos): del botón del árbol; el servidor también lo exige.
+// «Cargar registro», «Columnas del registro» y «Descargar plantilla» (Daniel, 2026-11-27: «en una sola fila»): van en la misma fila de las pestañas, a la derecha, y se ven en Datos y en Cargas.
+// Del botón del árbol; el servidor también lo exige. Se vuelven a armar cada vez (el registro puede haber cambiado de estado).
 function renderButtons() {
-    const toolbar = wrapperOf(DATA_TABLE)?.previousElementSibling;
-    if (!toolbar || !toolbar.classList.contains('data-table-zoom')) return;
+    const box = document.getElementById('reg-actions');
+    if (!box) return;
+    box.textContent = '';
     const reg = currentRegistry();
-    if (toolbar.querySelector('#reg-import-btn') || !(st.canTemplate || st.canExcel) || (reg && (reg.status !== 'active' || reg.obsolete))) return; // un obsoleto ya no recibe cargas
+    if (!(st.canTemplate || st.canExcel) || (reg && (reg.status !== 'active' || reg.obsolete))) return; // un obsoleto ya no recibe cargas
     const make = (id, icon, key, helpKey, onClick) => {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -696,11 +698,9 @@ function renderButtons() {
         btn.addEventListener('click', onClick);
         return btn;
     };
-    toolbar.classList.add('ven-toolbar');
-    if (!reg || reg.kind !== 'tabla') toolbar.prepend(make('reg-template-btn', 'bx-download', 'main.regTemplate', 'regTemplate', downloadTemplate)); // un registro libre no tiene plantilla: se carga tu propio Excel
-    const importBtn = make('reg-import-btn', 'bx-upload', 'main.regImport', 'regImport', openLoadModal);
-    toolbar.prepend(importBtn);
-    if (reg && reg.kind === 'tabla' && st.canExcel) importBtn.after(make('reg-columns-btn', 'bx-columns', 'main.regColsBtn', 'regColumnas', openFlexColumnsModal)); // las columnas que ya existen: nombre y clasificación
+    box.appendChild(make('reg-import-btn', 'bx-upload', 'main.regImport', 'regImport', openLoadModal));
+    if (!reg || reg.kind !== 'tabla') box.appendChild(make('reg-template-btn', 'bx-download', 'main.regTemplate', 'regTemplate', downloadTemplate)); // un registro libre no tiene plantilla: se carga tu propio Excel
+    if (reg && reg.kind === 'tabla' && st.canExcel) box.appendChild(make('reg-columns-btn', 'bx-columns', 'main.regColsBtn', 'regColumnas', openFlexColumnsModal)); // las columnas que ya existen: nombre y clasificación
 }
 function wireStatic() {
     document.querySelectorAll('[data-reg-tab]').forEach((btn) => btn.addEventListener('click', () => showTab(btn.dataset.regTab)));

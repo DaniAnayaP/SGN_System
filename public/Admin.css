@@ -10457,6 +10457,11 @@ th.data-table-col-filter-loading{ cursor: progress; opacity: 0.6; }
 .reg-updated[hidden]{ display: none; }
 .reg-updated .time-local{ display: inline; }
 .reg-updated .time-utc{ display: none; }
+/* «Cargar registro», «Columnas del registro» y «Descargar plantilla» en la fila de las pestañas, a la derecha (Daniel, 2026-11-27); la fecha de la última actualización se queda junto a las pestañas */
+.reg-row .reg-updated{ flex: 1 1 8rem; min-width: 0; white-space: normal; } /* la fecha cede espacio (se parte en dos renglones) para que pestañas y botones queden en una sola fila */
+.reg-actions{ display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; align-items: center; margin-left: auto; }
+.reg-actions:empty{ display: none; }
+.reg-actions .data-table-new-record-btn{ margin-right: 0; flex: 0 0 auto; white-space: nowrap; }
 .reg-tab{ border: 1px solid var(--color-border); border-radius: 1rem; padding: 0.25rem 0.95rem; background: var(--color-surface); color: inherit; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
 .reg-tab-on{ background: color-mix(in srgb, var(--color-accent) 18%, var(--color-surface)); border-color: transparent; }
 .reg-pill{ display: inline-block; border-radius: 1rem; padding: 0 0.6rem; font-size: 0.72rem; font-weight: 600; }
@@ -10590,7 +10595,9 @@ body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom[hidden]{
     body[data-active-page="cat-cargas-manuales-registros"] > main{ padding-left: 0.75rem; padding-right: 0.75rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .page-content{ padding-left: 0; padding-right: 0; }
     body[data-active-page="cat-cargas-manuales-registros"] .reg-row{ flex-direction: column; align-items: stretch; gap: 0.35rem; }
-    body[data-active-page="cat-cargas-manuales-registros"] .reg-updated{ text-align: center; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-updated{ text-align: center; flex: 0 0 auto; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-actions{ width: 100%; flex-wrap: nowrap; justify-content: stretch; gap: 0.5rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-actions .data-table-new-record-btn{ flex: 1 1 0; min-width: 0; justify-content: center; min-height: 2.6rem; line-height: 1.2; text-align: center; padding-inline: 0.5rem; white-space: normal; }
     body[data-active-page="cat-cargas-manuales-registros"] .reg-tabs{ gap: 0; padding: 3px; border-radius: 999px; background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface)); flex-wrap: nowrap; }
     body[data-active-page="cat-cargas-manuales-registros"] .reg-tab{ flex: 1; text-align: center; border: 0; background: transparent; padding-block: 0.4rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .reg-tab-on{ background: var(--color-surface); box-shadow: 0 1px 3px rgba(21, 24, 43, 0.18); }
