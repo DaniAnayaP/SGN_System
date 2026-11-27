@@ -10808,3 +10808,8 @@ td.an-cm:hover, td.an-cm:focus-visible{ background: color-mix(in srgb, var(--col
 .an-cm-item p{ margin: 0.15rem 0 0; font-size: 0.86rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .an-cm-text{ width: 100%; box-sizing: border-box; font: inherit; padding: 0.45rem 0.6rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 0.6rem; background: var(--color-surface); color: inherit; resize: vertical; }
 .an-cm-warn{ color: #b57a05; }
+
+/* Registros Información › carga de tabla libre: avisos de la llave (Daniel, 2026-11-27) */
+.reg-tb-keylost{ background: #fff5dc; box-shadow: inset 3px 0 0 #d9a21b; }
+.reg-tb-row .reg-fx-keywarn{ grid-column: 2 / -1; padding: 0.4rem 0.75rem; border-radius: 0.6rem; background: #fdecc8; color: #7a4d00; font-size: 0.82rem; }
+.reg-fx-keybanner, .reg-fx-mergedwarn{ margin: 0.5rem 0; padding: 0.55rem 0.8rem; border-radius: 0.7rem; background: #fdecc8; color: #7a4d00; font-size: 0.85rem; }

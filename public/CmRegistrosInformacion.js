@@ -968,6 +968,9 @@ function openFlexLoadModal() {
     const exMap = () => new Map(((s.info && s.info.existing) || []).map((e) => [e.name, e]));
     const hasExisting = () => !!(s.info && s.info.existing && s.info.existing.length);
     const colOf = (i) => s.cols.find((c) => String(c.i) === String(i));
+    // Una columna que era Llave en las cargas anteriores y en esta ya no lo es (se pone «No se carga» o pasa a Dato o Valor): renglones distintos pueden juntarse en uno (Daniel, 2026-11-27). Solo se avisa.
+    const wasKey = (c) => { if (c.wasKey) return true; const e = c.link ? exMap().get(c.link) : null; return !!(e && e.role === 'key'); };
+    const keyLost = (c) => s.mode === 'roles' && wasKey(c) && (c.st === 'skip' || (c.st === 'new' && c.role !== 'key'));
     // lo que de verdad se manda de una columna: lo ya definido si «ya existe», lo que se escribió si es nueva
     const effective = (c) => {
         if (s.mode === 'asis') return { name: c.name, role: 'data', agg: 'sum', stampName: true, cls: c.cls || '', color: c.cls ? s.classColors[foldCls(c.cls)] : null };
@@ -993,7 +996,8 @@ function openFlexLoadModal() {
         const isNewCol = roles && c.isNew && c.st === 'new';
         const nameInput = `<input type="text" class="reg-fx-name" data-fx-name="${c.i}" maxlength="60" value="${esc(c.name)}" placeholder="${esc(t('main.flexNamePh'))}" aria-label="${esc(t('main.flexColName'))}">`;
         const classEdit = `<span class="reg-tb-clsw">${classBox(c)}</span>`;
-        const cls = ['reg-tb-row', roles ? `reg-tb-${c.st}` : 'reg-tb-asis', isNewCol ? 'reg-tb-newcol' : '', pending ? 'reg-tb-pending' : ''].filter(Boolean).join(' ');
+        const lost = roles && keyLost(c);
+        const cls = ['reg-tb-row', roles ? `reg-tb-${c.st}` : 'reg-tb-asis', isNewCol ? 'reg-tb-newcol' : '', pending ? 'reg-tb-pending' : '', lost ? 'reg-tb-keylost' : ''].filter(Boolean).join(' ');
         const pick = `<div class="reg-tb-pick"><label class="reg-cd-pick"><input type="checkbox" data-fx-pick="${c.i}"${c.sel ? ' checked' : ''} aria-label="${esc(t('main.flexPick', { name: c.text }))}"></label></div>`;
         const colCell = `<div class="reg-tb-col"><b>${esc(c.text)}</b>${isNewCol ? `<span class="reg-fx-new">${esc(t('main.flexNewCol'))}</span>` : ''}<small>${c.example === undefined || c.example === null || c.example === '' ? '' : esc(c.example)}</small></div>`;
         if (!roles) return `<div class="${cls}">${pick}${colCell}<div class="reg-tb-name">${nameInput}</div><div class="reg-tb-cls">${classEdit}</div></div>`;
@@ -1016,7 +1020,8 @@ function openFlexLoadModal() {
             cl = classEdit;
         } else how = nm = cl = '<span class="reg-fx-dash">—</span>';
         const sug = pending ? `<div class="reg-cd-sug"><span>${esc(t('main.flexSugAsk', { name: c.sug }))}</span><button type="button" class="btn btn-secondary" data-fx-sug="yes" data-fx-for="${c.i}">${esc(t('main.flexSugYes'))}</button><button type="button" class="btn btn-secondary" data-fx-sug="no" data-fx-for="${c.i}">${esc(t('main.flexSugNo'))}</button></div>` : '';
-        return `<div class="${cls}">${pick}${colCell}${choice}<div class="reg-tb-how">${how}</div><div class="reg-tb-nm">${nm}</div><div class="reg-tb-cl">${cl}</div>${sug}</div>`;
+        const keyWarn = lost ? `<div class="reg-fx-keywarn" role="note">${esc(t('main.flexKeyLostRow'))}</div>` : '';
+        return `<div class="${cls}">${pick}${colCell}${choice}<div class="reg-tb-how">${how}</div><div class="reg-tb-nm">${nm}</div><div class="reg-tb-cl">${cl}</div>${sug}${keyWarn}</div>`;
     };
     const inView = (c) => s.view === 'all' || (s.mode === 'roles' && ((s.view === 'new' && c.st === 'new') || (s.view === 'skip' && c.st === 'skip')));
     const tableHtml = () => {
@@ -1035,11 +1040,13 @@ function openFlexLoadModal() {
         const nSel = s.cols.filter((c) => c.sel).length;
         const bulkBtn = (v, label) => `<button type="button" data-fx-bulk="${v}">${esc(label)}</button>`;
         const bulk = `<div class="reg-cd-bulk"><span class="reg-cd-bulk-n">${esc(t('main.flexBulkCount', { n: num(nSel) }))}</span><button type="button" class="reg-cd-link-btn" data-fx-bulk="all">${esc(t('main.flexBulkAll'))}</button><button type="button" class="reg-cd-link-btn" data-fx-bulk="none">${esc(t('main.flexBulkNone'))}</button>${nSel ? `<span class="reg-seg" role="group" aria-label="${esc(t('main.flexBulkTitle'))}">${roles ? `${bulkBtn('new', t('main.flexStNew'))}${bulkBtn('skip', t('main.flexStSkip'))}${['key', 'data', 'value'].map((r) => bulkBtn(`role:${r}`, t(`main.flexRole_${r}`))).join('')}` : ''}</span><span class="reg-cd-bulk-cls"><input type="text" id="fx-bulk-cls" list="fx-cls-list" maxlength="40" placeholder="${esc(t('main.flexClsNone'))}" aria-label="${esc(t('main.flexColClass'))}">${bulkBtn('cls', t('main.flexBulkApply'))}</span>` : ''}</div>`;
+        const lostKeys = roles ? s.cols.filter(keyLost) : [];
+        const keyBanner = lostKeys.length ? `<p class="reg-fx-keybanner" role="note"><b>${esc(t('main.flexKeyLostTitle'))}</b> ${esc(t('main.flexKeyLostText', { list: lostKeys.map((c) => `«${c.text}»`).join(', ') }))}</p>` : '';
         return `<h3 id="reg-i-title">${esc(t('main.flexImpTitle', { name: regName(reg) }))}</h3>
             <div class="reg-fx-modes" role="radiogroup" data-help-key="regFlexMode"><label class="reg-fx-mode${roles ? '' : ' reg-fx-mode-on'}"><input type="radio" name="fx-mode" value="asis"${roles ? '' : ' checked'}> <span>${esc(t('main.flexModeAsis'))}</span></label><label class="reg-fx-mode${roles ? ' reg-fx-mode-on' : ''}"><input type="radio" name="fx-mode" value="roles"${roles ? ' checked' : ''}> <span>${esc(t('main.flexModeRoles'))}</span></label></div>
             <p class="admin-hint">${esc(t('main.flexRead', { cols: info.headers.length, rows: num(info.rowsDeclared) }))}</p>
             ${info.sheets.length > 1 ? `<div class="reg-sheet"><label for="reg-i-sheet">${esc(t('main.regSheet'))}</label><select id="reg-i-sheet">${info.sheets.map((sh) => `<option value="${esc(sh.name)}"${sh.name === s.sheet ? ' selected' : ''}>${esc(sh.name)}</option>`).join('')}</select></div>` : ''}
-            ${pills}${views}${bulk}
+            ${pills}${views}${bulk}${keyBanner}
             <div class="wp-imp-table-wrap reg-cd-wrap" data-help-key="regFlexMap">${tableHtml()}</div>${classList()}
             <div class="reg-day" data-help-key="regFlexWhen"><label for="fx-day">${esc(t('main.flexWhen'))}</label><input type="date" id="fx-day" value="${esc(s.day)}" max="${esc(todayText)}"><input type="time" id="fx-time" value="${esc(s.time)}" aria-label="${esc(t('main.flexWhenTime'))}"></div>
             ${errBox()}<div class="admin-form-actions"><button type="button" class="btn" data-reg-i="review"${s.busy ? ' disabled' : ''}>${esc(t('main.regReview'))}</button><button type="button" class="btn btn-secondary" data-reg-i="again"${s.busy ? ' disabled' : ''}>${esc(t('main.regChooseAnother'))}</button><button type="button" class="btn btn-secondary" data-reg-i="cancel"${s.busy ? ' disabled' : ''}>${esc(t('main.regCancel'))}</button></div>`;
@@ -1063,9 +1070,11 @@ function openFlexLoadModal() {
             sum.blank ? pill('keep', t('main.flexSumBlank', { n: num(sum.blank) })) : '',
         ].join('');
         const issueRows = shown.map((i) => `<tr class="wp-imp-row wp-imp-row-${i.kind === 'error' ? 'error' : 'warn'}"><td class="wp-imp-num">${i.line}</td><td>${esc(i.column)}</td><td class="wp-imp-num">${i.file === undefined ? '' : esc(i.file)}</td><td class="wp-imp-num">${i.saved === undefined ? '' : esc(i.saved)}</td><td>${esc(t(`main.flexProb_${i.problem}`))}</td></tr>`).join('');
+        // Casi todos los renglones comparten la misma llave (Daniel, 2026-11-27): lo más probable es que la llave no distinga un renglón de otro. Solo se avisa.
+        const mergedWarn = roles && sum.merged >= 5 && sum.rowsInFile > 0 && sum.merged / sum.rowsInFile >= 0.5 ? `<p class="reg-fx-mergedwarn" role="alert"><b>${esc(t('main.flexMergedTitle'))}</b> ${esc(t('main.flexMergedText', { merged: num(sum.merged), rows: num(sum.rowsInFile), groups: num(sum.groups || (sum.rowsInFile - sum.merged)), back: t('main.flexBack') }))}</p>` : '';
         return `<h3 id="reg-i-title">${esc(s.file ? s.file.name : t('main.flexImpTitle', { name: regName(reg) }))}</h3>
             <p class="admin-hint">${esc(t('main.regRowsRead', { rows: num(sum.rowsInFile), sheet: sum.sheet || '' }))}</p>
-            <div class="wp-imp-sum" data-help-key="regPreview">${pills}</div>
+            <div class="wp-imp-sum" data-help-key="regPreview">${pills}</div>${mergedWarn}
             ${shown.length ? `<div class="wp-imp-table-wrap"><table class="wp-imp-table"><thead><tr><th>${esc(t('main.regIssueRow'))}</th><th>${esc(t('main.flexIssueCol'))}</th><th>${esc(t('main.regIssueFile'))}</th><th>${esc(t('main.regIssueSaved'))}</th><th>${esc(t('main.regIssueWhat'))}</th></tr></thead><tbody>${issueRows}</tbody></table></div>
             ${sum.issuesTotal > shown.length ? `<p class="admin-hint">${esc(t('main.regIssuesMore', { shown: shown.length, total: num(sum.issuesTotal) }))}</p>` : ''}` : ''}
             ${errBox()}<div class="admin-form-actions"><button type="button" class="btn" data-reg-i="load"${nothing || s.busy ? ' disabled' : ''}><i class="bx bx-upload" aria-hidden="true"></i> ${esc(nothing ? t('main.regLoadNothing') : t('main.regLoadGo'))}</button>
@@ -1124,7 +1133,7 @@ function openFlexLoadModal() {
             if (p && p.cls && Number.isInteger(p.color) && s.classColors[foldCls(p.cls)] === undefined) s.classColors[foldCls(p.cls)] = p.color;
             const c = { i: h.index, text: h.text, example: s.info.sample[0] ? s.info.sample[0].values[k] : '', st: 'new', link: '', sug: '', sugState: '', isNew: !!s.info.prevMode,
                 role: p && prevRoles ? p.role : (prevRoles && h.suggest.role === 'key' ? 'data' : h.suggest.role), agg: p && prevRoles && p.agg ? p.agg : h.suggest.agg, stampName: p && prevRoles ? p.stampName !== false : h.suggest.stampName !== false,
-                name: (p && p.name) || h.text, cls: (p && p.cls) || '' };
+                name: (p && p.name) || h.text, cls: (p && p.cls) || '', wasKey: !!(prevRoles && p && p.role === 'key') };
             if (prevRoles && p && p.role === 'skip') { c.st = 'skip'; c.isNew = false; c.role = h.suggest.role; c.name = h.text; }
             else if (prevRoles && p && known.has(p.name)) { c.st = 'exist'; c.link = p.name; c.isNew = false; }
             else if (prevRoles && p) c.isNew = false;
