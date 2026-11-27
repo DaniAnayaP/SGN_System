@@ -28,7 +28,7 @@ const regName = (r) => (r ? (r.name || t(r.nameKey)) : '');
 const colKeyOf = (key) => `an_${key}`;
 
 const params = new URLSearchParams(location.search);
-const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, sources: [], tab: params.get('tab') || '', extraction: null, data: null, text: '' };
+const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, sources: [], tab: params.get('tab') || '', extraction: null, data: null, text: '', selMode: false, sel: new Set(), bulkOpen: false, lastPick: -1, entries: [], leaving: false, refreshing: false };
 const wrapperOf = (id) => document.querySelector(`[data-table-id="${id}"]`);
 const tableOf = (id) => wrapperOf(id)?.querySelector('table.data-table');
 const registryByKey = (k) => st.registries.find((r) => r.key === k) || (st.sources || []).find((r) => r.key === k);
@@ -63,6 +63,7 @@ async function load() {
     st.analysis = body.analysis; st.registries = body.registries || []; st.extractions = body.extractions || [];
     st.canCreate = !!body.canCreate; st.canExtract = !!body.canExtract; st.canAnnul = !!body.canAnnul;
     st.design = JSON.parse(JSON.stringify(st.analysis.design));
+    restoreWork(); // los cambios de columnas que quedaron sin aplicar en esta pestaña
     try { st.sources = (await window.AnalysisKit.loadSources()).registries || []; } catch { st.sources = []; }
     renderHead();
 }
@@ -105,6 +106,7 @@ function showTab(tab) {
     if (verBar && verBar.classList.contains('data-table-zoom')) verBar.hidden = tab !== 'versions';
     const note = document.getElementById('an-truncated'); if (note) note.hidden = tab !== 'file';
     const addedBar = document.getElementById('an-added-bar'); if (addedBar && tab !== 'file') addedBar.hidden = true;
+    ['an-selbar', 'an-editpanel', 'an-pending'].forEach((id) => { const el = document.getElementById(id); if (el && tab !== 'file') el.hidden = true; });
     renderFileInfo();
     if (tab === 'design') renderDesign();
     else if (tab === 'file') loadFile();
@@ -310,16 +312,38 @@ document.addEventListener('click', async (event) => {
         try { await saveDesign(); renderHead(); renderDesign(); Dashboard.showToast(t('main.anSaved'), 'success'); } catch (err) { save.disabled = false; showError(errorText(err.body)); }
     } else if (go) extract();
 });
-function refreshAnalysis() {
-    const btn = document.querySelector('[data-an-refresh]');
-    if (btn) { if (btn.disabled) return; btn.disabled = true; btn.lastChild.textContent = ` ${t('main.anRefreshing')}`; }
+async function refreshAnalysis() {
+    if (st.refreshing) return;
+    st.refreshing = true;
+    const busy = (on) => document.querySelectorAll('[data-an-refresh]').forEach((btn) => { btn.disabled = on; const l = btn.querySelector('[data-an-refresh-label]'); if (l) l.textContent = on ? t('main.anRefreshing') : t(btn.closest('#an-pending') ? 'main.anPendGo' : 'main.anRefresh'); });
+    busy(true);
+    // los cambios de columnas sin aplicar se guardan juntos, una sola vez, y luego se arma todo
+    try { if (pendingInfo().total) await commitPending(); } catch (err) { st.refreshing = false; busy(false); Dashboard.showToast(errorText(err.body), 'error'); return; }
     try { sessionStorage.setItem('anRefreshed', String(st.id)); } catch { /* sin memoria del navegador: solo no sale el aviso */ }
     // se abre otra vez el análisis En vivo: el servidor arma todo de nuevo con los datos de hoy (como al guardar una columna agregada)
     const search = `?id=${st.id}&v=0&tab=file`;
+    st.leaving = true;
     if (location.search === search) location.reload(); else location.href = `CmAnalisis.html${search}`;
 }
 document.addEventListener('click', (event) => {
     if (event.target.closest('[data-an-refresh]')) { refreshAnalysis(); return; }
+    const q = (sel) => event.target.closest(sel);
+    if (q('[data-an-selmode],[data-an-pick],[data-an-selall],[data-an-selnone],[data-an-seldone],[data-an-bulkedit],[data-an-bulkclose],[data-an-bulkfmt],[data-an-bulkapply],[data-an-bulkremove],[data-an-undo],[data-an-discard]')) {
+        const m = document.querySelector('.an-addmenu'); if (m) m.hidden = true;
+        if (q('[data-an-selmode]')) { if (st.selMode) endSelection(); else { st.selMode = true; renderAddedBar(); } }
+        else if (q('[data-an-pick]')) toggleSel(q('[data-an-pick]').dataset.anPick, event.shiftKey);
+        else if (q('[data-an-selall]')) { (st.entries || []).forEach((e) => { if (e.status !== 'removed') st.sel.add(e.key); }); renderAddedBar(); }
+        else if (q('[data-an-selnone]')) { st.sel.clear(); st.bulkOpen = false; renderAddedBar(); }
+        else if (q('[data-an-seldone]')) endSelection();
+        else if (q('[data-an-bulkedit]')) { st.bulkOpen = !st.bulkOpen; renderAddedBar(); }
+        else if (q('[data-an-bulkclose]')) { st.bulkOpen = false; renderAddedBar(); }
+        else if (q('[data-an-bulkfmt]')) openBulkFormat(q('[data-an-bulkfmt]'));
+        else if (q('[data-an-bulkapply]')) applyBulk();
+        else if (q('[data-an-bulkremove]')) bulkRemove();
+        else if (q('[data-an-undo]')) stageUndo(q('[data-an-undo]').dataset.anUndo);
+        else if (q('[data-an-discard]')) discardPending();
+        return;
+    }
     const addCol = event.target.closest('[data-an-addcol]'); const addKind = event.target.closest('[data-an-addkind]'); const editCol = event.target.closest('[data-an-editcol]'); const delCol = event.target.closest('[data-an-delcol]');
     const menu = document.querySelector('.an-addmenu');
     if (menu) menu.hidden = addCol ? !menu.hidden : true; // «＋ Agregar columna» abre o cierra el menú; cualquier otro clic lo cierra
@@ -333,6 +357,7 @@ document.addEventListener('click', (event) => {
     else if (delCol) removeAdded(delCol.dataset.anDelcol);
 });
 document.addEventListener('change', (event) => {
+    if (event.target.id === 'an-bk-mode') { const input = document.getElementById('an-bk-cls'); if (input) { input.disabled = event.target.value !== 'set'; if (!input.disabled) input.focus(); } return; } // edición en grupo: solo «Poner…» deja escribir la clasificación
     const ref = event.target.closest('[data-an-ref]'); const filter = event.target.closest('[data-an-filter]');
     if (ref) { const set = new Set(st.design.reference); if (ref.checked) set.add(ref.dataset.anRef); else set.delete(ref.dataset.anRef); st.design.reference = DIMS.filter((d) => set.has(d)); setDirty(); }
     else if (filter) { readFilters(); setDirty(); }
@@ -367,7 +392,7 @@ const OPS_VALUE_ONLY = new Set(['logbase', 'round']);
 const foldCls = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
 // Clasificación de columnas (Daniel, 2026-11-26): el nombre lo escribe la persona y cada nombre lleva un color; columnas con el mismo nombre comparten color y banda en el Archivo.
 const FORMATS = ['general', 'int', 'dec1', 'dec2', 'money'];
-const classedList = () => [...((st.design && st.design.consulted) || []), ...((st.design && st.design.columns) || []), ...((st.analysis && st.analysis.design && st.analysis.design.added) || [])];
+const classedList = () => [...((st.design && st.design.consulted) || []), ...((st.design && st.design.columns) || []), ...((st.design && st.design.added) || [])];
 const classKnown = () => [...new Set(classedList().map((x) => x.cls).filter(Boolean))];
 const colorOfClass = (cls, skip) => {
     if (!cls) return null;
@@ -402,45 +427,321 @@ const fmtCell = (v, decimals) => {
 };
 const columnTitle = (c) => (c.group === 'reference' ? t(`main.regDim_${c.dim}`) : c.label);
 
-// la franja de arriba del Archivo: «＋ Agregar columna» y las columnas ya agregadas (un clic las edita; ✕ las quita)
+// ---- los cambios de columnas esperan al «Actualizar» (Daniel, 2026-11-27) --------------------------------------------------------------------------------------------------------
+// Agregar, quitar o cambiar una columna (o las columnas base) ya no vuelve a armar el análisis en cada cambio: queda como «cambio sin aplicar» sobre la copia de trabajo (st.design) y todo se guarda junto, una sola vez, al dar «Actualizar».
+// Lo guardado en el análisis es st.analysis.design; la tabla muestra lo último que se armó. Los cambios sin aplicar se recuerdan en esta pestaña (sessionStorage) por si se recarga la página.
+// Lo que solo cambia cómo se VE una columna (nombre, clasificación, formato) no espera: se guarda al momento (columns-meta y format/column) y no entra en los cambios sin aplicar.
+const canon = (v) => JSON.stringify(v, (k, val) => (val && typeof val === 'object' && !Array.isArray(val) ? Object.fromEntries(Object.keys(val).sort().map((x) => [x, val[x]])) : val));
+const sameJson = (a, b) => canon(a) === canon(b);
+const workLists = (d) => ({ columns: (d && d.columns) || [], added: (d && d.added) || [], base: (d && d.base) || [], dedupe: (d && d.dedupe) || 'sin' });
+const workKey = () => `anWork:${st.id}`;
+function pendingInfo() {
+    const saved = (st.analysis && st.analysis.design) || {}; const work = st.design || {};
+    const out = { removed: new Set(), isnew: new Set(), edited: new Set(), baseChanged: false, total: 0 };
+    [['f', 'columns'], ['a', 'added']].forEach(([p, field]) => {
+        const before = saved[field] || []; const after = work[field] || [];
+        const now = new Map(after.map((x) => [x.id, x]));
+        before.forEach((x) => { const y = now.get(x.id); if (!y) out.removed.add(`${p}:${x.id}`); else if (!sameJson(x, y)) out.edited.add(`${p}:${x.id}`); });
+        const had = new Set(before.map((x) => x.id));
+        after.forEach((x) => { if (!had.has(x.id)) out.isnew.add(`${p}:${x.id}`); });
+    });
+    out.baseChanged = !sameJson(saved.base || [], work.base || []) || (saved.dedupe || 'sin') !== (work.dedupe || 'sin');
+    out.total = out.removed.size + out.isnew.size + out.edited.size + (out.baseChanged ? 1 : 0);
+    return out;
+}
+function persistWork() {
+    try { if (pendingInfo().total) sessionStorage.setItem(workKey(), JSON.stringify({ saved: workLists(st.analysis.design), work: workLists(st.design) })); else sessionStorage.removeItem(workKey()); } catch { /* sin memoria del navegador: solo no se recuerdan al recargar */ }
+}
+function restoreWork() {
+    if (!st.canCreate || !st.design) return;
+    try {
+        const raw = sessionStorage.getItem(workKey()); if (!raw) return;
+        const o = JSON.parse(raw);
+        if (!sameJson(o.saved, workLists(st.analysis.design))) { sessionStorage.removeItem(workKey()); return; } // el análisis cambió desde entonces: esos cambios ya no aplican
+        Object.assign(st.design, o.work);
+    } catch { /* nada */ }
+}
+window.addEventListener('beforeunload', (event) => { if (!st.leaving && st.canCreate && st.analysis && pendingInfo().total) { event.preventDefault(); event.returnValue = ''; } }); // cambios sin aplicar: el navegador pregunta antes de salir
+function afterStage() { persistWork(); renderAddedBar(); }
+// Las fichas de la franja: primero las columnas de archivo (⊞) y luego las agregadas (ƒ, ?); las quitadas sin aplicar siguen en su lugar (con «deshacer») y las nuevas van al final de su grupo.
+function barEntries(live) {
+    const saved = st.analysis.design; const work = live ? st.design : st.analysis.design; const p = live ? pendingInfo() : null;
+    const out = [];
+    [['f', 'columns'], ['a', 'added']].forEach(([kind, field]) => {
+        const before = saved[field] || []; const after = work[field] || [];
+        const now = new Map(after.map((x) => [x.id, x]));
+        before.forEach((x) => { const key = `${kind}:${x.id}`; const y = now.get(x.id); out.push({ kind, id: x.id, key, item: y || x, status: !y ? 'removed' : (p && p.edited.has(key) ? 'edited' : 'saved') }); });
+        const had = new Set(before.map((x) => x.id));
+        after.forEach((x) => { if (!had.has(x.id)) out.push({ kind, id: x.id, key: `${kind}:${x.id}`, item: x, status: 'new' }); });
+    });
+    return out;
+}
+const entryByKey = (key) => (st.entries || []).find((e) => e.key === key);
+const entryLabel = (e) => (e.kind === 'f' ? e.item.label : e.item.name);
+function stageRemove(keys) {
+    const f = new Set(); const a = new Set();
+    keys.forEach((k) => { (k[0] === 'f' ? f : a).add(k.slice(2)); });
+    st.design.columns = (st.design.columns || []).filter((c) => !f.has(c.id));
+    st.design.added = (st.design.added || []).filter((x) => !a.has(x.id));
+    afterStage();
+}
+function stageUndo(key) {
+    const field = key[0] === 'f' ? 'columns' : 'added'; const id = key.slice(2);
+    const saved = st.analysis.design[field] || []; const idx = saved.findIndex((x) => x.id === id);
+    const list = st.design[field] || [];
+    if (idx < 0 || list.some((x) => x.id === id)) return;
+    let at = 0;
+    for (let i = idx - 1; i >= 0; i -= 1) { const j = list.findIndex((x) => x.id === saved[i].id); if (j >= 0) { at = j + 1; break; } } // vuelve a su lugar: después de la anterior que sigue ahí
+    list.splice(at, 0, JSON.parse(JSON.stringify(saved[idx])));
+    st.design[field] = list;
+    afterStage();
+}
+function discardPending() {
+    const saved = JSON.parse(JSON.stringify(workLists(st.analysis.design)));
+    Object.assign(st.design, saved);
+    st.sel.clear(); st.bulkOpen = false;
+    afterStage();
+}
+// Quitar una columna que usan fórmulas las deja vacías (#REF!): se avisa cuáles (las fórmulas que se quitan junto con ella no cuentan).
+async function confirmRemoval(keys) {
+    const gone = new Set(keys);
+    const keyOf = (k) => (k[0] === 'f' ? `c_${k.slice(2)}` : `a_${k.slice(2)}`);
+    const users = new Map();
+    (st.design.added || []).forEach((a) => {
+        if (gone.has(`a:${a.id}`)) return;
+        const json = JSON.stringify(a);
+        keys.forEach((k) => { if (json.includes(`"col":"${keyOf(k)}"`)) { if (!users.has(k)) users.set(k, []); users.get(k).push(a.name); } });
+    });
+    if (!users.size) return true;
+    const lines = [...users.entries()].map(([k, names]) => { const e = entryByKey(k); return t('main.anRemoveUsedLine', { name: e ? entryLabel(e) : k, users: names.join(', ') }); });
+    return Dashboard.confirm(`${lines.join(' ')} ${t('main.anRemoveUsedConfirm')}`);
+}
+async function removeFileColumn(id) { const k = `f:${id}`; if (await confirmRemoval([k])) stageRemove([k]); }
+async function removeAdded(id) { const k = `a:${id}`; if (await confirmRemoval([k])) stageRemove([k]); }
+async function saveAdded(list) { st.design.added = list; afterStage(); }
+async function saveColumns(columns, extra = {}) {
+    st.design.columns = columns;
+    if (extra.base) st.design.base = extra.base;
+    if (extra.dedupe) st.design.dedupe = extra.dedupe;
+    // el mismo nombre lleva el mismo color: también en las columnas de Operación y Criterio (antes lo hacía el servidor al guardar; ahora se guardan juntas al Actualizar)
+    if (extra.paint && extra.paint.cls) (st.design.added || []).forEach((a) => { if (a.cls && foldCls(a.cls) === foldCls(extra.paint.cls)) a.color = extra.paint.color; });
+    afterStage();
+}
+// «Actualizar»: guarda juntos los cambios sin aplicar (columnas y columnas base, luego las agregadas) y vuelve a abrir el análisis con todo.
+async function commitPending() {
+    const p = pendingInfo();
+    if (!p.total) return;
+    const saved = st.analysis.design; const work = st.design;
+    const send = async (path, body) => {
+        const res = await fetch(`${API}/${st.id}/${path}`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const out = await res.json().catch(() => ({}));
+        if (!res.ok) throw Object.assign(new Error('failed'), { body: out });
+        st.analysis = out.analysis;
+    };
+    if (p.baseChanged || !sameJson(saved.columns || [], work.columns || [])) await send('columns', { columns: work.columns || [], ...(p.baseChanged ? { base: work.base, dedupe: work.dedupe } : {}) });
+    if (!sameJson((st.analysis.design.added) || [], work.added || [])) await send('added', { added: work.added || [] });
+    st.design = JSON.parse(JSON.stringify(st.analysis.design));
+    persistWork();
+}
+// Los datos de una columna por su ficha: «f:ID» → c_ID, «a:ID» → a_ID.
+const dataKeyOfEntry = (key) => (key[0] === 'f' ? `c_${key.slice(2)}` : `a_${key.slice(2)}`);
+// Nombre y clasificación se guardan al momento (no hace falta «Actualizar»): items = [{ kind: 'f' | 'a', id, label?, cls?, color? }]
+async function saveMeta(items) {
+    const res = await fetch(`${API}/${st.id}/columns-meta`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error('failed'), { body: out });
+    st.analysis = out.analysis;
+    items.forEach((it) => { // la copia de trabajo solo toma nombre y clasificación: lo demás que esté sin aplicar se queda como estaba
+        const target = (it.kind === 'f' ? st.design.columns : st.design.added || []).find((x) => x.id === it.id);
+        if (!target) return;
+        if (it.label !== undefined) { if (it.kind === 'f') target.label = it.label; else target.name = it.label; }
+        if (it.cls !== undefined) { if (it.cls) { target.cls = it.cls; if (it.color !== undefined) target.color = it.color; } else { delete target.cls; delete target.color; } }
+    });
+    persistWork();
+}
+function reloadFile() { st.leaving = true; location.reload(); } // el motor de tablas no cambia el encabezado de una tabla ya iniciada: se vuelve a abrir (los cambios sin aplicar se recuerdan)
+// ---- seleccionar varias columnas para editarlas o quitarlas juntas (Daniel, 2026-11-27) ----
+function toggleSel(key, range) {
+    const list = (st.entries || []).filter((e) => e.status !== 'removed');
+    const at = list.findIndex((e) => e.key === key);
+    if (range && st.lastPick >= 0 && at >= 0) { for (let i = Math.min(st.lastPick, at); i <= Math.max(st.lastPick, at); i += 1) st.sel.add(list[i].key); } // Mayús + clic: de la última marcada hasta esta
+    else if (st.sel.has(key)) st.sel.delete(key); else st.sel.add(key);
+    st.lastPick = at;
+    renderAddedBar();
+}
+const selectedKeys = () => [...st.sel].filter((k) => { const e = entryByKey(k); return e && e.status !== 'removed'; });
+function endSelection() { st.selMode = false; st.sel.clear(); st.bulkOpen = false; st.lastPick = -1; renderAddedBar(); }
+function renderSelBar() {
+    const bar = document.getElementById('an-selbar'); const panel = document.getElementById('an-editpanel');
+    if (!bar || !panel) return;
+    const live = !!(st.extraction && st.extraction.live);
+    const on = st.selMode && st.canCreate && live && st.tab === 'file' && st.data;
+    const keys = on ? selectedKeys() : [];
+    bar.hidden = !on || !keys.length;
+    if (!bar.hidden) bar.innerHTML = `<span><b>${esc(t('main.anSelCount', { n: keys.length }))}</b></span><button type="button" class="btn btn-secondary" data-an-selall>${esc(t('main.anSelAll'))}</button><button type="button" class="btn btn-secondary" data-an-selnone>${esc(t('main.anSelNone'))}</button><span class="an-selbar-sp"></span><button type="button" class="btn btn-secondary" data-an-bulkedit><i class="bx bx-edit" aria-hidden="true"></i> ${esc(t('main.anBulkEdit', { n: keys.length }))}</button><button type="button" class="btn btn-secondary an-danger" data-an-bulkremove><i class="bx bx-trash" aria-hidden="true"></i> ${esc(t('main.anBulkRemove', { n: keys.length }))}</button><button type="button" class="btn btn-secondary" data-an-seldone>${esc(t('main.anSelDone'))}</button>`;
+    panel.hidden = !(on && st.bulkOpen && keys.length);
+    if (panel.hidden) { panel.innerHTML = ''; delete panel.dataset.keys; return; }
+    if (panel.dataset.keys === keys.join('|')) return; // el panel se arma una vez por selección: no se borra lo que se está escribiendo
+    panel.dataset.keys = keys.join('|');
+    const hasFile = keys.some((k) => k[0] === 'f');
+    const aggs = ['sum', 'avg', 'min', 'max', 'count', 'first'];
+    panel.innerHTML = `<h4>${esc(t('main.anBulkTitle', { n: keys.length }))}</h4>
+        <div class="an-f2">
+            <div><label for="an-bk-mode">${esc(t('main.anBulkCls'))}</label><div class="an-bk-row"><select id="an-bk-mode"><option value="keep">${esc(t('main.anBulkKeep'))}</option><option value="set">${esc(t('main.anBulkClsSet'))}</option><option value="none">${esc(t('main.anBulkClsNone'))}</option></select><input type="text" id="an-bk-cls" maxlength="40" autocomplete="off" list="an-bk-cls-list" placeholder="${esc(t('main.anBulkClsPh'))}" disabled><datalist id="an-bk-cls-list">${classKnown().map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div><small class="an-bk-note">${esc(t('main.anBulkNowNote'))}</small></div>
+            <div><label>${esc(t('main.anBulkFormat'))}</label><div><button type="button" class="btn btn-secondary" data-an-bulkfmt><i class="bx bx-slider-alt" aria-hidden="true"></i> ${esc(t('main.anBulkFormatBtn'))}</button></div><small class="an-bk-note">${esc(t('main.anBulkFmtNote'))}</small></div>
+            ${hasFile ? `<div><label for="an-bk-agg">${esc(t('main.anBulkAgg'))}</label><select id="an-bk-agg"><option value="">${esc(t('main.anBulkKeep'))}</option>${aggs.map((a) => `<option value="${a}">${esc(t(`main.an2Agg_${a}`))}</option>`).join('')}</select><small class="an-bk-note">${esc(t('main.anBulkWaitNote'))}</small></div>` : ''}
+        </div>
+        <div class="admin-form-actions"><button type="button" class="btn" data-an-bulkapply>${esc(t('main.anBulkApply'))}</button><button type="button" class="btn btn-secondary" data-an-bulkclose>${esc(t('main.regCancel'))}</button></div>`;
+}
+// El formato (número, celdas, encabezado) de varias columnas a la vez: el mismo cuadro del ⋮; cada cambio se aplica a todas las marcadas (solo lo que se toca, no borra el resto de cada una).
+function openBulkFormat(anchor) {
+    const keys = selectedKeys().map(dataKeyOfEntry).filter((k) => st.data && st.data.columns.some((c) => c.key === k));
+    if (!keys.length || !window.FlexFormat) return;
+    const FF = window.FlexFormat; let prev = {};
+    FF.openMenu({
+        anchor, title: t('main.anBulkFormatTitle', { n: keys.length }), note: t('main.anBulkFormatNote'), f: {},
+        onChange: (f) => {
+            const patch = {}; const clear = !Object.keys(f).length;
+            new Set([...Object.keys(prev), ...Object.keys(f)]).forEach((k) => { if (!sameJson(prev[k], f[k])) patch[k] = f[k]; });
+            prev = { ...f };
+            keys.forEach((dk) => { const col = st.data.columns.find((c) => c.key === dk); if (col) setColumnFormat(col, clear ? {} : { ...(col.ff || {}), ...patch }, clear ? null : patch); });
+            st.filePlan = fileCellPlan(st.data.columns);
+            keys.forEach((dk) => { const col = st.data.columns.find((c) => c.key === dk); const idx = st.data.columns.indexOf(col); FF.restyleColumn(tableOf(FILE_TABLE), { key: colKeyOf(dk), fmt: col.ff, num: !!(st.filePlan[idx] && st.filePlan[idx].numeric) }, lang()); });
+        },
+    });
+}
+// col.ff = formato nuevo (sin las llaves que se quitaron) y se guarda en el análisis
+function setColumnFormat(col, merged, patch) {
+    const FF = window.FlexFormat;
+    const next = { ...merged };
+    if (patch) Object.keys(patch).forEach((k) => { if (patch[k] === undefined || patch[k] === null) delete next[k]; });
+    if (FF.hasFormat(next)) col.ff = next; else delete col.ff;
+    saveFileFormat(col.key, next);
+}
+async function applyBulk() {
+    const keys = selectedKeys();
+    if (!keys.length) return;
+    const mode = (document.getElementById('an-bk-mode') || {}).value || 'keep';
+    const typed = ((document.getElementById('an-bk-cls') || {}).value || '').trim();
+    const agg = (document.getElementById('an-bk-agg') || {}).value || '';
+    if (mode === 'set' && !typed) { Dashboard.showToast(t('main.anBulkClsNeed'), 'error'); return; }
+    if (mode === 'keep' && !agg) { Dashboard.showToast(t('main.anBulkNothing'), 'info'); return; }
+    if (agg) { // cómo juntar los valores cambia los DATOS: espera al «Actualizar»
+        (st.design.columns || []).forEach((c) => { if (keys.includes(`f:${c.id}`)) c.agg = agg; });
+        afterStage();
+    }
+    if (mode !== 'keep') { // clasificación: no cambia datos, se guarda al momento
+        const items = keys.map((k) => {
+            const e = entryByKey(k);
+            return { kind: k[0], id: k.slice(2), cls: mode === 'set' ? typed : '', ...(mode === 'set' ? { color: colorOfClass(typed, e && e.item) } : {}) };
+        });
+        try { await saveMeta(items); } catch (err) { Dashboard.showToast(errorText(err.body), 'error'); return; }
+        reloadFile();
+        return;
+    }
+    st.bulkOpen = false; renderAddedBar();
+    Dashboard.showToast(t('main.anBulkDone', { n: keys.length }), 'success');
+}
+// ---- el menú ⋮ de un encabezado: además del formato, nombre, clasificación y de dónde sale (Daniel, 2026-11-27) ----
+function buildMetaExtra(col, menu) {
+    if (!st.canCreate || !(st.extraction && st.extraction.live) || col.group === 'reference') return null;
+    const isFile = col.group === 'consulted'; const kind = isFile ? 'f' : 'a'; const id = String(col.key).slice(2);
+    const item = (isFile ? st.design.columns : st.design.added || []).find((x) => x.id === id);
+    if (!item) return null;
+    const label = isFile ? item.label : item.name;
+    const wrap = document.createElement('div'); wrap.className = 'reg-fm-extra';
+    let src = '';
+    if (isFile) {
+        const live = (item.live || []).length ? `⟳ ${t('main.anMetaSourceLive')}` : '';
+        src = `<div class="reg-fm-g"><small>${esc(t('main.anMetaSource'))}</small><span class="an-meta-src">${esc(regName(registryByKey(item.registry)) || item.registry)}${live ? ` · ${esc(live)}` : ''}</span><button type="button" class="reg-fm-clear" data-meta="source">${esc(t('main.anMetaSourceBtn'))}</button></div>`;
+    }
+    wrap.innerHTML = `<div class="reg-fm-g"><small>${esc(t('main.anMetaName'))}</small><input type="text" maxlength="80" autocomplete="off" data-meta="label" value="${esc(label)}"></div>
+        <div class="reg-fm-g"><small>${esc(t('main.anMetaCls'))}</small><input type="text" maxlength="40" autocomplete="off" data-meta="cls" list="an-meta-cls-list" placeholder="${esc(t('main.anBulkClsNone'))}" value="${esc(item.cls || '')}"><datalist id="an-meta-cls-list">${classKnown().map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
+        <p class="reg-fm-note">${esc(t('main.anMetaNote'))}</p>${src}`;
+    let busy = false;
+    const commit = async () => {
+        if (busy) return;
+        const nextLabel = wrap.querySelector('[data-meta="label"]').value.trim(); const nextCls = wrap.querySelector('[data-meta="cls"]').value.trim();
+        if (nextLabel === label && nextCls === (item.cls || '')) return;
+        if (!nextLabel) { Dashboard.showToast(t('main.anErr_ADDED_NAME'), 'error'); wrap.querySelector('[data-meta="label"]').value = label; return; }
+        busy = true;
+        const it = { kind, id };
+        if (nextLabel !== label) it.label = nextLabel;
+        if (nextCls !== (item.cls || '')) { it.cls = nextCls; if (nextCls) it.color = colorOfClass(nextCls, item); }
+        try { await saveMeta([it]); reloadFile(); } catch (err) { busy = false; Dashboard.showToast(errorText(err.body), 'error'); }
+    };
+    wrap.addEventListener('change', (event) => { if (event.target.dataset.meta === 'label' || event.target.dataset.meta === 'cls') commit(); });
+    wrap.addEventListener('keydown', (event) => { if (event.key === 'Enter' && event.target.dataset && event.target.dataset.meta) { event.preventDefault(); commit(); } });
+    wrap.addEventListener('click', (event) => { if (event.target.closest('[data-meta="source"]')) { menu.close(); window.AnalysisPage.openFileColumn(id); } });
+    return wrap;
+}
+// la franja de arriba del Archivo: «＋ Agregar columna», «Seleccionar» y las columnas ya agregadas (un clic las edita; ✕ las quita; los cambios esperan al «Actualizar»)
 function renderAddedBar() {
     const bar = document.getElementById('an-added-bar');
     if (!bar) return;
-    const added = (st.analysis && st.analysis.design && st.analysis.design.added) || [];
-    if (st.tab !== 'file' || !st.extraction || !st.data) { bar.hidden = true; return; }
+    if (st.tab !== 'file' || !st.extraction || !st.data) { bar.hidden = true; renderSelBar(); renderPendingBar(); return; }
+    const live = !!(st.extraction && st.extraction.live);
+    const editable = st.canCreate && live;
     const cols = st.data.columns || [];
-    const fileCols = st.analysis.design.columns || [];
     const letterOfKey = (key) => { const i = cols.findIndex((c) => c.key === key); return i < 0 ? '' : columnLetter(i); };
-    bar.innerHTML = `${st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden>${st.extraction && st.extraction.live ? `<button type="button" data-an-addkind="file">${esc(t('main.an2KindFile'))}</button>` : ''}<button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button></span></span>` : ''}`
-        + fileCols.map((c) => `<span class="an-addedchip an-filechip"><button type="button" data-an-editfile="${esc(c.id)}" title="${esc(t('main.an2EditFileCol'))}"${st.canCreate && st.extraction.live ? '' : ' disabled'}>⊞ ${esc(c.label)} <small>${esc(letterOfKey(`c_${c.id}`))}</small></button>${st.canCreate && st.extraction.live ? `<button type="button" data-an-delfile="${esc(c.id)}" aria-label="${esc(t('main.an2RemoveFileCol'))}" title="${esc(t('main.an2RemoveFileCol'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</span>`).join('')
-        + added.map((a) => `<span class="an-addedchip"><button type="button" data-an-editcol="${esc(a.id)}" title="${esc(t('main.anAddedEditTitle'))}"${st.canCreate ? '' : ' disabled'}>${a.kind === 'criterion' ? '?' : 'ƒ'} ${esc(a.name)} <small>${esc(letterOfKey(`a_${a.id}`))}</small></button>${st.canCreate ? `<button type="button" data-an-delcol="${esc(a.id)}" aria-label="${esc(t('main.anAddedRemove'))}" title="${esc(t('main.anAddedRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</span>`).join('');
-    // «Actualizar» (Daniel, 2026-11-26): vuelve a cargar el análisis En vivo con lo que hay hoy (datos de los registros, fórmulas y columnas agregadas)
-    if (st.extraction && st.extraction.live) bar.insertAdjacentHTML('beforeend', `<button type="button" class="btn btn-secondary" data-an-refresh data-help-key="anRefresh"><i class="bx bx-refresh" aria-hidden="true"></i> ${esc(t('main.anRefresh'))}</button>`);
+    const entries = barEntries(live);
+    st.entries = entries;
+    const pick = !!(st.selMode && editable);
+    const pend = editable ? pendingInfo() : null;
+    const chip = (e) => {
+        const isFile = e.kind === 'f';
+        const letter = e.status === 'new' ? '' : letterOfKey(dataKeyOfEntry(e.key));
+        const icon = isFile ? '⊞' : (e.item.kind === 'criterion' ? '?' : 'ƒ');
+        const picked = pick && st.sel.has(e.key);
+        const cls = `an-addedchip${isFile ? ' an-filechip' : ''}${e.status !== 'saved' ? ` an-chip-${e.status}` : ''}${picked ? ' an-chip-picked' : ''}`;
+        const attr = pick ? `data-an-pick="${esc(e.key)}"` : (isFile ? `data-an-editfile="${esc(e.id)}"` : `data-an-editcol="${esc(e.id)}"`);
+        const title = pick ? t('main.anPickTitle') : t(isFile ? 'main.an2EditFileCol' : 'main.anAddedEditTitle');
+        const tag = e.status === 'new' ? `<span class="an-chip-tag">${esc(t('main.anChipNew'))}</span>` : (e.status === 'edited' ? `<span class="an-chip-tag">${esc(t('main.anChipEdited'))}</span>` : '');
+        const head = `<button type="button" ${attr} title="${esc(title)}"${editable && e.status !== 'removed' ? '' : ' disabled'}>${pick ? `<span class="an-chip-box" aria-hidden="true">${picked ? '☑' : '☐'}</span>` : ''}${icon} ${esc(entryLabel(e))} <small>${esc(letter)}</small></button>${tag}`;
+        let tail = '';
+        if (e.status === 'removed') tail = `<button type="button" class="an-chip-undo" data-an-undo="${esc(e.key)}">${esc(t('main.anChipUndo'))}</button>`;
+        else if (editable && !pick) tail = `<button type="button" ${isFile ? 'data-an-delfile' : 'data-an-delcol'}="${esc(e.id)}" aria-label="${esc(t(isFile ? 'main.an2RemoveFileCol' : 'main.anAddedRemove'))}" title="${esc(t(isFile ? 'main.an2RemoveFileCol' : 'main.anAddedRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button>`;
+        return `<span class="${cls}">${head}${tail}</span>`;
+    };
+    const addMenu = st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden>${live ? `<button type="button" data-an-addkind="file">${esc(t('main.an2KindFile'))}</button>` : ''}<button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button></span></span>` : '';
+    const selBtn = editable && entries.filter((e) => e.status !== 'removed').length > 1 ? `<button type="button" class="btn btn-secondary${st.selMode ? ' an-on' : ''}" data-an-selmode aria-pressed="${st.selMode ? 'true' : 'false'}" data-help-key="anSelect"><i class="bx bx-select-multiple" aria-hidden="true"></i> ${esc(t('main.anSelectBtn'))}</button>` : '';
+    bar.innerHTML = `${addMenu}${selBtn}${entries.map(chip).join('')}`;
+    // «Actualizar» (Daniel, 2026-11-26): vuelve a cargar el análisis En vivo con lo que hay hoy (datos de los registros, fórmulas, columnas agregadas y, desde 2026-11-27, los cambios sin aplicar)
+    if (live) bar.insertAdjacentHTML('beforeend', `<button type="button" class="btn btn-secondary" data-an-refresh data-help-key="anRefresh"><i class="bx bx-refresh" aria-hidden="true"></i> <span data-an-refresh-label>${esc(t('main.anRefresh'))}</span>${pend && pend.total ? ` <span class="an-badge">${pend.total}</span>` : ''}</button>`);
     if (st.canExtract && st.analysis.status === 'active') bar.insertAdjacentHTML('beforeend', `<button type="button" class="btn" data-an-extract data-help-key="anExtract"><i class="bx bx-export" aria-hidden="true"></i> ${esc(t('main.anExtract'))}</button>`);
     bar.hidden = false;
+    renderSelBar();
+    renderPendingBar();
 }
-async function saveAdded(list) {
-    const res = await fetch(`${API}/${st.id}/added`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ added: list }) });
-    const out = await res.json().catch(() => ({}));
-    if (!res.ok) throw Object.assign(new Error('failed'), { body: out });
-    st.analysis = out.analysis; st.design = JSON.parse(JSON.stringify(st.analysis.design));
-    // el motor de tablas no cambia las columnas de una tabla ya iniciada: se vuelve a abrir el Archivo con las columnas nuevas
-    location.href = `CmAnalisis.html?id=${st.id}&v=${st.extraction && !st.extraction.live ? st.extraction.id : 0}&tab=file`;
+function renderPendingBar() {
+    const el = document.getElementById('an-pending');
+    if (!el) return;
+    const on = st.canCreate && st.tab === 'file' && st.data && st.extraction && st.extraction.live;
+    const p = on ? pendingInfo() : null;
+    el.hidden = !p || !p.total;
+    if (el.hidden) { el.innerHTML = ''; return; }
+    const bits = [];
+    if (p.isnew.size) bits.push(t('main.anPendNew', { n: p.isnew.size }));
+    if (p.removed.size) bits.push(t('main.anPendRemoved', { n: p.removed.size }));
+    if (p.edited.size) bits.push(t('main.anPendEdited', { n: p.edited.size }));
+    if (p.baseChanged) bits.push(t('main.anPendBase'));
+    el.innerHTML = `<span><b>${esc(t('main.anPendTitle', { n: p.total }))}</b> ${esc(bits.join(' · '))}. ${esc(t('main.anPendNote'))}</span><span class="an-pending-sp"></span><button type="button" class="btn btn-secondary" data-an-discard>${esc(t('main.anPendDiscard'))}</button><button type="button" class="btn" data-an-refresh data-help-key="anPending"><i class="bx bx-refresh" aria-hidden="true"></i> <span data-an-refresh-label>${esc(t('main.anPendGo'))}</span></button>`;
 }
-async function removeAdded(id) {
-    const added = (st.analysis.design.added || []);
-    const col = added.find((a) => a.id === id);
-    if (!col) return;
-    if (!(await Dashboard.confirm(t('main.anAddedRemoveConfirm', { name: col.name })))) return;
-    try { await saveAdded(added.filter((a) => a.id !== id)); } catch (err) { Dashboard.showToast(errorText(err.body), 'error'); }
+async function bulkRemove() {
+    const keys = selectedKeys();
+    if (!keys.length) return;
+    if (!(await confirmRemoval(keys))) return;
+    stageRemove(keys);
+    st.sel.clear(); st.bulkOpen = false; renderAddedBar();
+    Dashboard.showToast(t('main.anBulkRemoved', { n: keys.length }), 'info');
 }
 function openAddedDialog(editId) {
     const allCols = (st.data && st.data.columns) || [];
-    const added = (st.analysis.design.added || []);
+    const added = (st.design.added || []);
     const editing = editId ? added.find((a) => a.id === editId) : null;
     if (editing && editing.kind === 'criterion') { openCriterionDialog(editId); return; }
     // las columnas que se pueden usar: las consultadas y las agregadas ANTES de esta (cada una con su letra de Excel)
-    const editAt = editing ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length;
+    const editAt = editing && allCols.some((c) => c.key === `a_${editing.id}`) ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length; // una columna agregada que aún no se arma (cambio sin aplicar) puede usar todas las que ya están
     const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), group: c.group })).filter((c, i) => c.group !== 'reference' && i < editAt);
     const newLetter = columnLetter(editing ? editAt : allCols.length);
     const toDraftStep = (s) => (s.op === 'start' || s.arg
@@ -542,7 +843,7 @@ function openAddedDialog(editId) {
             if (!def) return err(t('main.anErr_ADDED_STEPS'));
             if (!editing && added.length >= 40) return err(t('main.anErr_ADDED_TOO_MANY'));
             const next = editing ? added.map((a) => (a.id === editing.id ? def : a)) : [...added, { ...def, id: `a${Date.now().toString(36)}` }];
-            try { await saveAdded(next); } catch (e) { err(errorText(e.body)); }
+            try { await saveAdded(next); close(); } catch (e) { err(errorText(e.body)); }
         });
         if (!touchedName) setTimeout(() => $('#an-ad-name').focus(), 0);
     });
@@ -557,10 +858,10 @@ const numOf = (v) => { const s = String(v === null || v === undefined ? '' : v).
 
 function openCriterionDialog(editId) {
     const allCols = (st.data && st.data.columns) || [];
-    const added = (st.analysis.design.added || []);
+    const added = (st.design.added || []);
     const editing = editId ? added.find((a) => a.id === editId) : null;
     // las columnas que se pueden revisar: todas las del archivo y las agregadas ANTES de esta (cada una con su letra de Excel)
-    const editAt = editing ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length;
+    const editAt = editing && allCols.some((c) => c.key === `a_${editing.id}`) ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length; // una columna agregada que aún no se arma (cambio sin aplicar) puede usar todas las que ya están
     const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i) })).filter((c, i) => i < editAt);
     const newLetter = columnLetter(editing ? editAt : allCols.length);
     const blankRes = (type) => ({ type, text: '', value: '', col: pickable[0] ? pickable[0].key : '' });
@@ -709,7 +1010,7 @@ function openCriterionDialog(editId) {
             if (!def) return err(t('main.anErr_ADDED_RULES'));
             if (!editing && added.length >= 40) return err(t('main.anErr_ADDED_TOO_MANY'));
             const next = editing ? added.map((a) => (a.id === editing.id ? def : a)) : [...added, { ...def, id: `a${Date.now().toString(36)}` }];
-            try { await saveAdded(next); } catch (e) { err(errorText(e.body)); }
+            try { await saveAdded(next); close(); } catch (e) { err(errorText(e.body)); }
         });
         setTimeout(() => { if (!draft.name) $('#an-cr-name').focus(); }, 0);
     });
@@ -780,6 +1081,7 @@ function setupFileFormat(table, cols) {
                 title: t('main.fmtTitle', { name: current.label }),
                 note: t('main.fmtSaveNoteAn'),
                 f: current.ff,
+                extra: (menu) => buildMetaExtra(current, menu),
                 onChange: (f) => {
                     if (FF.hasFormat(f)) current.ff = { ...f }; else delete current.ff;
                     st.filePlan = fileCellPlan(st.data.columns); // los renglones que se dibujen después ya traen el formato nuevo
@@ -1022,16 +1324,5 @@ function openAnnul(e) {
 }
 
 // ---- lo que las ventanas «De un archivo» y «Columnas base» (AnArchivoDialog.js) usan de esta pantalla ----
-async function saveColumns(columns, extra = {}) {
-    const res = await fetch(`${API}/${st.id}/columns`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ columns, ...extra }) });
-    const out = await res.json().catch(() => ({}));
-    if (!res.ok) throw Object.assign(new Error('failed'), { body: out });
-    st.analysis = out.analysis; st.design = JSON.parse(JSON.stringify(st.analysis.design));
-    location.href = `CmAnalisis.html?id=${st.id}&v=0&tab=file`; // el motor de tablas no cambia las columnas de una tabla ya iniciada: se vuelve a abrir «En vivo» con las columnas nuevas
-}
-async function removeFileColumn(id) {
-    const cols = ((st.analysis.design && st.analysis.design.columns) || []).filter((c) => c.id !== id);
-    try { await saveColumns(cols); } catch (err) { Dashboard.showToast(errorText(err.body), 'error'); }
-}
 window.AnalysisPage = { st, t, esc, modal, regName, registryByKey, colorOfClass, classKnown, CLASS_COLORS, errorText, saveColumns, removeFileColumn, paintClass, kit: window.AnalysisKit };
 })();

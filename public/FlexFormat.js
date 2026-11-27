@@ -155,9 +155,10 @@
         };
         const swatches = (act, list, cur, label) => `<span class="reg-fm-sw"><span class="reg-fm-lab">${esc(label)}</span><button type="button" class="reg-fm-none" data-fm="${act}" data-v="" aria-pressed="${!cur}" title="${esc(T('main.fmtNone'))}" aria-label="${esc(T('main.fmtNone'))}"></button>${list.map((c) => `<button type="button" data-fm="${act}" data-v="${c}" style="background:${c}" aria-pressed="${cur === c}" aria-label="${c}"></button>`).join('')}<input type="color" data-fm="${act}-c" value="${cur || '#d96ecf'}" aria-label="${esc(T('main.fmtMoreColors'))}" title="${esc(T('main.fmtMoreColors'))}"></span>`;
         const toggle = (act, on, label, inner) => `<button type="button" class="reg-fm-ic" data-fm="${act}" aria-pressed="${on}" title="${esc(label)}" aria-label="${esc(label)}">${inner}</button>`;
+        const extraNode = opts.extra ? opts.extra({ close: closeMenu }) : null; // secciones propias de la pantalla (se arman una vez y se vuelven a poner en cada dibujo)
         const draw = () => {
             const f = state.f;
-            box.innerHTML = `<div class="reg-fm-head"><b>${esc(opts.title)}</b><button type="button" class="reg-fm-x" data-fm="close" aria-label="${esc(T('main.regCancel'))}">×</button></div>
+            box.innerHTML = `<div class="reg-fm-head"><b>${esc(opts.title)}</b><button type="button" class="reg-fm-x" data-fm="close" aria-label="${esc(T('main.regCancel'))}">×</button></div>${extraNode ? '<div data-fm-extra></div>' : ''}
             <div class="reg-fm-g"><small>${esc(T('main.fmtNumber'))}</small><div class="reg-fm-r"><select data-fm="nf" aria-label="${esc(T('main.fmtNumber'))}">${NUMBER_FORMATS.map((n) => `<option value="${n}"${(f.nf || 'general') === n ? ' selected' : ''}>${esc(T(`main.fmtNf_${n}`))}</option>`).join('')}</select>
                 ${toggle('dec-', false, T('main.fmtDecLess'), '−.0')}${toggle('dec+', false, T('main.fmtDecMore'), '+.0')}${toggle('miles', !!f.miles, T('main.fmtThousands'), '000')}</div></div>
             <div class="reg-fm-g"><small>${esc(T('main.fmtCells'))}</small><div class="reg-fm-r">${toggle('b', !!f.b, T('main.fmtBold'), '<b>N</b>')}${toggle('i', !!f.i, T('main.fmtItalic'), '<i>K</i>')}${toggle('u', !!f.u, T('main.fmtUnderline'), '<u>S</u>')}${toggle('bd', !!f.bd, T('main.fmtBorders'), '▦')}
@@ -166,6 +167,7 @@
             <div class="reg-fm-g"><small>${esc(T('main.fmtHeader'))}</small><div class="reg-fm-r">${toggle('hb', !!f.hb, T('main.fmtBold'), '<b>N</b>')}</div>
                 ${swatches('hfill', HFILLS, f.hfill, T('main.fmtHFill'))}${swatches('hink', HINKS, f.hink, T('main.fmtInk'))}</div>
             <div class="reg-fm-foot"><button type="button" class="reg-fm-clear" data-fm="clear">${esc(T('main.fmtClear'))}</button><span class="reg-fm-note">${esc(opts.note || T('main.fmtSaveNote'))}</span></div>`;
+            if (extraNode) { const slot = box.querySelector('[data-fm-extra]'); if (slot) slot.appendChild(extraNode); }
         };
         draw();
         // la posición: debajo del botón, sin salirse de la ventana

@@ -8040,6 +8040,35 @@ app.post('/api/business/manual-analyses/:id/export-xlsx', requireAuth, async (re
         return res.json({ key, ff: looks[key] || null });
     });
 });
+// Nombre y clasificación de columnas del Archivo (Daniel, 2026-11-27): lo que solo cambia cómo se VE una columna se guarda al momento, sin esperar al «Actualizar» ni tocar lo demás del diseño.
+// PUT { items: [{ kind: 'f' (columna de archivo) | 'a' (agregada), id, label?, cls?, color? }] }: cls '' quita la clasificación.
+app.put('/api/business/manual-analyses/:id/columns-meta', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    if (!anAbilities(req).canCreate) return anForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const items = Array.isArray(req.body && req.body.items) ? req.body.items.slice(0, 200) : [];
+    if (!items.length) return anFail(res, 'COL_NOT_FOUND', 400);
+    const current = anOut(analysis, req).design;
+    const columns = (current.columns || []).map((c) => ({ ...c }));
+    const added = (current.added || []).map((a) => ({ ...a }));
+    for (const it of items) {
+        const isFile = !it || it.kind !== 'a';
+        const target = (isFile ? columns : added).find((x) => x.id === (it && it.id));
+        if (!target) return anFail(res, 'COL_NOT_FOUND', 400);
+        if (it.label !== undefined) { if (isFile) target.label = String(it.label); else target.name = String(it.label); }
+        if (it.cls !== undefined) {
+            if (String(it.cls).trim()) { target.cls = String(it.cls); if (it.color !== undefined) target.color = it.color; } else { delete target.cls; delete target.color; }
+        }
+    }
+    const next = manualAnalyses.normalizeDesign({ ...current, legacy: false, columns, added }, anRegistryKeys(req));
+    if (next.error) return anFail(res, next.error);
+    const bad = anCheckDesign(req, next.design);
+    if (bad) return anFail(res, bad.error, 400, { field: bad.field });
+    const updated = updateAnalysis(analysis.id, clientId, isTestAccount, { design: next.design });
+    logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: updated.name, action: 'update', fieldKey: 'main.anColumnasNombreClasif', oldValue: '', newValue: String(items.length), changedBy: changedByLabel(req) });
+    res.json({ analysis: anOut(updated, req) });
+});
 app.put('/api/business/manual-analyses/:id/added', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
     if (!analysis) return;

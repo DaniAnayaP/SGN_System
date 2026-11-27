@@ -142,7 +142,7 @@ function openFileColumn(editId) {
     const html = `<h3>${esc(d.editing ? t('main.an2EditFileColTitle') : t('main.an2AddFileColTitle'))}</h3><div id="fd-body" class="an-fd"></div>
         <p class="admin-error" id="fd-error" role="alert" hidden></p>
         <div class="admin-form-actions"><button type="button" class="btn" data-an-go>${esc(d.editing ? t('main.an2Save') : t('main.anAddColumnFile'))}</button><button type="button" class="btn btn-secondary" data-an-close>${esc(t('main.regCancel'))}</button></div>`;
-    modal(html, (overlay) => {
+    modal(html, (overlay, close) => {
         overlay.querySelector('.exp-panel').classList.add('an-fd-panel');
         const host = overlay.querySelector('#fd-body');
         const err = (text) => { const el = overlay.querySelector('#fd-error'); el.textContent = text; el.hidden = !text; };
@@ -244,6 +244,7 @@ function openFileColumn(editId) {
                 const repaint = d.cls.trim() && d.colorTouched && kit.hasClassColor(d.color);
                 if (repaint) P.paintClass(d.cls.trim(), d.color);
                 await P.saveColumns(list, repaint ? { paint: { cls: d.cls.trim(), color: d.color } } : {});
+                close();
             } catch (e) { btn.disabled = false; err(P.errorText(e.body)); }
         });
     });
@@ -263,7 +264,7 @@ function openBase() {
         <div class="an-opts"><label class="an-opt"><input type="radio" name="bd-dedupe" value="sin"><span><b>${esc(t('main.an2NoDup'))}</b></span></label><label class="an-opt"><input type="radio" name="bd-dedupe" value="con"><span><b>${esc(t('main.an2Dup'))}</b><small>${esc(t('main.an2DupHint'))}</small></span></label></div>
         <p class="admin-error" id="bd-error" role="alert" hidden></p>
         <div class="admin-form-actions"><button type="button" class="btn" data-an-go>${esc(t('main.an2Save'))}</button><button type="button" class="btn btn-secondary" data-an-close>${esc(t('main.regCancel'))}</button></div>`;
-    modal(html, (overlay) => {
+    modal(html, (overlay, close) => {
         const labelOf = (key) => (all.find((c) => c.key === key) || {}).label || key;
         const err = (text) => { const el = overlay.querySelector('#bd-error'); el.textContent = text; el.hidden = !text; };
         overlay.querySelectorAll('input[name="bd-dedupe"]').forEach((r) => { r.checked = r.value === dedupe; r.addEventListener('change', () => { dedupe = r.value; }); });
@@ -286,7 +287,7 @@ function openBase() {
             const btn = event.currentTarget;
             if (!base.some((b) => b.key)) { err(t('main.an2NeedKey')); return; }
             btn.disabled = true; err('');
-            try { await P.saveColumns(design.columns || [], { base, dedupe }); } catch (e) { btn.disabled = false; err(P.errorText(e.body)); }
+            try { await P.saveColumns(design.columns || [], { base, dedupe }); close(); } catch (e) { btn.disabled = false; err(P.errorText(e.body)); }
         });
     });
 }
