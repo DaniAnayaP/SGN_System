@@ -5256,8 +5256,8 @@ function registryRowsCached(clientId, forTestAccount, registryKey) {
     return entry;
 }
 // Los valores distintos de UNA columna de la tabla de datos (los de TODO el registro, no los 2,000 dibujados), para la lista del filtro de esa columna. info = { column } o { period } (de manualRegistries.columnInfo, nunca de lo que
-// escribe el usuario). Si hay más de `limit` valores no se manda la lista (complete: false): ahí solo se ofrece escribir lo buscado.
-function registryColumnValues(clientId, forTestAccount, registryKey, info, limit = 150) {
+// escribe el usuario). Si hay más de `limit` (5,000) valores no se manda la lista (complete: false): ahí solo se ofrece escribir lo buscado.
+function registryColumnValues(clientId, forTestAccount, registryKey, info, limit = 5000) {
     const entry = registryRowsCached(clientId, forTestAccount, registryKey);
     const seen = new Set();
     if (info.period) {

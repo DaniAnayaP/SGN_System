@@ -11,7 +11,7 @@ const totalsCalc = require('./public/TotalsCalc.js');
 
 const PAGE = 2000;
 const CELL_BUDGET = 20000; // celdas (renglones x columnas) que se mandan para dibujar de una vez
-const DISTINCT_LIMIT = 150;
+const DISTINCT_LIMIT = 5000; // más valores distintos que esto: el filtro no ofrece la lista de casillas, solo escribir lo buscado (con 5,000 el menú abre en ~0.3 s)
 const MESSAGES = {
     FLEX_CONFIG: 'La elección de columnas no es válida.', FLEX_DUP_NAME: 'Dos columnas se llaman igual: cambia el nombre de una.', FLEX_NO_KEY: 'Elige al menos una columna como llave (va hacia abajo).',
     IMPORT_TOO_MANY_COLUMNS: 'El archivo trae demasiadas columnas.', IMPORT_STAMP: 'El día y la hora no son válidos.', BAD_FILTER: 'El filtro no es válido.', BAD_COLUMN: 'Esa columna no existe.', BAD_CALCS: 'Los cálculos de la fila de totales no son válidos.', FLEX_NO_NAME: 'La columna necesita un nombre.', FLEX_NAME_LOCKED: 'El nombre de una llave o de un dato no se puede cambiar.',

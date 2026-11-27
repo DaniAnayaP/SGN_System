@@ -15583,6 +15583,7 @@ function refreshColumnSearchGates() {
             if (!hasColumnSearchGrant(tableId, col, 'sort')) th.classList.remove('data-table-col-sortable');
             if (!hasColumnSearchGrant(tableId, col, 'reorder')) th.draggable = false;
         });
+        renderColumnGroupBand(tableId); // la banda de clasificación solo se arrastra si se pueden reordenar todas sus columnas
     });
 }
 

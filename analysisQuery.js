@@ -5,7 +5,7 @@
 // El filtro es el mismo de la pantalla de Registros (cf = { f: { columna: [valores] }, r: { columna: regla } }, ver flexRegistries.parseFilter) y trabaja con lo que trae cada celda (texto o número tal cual).
 const flex = require('./flexRegistries');
 
-const MAX_VALUES = 400; // como en Registros: una columna con más valores distintos no ofrece la lista de casillas, solo se escribe lo buscado
+const MAX_VALUES = 5000; // como en Registros: una columna con más valores distintos no ofrece la lista de casillas, solo se escribe lo buscado (con 5,000 el menú abre en ~0.3 s)
 
 // columns = las columnas con su llave (en el orden de los renglones). q = { cf, sort, dir }. Devuelve { filter, sortIdx, dir } o { error }.
 function parse(columns, q) {
