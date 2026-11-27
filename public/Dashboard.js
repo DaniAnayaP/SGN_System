@@ -3642,7 +3642,8 @@ function reconcileDataTableConfig(raw, columnKeys) {
 }
 
 // keepOnGrow (tablas con data-columns-grow="1"): si solo se SUMARON columnas (ninguna se fue), la personalización guardada se conserva y la columna nueva entra al final; con una columna que ya no existe se reinicia como siempre.
-function loadDataTableConfig(tableId, columnKeys, keepOnGrow = false) {
+// keepAlways (tablas con data-columns-keep="1", cuyas columnas tienen una clave estable: el Análisis, Daniel 2026-11-27 «debe respetar los cambios de diseño, ancho, columnas fijas…»): se conserva SIEMPRE; la columna que se fue sale del orden, de las fijas, de las ocultas y de los anchos, y las demás quedan como estaban.
+function loadDataTableConfig(tableId, columnKeys, keepOnGrow = false, keepAlways = false) {
     let stored = null;
     try {
         stored = JSON.parse(localStorage.getItem(dataTableConfigStorageKey(tableId)) || 'null');
@@ -3652,7 +3653,7 @@ function loadDataTableConfig(tableId, columnKeys, keepOnGrow = false) {
     if (stored && stored.signature !== dataTableColumnsSignature(columnKeys)) {
         const keySet = new Set(columnKeys);
         const onlyGrew = keepOnGrow && Array.isArray(stored.order) && stored.order.every((k) => keySet.has(k));
-        if (!onlyGrew) stored = null;
+        if (!onlyGrew && !keepAlways) stored = null;
     }
     return reconcileDataTableConfig(stored, columnKeys);
 }
@@ -5685,7 +5686,7 @@ function initDataTableColumns(wrapper, index) {
     // that call itself is what would populate it going forward. See
     // maybeApplyDefaultSavedLayout below.
     const hadNoStoredLayout = localStorage.getItem(dataTableConfigStorageKey(tableId)) == null;
-    const config = loadDataTableConfig(tableId, columnKeys, wrapper.dataset.columnsGrow === '1');
+    const config = loadDataTableConfig(tableId, columnKeys, wrapper.dataset.columnsGrow === '1', wrapper.dataset.columnsKeep === '1');
     const naturalWidths = measureNaturalColumnWidths(table);
     columnKeys.forEach((key) => {
         if (config.widths[key] == null) config.widths[key] = naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
