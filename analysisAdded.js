@@ -116,11 +116,12 @@ function normalizeAdded(raw) {
     const ids = new Set();
     for (const c of list) {
         if (!c || typeof c !== 'object') continue;
-        if (c.kind !== 'op' && c.kind !== 'criterion') return { error: 'ADDED_KIND' };
+        if (c.kind !== 'op' && c.kind !== 'criterion' && c.kind !== 'comment') return { error: 'ADDED_KIND' };
         const name = cleanText(c.name, MAX_NAME);
         if (!name) return { error: 'ADDED_NAME' };
         let body;
-        if (c.kind === 'op') {
+        if (c.kind === 'comment') body = {}; // «Comentarios» (2026-11-27): no se calcula, la persona la escribe renglón por renglón (analysis_comments)
+        else if (c.kind === 'op') {
             const steps = normalizeSteps(c.steps);
             if (!steps) return { error: 'ADDED_STEPS' };
             body = { steps };
@@ -136,7 +137,7 @@ function normalizeAdded(raw) {
         while (ids.has(id)) id += '_';
         ids.add(id);
         const cls = cleanText(c.cls, MAX_CLASS);
-        const decimals = Number.isInteger(c.decimals) && c.decimals >= 0 && c.decimals <= 6 ? c.decimals : null;
+        const decimals = c.kind !== 'comment' && Number.isInteger(c.decimals) && c.decimals >= 0 && c.decimals <= 6 ? c.decimals : null;
         added.push({ id, kind: c.kind, name, cls, color: cls ? normalizeClassColor(c.color) : null, decimals, ...body });
     }
     return { added };
@@ -295,8 +296,8 @@ function runCriterion(def, get) {
     }
     return def.otherwise ? resultOf(def.otherwise, get) : null;
 }
-const runColumn = (c, get) => (c.kind === 'criterion' ? runCriterion(c, get) : runSteps(c.steps, get));
-const formulaOfColumn = (c, letterOf) => (c.kind === 'criterion' ? formulaOfCriterion(c, letterOf) : formulaOfSteps(c.steps, letterOf));
+const runColumn = (c, get) => (c.kind === 'comment' ? null : (c.kind === 'criterion' ? runCriterion(c, get) : runSteps(c.steps, get))); // una columna de comentarios la llena el servidor con lo que se escribió
+const formulaOfColumn = (c, letterOf) => (c.kind === 'comment' ? '' : (c.kind === 'criterion' ? formulaOfCriterion(c, letterOf) : formulaOfSteps(c.steps, letterOf)));
 
 const addedKey = (c) => `a_${c.id}`;
 // Las columnas que se agregan al final del archivo: [{ key, group: 'added', id, kind, label, cls, color, decimals, formula }]

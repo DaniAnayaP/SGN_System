@@ -10787,3 +10787,17 @@ th.an-ref-key::after{ content: " ·"; opacity: 0.55; }
 .reg-fm-extra{ display: flex; flex-direction: column; gap: 0.45rem; padding-bottom: 0.6rem; margin-bottom: 0.5rem; border-bottom: 1px dashed color-mix(in srgb, var(--color-accent) 35%, transparent); }
 .reg-fm-extra input[type="text"]{ width: 100%; font: inherit; font-size: 0.82rem; padding: 0.3rem 0.5rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 0.45rem; background: var(--color-surface); color: inherit; }
 .an-meta-src{ font-size: 0.78rem; }
+
+/* Análisis: columna «Comentarios» (Daniel, 2026-11-27) */
+td.an-cm{ cursor: pointer; min-width: 14rem; max-width: 22rem; white-space: normal; }
+td.an-cm:hover, td.an-cm:focus-visible{ background: color-mix(in srgb, var(--color-accent) 9%, transparent); outline: none; }
+.an-cm-last{ display: inline-block; max-width: 17rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.an-cm-n{ display: inline-block; margin-left: 0.3rem; padding: 0 0.45rem; border-radius: 999px; background: color-mix(in srgb, var(--color-accent) 20%, var(--color-surface)); font-size: 0.68rem; font-weight: 700; vertical-align: middle; }
+.an-cm-add{ opacity: 0.55; font-size: 0.76rem; }
+.an-cm-list{ display: flex; flex-direction: column; gap: 0.5rem; max-height: 16rem; overflow: auto; margin: 0.3rem 0 0.7rem; }
+.an-cm-item{ border-left: 3px solid color-mix(in srgb, var(--color-accent) 55%, transparent); padding: 0.2rem 0.65rem; background: color-mix(in srgb, var(--color-accent) 7%, var(--color-surface)); border-radius: 0 0.5rem 0.5rem 0; }
+.an-cm-head{ display: flex; gap: 0.5rem; align-items: baseline; flex-wrap: wrap; font-size: 0.78rem; }
+.an-cm-head span{ opacity: 0.7; font-size: 0.72rem; }
+.an-cm-item p{ margin: 0.15rem 0 0; font-size: 0.86rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.an-cm-text{ width: 100%; box-sizing: border-box; font: inherit; padding: 0.45rem 0.6rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); border-radius: 0.6rem; background: var(--color-surface); color: inherit; resize: vertical; }
+.an-cm-warn{ color: #b57a05; }

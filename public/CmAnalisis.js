@@ -28,7 +28,7 @@ const regName = (r) => (r ? (r.name || t(r.nameKey)) : '');
 const colKeyOf = (key) => `an_${key}`;
 
 const params = new URLSearchParams(location.search);
-const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, sources: [], tab: params.get('tab') || '', extraction: null, data: null, text: '', selMode: false, sel: new Set(), bulkOpen: false, lastPick: -1, entries: [], leaving: false, refreshing: false, view: null, sortSpec: null, cf: null };
+const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, sources: [], tab: params.get('tab') || '', extraction: null, data: null, text: '', selMode: false, sel: new Set(), bulkOpen: false, lastPick: -1, entries: [], leaving: false, refreshing: false, view: null, sortSpec: null, cf: null, canComment: false };
 const wrapperOf = (id) => document.querySelector(`[data-table-id="${id}"]`);
 const tableOf = (id) => wrapperOf(id)?.querySelector('table.data-table');
 const registryByKey = (k) => st.registries.find((r) => r.key === k) || (st.sources || []).find((r) => r.key === k);
@@ -61,7 +61,7 @@ async function load() {
     if (!res.ok) throw new Error('load failed');
     const body = await res.json();
     st.analysis = body.analysis; st.registries = body.registries || []; st.extractions = body.extractions || [];
-    st.canCreate = !!body.canCreate; st.canExtract = !!body.canExtract; st.canAnnul = !!body.canAnnul;
+    st.canCreate = !!body.canCreate; st.canExtract = !!body.canExtract; st.canAnnul = !!body.canAnnul; st.canComment = !!body.canComment;
     st.design = JSON.parse(JSON.stringify(st.analysis.design));
     restoreWork(); // los cambios de columnas que quedaron sin aplicar en esta pestaña
     try { st.sources = (await window.AnalysisKit.loadSources()).registries || []; } catch { st.sources = []; }
@@ -327,6 +327,8 @@ async function refreshAnalysis() {
 }
 document.addEventListener('click', (event) => {
     if (event.target.closest('[data-an-refresh]')) { refreshAnalysis(); return; }
+    const cmCell = event.target.closest('td.an-cm');
+    if (cmCell && cmCell.closest(`[data-table-id="${FILE_TABLE}"]`)) { openCommentsPanel(cmCell); return; } // un clic en una celda de comentarios abre su lista
     const q = (sel) => event.target.closest(sel);
     if (q('[data-an-selmode],[data-an-pick],[data-an-selall],[data-an-selnone],[data-an-seldone],[data-an-bulkedit],[data-an-bulkclose],[data-an-bulkfmt],[data-an-bulkapply],[data-an-bulkremove],[data-an-undo],[data-an-discard]')) {
         const m = document.querySelector('.an-addmenu'); if (m) m.hidden = true;
@@ -352,10 +354,11 @@ document.addEventListener('click', (event) => {
     else if (editFile) window.AnalysisPage.openFileColumn(editFile.dataset.anEditfile);
     else if (delFile) window.AnalysisPage.removeFileColumn(delFile.dataset.anDelfile);
     else if (addKind && addKind.dataset.anAddkind === 'file') window.AnalysisPage.openFileColumn(null);
-    else if (addKind) { if (addKind.dataset.anAddkind === 'criterion') openCriterionDialog(null); else openAddedDialog(null); }
+    else if (addKind) { if (addKind.dataset.anAddkind === 'criterion') openCriterionDialog(null); else if (addKind.dataset.anAddkind === 'comment') openCommentColumnDialog(null); else openAddedDialog(null); }
     else if (editCol) openAddedDialog(editCol.dataset.anEditcol);
     else if (delCol) removeAdded(delCol.dataset.anDelcol);
 });
+document.addEventListener('keydown', (event) => { if (event.key === 'Enter' && event.target.matches && event.target.matches('td.an-cm') && event.target.closest(`[data-table-id="${FILE_TABLE}"]`)) openCommentsPanel(event.target); });
 document.addEventListener('change', (event) => {
     if (event.target.id === 'an-bk-mode') { const input = document.getElementById('an-bk-cls'); if (input) { input.disabled = event.target.value !== 'set'; if (!input.disabled) input.focus(); } return; } // edición en grupo: solo «Poner…» deja escribir la clasificación
     const ref = event.target.closest('[data-an-ref]'); const filter = event.target.closest('[data-an-filter]');
@@ -691,7 +694,7 @@ function renderAddedBar() {
     const chip = (e) => {
         const isFile = e.kind === 'f';
         const letter = e.status === 'new' ? '' : letterOfKey(dataKeyOfEntry(e.key));
-        const icon = isFile ? '⊞' : (e.item.kind === 'criterion' ? '?' : 'ƒ');
+        const icon = isFile ? '⊞' : (e.item.kind === 'criterion' ? '?' : (e.item.kind === 'comment' ? '✎' : 'ƒ'));
         const picked = pick && st.sel.has(e.key);
         const cls = `an-addedchip${isFile ? ' an-filechip' : ''}${e.status !== 'saved' ? ` an-chip-${e.status}` : ''}${picked ? ' an-chip-picked' : ''}`;
         const attr = pick ? `data-an-pick="${esc(e.key)}"` : (isFile ? `data-an-editfile="${esc(e.id)}"` : `data-an-editcol="${esc(e.id)}"`);
@@ -703,7 +706,7 @@ function renderAddedBar() {
         else if (editable && !pick) tail = `<button type="button" ${isFile ? 'data-an-delfile' : 'data-an-delcol'}="${esc(e.id)}" aria-label="${esc(t(isFile ? 'main.an2RemoveFileCol' : 'main.anAddedRemove'))}" title="${esc(t(isFile ? 'main.an2RemoveFileCol' : 'main.anAddedRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button>`;
         return `<span class="${cls}">${head}${tail}</span>`;
     };
-    const addMenu = st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden>${live ? `<button type="button" data-an-addkind="file">${esc(t('main.an2KindFile'))}</button>` : ''}<button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button></span></span>` : '';
+    const addMenu = st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden>${live ? `<button type="button" data-an-addkind="file">${esc(t('main.an2KindFile'))}</button>` : ''}<button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button><button type="button" data-an-addkind="comment" data-help-key="anComentarios">${esc(t('main.anAddKindComment'))}</button></span></span>` : '';
     const selBtn = editable && entries.filter((e) => e.status !== 'removed').length > 1 ? `<button type="button" class="btn btn-secondary${st.selMode ? ' an-on' : ''}" data-an-selmode aria-pressed="${st.selMode ? 'true' : 'false'}" data-help-key="anSelect"><i class="bx bx-select-multiple" aria-hidden="true"></i> ${esc(t('main.anSelectBtn'))}</button>` : '';
     bar.innerHTML = `${addMenu}${selBtn}${entries.map(chip).join('')}`;
     // «Actualizar» (Daniel, 2026-11-26): vuelve a cargar el análisis En vivo con lo que hay hoy (datos de los registros, fórmulas, columnas agregadas y, desde 2026-11-27, los cambios sin aplicar)
@@ -740,9 +743,10 @@ function openAddedDialog(editId) {
     const added = (st.design.added || []);
     const editing = editId ? added.find((a) => a.id === editId) : null;
     if (editing && editing.kind === 'criterion') { openCriterionDialog(editId); return; }
+    if (editing && editing.kind === 'comment') { openCommentColumnDialog(editId); return; }
     // las columnas que se pueden usar: las consultadas y las agregadas ANTES de esta (cada una con su letra de Excel)
     const editAt = editing && allCols.some((c) => c.key === `a_${editing.id}`) ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length; // una columna agregada que aún no se arma (cambio sin aplicar) puede usar todas las que ya están
-    const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), group: c.group })).filter((c, i) => c.group !== 'reference' && i < editAt);
+    const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), group: c.group })).filter((c, i) => c.group !== 'reference' && c.kind !== 'comment' && i < editAt); // una columna de comentarios no entra en una fórmula
     const newLetter = columnLetter(editing ? editAt : allCols.length);
     const toDraftStep = (s) => (s.op === 'start' || s.arg
         ? { op: s.op, kind: s.arg && s.arg.col !== undefined ? 'col' : 'value', col: s.arg && s.arg.col !== undefined ? s.arg.col : '', value: s.arg && s.arg.value !== undefined ? String(s.arg.value) : '' }
@@ -862,7 +866,7 @@ function openCriterionDialog(editId) {
     const editing = editId ? added.find((a) => a.id === editId) : null;
     // las columnas que se pueden revisar: todas las del archivo y las agregadas ANTES de esta (cada una con su letra de Excel)
     const editAt = editing && allCols.some((c) => c.key === `a_${editing.id}`) ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length; // una columna agregada que aún no se arma (cambio sin aplicar) puede usar todas las que ya están
-    const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i) })).filter((c, i) => i < editAt);
+    const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), kind: c.kind })).filter((c, i) => c.kind !== 'comment' && i < editAt);
     const newLetter = columnLetter(editing ? editAt : allCols.length);
     const blankRes = (type) => ({ type, text: '', value: '', col: pickable[0] ? pickable[0].key : '' });
     const fromResult = (r) => {
@@ -1115,10 +1119,14 @@ function buildAnalysisXlsx({ columns, trs }) {
     const rows = trs.map((tr) => { const row = st.data.rows[Number(tr.dataset.r)] || []; return idx.map((i) => (row[i] === undefined ? null : row[i])); });
     if (fullDownloadApplies()) {
         Dashboard.showToast(t('main.downloadFullPreparing'), 'info');
-        return { url: `${API}/${st.id}/export-xlsx`, body: { full: true, v: st.extraction && !st.extraction.live ? st.extraction.id : 0, text: st.text || '', keys: idx.map((i) => defs[i].key) } };
+        return { url: `${API}/${st.id}/export-xlsx`, body: { full: true, v: st.extraction && !st.extraction.live ? st.extraction.id : 0, text: st.text || '', keys: idx.map((i) => defs[i].key), tz: new Date().getTimezoneOffset() } };
     }
+    // las columnas de comentarios: el Excel lleva todos los comentarios de cada renglón (el servidor los arma con la llave del renglón)
+    const commentCols = [];
+    idx.forEach((i, pos) => { if (defs[i].kind === 'comment') commentCols.push({ at: pos, col: defs[i].id }); });
+    const commentExtra = commentCols.length ? { commentCols, rowKeys: trs.map((tr) => (st.data.keys || [])[Number(tr.dataset.r)] || ''), v: st.extraction && !st.extraction.live ? st.extraction.id : 0, tz: new Date().getTimezoneOffset() } : {};
     const labelOf = (c) => c.label || (c.dim ? t(`main.regDim_${c.dim}`) : c.key);
-    return { url: `${API}/${st.id}/export-xlsx`, body: { columns: idx.map((i) => ({ label: labelOf(defs[i]), ff: defs[i].ff || null, fmt: defs[i].fmt || '', style: defs[i].style || null, decimals: Number.isInteger(defs[i].decimals) ? defs[i].decimals : null })), rows } };
+    return { url: `${API}/${st.id}/export-xlsx`, body: { columns: idx.map((i) => ({ label: labelOf(defs[i]), ff: defs[i].ff || null, fmt: defs[i].fmt || '', style: defs[i].style || null, decimals: Number.isInteger(defs[i].decimals) ? defs[i].decimals : null })), rows, ...commentExtra } };
 }
 function ensureEmpty(tableId, span, key) {
     const tbody = tableOf(tableId).tBodies[0];
@@ -1138,7 +1146,7 @@ function fileCellPlan(cols) {
     return cols.map((c, i) => {
         const key = esc(colKeyOf(c.key));
         let cls = 'an-ref'; let fmt = (v) => v;
-        if (c.group === 'added') { cls = c.kind === 'criterion' ? 'an-added' : 'an-added col-num'; fmt = (v) => (v === null ? '' : fmtCell(v, c.decimals)); }
+        if (c.group === 'added') { cls = c.kind === 'criterion' || c.kind === 'comment' ? `an-added${c.kind === 'comment' ? ' an-cm' : ''}` : 'an-added col-num'; fmt = (v) => (v === null ? '' : fmtCell(v, c.decimals)); }
         else if (c.group !== 'reference') { cls = 'an-cons col-num'; fmt = (v) => (v === null ? '' : window.AnalysisKit.fmtValue(v, c.fmt, c.pat)); }
         const look = c.group === 'consulted' && c.style ? window.AnalysisKit.lookCss(c.style).cell : null; // el aspecto va en cada celda: los renglones que se dibujan después también lo traen
         let style = look && Object.keys(look).length ? ` style="${esc(Object.entries(look).map(([k, v]) => `${k}:${v}`).join(';'))}"` : '';
@@ -1152,7 +1160,7 @@ function fileCellPlan(cols) {
             const css = FF.cellCss(ff);
             if (css) style = ` style="${esc(`${look && Object.keys(look).length ? `${Object.entries(look).map(([k, v]) => `${k}:${v}`).join(';')};` : ''}${css}`)}"`;
         }
-        return { i, key, cls, fmt, style, ff: !!ff, numeric };
+        return { i, key, cls, fmt, style, ff: !!ff, numeric, comment: c.group === 'added' && c.kind === 'comment', dataKey: c.key };
     });
 }
 function fileRowsHtml(from, to) {
@@ -1162,6 +1170,7 @@ function fileRowsHtml(from, to) {
         let tr = `<tr data-r="${at}">`; // el número del renglón de los datos: la descarga con formato toma de ahí el valor de cada celda
         for (let k = 0; k < plan.length; k += 1) {
             const p = plan[k]; const raw = row[p.i]; const v = p.fmt(raw);
+            if (p.comment) { tr += commentCellHtml(p, at, raw); continue; } // la columna de comentarios: el último comentario y cuántos hay
             // el número tal cual (data-v) para poder volver a darle formato sin recargar; con formato, también para ordenar por el número y no por el texto
             const extra = typeof raw === 'number' ? ` data-v="${raw}"${p.ff ? ` data-sort-value="${raw}"` : ''}` : '';
             tr += `<td data-col="${p.key}" class="${p.cls}"${p.style}${extra}>${v === null || v === undefined || v === '' ? '—' : esc(String(v))}</td>`;
@@ -1258,6 +1267,110 @@ async function fileColumnValues(key) {
     for (let r = 0; r < st.data.rows.length; r += 1) { seen.add(cellText(r, at)); if (seen.size > FILTER_VALUE_LIMIT) return { values: [], complete: false }; }
     return { values: [...seen].sort((a, b) => a.localeCompare(b, lang() === 'en' ? 'en' : 'es', { numeric: true, sensitivity: 'base' })), complete: true };
 }
+// ---- columna «Comentarios» (Daniel, 2026-11-27): la lista de comentarios de cada renglón, con fecha y autor; escribe quien tenga el permiso del árbol; una versión trae los de su momento ----
+const canWriteComments = () => !!(st.canComment && st.extraction && st.extraction.live && st.analysis && st.analysis.status === 'active');
+function commentInner(n, last) {
+    if (n) return `<span class="an-cm-last">${esc(String(last === null || last === undefined ? '' : last))}</span><span class="an-cm-n" title="${esc(t('main.anCmCount', { n }))}">${n}</span>`;
+    return canWriteComments() ? `<span class="an-cm-add">＋ ${esc(t('main.anCmAdd'))}</span>` : '—';
+}
+function commentCellHtml(p, at, raw) {
+    const n = ((st.data.cm || {})[p.dataKey] || { n: [] }).n[at] || 0;
+    return `<td data-col="${p.key}" class="${p.cls}" tabindex="0">${commentInner(n, raw)}</td>`;
+}
+const rowKeyAt = (r) => (st.data && st.data.keys ? st.data.keys[r] : '') || '';
+function rowTitleAt(r) {
+    const parts = [];
+    st.data.columns.forEach((c, i) => { if (c.group === 'reference' && c.isKey) { const v = st.data.rows[r][i]; if (v !== null && v !== undefined && v !== '') parts.push(String(v)); } });
+    return parts.join(' · ');
+}
+function openCommentsPanel(td) {
+    const tr = td.closest('tr'); const r = Number(tr && tr.dataset.r);
+    if (!st.data || !Number.isInteger(r)) return;
+    const dataKey = String(td.dataset.col || '').replace(/^an_/, '');
+    const id = dataKey.slice(2); const key = rowKeyAt(r);
+    if (!key) return;
+    const live = !!(st.extraction && st.extraction.live);
+    const canWrite = canWriteComments();
+    const colAt = st.data.columns.findIndex((c) => c.key === dataKey);
+    const colDef = st.data.columns[colAt];
+    const html = `<h3>${esc(colDef ? colDef.label : '')} · ${esc(rowTitleAt(r))}</h3>
+        <div class="an-cm-list" id="an-cm-list" aria-live="polite"><p class="admin-hint">${esc(t('main.anCmLoading'))}</p></div>
+        ${canWrite ? `<textarea id="an-cm-text" class="an-cm-text" maxlength="1000" rows="3" placeholder="${esc(t('main.anCmPlaceholder'))}" aria-label="${esc(t('main.anCmPlaceholder'))}"></textarea><p class="admin-hint">${esc(t('main.anCmNote'))}</p>`
+            : `<p class="admin-hint">${esc(!live ? t('main.anCmVersionNote') : (!st.canComment ? t('main.anCmNoPermission') : t('main.anCmInactiveNote')))}</p>`}
+        <p class="admin-error" id="an-cm-error" role="alert" hidden></p>
+        <div class="admin-form-actions">${canWrite ? `<button type="button" class="btn" data-an-cmadd>${esc(t('main.anCmAddBtn'))}</button>` : ''}<button type="button" class="btn btn-secondary" data-an-close>${esc(t('main.anCmClose'))}</button></div>`;
+    modal(html, async (overlay) => {
+        const list = overlay.querySelector('#an-cm-list');
+        const drawList = (comments) => {
+            list.innerHTML = '';
+            if (!comments.length) { const p = document.createElement('p'); p.className = 'admin-hint'; p.textContent = t('main.anCmEmpty'); list.appendChild(p); return; }
+            comments.forEach((c) => {
+                const item = document.createElement('div'); item.className = 'an-cm-item';
+                const head = document.createElement('div'); head.className = 'an-cm-head';
+                const who = document.createElement('b'); who.textContent = c.by || '—';
+                const when = document.createElement('span'); if (c.at) Dashboard.renderTimeStamp(when, c.at); // la hora se guarda en UTC y se ve en la hora de quien mira
+                head.append(who, when);
+                const body = document.createElement('p'); body.textContent = c.t;
+                item.append(head, body); list.appendChild(item);
+            });
+            list.scrollTop = list.scrollHeight;
+        };
+        const showError = (text) => { const el = overlay.querySelector('#an-cm-error'); el.textContent = text; el.hidden = !text; };
+        try {
+            const res = await fetch(`${API}/${st.id}/comments?col=${encodeURIComponent(id)}&key=${encodeURIComponent(key)}&v=${live ? 0 : st.extraction.id}`, { credentials: 'include' });
+            if (!res.ok) throw new Error('load failed');
+            drawList((await res.json()).comments || []);
+        } catch { list.innerHTML = ''; showError(t('main.anCmLoadError')); }
+        const btn = overlay.querySelector('[data-an-cmadd]');
+        if (btn) btn.addEventListener('click', async () => {
+            const box = overlay.querySelector('#an-cm-text'); const text = box.value.trim();
+            showError('');
+            if (!text) { showError(t('main.anErr_COMMENT_EMPTY')); return; }
+            btn.disabled = true;
+            try {
+                const res = await fetch(`${API}/${st.id}/comments`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ col: id, key, text }) });
+                const outBody = await res.json().catch(() => ({}));
+                if (!res.ok) throw Object.assign(new Error('failed'), { body: outBody });
+                const comments = outBody.comments || [];
+                drawList(comments); box.value = '';
+                // la celda y los datos de la pantalla toman lo nuevo (el último comentario y cuántos hay)
+                const last = comments.length ? comments[comments.length - 1].t : null;
+                if (colAt >= 0) st.data.rows[r][colAt] = last;
+                if (st.data.cm && st.data.cm[dataKey]) st.data.cm[dataKey].n[r] = comments.length;
+                td.innerHTML = commentInner(comments.length, last);
+                Dashboard.showToast(t('main.anCmAdded'), 'success');
+            } catch (err) { showError(errorText(err.body)); } finally { btn.disabled = false; }
+        });
+    });
+}
+// La ventana de una columna de comentarios (nombre y clasificación): lo que se escribe en cada renglón no va aquí.
+function openCommentColumnDialog(editId) {
+    const added = (st.design.added || []);
+    const editing = editId ? added.find((a) => a.id === editId) : null;
+    const draft = { name: editing ? editing.name : '', cls: editing ? (editing.cls || '') : '' };
+    const dup = st.design.dedupe === 'con';
+    const html = `<h3>${esc(t(editing ? 'main.anCmEditTitle' : 'main.anCmTitle'))}</h3>
+        <p class="admin-hint">${esc(t('main.anCmHint'))}</p>${dup ? `<p class="admin-hint an-cm-warn">${esc(t('main.anCmDupWarn'))}</p>` : ''}
+        <div class="an-f2">
+            <div><label for="an-cm-name">${esc(t('main.anColLabel'))}</label><input type="text" id="an-cm-name" maxlength="80" autocomplete="off" value="${esc(draft.name)}"></div>
+            <div><label for="an-cm-cls">${esc(t('main.anAddedClass'))}</label><input type="text" id="an-cm-cls" maxlength="40" autocomplete="off" list="an-cm-cls-list" placeholder="${esc(t('main.anAddedClassNone'))}" value="${esc(draft.cls)}"><datalist id="an-cm-cls-list">${classKnown().map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
+        </div>
+        <p class="admin-error" id="an-cm-cerror" role="alert" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" data-an-go>${esc(t(editing ? 'main.anAddedSave' : 'main.anAddedGo'))}</button><button type="button" class="btn btn-secondary" data-an-close>${esc(t('main.regCancel'))}</button></div>`;
+    modal(html, (overlay, close) => {
+        const $ = (sel) => overlay.querySelector(sel);
+        setTimeout(() => $('#an-cm-name').focus(), 0);
+        $('[data-an-go]').addEventListener('click', async () => {
+            const err = (text) => { const el = $('#an-cm-cerror'); el.textContent = text; el.hidden = !text; };
+            const name = $('#an-cm-name').value.trim(); const cls = $('#an-cm-cls').value.trim();
+            if (!name) return err(t('main.anErr_ADDED_NAME'));
+            if (!editing && added.length >= 40) return err(t('main.anErr_ADDED_TOO_MANY'));
+            const def = { id: editing ? editing.id : `a${Date.now().toString(36)}`, kind: 'comment', name, cls, color: cls ? colorOfClass(cls, editing) : null, decimals: null };
+            const next = editing ? added.map((a) => (a.id === editing.id ? def : a)) : [...added, def];
+            try { await saveAdded(next); close(); } catch (e) { err(errorText(e.body)); }
+        });
+    });
+}
 function drawAllFileRows() { drawFileRows(Infinity); return Promise.resolve(true); }
 function watchFileScroll(wrapper) {
     if (!wrapper || wrapper.dataset.anScroll) return;
@@ -1322,7 +1435,7 @@ async function loadFile() {
                 if (c.group === 'added') {
                     let groupTable;
                     if (c.cls) { groupTable = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(groupTable, c.cls, window.AnalysisKit.classColor(c.color)); }
-                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: `${c.kind === 'criterion' ? '?' : 'ƒ'} ${c.label}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
+                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: `${c.kind === 'criterion' ? '?' : (c.kind === 'comment' ? '✎' : 'ƒ')} ${c.label}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
                 }
                 // una columna consultada con clasificación va bajo su propia banda (nombre y color de la persona); sin clasificación, bajo «Consultadas» como siempre
                 let consBand;

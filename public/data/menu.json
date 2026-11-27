@@ -686,7 +686,8 @@
               "submenu": [
                 { "id": "colAnCrearAuth", "labelKey": "main.colAnCrearAuth", "permissionOnly": true },
                 { "id": "colAnExtraerAuth", "labelKey": "main.colAnExtraerAuth", "permissionOnly": true },
-                { "id": "colAnAnularAuth", "labelKey": "main.colAnAnularAuth", "permissionOnly": true }
+                { "id": "colAnAnularAuth", "labelKey": "main.colAnAnularAuth", "permissionOnly": true },
+                { "id": "colAnComentarAuth", "labelKey": "main.colAnComentarAuth", "permissionOnly": true }
               ]
             }
           ],

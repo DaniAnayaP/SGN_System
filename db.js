@@ -1298,6 +1298,29 @@ db.exec(`
     ) WITHOUT ROWID;
 `);
 
+// Análisis › columna «Comentarios» (Daniel, 2026-11-27): los comentarios los escribe la persona, uno tras otro (nunca se reescriben ni se borran), y van ligados a la LLAVE del renglón (no a su posición): row_key = las columnas llave ya normalizadas, unidas con \u0001.
+// Cada versión extraída guarda una COPIA de los comentarios de ese momento (analysis_comment_versions): como todo lo de una versión, no cambia después.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS analysis_comments (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        analysis_id    INTEGER NOT NULL REFERENCES manual_analyses(id) ON DELETE CASCADE,
+        column_id      TEXT NOT NULL,
+        row_key        TEXT NOT NULL,
+        author         TEXT NOT NULL DEFAULT '',
+        author_user_id INTEGER,
+        body           TEXT NOT NULL,
+        created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_analysis_comments_row ON analysis_comments(analysis_id, column_id, row_key);
+    CREATE TABLE IF NOT EXISTS analysis_comment_versions (
+        extraction_id INTEGER NOT NULL REFERENCES manual_analysis_extractions(id) ON DELETE CASCADE,
+        column_id     TEXT NOT NULL,
+        row_key       TEXT NOT NULL,
+        comments_json TEXT NOT NULL,
+        PRIMARY KEY (extraction_id, column_id, row_key)
+    ) WITHOUT ROWID;
+`);
+
 // Seed data for the geo catalog — a real, well-known list of países (not a
 // live internet fetch: no outbound access from this server has been set up,
 // and the world's country list is static enough to hardcode reliably) plus
@@ -4390,7 +4413,7 @@ const BUTTON_NOTIFY_COLUMNS = {
     'mtto-correctivo': { create: 'colMcCreateAuth' },
     'ventas': { import: 'colVenImportAuth' },
     'registros': { import: 'colRegCargarPlantillaAuth', importExcel: 'colRegCargarExcelAuth', annul: 'colRegAnularAuth', create: 'colRegCrearAuth' },
-    'analisis': { create: 'colAnCrearAuth', extract: 'colAnExtraerAuth', annul: 'colAnAnularAuth' },
+    'analisis': { create: 'colAnCrearAuth', extract: 'colAnExtraerAuth', annul: 'colAnAnularAuth', comment: 'colAnComentarAuth' },
 };
 // Notificar actualizado de un ÍCONO que guarda algo (Búsqueda guardada, Acomodo guardado): hoja <pantalla>/<ícono>/notificar.
 const NOTIFY_ICON_IDS = ['iconSavedSearch', 'iconSavedLayout', 'iconFieldRules'];
@@ -5681,6 +5704,54 @@ function listExtractionRows(extractionId, { text = '', limit = 2000 } = {}) {
     const total = db.prepare(`SELECT COUNT(*) AS n FROM manual_analysis_rows WHERE ${where.join(' AND ')}`).get(...params).n;
     const rows = db.prepare(`SELECT data_json FROM manual_analysis_rows WHERE ${where.join(' AND ')} ORDER BY row_no LIMIT ?`).all(...params, limit).map((r) => JSON.parse(r.data_json));
     return { rows, total };
+}
+// ---- Comentarios de una columna «Comentarios» del Análisis ----
+const ANALYSIS_COMMENT_MAX = 1000;
+const commentOf = (r) => ({ by: r.author, at: r.created_at, t: r.body });
+// Agrega un comentario al final de la lista de ese renglón; devuelve el comentario con su autor y su fecha (UTC).
+function addAnalysisComment({ analysisId, columnId, rowKey, author, userId, body }) {
+    const id = db.prepare('INSERT INTO analysis_comments (analysis_id, column_id, row_key, author, author_user_id, body) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(analysisId, String(columnId), String(rowKey), String(author || '').slice(0, 120), userId || null, String(body).slice(0, ANALYSIS_COMMENT_MAX)).lastInsertRowid;
+    return commentOf(db.prepare('SELECT author, body, created_at FROM analysis_comments WHERE id = ?').get(id));
+}
+// Los comentarios de hoy de un renglón, del más viejo al más nuevo.
+function listAnalysisComments(analysisId, columnId, rowKey) {
+    return db.prepare('SELECT author, body, created_at FROM analysis_comments WHERE analysis_id = ? AND column_id = ? AND row_key = ? ORDER BY id').all(analysisId, String(columnId), String(rowKey)).map(commentOf);
+}
+// Todos los comentarios de unas columnas, agrupados: Map(columna → Map(llave del renglón → [{ by, at, t }])).
+function analysisCommentsMap(analysisId, columnIds) {
+    const out = new Map();
+    if (!columnIds.length) return out;
+    columnIds.forEach((c) => out.set(c, new Map()));
+    const stmt = db.prepare(`SELECT column_id, row_key, author, body, created_at FROM analysis_comments WHERE analysis_id = ? AND column_id IN (${columnIds.map(() => '?').join(',')}) ORDER BY id`);
+    for (const r of stmt.iterate(analysisId, ...columnIds)) {
+        const byRow = out.get(r.column_id);
+        let list = byRow.get(r.row_key);
+        if (!list) { list = []; byRow.set(r.row_key, list); }
+        list.push(commentOf(r));
+    }
+    return out;
+}
+// Al extraer una versión: guarda una copia de los comentarios de ese momento. Devuelve cuántos renglones traen comentarios.
+function snapshotAnalysisComments(extractionId, analysisId, columnIds) {
+    const map = analysisCommentsMap(analysisId, columnIds);
+    const insert = db.prepare('INSERT OR REPLACE INTO analysis_comment_versions (extraction_id, column_id, row_key, comments_json) VALUES (?, ?, ?, ?)');
+    let n = 0;
+    db.transaction(() => { map.forEach((byRow, col) => byRow.forEach((list, key) => { insert.run(extractionId, col, key, JSON.stringify(list)); n += 1; })); })();
+    return n;
+}
+// Lo mismo, pero de una versión ya extraída (la copia de ese momento).
+function extractionCommentsMap(extractionId, columnIds) {
+    const out = new Map();
+    if (!columnIds.length) return out;
+    columnIds.forEach((c) => out.set(c, new Map()));
+    const stmt = db.prepare(`SELECT column_id, row_key, comments_json FROM analysis_comment_versions WHERE extraction_id = ? AND column_id IN (${columnIds.map(() => '?').join(',')})`);
+    for (const r of stmt.iterate(extractionId, ...columnIds)) { try { out.get(r.column_id).set(r.row_key, JSON.parse(r.comments_json)); } catch { /* una copia dañada no tumba la pantalla */ } }
+    return out;
+}
+function listExtractionComments(extractionId, columnId, rowKey) {
+    const row = db.prepare('SELECT comments_json FROM analysis_comment_versions WHERE extraction_id = ? AND column_id = ? AND row_key = ?').get(extractionId, String(columnId), String(rowKey));
+    try { return row ? JSON.parse(row.comments_json) : []; } catch { return []; }
 }
 // Lo vigente de un registro en los periodos pedidos, como el análisis lo necesita: Map(unidad\u0001codigo → { dims, values: { periodo: valor } }). filters: { unidades, categorias, codigos } (exactos, sin importar mayúsculas).
 function registrySources(clientId, forTestAccount, registryKey, periods, filters = {}) {
@@ -23377,7 +23448,7 @@ module.exports = {
     getPosSalesLastLoad,
     listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete,
     analysisOrdersBySite,
-    AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources,
+    AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources, ANALYSIS_COMMENT_MAX, addAnalysisComment, listAnalysisComments, analysisCommentsMap, snapshotAnalysisComments, extractionCommentsMap, listExtractionComments,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, reconsiderRegistryLoad, deleteFlexLoadData, flexConfigHistory, diskSpace, getRegistryFormat, setRegistryFormat, clearRegistryFormat, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexConfigLoads, updateFlexConfigs, listAnalysisDesigns, setAnalysisDesignRaw, registrySignature, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
