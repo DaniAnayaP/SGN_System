@@ -3461,6 +3461,211 @@
     th.data-table-col-filter-active .data-table-col-filter-trigger{
         color: var(--color-accent, #1a73e8);
     }
+    /* Fila de totales (Dashboard.js: registerTotalsRow): la franja «Σ Totales» pegada al pie de la tabla, una celda por columna; se toca una celda y se elige el cálculo. Se queda a la vista aunque se baje,
+       y sus celdas siguen el orden, lo oculto y lo fijo de las columnas como cualquier renglón. */
+    .data-table tfoot.data-table-totals{
+        position: sticky;
+        bottom: 0;
+        z-index: 4;
+    }
+    .data-table tfoot.data-table-totals td{
+        background-color: color-mix(in srgb, var(--color-accent, #8a3590) 12%, var(--color-surface));
+        border-top: 0;
+        border-bottom: 0;
+        vertical-align: top;
+        padding-top: 0.15rem;
+        padding-bottom: 0.45rem;
+        overflow: hidden;
+    }
+    .data-table tfoot.data-table-totals tr.data-table-totals-title td{
+        border-top: 2px solid color-mix(in srgb, var(--color-accent, #8a3590) 45%, var(--color-border));
+        padding-top: 0.3rem;
+        padding-bottom: 0.05rem;
+        overflow: visible;
+    }
+    .data-table-totals-title-text{
+        position: sticky;
+        left: 0;
+        display: inline-block;
+        font-size: calc(var(--data-table-font-size, 0.85rem) * 0.8);
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+        white-space: nowrap;
+    }
+    .data-table-totals-btn{
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0;
+        width: 100%;
+        min-width: 0;
+        padding: 0.1rem 0.2rem;
+        border: 1px solid transparent;
+        border-radius: 0.4rem;
+        background: transparent;
+        color: var(--color-text-primary);
+        font: inherit;
+        line-height: 1.25;
+        text-align: left;
+        cursor: pointer;
+    }
+    .data-table-totals-btn:hover,
+    .data-table-totals-btn:focus-visible{
+        border-color: var(--color-accent, #8a3590);
+        outline: none;
+    }
+    .data-table-totals-btn small{
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: calc(var(--data-table-font-size, 0.85rem) * 0.7);
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+    }
+    .data-table-totals-btn b{
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--data-table-font-size, 0.85rem);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .data-table-totals-btn.is-empty{
+        border: 1px dashed color-mix(in srgb, var(--color-accent, #8a3590) 50%, var(--color-border));
+    }
+    .data-table-totals-btn.is-empty b{
+        font-weight: 500;
+        color: var(--color-text-secondary);
+    }
+    .data-table tfoot.data-table-totals td.col-num .data-table-totals-btn{
+        align-items: flex-end;
+        text-align: right;
+    }
+    /* El menú de un cálculo flota sobre la página (no lo recorta el desplazamiento de la tabla) y se abre hacia arriba de la franja. */
+    .data-table-totals-menu{
+        position: fixed;
+        z-index: 150;
+        width: 17.5rem;
+        max-width: calc(100vw - 1rem);
+        overflow-y: auto;
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 0.7rem;
+        box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.22);
+        font-size: 0.84rem;
+        color: var(--color-text-primary);
+    }
+    .data-table-totals-menu header{
+        padding: 0.5rem 0.85rem;
+        background-color: color-mix(in srgb, var(--color-accent, #8a3590) 14%, var(--color-surface));
+        border-bottom: 1px solid var(--color-border);
+        font-size: 0.78rem;
+    }
+    .data-table-totals-menu header span{
+        color: var(--color-text-secondary);
+    }
+    .data-table-totals-list{
+        display: flex;
+        flex-direction: column;
+        padding: 0.25rem 0 0.4rem;
+    }
+    .data-table-totals-group{
+        padding: 0.5rem 0.85rem 0.15rem;
+        font-size: 0.64rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+    }
+    .data-table-totals-group small{
+        font-weight: 400;
+        text-transform: none;
+        letter-spacing: 0;
+    }
+    .data-table-totals-opt{
+        display: flex;
+        align-items: flex-start;
+        gap: 0.55rem;
+        padding: 0.35rem 0.85rem;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .data-table-totals-opt:hover:not(:disabled),
+    .data-table-totals-opt:focus-visible{
+        background-color: color-mix(in srgb, var(--color-accent, #8a3590) 10%, var(--color-surface));
+        outline: none;
+    }
+    .data-table-totals-opt:disabled{
+        opacity: 0.5;
+        cursor: default;
+    }
+    .data-table-totals-opt i{
+        flex: none;
+        width: 0.9rem;
+        height: 0.9rem;
+        margin-top: 0.2rem;
+        border: 2px solid var(--color-border);
+        border-radius: 50%;
+        box-sizing: border-box;
+    }
+    .data-table-totals-opt.is-on{
+        background-color: color-mix(in srgb, var(--color-accent, #8a3590) 16%, var(--color-surface));
+        font-weight: 600;
+    }
+    .data-table-totals-opt.is-on i{
+        border-color: var(--color-accent, #8a3590);
+        background: radial-gradient(circle, var(--color-accent, #8a3590) 0 42%, transparent 48%);
+    }
+    .data-table-totals-opt small{
+        display: block;
+        font-size: 0.7rem;
+        font-weight: 400;
+        color: var(--color-text-secondary);
+    }
+    .data-table-totals-cond{
+        margin: 0.1rem 0.85rem 0.35rem 2.3rem;
+        padding: 0.5rem 0.6rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0.6rem;
+        background-color: var(--color-bg);
+    }
+    .data-table-totals-cond[hidden]{
+        display: none;
+    }
+    .data-table-totals-cond-row{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        align-items: center;
+    }
+    .data-table-totals-input{
+        flex: 1 1 6rem;
+        min-width: 0;
+        padding: 0.3rem 0.55rem;
+        border: 1px solid var(--color-border);
+        border-radius: 0.4rem;
+        background-color: var(--color-surface);
+        color: var(--color-text-primary);
+        font: inherit;
+    }
+    .data-table-totals-input:focus{
+        outline: none;
+        border-color: var(--color-text-primary);
+    }
+    .data-table-totals-apply{
+        flex: none;
+        padding: 0.3rem 0.8rem;
+    }
     /* Floating menu is appended to <body> (not the <th>) so it isn't
        clipped by the table wrapper's own overflow:auto scroll region —
        position is set inline in JS from the trigger's own

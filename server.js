@@ -7241,7 +7241,7 @@ app.post('/api/business/pos-sales/import', requireAuth, posSalesRaw, async (req,
 const manualRegistries = require('./manualRegistries');
 const REG_TABLE = 'registros';
 const REG_LOADS_TABLE = 'registros-cargas';
-const REG_COLS = { plantilla: 'colRegCargarPlantillaAuth', excel: 'colRegCargarExcelAuth', annul: 'colRegAnularAuth', create: 'colRegCrearAuth' };
+const REG_COLS = { plantilla: 'colRegCargarPlantillaAuth', excel: 'colRegCargarExcelAuth', annul: 'colRegAnularAuth', create: 'colRegCrearAuth', totals: 'colRegTotalesAuth' };
 const regRaw = express.raw({ type: () => true, limit: '60mb' });
 const regLoading = new Set(); // una carga a la vez por registro y por cliente
 const REG_MESSAGES = {
@@ -7251,7 +7251,7 @@ const REG_MESSAGES = {
 function regAbilities(req) {
     const admin = !!req.user.isClientAdmin;
     const grants = admin ? null : getUserEffectiveGrants(req.user.sub);
-    return { canTemplate: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.plantilla), canExcel: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.excel), canAnnul: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.annul), canCreateRegistry: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.create) };
+    return { canTemplate: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.plantilla), canExcel: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.excel), canAnnul: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.annul), canCreateRegistry: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.create), canTotals: admin || canCreateColumn(grants, REG_TABLE, REG_COLS.totals) };
 }
 // Los registros de un cliente: los dos de siempre (nombre por idioma) y los que agregó él (nombre y lo que mide, tal como los escribió). Los desactivados siguen existiendo (sus datos se conservan).
 const regFoldName = (text) => String(text || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
@@ -7390,6 +7390,40 @@ app.get('/api/business/manual-registries/:key/values', requireAuth, (req, res) =
     shown.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
     res.set('Cache-Control', 'no-store');
     res.json({ col: info.key, values: shown, complete });
+});
+// La fila de totales de la tabla de datos (Daniel, 2026-11-27): el cálculo que la persona eligió para cada columna (public/TotalsCalc.js) sobre TODOS los renglones que pasan el texto y el filtro por columna de la pantalla.
+// Del botón «Totales» (colRegTotalesAuth) de la clase Botones del árbol.
+const totalsCalc = require('./public/TotalsCalc.js');
+const REG_DIM_FIELDS = [['colRegUnidad', 'unidad'], ['colRegUnidadNombre', 'unidadNombre'], ['colRegCodigo', 'codigo'], ['colRegDescripcion', 'descripcion'], ['colRegCategoria', 'categoria'], ['colRegUdm', 'udm']];
+app.get('/api/business/manual-registries/:key/totals', requireAuth, (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    if (!regAbilities(req).canTotals) return res.status(403).json({ code: 'REG_FORBIDDEN', message: 'No tienes permiso para ver los totales.' });
+    if (registry.kind === 'tabla') return flexApi.totalsRoute(req, res, registry);
+    const { clientId, isTestAccount } = req.user;
+    const lang = req.query.lang === 'en' ? 'en' : 'es';
+    const parsedCf = manualRegistries.parseColumnFilter(req.query.cf, lang);
+    if (parsedCf.error) return res.status(400).json({ code: parsedCf.error, message: 'El filtro no es válido.' });
+    const parsedCalcs = totalsCalc.parseCalcs(req.query.calcs);
+    if (parsedCalcs.error) return res.status(400).json({ code: parsedCalcs.error, message: 'Los cálculos de la fila de totales no son válidos.' });
+    res.set('Cache-Control', 'no-store');
+    if (!parsedCalcs.specs.size) return res.json({ rows: 0, values: {} });
+    const periods = registryPeriods(clientId, isTestAccount, registry.key);
+    const keys = [...REG_DIM_FIELDS.map((d) => d[0]), ...periods.map((p) => `p_${String(p).replace(/-/g, '_')}`)];
+    const at = new Map(keys.map((k, i) => [k, i]));
+    const filters = { text: String(req.query.text || '').slice(0, 200) };
+    const dims = REG_DIM_FIELDS.length;
+    try {
+        const out = totalsCalc.compute(parsedCalcs.specs, (key) => at.get(key), (onRow) => {
+            for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters, 2000, parsedCf.filter)) {
+                batch.forEach((row) => onRow((i) => (i < dims ? row[REG_DIM_FIELDS[i][1]] : row.values[periods[i - dims]])));
+            }
+        });
+        res.json(out);
+    } catch (err) {
+        console.error('Registros Información: los totales fallaron:', err);
+        res.status(500).json({ code: 'TOTALS_ERROR', message: 'No se pudieron calcular los totales.' });
+    }
 });
 // La descarga COMPLETA de los datos de un registro (Excel o CSV): todos los renglones, no solo los que muestra la tabla (los primeros 2,000), con las columnas de referencia y un periodo por columna. Se arma por tandas y se va mandando
 // (así un registro de más de cien mil renglones no se carga entero en memoria). text = el mismo texto del filtro de arriba; no lleva los filtros de columna ni las columnas ocultas de la pantalla. Quien ve la tabla puede bajarla.
@@ -7622,7 +7656,7 @@ app.post('/api/business/manual-registries/:key/loads/:id/annul', requireAuth, (r
 const manualAnalyses = require('./manualAnalyses');
 const AN_TABLE = 'analisis';
 const AN_EXT_TABLE = 'analisis-extracciones';
-const AN_COLS = { create: 'colAnCrearAuth', extract: 'colAnExtraerAuth', annul: 'colAnAnularAuth', comment: 'colAnComentarAuth' };
+const AN_COLS = { create: 'colAnCrearAuth', extract: 'colAnExtraerAuth', annul: 'colAnAnularAuth', comment: 'colAnComentarAuth', totals: 'colAnTotalesAuth' };
 const AN_MESSAGES = {
     AN_NAME_REQUIRED: 'Ponle un nombre al análisis.', AN_NAME_TAKEN: 'Ya hay un análisis con ese nombre.', DESIGN_REGISTRIES: 'Elige al menos un registro.', DESIGN_COLUMN_REGISTRY: 'Una columna usa un registro que el análisis no tiene.',
     DESIGN_COLUMN_PERIODS: 'Cada columna consultada necesita al menos un periodo.', AN_NO_COLUMNS: 'Agrega al menos una columna consultada antes de extraer.', AN_EMPTY: 'Con este diseño no sale ningún renglón: revisa los periodos y los filtros.',
@@ -7644,7 +7678,7 @@ analysisSources.startBackground();
 function anAbilities(req) {
     const admin = !!req.user.isClientAdmin;
     const grants = admin ? null : getUserEffectiveGrants(req.user.sub);
-    return { canCreate: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.create), canExtract: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.extract), canAnnul: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.annul), canComment: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.comment) };
+    return { canCreate: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.create), canExtract: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.extract), canAnnul: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.annul), canComment: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.comment), canTotals: admin || canCreateColumn(grants, AN_TABLE, AN_COLS.totals) };
 }
 // Cualquier registro sirve para un análisis (mensual, diario o de tabla libre); el diseño anterior solo usa los mensuales y diarios.
 const anRegistryKeys = (req) => regClientRegistries(req.user.clientId, req.user.isTestAccount).map((r) => r.key);

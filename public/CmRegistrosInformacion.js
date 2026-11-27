@@ -38,7 +38,7 @@ function periodLabel(period) {
 const periodKey = (period) => `p_${String(period).replace(/-/g, '_')}`;
 const todayStamp = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-const st = { drawn: 0, cf: null, seq: 0, lastLoadId: null, registries: [], key: null, tab: 'data', data: null, loads: null, canTemplate: false, canExcel: false, canAnnul: false, canCreateRegistry: false, text: '', loadsInit: false, loadPick: new Set() };
+const st = { drawn: 0, cf: null, seq: 0, lastLoadId: null, registries: [], key: null, tab: 'data', data: null, loads: null, canTemplate: false, canExcel: false, canAnnul: false, canCreateRegistry: false, text: '', loadsInit: false, loadPick: new Set(), numCols: new Set() };
 // El nombre de un registro: los dos de siempre se traducen; los que agregó el cliente llevan el nombre que él les puso.
 const regName = (reg) => (reg && (reg.name || (reg.nameKey ? t(reg.nameKey) : ''))) || t('menu.cmRegistrosInformacion');
 const currentRegistry = () => st.registries.find((r) => r.key === st.key) || null;
@@ -327,6 +327,7 @@ function drawData() {
     if (!body) return;
     const wrapper = wrapperOf(DATA_TABLE);
     const flex = isFlex(body);
+    st.numCols = new Set(flex ? body.columns.filter((c) => c.num).map((c) => c.key) : body.periods.map(periodKey)); // las columnas con números (los cálculos de suma, promedio… de la fila de totales)
     const first = buildHeader(DATA_TABLE, flex ? flexColumns(body) : dataColumns(body.periods));
     const table = tableOf(DATA_TABLE);
     const tbody = table.tBodies[0];
@@ -339,9 +340,12 @@ function drawData() {
     if (first && flex && table.tHead) { const mine = table.tHead.querySelector('tr.data-table-group-band-table'); const type = table.tHead.querySelector('tr.data-table-group-band-classification'); if (mine && type) table.tHead.insertBefore(mine, type); }
     if (first && Dashboard.registerServerFilteredTable) Dashboard.registerServerFilteredTable(DATA_TABLE, { onChange: (spec) => { st.cf = spec; refreshData(); }, getValues: fetchColumnValues });
     if (first && Dashboard.registerPartialTable) Dashboard.registerPartialTable(DATA_TABLE, { isComplete: () => !st.data || st.drawn >= st.data.rows.length, loadAll: drawAllRows });
+    // la fila de totales (Daniel, 2026-11-27): el servidor suma y cuenta TODOS los renglones que pasan el texto y el filtro, no solo los dibujados
+    if (first && Dashboard.registerTotalsRow) Dashboard.registerTotalsRow(DATA_TABLE, { scope: () => st.key || '', canUse: () => !!(st.data && st.data.canTotals), isNumeric: (key) => st.numCols.has(key), rowsInfo: () => { const n = st.data ? st.data.total : 0; return { count: n, total: n, filtered: !!(st.cf || st.text) }; }, compute: fetchTotals });
     watchScroll(wrapper);
     if (flex) setupFlexFormat(table, body); // el encabezado con el formato de cada columna y su menú ⋮
     if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(DATA_TABLE);
+    if (Dashboard.refreshTotalsRow) Dashboard.refreshTotalsRow(DATA_TABLE);
     wrapper.setAttribute('data-help-key', flex ? 'regTableLibre' : 'regTable');
     if (Dashboard.attachTableDownloadButton) {
         Dashboard.attachTableDownloadButton(DATA_TABLE, { getTitle: () => `${regName(currentRegistry())}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : ''),
@@ -652,6 +656,15 @@ async function refreshData() {
     }
 }
 // La lista de valores de una columna para su filtro: los de TODO el registro (no los dibujados).
+// Los cálculos de la fila de totales (specs = { columna: cálculo }) sobre todo lo que pasa el texto de arriba y el filtro por columna.
+async function fetchTotals(specs) {
+    const params = new URLSearchParams({ lang: lang(), tz: String(tzOffset()), calcs: JSON.stringify(specs) });
+    if (st.text) params.set('text', st.text);
+    if (st.cf) params.set('cf', JSON.stringify(st.cf));
+    const res = await fetch(`${API}/${encodeURIComponent(st.key)}/totals?${params}`, { credentials: 'include' });
+    if (!res.ok) throw new Error('totals failed');
+    return res.json();
+}
 async function fetchColumnValues(col) {
     const res = await fetch(`${API}/${encodeURIComponent(st.key)}/values?col=${encodeURIComponent(col)}&lang=${lang()}&tz=${tzOffset()}`, { credentials: 'include' });
     if (!res.ok) throw new Error('values failed');

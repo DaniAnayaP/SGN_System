@@ -3899,6 +3899,7 @@ function applyDataTableColumnLayout(tableId) {
 
     if (fadeMode) updateFadeStyle(tableId, config.hidden);
     renderColumnGroupBand(tableId);
+    applyTotalsRowLayout(tableId); // la franja de totales (ver registerTotalsRow) sigue el orden, lo oculto y lo fijo de las columnas
     refreshSavedLayoutPillForTable(tableId);
 }
 // Las tablas con data-hidden-style="fade" (Cargas Manuales: Daniel, 2026-11-25, «que se queden en el mismo lugar, pero con un color difuminado») no esconden la columna que la persona oculta con Personalizar columnas:
@@ -15773,8 +15774,318 @@ function ensureColumnMinWidth(tableId, key, widthPx) {
     return true;
 }
 
+// ---- Fila de totales (Daniel, 2026-11-27: «una fila de totales, para que me dé los totales al filtrar: suma, contar, contar solo lo que inicia con A, o solo los datos que no se repiten») ----
+// Una franja «Σ Totales» pegada al pie de la tabla con una celda por columna: se toca una celda y se elige el cálculo (public/TotalsCalc.js: suma, promedio, mínimo, máximo, contar con dato, vacíos, sin repetir, los que salen una sola vez
+// y «contar solo los que…» con la misma escritura de los filtros). La pantalla se registra con registerTotalsRow(tableId, { scope, canUse, isNumeric, rowsInfo, compute }) y pide refreshTotalsRow(tableId) cuando cambian los datos o el filtro:
+//   scope() → texto que separa lo guardado (el registro o el análisis), canUse() → el permiso del árbol, isNumeric(columna) → si la columna trae números,
+//   rowsInfo() → { count, total, filtered } (a cuántos renglones se refiere; total > count = solo los cargados), compute(cálculos) → promesa de { rows, values: { columna: número | null } }.
+// Cada persona guarda sus cálculos en su navegador (como el ancho de las columnas), por tabla y por registro o análisis.
+const DATA_TABLE_TOTALS_KEY_PREFIX = 'dataTableTotals:';
+const totalsRows = new Map(); // tableId → { opts, calcs, scope, values, rows, seq, loading, error }
+let totalsMenuEl = null;
+let totalsMenuCleanup = null;
+const totalsLocale = () => (localStorage.getItem('lang') === 'en' ? 'en-US' : 'es-MX');
+const totalsStorageKey = (tableId, scope) => `${DATA_TABLE_TOTALS_KEY_PREFIX}${tableId}:${scope}`;
+function loadTotalsCalcs(tableId, scope) {
+    const calcs = {};
+    try {
+        const raw = JSON.parse(localStorage.getItem(totalsStorageKey(tableId, scope)) || '{}');
+        Object.keys(raw || {}).forEach((key) => { const spec = window.TotalsCalc.normalizeSpec(raw[key]); if (spec) calcs[key] = spec; });
+    } catch {
+        // sin lo guardado: sin cálculos
+    }
+    return calcs;
+}
+function saveTotalsCalcs(tableId, entry) {
+    try {
+        const key = totalsStorageKey(tableId, entry.scope);
+        if (Object.keys(entry.calcs).length) localStorage.setItem(key, JSON.stringify(entry.calcs)); else localStorage.removeItem(key);
+    } catch {
+        // el navegador no deja guardar: los cálculos valen mientras la pantalla está abierta
+    }
+}
+function registerTotalsRow(tableId, opts) {
+    totalsRows.set(tableId, { opts, calcs: null, scope: null, values: {}, rows: null, dataSeq: 0, error: false });
+}
+// el nombre corto de un cálculo, como se ve arriba del número
+function totalsSpecLabel(spec) {
+    if (spec.fn !== 'where') return t(`main.totalsLabel_${spec.fn}`);
+    const rule = spec.rule;
+    if (rule.kind === 'range') {
+        const loc = totalsLocale();
+        const f = (n) => window.TotalsCalc.formatValue(n, loc);
+        if (rule.from !== null && rule.to !== null) return t('main.totalsLabel_range', { from: f(rule.from), to: f(rule.to) });
+        return rule.from !== null ? t('main.totalsLabel_from', { from: f(rule.from) }) : t('main.totalsLabel_to', { to: f(rule.to) });
+    }
+    return t(`main.totalsLabel_${rule.mode}`, { text: rule.text });
+}
+// La franja se arma de nuevo cada vez (son pocas celdas) y sus celdas siguen el orden, lo oculto y lo fijo de las columnas igual que cualquier renglón (applyRowColumnState).
+function renderTotalsRow(tableId) {
+    const entry = totalsRows.get(tableId);
+    const state = dataTableColumnState.get(tableId);
+    if (!entry || !state) return;
+    const table = state.table;
+    if (!entry.opts.canUse()) { table.tFoot?.remove(); return; }
+    let tfoot = table.tFoot;
+    if (!tfoot || !tfoot.classList.contains('data-table-totals')) {
+        tfoot?.remove();
+        tfoot = table.createTFoot();
+        tfoot.className = 'data-table-totals';
+        tfoot.setAttribute('data-help-key', 'dataTableTotals');
+        tfoot.addEventListener('click', (event) => {
+            const btn = event.target.closest('button[data-col]');
+            if (btn) openTotalsMenu(tableId, btn.dataset.col, btn);
+        });
+    }
+    tfoot.textContent = '';
+    const info = entry.opts.rowsInfo ? entry.opts.rowsInfo() : { count: 0, total: 0, filtered: false };
+    const loc = totalsLocale();
+    const titleRow = tfoot.insertRow();
+    titleRow.className = 'data-table-totals-title';
+    const titleCell = titleRow.insertCell();
+    titleCell.colSpan = state.columnKeys.length;
+    const titleInner = document.createElement('span');
+    titleInner.className = 'data-table-totals-title-text';
+    titleInner.textContent = `${t('main.totalsTitle', { n: window.TotalsCalc.formatValue(info.count, loc) })}${info.filtered ? t('main.totalsFiltered') : ''}${info.total > info.count ? t('main.totalsPartial', { total: window.TotalsCalc.formatValue(info.total, loc) }) : ''}`;
+    titleCell.appendChild(titleInner);
+    const row = tfoot.insertRow();
+    row.className = 'data-table-totals-cells';
+    state.columnKeys.forEach((key) => {
+        const spec = entry.calcs[key];
+        const td = row.insertCell();
+        td.dataset.col = key;
+        if (entry.opts.isNumeric(key)) td.classList.add('col-num');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.col = key;
+        btn.className = `data-table-totals-btn${spec ? '' : ' is-empty'}`;
+        const small = document.createElement('small');
+        const big = document.createElement('b');
+        if (!spec) {
+            small.textContent = 'Σ';
+            big.textContent = t('main.totalsPick');
+        } else {
+            small.textContent = totalsSpecLabel(spec);
+            big.textContent = entry.error ? '—' : (key in entry.values ? window.TotalsCalc.formatValue(entry.values[key], loc) : '…');
+        }
+        btn.title = `${state.labels[key] || key} · ${spec ? totalsSpecLabel(spec) : t('main.totalsPick')}`;
+        btn.setAttribute('aria-haspopup', 'dialog');
+        btn.append(small, big);
+        td.appendChild(btn);
+    });
+    applyRowColumnState(row, tableId);
+}
+// Cuando cambian las columnas (orden, ocultas, fijas) las celdas de la franja se acomodan igual.
+function applyTotalsRowLayout(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    const row = state && state.table.tFoot && state.table.tFoot.querySelector('tr.data-table-totals-cells');
+    if (row) applyRowColumnState(row, tableId);
+}
+// Vuelve a pedir los cálculos (cambiaron los datos o el filtro). only: solo esas columnas (la persona acaba de cambiar su cálculo); lo demás se queda como estaba.
+function refreshTotalsRow(tableId, { only } = {}) {
+    const entry = totalsRows.get(tableId);
+    const state = dataTableColumnState.get(tableId);
+    if (!entry || !state || !window.TotalsCalc) return;
+    const scope = String(entry.opts.scope ? entry.opts.scope() : '');
+    if (entry.calcs === null || entry.scope !== scope) { entry.scope = scope; entry.calcs = loadTotalsCalcs(tableId, scope); entry.values = {}; }
+    const specs = {};
+    state.columnKeys.forEach((key) => { if (entry.calcs[key] && (!only || only.includes(key))) specs[key] = entry.calcs[key]; });
+    Object.keys(entry.values).forEach((key) => { if (!entry.calcs[key]) delete entry.values[key]; }); // el que se quitó ya no muestra su número
+    // datos nuevos (cambió el filtro o llegaron cargas): los números de antes ya no valen y un pedido anterior que llegue tarde se descarta; si solo cambió el cálculo de una columna, los pedidos de las demás siguen valiendo
+    if (!only) { entry.dataSeq = (entry.dataSeq || 0) + 1; entry.values = {}; }
+    const dataSeq = entry.dataSeq || 0;
+    entry.error = false;
+    renderTotalsRow(tableId);
+    if (!Object.keys(specs).length || !entry.opts.canUse()) return;
+    Promise.resolve(entry.opts.compute(specs)).then((res) => {
+        if (dataSeq !== (entry.dataSeq || 0)) return; // llegó un filtro más nuevo
+        entry.values = { ...entry.values, ...((res && res.values) || {}) };
+        entry.rows = res ? res.rows : null;
+        renderTotalsRow(tableId);
+    }).catch(() => {
+        if (dataSeq !== (entry.dataSeq || 0)) return;
+        entry.error = true;
+        renderTotalsRow(tableId);
+        showToast(t('main.totalsError'), 'error');
+    });
+}
+function closeTotalsMenu() {
+    if (totalsMenuCleanup) totalsMenuCleanup();
+    totalsMenuCleanup = null;
+    totalsMenuEl?.remove();
+    totalsMenuEl = null;
+}
+function placeTotalsMenu(menu, anchor) {
+    const rect = anchor.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    const margin = 8;
+    const above = rect.top - margin * 2;
+    const below = vh - rect.bottom - margin * 2;
+    // la franja está al pie: el menú sale hacia arriba, y hacia abajo solo si arriba no hay lugar
+    const up = above >= below || menu.scrollHeight <= above;
+    menu.style.maxHeight = `${Math.max(160, up ? above : below)}px`;
+    menu.style.left = `${Math.max(margin, Math.min(rect.left, vw - menu.offsetWidth - margin))}px`;
+    if (up) { menu.style.top = 'auto'; menu.style.bottom = `${vh - rect.top + 6}px`; } else { menu.style.bottom = 'auto'; menu.style.top = `${rect.bottom + 6}px`; }
+}
+function openTotalsMenu(tableId, key, anchor) {
+    const entry = totalsRows.get(tableId);
+    const state = dataTableColumnState.get(tableId);
+    if (!entry || !state) return;
+    closeTotalsMenu();
+    const TC = window.TotalsCalc;
+    const numeric = !!entry.opts.isNumeric(key);
+    const current = entry.calcs[key] || null;
+    const menu = document.createElement('div');
+    menu.className = 'data-table-totals-menu';
+    menu.setAttribute('role', 'dialog');
+    menu.setAttribute('data-help-key', 'dataTableTotals');
+    menu.setAttribute('aria-label', t('main.totalsMenuLabel', { name: state.labels[key] || key }));
+    const head = document.createElement('header');
+    const name = document.createElement('b');
+    name.textContent = state.labels[key] || key;
+    const kind = document.createElement('span');
+    kind.textContent = ` · ${t(numeric ? 'main.totalsKindNum' : 'main.totalsKindText')}`;
+    head.append(name, kind);
+    menu.appendChild(head);
+    const list = document.createElement('div');
+    list.className = 'data-table-totals-list';
+    menu.appendChild(list);
+    const apply = (spec) => {
+        if (spec) entry.calcs[key] = spec; else delete entry.calcs[key];
+        saveTotalsCalcs(tableId, entry);
+        closeTotalsMenu();
+        refreshTotalsRow(tableId, { only: [key] });
+    };
+    const group = (text, disabledNote) => {
+        const g = document.createElement('div');
+        g.className = 'data-table-totals-group';
+        g.textContent = text;
+        if (disabledNote) { const s = document.createElement('small'); s.textContent = ` · ${disabledNote}`; g.appendChild(s); }
+        list.appendChild(g);
+    };
+    const options = {};
+    const option = (fn, { hint, disabled } = {}) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `data-table-totals-opt${current && current.fn === fn ? ' is-on' : ''}`;
+        btn.dataset.fn = fn;
+        btn.disabled = !!disabled;
+        btn.setAttribute('role', 'menuitemradio');
+        btn.setAttribute('aria-checked', current && current.fn === fn ? 'true' : 'false');
+        const dot = document.createElement('i');
+        dot.setAttribute('aria-hidden', 'true');
+        const text = document.createElement('span');
+        text.textContent = t(fn === 'none' ? 'main.totalsNone' : `main.totalsFn_${fn}`);
+        if (hint) { const small = document.createElement('small'); small.textContent = hint; text.appendChild(small); }
+        btn.append(dot, text);
+        list.appendChild(btn);
+        options[fn] = btn;
+        return btn;
+    };
+    option('none').classList.toggle('is-on', !current);
+    group(t('main.totalsGroupCount'));
+    option('count');
+    option('empty');
+    option('distinct', { hint: t('main.totalsHint_distinct') });
+    option('once', { hint: t('main.totalsHint_once') });
+    option('where');
+    // la condición de «contar solo los que…»: texto (inicia con, contiene, igual a) o, en una columna de números, desde / hasta
+    const cond = document.createElement('div');
+    cond.className = 'data-table-totals-cond';
+    cond.hidden = !(current && current.fn === 'where');
+    const rule = current && current.fn === 'where' ? current.rule : null;
+    let modeSel = null;
+    let textInput = null;
+    let fromInput = null;
+    let toInput = null;
+    const condRow = document.createElement('div');
+    condRow.className = 'data-table-totals-cond-row';
+    if (numeric) {
+        fromInput = document.createElement('input');
+        toInput = document.createElement('input');
+        [[fromInput, 'main.totalsFrom', rule && rule.kind === 'range' ? rule.from : null], [toInput, 'main.totalsTo', rule && rule.kind === 'range' ? rule.to : null]].forEach(([input, labelKey, value]) => {
+            input.type = 'text';
+            input.inputMode = 'decimal';
+            input.className = 'data-table-totals-input';
+            input.placeholder = t(labelKey);
+            input.setAttribute('aria-label', t(labelKey));
+            input.value = value === null || value === undefined ? '' : String(value);
+            condRow.appendChild(input);
+        });
+    } else {
+        modeSel = document.createElement('select');
+        modeSel.className = 'data-table-totals-input';
+        modeSel.setAttribute('aria-label', t('main.totalsModeLabel'));
+        [['startsWith', 'main.filterModeStartsWith'], ['contains', 'main.filterModeContains'], ['equals', 'main.filterModeEquals']].forEach(([mode, labelKey]) => {
+            const o = document.createElement('option');
+            o.value = mode;
+            o.textContent = t(labelKey);
+            modeSel.appendChild(o);
+        });
+        modeSel.value = rule && rule.kind === 'text' ? rule.mode : 'startsWith';
+        textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.maxLength = 200;
+        textInput.className = 'data-table-totals-input';
+        textInput.placeholder = t('main.totalsTextPlaceholder');
+        textInput.setAttribute('aria-label', t('main.totalsTextPlaceholder'));
+        textInput.value = rule && rule.kind === 'text' ? rule.text : '';
+        condRow.append(modeSel, textInput);
+    }
+    const applyBtn = document.createElement('button');
+    applyBtn.type = 'button';
+    applyBtn.className = 'btn data-table-totals-apply';
+    applyBtn.textContent = t('main.totalsApply');
+    condRow.appendChild(applyBtn);
+    cond.appendChild(condRow);
+    const whereSpec = () => TC.normalizeSpec({ fn: 'where', rule: numeric ? { kind: 'range', from: fromInput.value, to: toInput.value } : { kind: 'text', mode: modeSel.value, text: textInput.value } });
+    const syncApply = () => { applyBtn.disabled = !whereSpec(); };
+    cond.addEventListener('input', syncApply);
+    cond.addEventListener('change', syncApply);
+    cond.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); const spec = whereSpec(); if (spec) apply(spec); } });
+    applyBtn.addEventListener('click', () => { const spec = whereSpec(); if (spec) apply(spec); });
+    syncApply();
+    list.appendChild(cond);
+    group(t('main.totalsGroupNum'), numeric ? '' : t('main.totalsNumOnly'));
+    ['sum', 'avg', 'min', 'max'].forEach((fn) => option(fn, { disabled: !numeric }));
+    list.addEventListener('click', (event) => {
+        const btn = event.target.closest('button.data-table-totals-opt');
+        if (!btn || btn.disabled) return;
+        const fn = btn.dataset.fn;
+        if (fn === 'none') { apply(null); return; }
+        if (fn === 'where') { cond.hidden = false; Object.values(options).forEach((b) => b.classList.toggle('is-on', b === btn)); (textInput || fromInput).focus(); placeTotalsMenu(menu, anchor); return; }
+        apply({ fn });
+    });
+    document.body.appendChild(menu);
+    totalsMenuEl = menu;
+    placeTotalsMenu(menu, anchor);
+    const first = menu.querySelector('.data-table-totals-opt.is-on') || menu.querySelector('.data-table-totals-opt:not(:disabled)');
+    if (!cond.hidden && (textInput || fromInput)) (textInput || fromInput).focus(); else if (first) first.focus();
+    const onOutside = (event) => { if (!menu.contains(event.target) && !anchor.contains(event.target)) closeTotalsMenu(); };
+    const onKey = (event) => { if (event.key === 'Escape') { closeTotalsMenu(); if (anchor.isConnected) anchor.focus(); } };
+    const onMove = (event) => {
+        if (event && event.target instanceof Node && menu.contains(event.target)) return; // el desplazamiento del propio menú
+        const r = anchor.isConnected ? anchor.getBoundingClientRect() : null;
+        if (!r || r.bottom < 0 || r.top > document.documentElement.clientHeight) { closeTotalsMenu(); return; }
+        placeTotalsMenu(menu, anchor);
+    };
+    document.addEventListener('mousedown', onOutside, true);
+    document.addEventListener('keydown', onKey, true);
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    totalsMenuCleanup = () => {
+        document.removeEventListener('mousedown', onOutside, true);
+        document.removeEventListener('keydown', onKey, true);
+        window.removeEventListener('scroll', onMove, true);
+        window.removeEventListener('resize', onMove);
+    };
+}
+
 window.Dashboard = {
     ensureColumnMinWidth,
+    registerTotalsRow,
+    refreshTotalsRow,
     initDashboard,
     renderTableRowsInChunks,
     registerPartialTable,

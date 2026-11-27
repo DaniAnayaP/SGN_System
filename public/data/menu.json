@@ -646,7 +646,8 @@
                 { "id": "colRegCargarPlantillaAuth", "labelKey": "main.colRegCargarPlantillaAuth", "permissionOnly": true },
                 { "id": "colRegCargarExcelAuth", "labelKey": "main.colRegCargarExcelAuth", "permissionOnly": true },
                 { "id": "colRegAnularAuth", "labelKey": "main.colRegAnularAuth", "permissionOnly": true },
-                { "id": "colRegCrearAuth", "labelKey": "main.colRegCrearAuth", "permissionOnly": true }
+                { "id": "colRegCrearAuth", "labelKey": "main.colRegCrearAuth", "permissionOnly": true },
+                { "id": "colRegTotalesAuth", "labelKey": "main.colRegTotalesAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -687,7 +688,8 @@
                 { "id": "colAnCrearAuth", "labelKey": "main.colAnCrearAuth", "permissionOnly": true },
                 { "id": "colAnExtraerAuth", "labelKey": "main.colAnExtraerAuth", "permissionOnly": true },
                 { "id": "colAnAnularAuth", "labelKey": "main.colAnAnularAuth", "permissionOnly": true },
-                { "id": "colAnComentarAuth", "labelKey": "main.colAnComentarAuth", "permissionOnly": true }
+                { "id": "colAnComentarAuth", "labelKey": "main.colAnComentarAuth", "permissionOnly": true },
+                { "id": "colAnTotalesAuth", "labelKey": "main.colAnTotalesAuth", "permissionOnly": true }
               ]
             }
           ],
@@ -3333,7 +3335,8 @@
                 { "id": "colRegCargarPlantillaAuth", "labelKey": "main.colRegCargarPlantillaAuth", "permissionOnly": true },
                 { "id": "colRegCargarExcelAuth", "labelKey": "main.colRegCargarExcelAuth", "permissionOnly": true },
                 { "id": "colRegAnularAuth", "labelKey": "main.colRegAnularAuth", "permissionOnly": true },
-                { "id": "colRegCrearAuth", "labelKey": "main.colRegCrearAuth", "permissionOnly": true }
+                { "id": "colRegCrearAuth", "labelKey": "main.colRegCrearAuth", "permissionOnly": true },
+                { "id": "colRegTotalesAuth", "labelKey": "main.colRegTotalesAuth", "permissionOnly": true }
               ]
             }
           ],

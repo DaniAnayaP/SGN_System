@@ -28,7 +28,7 @@ const regName = (r) => (r ? (r.name || t(r.nameKey)) : '');
 const colKeyOf = (key) => `an_${key}`;
 
 const params = new URLSearchParams(location.search);
-const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, sources: [], tab: params.get('tab') || '', extraction: null, data: null, text: '', selMode: false, sel: new Set(), bulkOpen: false, lastPick: -1, entries: [], leaving: false, refreshing: false, view: null, sortSpec: null, cf: null, canComment: false };
+const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, sources: [], tab: params.get('tab') || '', extraction: null, data: null, text: '', selMode: false, sel: new Set(), bulkOpen: false, lastPick: -1, entries: [], leaving: false, refreshing: false, view: null, sortSpec: null, cf: null, canComment: false, canTotals: false, numCols: new Set() };
 const wrapperOf = (id) => document.querySelector(`[data-table-id="${id}"]`);
 const tableOf = (id) => wrapperOf(id)?.querySelector('table.data-table');
 const registryByKey = (k) => st.registries.find((r) => r.key === k) || (st.sources || []).find((r) => r.key === k);
@@ -61,7 +61,7 @@ async function load() {
     if (!res.ok) throw new Error('load failed');
     const body = await res.json();
     st.analysis = body.analysis; st.registries = body.registries || []; st.extractions = body.extractions || [];
-    st.canCreate = !!body.canCreate; st.canExtract = !!body.canExtract; st.canAnnul = !!body.canAnnul; st.canComment = !!body.canComment;
+    st.canCreate = !!body.canCreate; st.canExtract = !!body.canExtract; st.canAnnul = !!body.canAnnul; st.canComment = !!body.canComment; st.canTotals = !!body.canTotals;
     st.design = JSON.parse(JSON.stringify(st.analysis.design));
     restoreWork(); // los cambios de columnas que quedaron sin aplicar en esta pestaña
     try { st.sources = (await window.AnalysisKit.loadSources()).registries || []; } catch { st.sources = []; }
@@ -1247,7 +1247,8 @@ function buildView() {
     st.view = view;
 }
 // Vuelve a dibujar los primeros renglones del resultado (el resto sigue por partes al bajar o con «Mostrar más»).
-function applyFileView() {
+// sameRows: ordenar no cambia qué renglones cuentan, así que la fila de totales no se vuelve a calcular
+function applyFileView(sameRows) {
     const table = tableOf(FILE_TABLE);
     if (!table || !st.data) return;
     buildView();
@@ -1257,8 +1258,21 @@ function applyFileView() {
     ensureEmpty(FILE_TABLE, st.data.columns.length);
     const wrapper = wrapperOf(FILE_TABLE); if (wrapper) wrapper.scrollTop = 0;
     updateFileNote();
+    if (!sameRows && Dashboard.refreshTotalsRow) Dashboard.refreshTotalsRow(FILE_TABLE);
 }
-function setFileSort(key, dir) { st.sortSpec = dir ? { key, dir } : null; applyFileView(); }
+function setFileSort(key, dir) { st.sortSpec = dir ? { key, dir } : null; applyFileView(true); }
+// ---- fila de totales: a cuántos renglones se refiere y el cálculo sobre los que pasan el filtro (st.view) ----
+function fileTotalsInfo() {
+    const count = (st.view || []).length;
+    return { count, total: st.data && st.data.truncated ? st.data.total : count, filtered: !!(st.cf || st.text) };
+}
+function computeFileTotals(specs) {
+    const at = dataColumnIndexes(); const view = st.view || []; const rows = st.data ? st.data.rows : [];
+    const out = window.TotalsCalc.compute(new Map(Object.entries(specs)), (key) => at.get(key), (onRow) => {
+        for (let k = 0; k < view.length; k += 1) { const r = view[k]; const row = rows[r]; onRow((i) => row[i], (i) => cellText(r, i)); }
+    });
+    return Promise.resolve(out);
+}
 // La lista de casillas del filtro de una columna: los valores distintos que muestra (de los datos que trae la pantalla).
 async function fileColumnValues(key) {
     const at = dataColumnIndexes().get(key);
@@ -1447,6 +1461,7 @@ async function loadFile() {
         const tbody = tableOf(FILE_TABLE).tBodies[0];
         tbody.innerHTML = '';
         st.filePlan = fileCellPlan(cols);
+        st.numCols = new Set(st.filePlan.filter((p) => p.numeric || /col-num/.test(p.cls)).map((p) => p.key)); // las columnas con números (la fila de totales ofrece suma, promedio…)
         buildView(); // el filtro y el orden que ya estaban puestos se conservan al volver a leer
         st.drawn = 0;
         drawFileRows(FIRST_ROWS); // el resto se dibuja por partes: dibujar los 5,000 renglones de golpe tardaba más de 5 segundos en el navegador
@@ -1455,11 +1470,14 @@ async function loadFile() {
         if (first && Dashboard.registerPartialTable) Dashboard.registerPartialTable(FILE_TABLE, { isComplete: () => !st.data || !st.view || st.drawn >= st.view.length, loadAll: drawAllFileRows, dataMode: true, sortRows: setFileSort, rowIndexes: () => (st.view || []).slice() });
         // el filtro por columna y sus listas de valores salen de los datos que ya trae la pantalla (no de las celdas dibujadas)
         if (first && Dashboard.registerServerFilteredTable) Dashboard.registerServerFilteredTable(FILE_TABLE, { onChange: (spec) => { st.cf = spec; applyFileView(); }, getValues: fileColumnValues });
+        // la fila de totales (Daniel, 2026-11-27): suma y cuenta los renglones que pasan el filtro de entre los que ya trae la pantalla (En vivo manda hasta 5,000; si hay más, la franja lo dice)
+        if (first && Dashboard.registerTotalsRow) Dashboard.registerTotalsRow(FILE_TABLE, { scope: () => String(st.id), canUse: () => !!st.canTotals, isNumeric: (key) => st.numCols.has(key), rowsInfo: fileTotalsInfo, compute: computeFileTotals });
         watchFileScroll(wrapper);
         // el aspecto de cada columna (negrita, colores, bordes…) se pone después de armar la tabla
         cols.forEach((c) => { if (c.group === 'consulted' && c.style) window.AnalysisKit.applyLook(tableOf(FILE_TABLE), colKeyOf(c.key), c.style); });
         setupFileFormat(tableOf(FILE_TABLE), cols); // el formato de cada encabezado y su menú ⋮ (va después del aspecto de la columna: el ⋮ manda)
         if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(FILE_TABLE);
+        if (Dashboard.refreshTotalsRow) Dashboard.refreshTotalsRow(FILE_TABLE);
         wrapper.setAttribute('data-help-key', 'anFile');
         if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(FILE_TABLE, { getTitle: () => `${st.analysis.name}_${e.live ? t('main.an2Live') : `v${e.version}`}`, getNotice: (format) => (st.data && st.data.truncated && !(format === 'xlsx' && fullDownloadApplies()) ? t('main.anDownloadTruncated', { shown: st.data.rows.length, total: num(st.data.total) }) : ''), buildXlsx: buildAnalysisXlsx });
         updateFileNote();

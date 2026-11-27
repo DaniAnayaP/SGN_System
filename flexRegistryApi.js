@@ -7,13 +7,14 @@ const flexExcel = require('./flexExcel');
 const SearchSyntax = require('./public/SearchSyntax.js');
 const db = require('./db');
 const analysisSources = require('./analysisSources');
+const totalsCalc = require('./public/TotalsCalc.js');
 
 const PAGE = 2000;
 const CELL_BUDGET = 20000; // celdas (renglones x columnas) que se mandan para dibujar de una vez
 const DISTINCT_LIMIT = 150;
 const MESSAGES = {
     FLEX_CONFIG: 'La elección de columnas no es válida.', FLEX_DUP_NAME: 'Dos columnas se llaman igual: cambia el nombre de una.', FLEX_NO_KEY: 'Elige al menos una columna como llave (va hacia abajo).',
-    IMPORT_TOO_MANY_COLUMNS: 'El archivo trae demasiadas columnas.', IMPORT_STAMP: 'El día y la hora no son válidos.', BAD_FILTER: 'El filtro no es válido.', BAD_COLUMN: 'Esa columna no existe.', FLEX_NO_NAME: 'La columna necesita un nombre.', FLEX_NAME_LOCKED: 'El nombre de una llave o de un dato no se puede cambiar.',
+    IMPORT_TOO_MANY_COLUMNS: 'El archivo trae demasiadas columnas.', IMPORT_STAMP: 'El día y la hora no son válidos.', BAD_FILTER: 'El filtro no es válido.', BAD_COLUMN: 'Esa columna no existe.', BAD_CALCS: 'Los cálculos de la fila de totales no son válidos.', FLEX_NO_NAME: 'La columna necesita un nombre.', FLEX_NAME_LOCKED: 'El nombre de una llave o de un dato no se puede cambiar.',
 };
 const compareText = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
 const stampToDb = (iso) => {
@@ -141,6 +142,17 @@ module.exports = function createFlexApi(deps) {
         const all = [...seen].sort(compareText);
         res.set('Cache-Control', 'no-store');
         res.json({ col: ctx.columns[idx].key, values: all.slice(0, DISTINCT_LIMIT), complete: all.length <= DISTINCT_LIMIT });
+    }
+    // La fila de totales (Daniel, 2026-11-27): suma o cuenta TODOS los renglones que pasan el filtro y el texto de la pantalla (no solo los que se dibujan). calcs = { columna: cálculo } (ver public/TotalsCalc.js).
+    function totalsRoute(req, res, registry) {
+        const ctx = context(req, registry, req.query || {});
+        if (ctx.error) return fail(res, 400, ctx.error);
+        const parsed = totalsCalc.parseCalcs(req.query.calcs);
+        if (parsed.error) return fail(res, 400, parsed.error);
+        const at = new Map(ctx.columns.map((c, i) => [c.key, i]));
+        const out = parsed.specs.size ? totalsCalc.compute(parsed.specs, (key) => at.get(key), (onRow) => scan(ctx, (get) => { onRow(get); return true; })) : { rows: 0, values: {} };
+        res.set('Cache-Control', 'no-store');
+        res.json(out);
     }
     async function exportRoute(req, res, registry) {
         const ctx = context(req, registry, req.query || {});
@@ -390,5 +402,5 @@ module.exports = function createFlexApi(deps) {
             regLoading.delete(lockKey);
         }
     }
-    return { dataRoute, valuesRoute, exportRoute, inspectRoute, importRoute, formatRoute, columnFormatRoute, columnsRoute, loadActionRoute };
+    return { dataRoute, valuesRoute, totalsRoute, exportRoute, inspectRoute, importRoute, formatRoute, columnFormatRoute, columnsRoute, loadActionRoute };
 };
