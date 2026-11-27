@@ -7635,6 +7635,7 @@ const analysisAdded = require('./analysisAdded');
 const analysisSources = require('./analysisSources');
 const analysisBuild = require('./analysisBuild');
 const flexExcelFormat = require('./flexExcel');
+const analysisExcel = require('./analysisExcel');
 // Las claves de columna de las tablas libres ya no son su posición (c0, c1…): se convierten, una vez, los análisis que todavía las traen.
 try { analysisSources.upgradeStoredKeys(); } catch (err) { console.error('[análisis] No se pudieron convertir las claves de columna:', err && err.message); }
 // Las tablas que usan los análisis se leen solas poco después de arrancar y se mantienen al día (así abrir un análisis casi siempre es instantáneo).
@@ -7972,6 +7973,26 @@ app.post('/api/business/manual-analyses/:id/column-preview', requireAuth, (req, 
     res.json({ total: built.rows.length, withValue, columns: built.columns.slice(0, -1).map((c) => ({ key: c.key, label: c.label })), sample: built.rows.filter((r) => r[at] !== null && r[at] !== undefined).slice(0, 8).map((r) => ({ base: r.slice(0, at), value: r[at] })), truncated: !!built.truncated });
 });
 // Guardar la lista de columnas agregadas (la lista completa, en orden). Es parte del diseño: se repite sola en cada versión.
+// La descarga del Análisis en Excel con el formato de pantalla (Daniel, 2026-11-26): la pantalla manda lo que se ve (las columnas visibles, los renglones que pasan los filtros, en su orden) y el formato de cada columna;
+// aquí se revisa y se escribe el Excel (analysisExcel.js): números como números con su formato real de Excel, estilos de celdas y encabezados.
+app.post('/api/business/manual-analyses/:id/export-xlsx', requireAuth, async (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    const payload = analysisExcel.cleanPayload(req.body);
+    if (payload.error) return res.status(400).json({ message: payload.error });
+    try {
+        const title = payload.title || analysis.name;
+        const wb = analysisExcel.buildWorkbook({ ...payload, title });
+        res.set('Cache-Control', 'no-store');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', buildContentDisposition(`${String(title).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'Analisis'}.xlsx`));
+        await wb.xlsx.write(res);
+        res.end();
+    } catch (err) {
+        console.error('Análisis: la descarga en Excel falló:', err);
+        if (!res.headersSent) res.status(500).json({ message: 'No se pudo armar la descarga.' }); else res.destroy();
+    }
+});
 // El formato de UNA columna del análisis (el menú ⋮ del encabezado, como en Registros Información): PUT { key, format } lo guarda, DELETE { key } lo borra. Se guarda con el diseño y vale para todos.
 ['put', 'delete'].forEach((method) => {
     app[method]('/api/business/manual-analyses/:id/format/column', requireAuth, (req, res) => {

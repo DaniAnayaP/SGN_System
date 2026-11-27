@@ -5820,11 +5820,12 @@ function getVisibleTableSnapshot(tableId) {
     const hiddenSet = new Set(state.config.hidden);
     const visualOrder = getVisualColumnOrder(state.config).filter((k) => !hiddenSet.has(k));
     const columns = visualOrder.map((key) => ({ key, label: state.labels[key] || key }));
-    const rows = Array.from(state.table.tBodies[0]?.rows || [])
+    // trs: los mismos renglones como elementos, en el orden en que se ven (para quien arma su propia descarga con los datos de cada uno)
+    const trs = Array.from(state.table.tBodies[0]?.rows || [])
         .filter((tr) => !tr.querySelector('td.data-table-empty-cell'))
-        .filter((tr) => !tr.hidden && !tr.classList.contains('data-table-row-col-filtered'))
-        .map((tr) => visualOrder.map((key) => (tr.querySelector(`[data-col="${key}"]`)?.textContent || '').trim()));
-    return { columns, rows };
+        .filter((tr) => !tr.hidden && !tr.classList.contains('data-table-row-col-filtered'));
+    const rows = trs.map((tr) => visualOrder.map((key) => (tr.querySelector(`[data-col="${key}"]`)?.textContent || '').trim()));
+    return { columns, rows, trs };
 }
 
 // Las claves de las columnas que se ven (no ocultas ni difuminadas), en el orden en que se ven: para que una descarga completa del servidor baje las mismas columnas que la pantalla.
@@ -5838,7 +5839,8 @@ function getVisibleColumnKeys(tableId) {
 // El icono Descargar de una tabla (Daniel, 2026-11-25): baja SIEMPRE lo que se ve, o sea los renglones que pasan los filtros y las columnas que no están ocultas o difuminadas, en Excel, CSV o PDF.
 // Es del icono iconDownload del árbol (el administrador del cliente lo ve siempre). getTitle() da el nombre del archivo; getNotice() puede devolver un aviso (p. ej. la tabla solo trae una parte de los renglones).
 // Va en la misma barra .data-table-zoom que los demás iconos; se llama una vez por tabla, cuando ya se armó.
-function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownload } = {}) {
+// buildXlsx({ columns, trs }) (opcional): la pantalla arma su propio Excel con formato; devuelve { url, body } (se manda por POST y baja el archivo) o null para usar el Excel de siempre.
+function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownload, buildXlsx } = {}) {
     const wrapper = document.querySelector(`.data-table-wrapper[data-table-id="${CSS.escape(tableId)}"]`);
     const zoom = wrapper?.previousElementSibling;
     if (!zoom?.classList?.contains('data-table-zoom') || zoom.querySelector('[data-download-btn]')) return;
@@ -5863,11 +5865,26 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownlo
         }
         const pendingRows = needAllTableRows(tableId); // una tabla que dibuja por partes dibuja primero el resto: se baja todo lo que tiene, no solo lo dibujado
         if (pendingRows) await pendingRows;
-        const { columns, rows } = getVisibleTableSnapshot(tableId);
+        const { columns, rows, trs } = getVisibleTableSnapshot(tableId);
         if (!columns.length) return;
         const title = String((getTitle && getTitle()) || tableId).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
         const notice = getNotice && getNotice();
         if (notice) showToast(notice, 'info');
+        if (format === 'xlsx' && buildXlsx) {
+            try {
+                const custom = await buildXlsx({ columns, trs });
+                if (custom) {
+                    const res = await fetch(custom.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ ...custom.body, title }) });
+                    if (!res.ok) throw new Error('export failed');
+                    saveBlob(await res.blob(), `${title}.xlsx`);
+                    return;
+                }
+            } catch (err) {
+                console.error('Descargar: no se pudo bajar la tabla con formato', err);
+                showToast(t('main.downloadError'), 'error');
+                return;
+            }
+        }
         try {
             if (format === 'csv') {
                 const lines = [columns.map((c) => csvEscape(c.label)).join(',')];

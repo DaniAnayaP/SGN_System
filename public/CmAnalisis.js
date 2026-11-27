@@ -792,6 +792,17 @@ function setupFileFormat(table, cols) {
         th.appendChild(btn);
     });
 }
+// La descarga en Excel con el MISMO formato de la pantalla (Daniel, 2026-11-26): la tabla manda lo que se ve (columnas visibles en su orden y renglones que pasan los filtros y el orden) con el valor de cada celda
+// (el número tal cual, no el texto con formato) y el formato de cada columna; el servidor escribe el Excel (analysisExcel.js).
+function buildAnalysisXlsx({ columns, trs }) {
+    if (!st.data || !trs) return null;
+    const defs = st.data.columns;
+    const at = new Map(defs.map((c, i) => [colKeyOf(c.key), i]));
+    const idx = columns.map((c) => at.get(c.key));
+    if (idx.some((i) => i === undefined)) return null;
+    const rows = trs.map((tr) => { const row = st.data.rows[Number(tr.dataset.r)] || []; return idx.map((i) => (row[i] === undefined ? null : row[i])); });
+    return { url: `${API}/${st.id}/export-xlsx`, body: { columns: idx.map((i) => ({ label: defs[i].label, ff: defs[i].ff || null, fmt: defs[i].fmt || '', style: defs[i].style || null })), rows } };
+}
 function ensureEmpty(tableId, span, key) {
     const tbody = tableOf(tableId).tBodies[0];
     if (tbody.querySelectorAll('tr').length) return;
@@ -831,7 +842,7 @@ function fileRowsHtml(from, to) {
     const rows = st.data.rows; const plan = st.filePlan; const html = [];
     for (let r = from; r < to; r += 1) {
         const row = rows[r];
-        let tr = '<tr>';
+        let tr = `<tr data-r="${r}">`; // el número del renglón de los datos: la descarga con formato toma de ahí el valor de cada celda
         for (let k = 0; k < plan.length; k += 1) {
             const p = plan[k]; const raw = row[p.i]; const v = p.fmt(raw);
             // el número tal cual (data-v) para poder volver a darle formato sin recargar; con formato, también para ordenar por el número y no por el texto
@@ -938,7 +949,7 @@ async function loadFile() {
         setupFileFormat(tableOf(FILE_TABLE), cols); // el formato de cada encabezado y su menú ⋮ (va después del aspecto de la columna: el ⋮ manda)
         if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(FILE_TABLE);
         wrapper.setAttribute('data-help-key', 'anFile');
-        if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(FILE_TABLE, { getTitle: () => `${st.analysis.name}_${e.live ? t('main.an2Live') : `v${e.version}`}`, getNotice: () => (st.data && st.data.truncated ? t('main.anDownloadTruncated', { shown: st.data.rows.length, total: num(st.data.total) }) : '') });
+        if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(FILE_TABLE, { getTitle: () => `${st.analysis.name}_${e.live ? t('main.an2Live') : `v${e.version}`}`, getNotice: () => (st.data && st.data.truncated ? t('main.anDownloadTruncated', { shown: st.data.rows.length, total: num(st.data.total) }) : ''), buildXlsx: buildAnalysisXlsx });
         updateFileNote();
         renderAddedBar();
         try { if (sessionStorage.getItem('anRefreshed') === String(st.id)) { sessionStorage.removeItem('anRefreshed'); Dashboard.showToast(t('main.anRefreshDone'), 'success'); } } catch { /* nada */ }
