@@ -3583,6 +3583,55 @@ function renderDataTableZoomControls() {
 // dynamically-built <td>) to carry a stable data-col="<key>" attribute —
 // see OpTransVolTraslados.html / Admin-SaaS.html / Admin-SaaS.js for the
 // convention any future table must follow to get this for free.
+// ---- Desplazamiento al arrastrar (Daniel, 2026-11-27) ------------------------------------------------------------------------------------------------------------------------
+// Al arrastrar algo hacia la orilla de un contenedor con scroll (una tabla ancha, la lista de un modal, un árbol con scroll propio), el contenedor se desplaza solo, más rápido cuanto más cerca de la orilla; sin esto solo se podía soltar
+// en lo que ya estaba a la vista. Vale para TODO arrastre del sistema (se escucha en document); el scroll de la página lo hace el navegador y no se toca. Se detiene al soltar o si dejan de llegar eventos de arrastre.
+(function installDragAutoScroll() {
+    const EDGE = 80; // px de la orilla donde empieza
+    const MAX = 16; // px por cuadro a la orilla
+    let raf = null; let scrollX = null; let scrollY = null; let speedX = 0; let speedY = 0; let lastAt = 0; let idleTimer = null;
+    const snapOff = new Map(); // contenedor → su scroll-snap-type de antes (se apaga mientras se arrastra hacia la orilla: con «mandatory» cada desplazamiento chico regresa a su sitio y la tabla no se mueve)
+    const scrollerOf = (start, axis) => {
+        for (let n = start; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+            const cs = getComputedStyle(n);
+            if (axis === 'x' ? (/(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth) : (/(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight)) return n;
+        }
+        return null;
+    };
+    const speedFor = (pos, from, to) => {
+        const edge = Math.min(EDGE, (to - from) / 4);
+        if (pos < from + edge) return -Math.ceil(((from + edge - pos) / edge) * MAX);
+        if (pos > to - edge) return Math.ceil(((pos - (to - edge)) / edge) * MAX);
+        return 0;
+    };
+    const stop = () => {
+        speedX = 0; speedY = 0;
+        if (raf) { cancelAnimationFrame(raf); raf = null; }
+        clearTimeout(idleTimer);
+        snapOff.forEach((before, el) => { el.style.scrollSnapType = before; });
+        snapOff.clear();
+    };
+    const step = () => {
+        if ((!speedX && !speedY) || Date.now() - lastAt > 400) { raf = null; speedX = 0; speedY = 0; return; }
+        if (scrollX && speedX) scrollX.scrollLeft += speedX;
+        if (scrollY && speedY) scrollY.scrollTop += speedY;
+        raf = requestAnimationFrame(step);
+    };
+    document.addEventListener('dragover', (event) => {
+        scrollX = scrollerOf(event.target, 'x');
+        scrollY = scrollerOf(event.target, 'y');
+        speedX = 0; speedY = 0;
+        if (scrollX) { const r = scrollX.getBoundingClientRect(); speedX = speedFor(event.clientX, Math.max(r.left, 0), Math.min(r.right, window.innerWidth)); }
+        if (scrollY) { const r = scrollY.getBoundingClientRect(); speedY = speedFor(event.clientY, Math.max(r.top, 0), Math.min(r.bottom, window.innerHeight)); }
+        lastAt = Date.now();
+        [[scrollX, speedX], [scrollY, speedY]].forEach(([el, speed]) => { if (el && speed && !snapOff.has(el)) { snapOff.set(el, el.style.scrollSnapType); el.style.scrollSnapType = 'none'; } });
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(stop, 700); // un arrastre que termina sin soltar aquí (un archivo que sale de la ventana) también restaura el «pegado»
+        if ((speedX || speedY) && !raf) raf = requestAnimationFrame(step);
+        else if (!speedX && !speedY) stop();
+    }, true);
+    ['dragend', 'drop'].forEach((type) => document.addEventListener(type, stop, true));
+})();
 const DATA_TABLE_COLUMNS_KEY_PREFIX = 'dataTableColumns:';
 const DATA_TABLE_PIN_MAX = 4;
 const DATA_TABLE_COL_MIN_WIDTH = 80; // px floor — narrower risks clipping icon buttons/logos/swatches
@@ -3606,8 +3655,20 @@ function getDataTableColumnKeys(table) {
     return Array.from(getHeaderRow(table).cells).map((th) => th.dataset.col).filter(Boolean);
 }
 
+// Acomodo POR ANÁLISIS (Daniel, 2026-11-27): una tabla con data-layout-scope="<id>" guarda su acomodo (navegador) y sus acomodos guardados (servidor) con esa clave (tabla:id), no con la de la tabla a secas.
+const layoutScopes = new Map(); // tableId → alcance
+const layoutKeyOf = (tableId) => (layoutScopes.get(tableId) ? `${tableId}:${layoutScopes.get(tableId)}` : tableId);
+// Acomodo ORIGINAL: una pantalla (el Análisis) registra { get() → { order, hidden, pinned, widths } | null, canEdit() → bool, save(layout | null) → Promise }. Quien no se ha acomodado nada ve la tabla así.
+const ORIGINAL_LAYOUT_ID = 'original';
+const originalLayouts = new Map();
+function registerOriginalLayout(tableId, provider) { originalLayouts.set(tableId, provider); }
+function originalLayoutOf(tableId) {
+    const provider = originalLayouts.get(tableId);
+    const layout = provider && provider.get();
+    return layout && Array.isArray(layout.order) && layout.order.length ? layout : null;
+}
 function dataTableConfigStorageKey(tableId) {
-    return `${DATA_TABLE_COLUMNS_KEY_PREFIX}${tableId}`;
+    return `${DATA_TABLE_COLUMNS_KEY_PREFIX}${layoutKeyOf(tableId)}`;
 }
 
 // Order-independent fingerprint of a table's column SET (not its order) —
@@ -3941,6 +4002,7 @@ window.addEventListener('resize', resizeAllDataTables);
 function resetDataTableColumnLayout(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
+    if (returnToOriginalLayout(tableId)) return; // con acomodo original, «Limpiar» regresa a él (no al orden de los datos)
     state.config = {
         order: state.columnKeys.slice(),
         hidden: [],
@@ -5715,8 +5777,11 @@ function initDataTableColumns(wrapper, index) {
     // this device yet) -- captured BEFORE loadDataTableConfig runs, since
     // that call itself is what would populate it going forward. See
     // maybeApplyDefaultSavedLayout below.
+    if (wrapper.dataset.layoutScope) layoutScopes.set(tableId, wrapper.dataset.layoutScope); else layoutScopes.delete(tableId); // el alcance va ANTES de leer lo guardado
     const hadNoStoredLayout = localStorage.getItem(dataTableConfigStorageKey(tableId)) == null;
-    const config = loadDataTableConfig(tableId, columnKeys, wrapper.dataset.columnsGrow === '1', wrapper.dataset.columnsKeep === '1');
+    // quien no se ha acomodado nada ve el acomodo original de la pantalla (sin guardárselo: así sigue al original si cambia)
+    const original = hadNoStoredLayout ? originalLayoutOf(tableId) : null;
+    const config = original ? reconcileDataTableConfig(original, columnKeys) : loadDataTableConfig(tableId, columnKeys, wrapper.dataset.columnsGrow === '1', wrapper.dataset.columnsKeep === '1');
     const naturalWidths = measureNaturalColumnWidths(table);
     columnKeys.forEach((key) => {
         if (config.widths[key] == null) config.widths[key] = naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
@@ -5728,6 +5793,7 @@ function initDataTableColumns(wrapper, index) {
         columnRules: new Map(),
     });
     applyDataTableColumnLayout(tableId);
+    if (original) setActiveSavedLayout(tableId, { id: ORIGINAL_LAYOUT_ID, name: t('main.layoutOriginalName') });
     // Una tabla cambia de ancho por más que la ventana (el menú lateral, la
     // escala de la interfaz, una barra de scroll, un panel que se abre): cada
     // vez que cambie, se vuelve a repartir el ancho de sus columnas.
@@ -6702,7 +6768,7 @@ let layoutMenuState = null; // { tableId, pill, input, layouts, loaded, query }
 // coincide y el nombre deja de mostrarse -- nunca presume un acomodo que la
 // tabla ya no tiene.
 function activeLayoutStorageKey(tableId) {
-    return `sgn_active_layout::${tableId}`;
+    return `sgn_active_layout::${layoutKeyOf(tableId)}`;
 }
 
 function layoutConfigSignature(config) {
@@ -6741,7 +6807,10 @@ function clearActiveSavedLayout(tableId) {
 // con uno, queda como píldora con su nombre escrito y la ✕ para limpiarlo.
 // Abierto el menú, el nombre le cede su lugar al buscador.
 function refreshSavedLayoutPill(pill) {
-    const active = getActiveSavedLayout(pill.dataset.pillTableId);
+    const tableId = pill.dataset.pillTableId;
+    let active = getActiveSavedLayout(tableId);
+    // con acomodo original, lo que no es ni el original ni un acomodo guardado es «Mi acomodo» (la ✕ regresa al original)
+    if (!active && originalLayoutOf(tableId) && localStorage.getItem(dataTableConfigStorageKey(tableId)) != null) active = { id: 'mine', name: t('main.layoutMineName') };
     const nameEl = pill.querySelector('.data-table-layout-pill-name');
     nameEl.textContent = active ? active.name : '';
     nameEl.hidden = !active || pill.classList.contains('open');
@@ -6754,6 +6823,96 @@ function refreshSavedLayoutPillForTable(tableId) {
     if (pill) refreshSavedLayoutPill(pill);
 }
 
+// Regresa al acomodo original de la pantalla: se olvida el acomodo propio de este navegador (así sigue al original si cambia) y la etiqueta dice «★ Original». false si la pantalla no tiene original.
+function returnToOriginalLayout(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    const original = originalLayoutOf(tableId);
+    if (!state || !original) return false;
+    try { localStorage.removeItem(dataTableConfigStorageKey(tableId)); } catch { /* ignore */ }
+    state.config = reconcileDataTableConfig(original, state.columnKeys);
+    state.columnKeys.forEach((key) => {
+        if (state.config.widths[key] == null) state.config.widths[key] = state.naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
+    });
+    applyDataTableColumnLayout(tableId);
+    setActiveSavedLayout(tableId, { id: ORIGINAL_LAYOUT_ID, name: t('main.layoutOriginalName') });
+    refreshSavedLayoutPillForTable(tableId);
+    return true;
+}
+
+// Deja el acomodo de ahora como el original (layout) o lo quita (null). Quien lo hace deja de tener acomodo propio en su navegador: sigue al original.
+async function setOriginalLayout(tableId, layout) {
+    const provider = originalLayouts.get(tableId);
+    if (!provider) return;
+    closeSavedLayoutMenu();
+    try {
+        await provider.save(layout);
+        if (layout) {
+            try { localStorage.removeItem(dataTableConfigStorageKey(tableId)); } catch { /* ignore */ }
+            setActiveSavedLayout(tableId, { id: ORIGINAL_LAYOUT_ID, name: t('main.layoutOriginalName') });
+        } else if (getActiveSavedLayout(tableId)?.id === ORIGINAL_LAYOUT_ID) {
+            clearActiveSavedLayout(tableId);
+        }
+        refreshSavedLayoutPillForTable(tableId);
+        showToast(t(layout ? 'main.layoutOriginalSet' : 'main.layoutOriginalCleared'), 'success');
+    } catch {
+        showToast(t('main.layoutOriginalError'), 'error');
+    }
+}
+
+// La fila «★ Acomodo original» del menú de Acomodo Guardado (solo en pantallas que registran un original).
+function buildOriginalLayoutRow(state, provider) {
+    const tableId = state.tableId;
+    const defined = !!originalLayoutOf(tableId);
+    const canEdit = !!provider.canEdit();
+    const wrap = document.createElement('div');
+    wrap.className = 'data-table-layout-original';
+    wrap.dataset.helpKey = 'layoutOriginal';
+    const active = getActiveSavedLayout(tableId)?.id === ORIGINAL_LAYOUT_ID;
+    const row = document.createElement('div');
+    row.className = 'data-table-layout-item' + (active ? ' on' : '');
+    const check = document.createElement('span');
+    check.className = 'data-table-layout-check';
+    if (active) check.innerHTML = '<i class="bx bx-check" aria-hidden="true"></i>';
+    const nameBtn = document.createElement('button');
+    nameBtn.type = 'button';
+    nameBtn.className = 'data-table-layout-name';
+    nameBtn.setAttribute('role', 'menuitem');
+    nameBtn.textContent = t('main.layoutOriginalRow');
+    nameBtn.disabled = !defined;
+    nameBtn.addEventListener('click', () => { closeSavedLayoutMenu(); returnToOriginalLayout(tableId); });
+    const badge = document.createElement('span');
+    badge.className = 'saved-view-scope-badge saved-view-scope-global';
+    badge.textContent = t(defined ? 'main.layoutOriginalDefined' : 'main.layoutOriginalUndefined');
+    row.append(check, nameBtn, badge);
+    if (canEdit && defined) {
+        const acts = document.createElement('span');
+        acts.className = 'data-table-layout-acts';
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'data-table-layout-act data-table-layout-act-del';
+        delBtn.setAttribute('aria-label', t('main.layoutOriginalClear'));
+        delBtn.title = t('main.layoutOriginalClear');
+        delBtn.innerHTML = '<i class="bx bx-trash" aria-hidden="true"></i>';
+        delBtn.addEventListener('click', () => setOriginalLayout(tableId, null));
+        acts.appendChild(delBtn);
+        row.appendChild(acts);
+    }
+    wrap.appendChild(row);
+    if (canEdit) {
+        const set = document.createElement('button');
+        set.type = 'button';
+        set.className = 'data-table-layout-item data-table-layout-set';
+        set.setAttribute('role', 'menuitem');
+        set.innerHTML = '<span class="data-table-layout-plus"><i class="bx bx-upload" aria-hidden="true"></i></span>';
+        const label = document.createElement('span');
+        label.textContent = t('main.layoutOriginalSetBtn');
+        set.appendChild(label);
+        set.addEventListener('click', () => setOriginalLayout(tableId, collectCurrentLayoutSnapshot(tableId)));
+        wrap.appendChild(set);
+    }
+    return wrap;
+}
+
 // ✕ en la píldora: quita el acomodo y regresa al default que le toca a esta
 // cuenta -- su acomodo por default asignado si lo hay (el personal gana al
 // global, igual que en la primera visita), y si no, el original de la tabla.
@@ -6763,11 +6922,13 @@ async function clearSavedLayoutForTable(tableId) {
     closeSavedLayoutMenu();
     clearActiveSavedLayout(tableId);
     try { localStorage.removeItem(dataTableConfigStorageKey(tableId)); } catch { /* ignore */ }
-    state.config = reconcileDataTableConfig(null, state.columnKeys);
+    state.config = reconcileDataTableConfig(originalLayoutOf(tableId), state.columnKeys);
     state.columnKeys.forEach((key) => {
         if (state.config.widths[key] == null) state.config.widths[key] = state.naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
     });
     applyDataTableColumnLayout(tableId);
+    if (originalLayoutOf(tableId)) setActiveSavedLayout(tableId, { id: ORIGINAL_LAYOUT_ID, name: t('main.layoutOriginalName') });
+    refreshSavedLayoutPillForTable(tableId);
     await maybeApplyDefaultSavedLayout(tableId);
 }
 
@@ -6847,6 +7008,8 @@ function renderSavedLayoutMenu() {
         openColumnArrangeEditor(state.tableId);
     });
     layoutMenuEl.appendChild(add);
+    const originalProvider = originalLayouts.get(state.tableId);
+    if (originalProvider) layoutMenuEl.appendChild(buildOriginalLayoutRow(state, originalProvider));
     if (!state.loaded) return;
 
     const sep = document.createElement('div');
@@ -6935,7 +7098,7 @@ function renderSavedLayoutMenu() {
 
 async function refreshSavedLayoutMenu(state) {
     try {
-        const res = await fetch(`${savedLayoutApiBase(state.tableId)}/${encodeURIComponent(state.tableId)}`, { credentials: 'include' });
+        const res = await fetch(`${savedLayoutApiBase(state.tableId)}/${encodeURIComponent(layoutKeyOf(state.tableId))}`, { credentials: 'include' });
         if (res.ok) state.layouts = (await res.json()).layouts || [];
     } catch {
         // Leave the list as it was -- the next open retries the fetch anyway.
@@ -9046,7 +9209,7 @@ async function submitSavedLayout() {
     try {
         const res = await fetch(savedLayoutApiBase(savedLayoutTableId), {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-            body: JSON.stringify({ tableKey: savedLayoutTableId, name, layout, scope, isDefault: savedLayoutDefaultCheckbox.checked, audience }),
+            body: JSON.stringify({ tableKey: layoutKeyOf(savedLayoutTableId), name, layout, scope, isDefault: savedLayoutDefaultCheckbox.checked, audience }),
         });
         if (!res.ok) {
             const body = await res.json().catch(() => null);
@@ -9075,7 +9238,7 @@ async function submitSavedLayout() {
 // global one, matching the plan's stated precedence.
 async function maybeApplyDefaultSavedLayout(tableId) {
     try {
-        const res = await fetch(`${savedLayoutApiBase(tableId)}/${encodeURIComponent(tableId)}`, { credentials: 'include' });
+        const res = await fetch(`${savedLayoutApiBase(tableId)}/${encodeURIComponent(layoutKeyOf(tableId))}`, { credentials: 'include' });
         if (!res.ok) return;
         const { layouts } = await res.json();
         const personalDefault = (layouts || []).find((l) => l.scope === 'personal' && l.isDefault);
@@ -16140,6 +16303,7 @@ window.Dashboard = {
     renderTableRowsInChunks,
     registerPartialTable,
     registerServerFilteredTable,
+    registerOriginalLayout,
     resetServerFilterValues,
     setColumnClassMeta,
     reapplyColumnFilters,

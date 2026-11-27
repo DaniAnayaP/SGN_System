@@ -2156,6 +2156,17 @@
     "arrangePreviewEmpty": "No columns yet. Mark Normal or Pinned in the list and they show up here.",
     "arrangePickOne": "Mark at least one column to continue",
     "savedLayoutClearBtn": "Clear layout",
+    "layoutOriginalRow": "★ Original layout",
+    "layoutOriginalName": "★ Original",
+    "layoutMineName": "My layout",
+    "layoutOriginalDefined": "set",
+    "layoutOriginalUndefined": "not set",
+    "layoutOriginalSetBtn": "Make my layout the original",
+    "layoutOriginalClear": "Remove the original",
+    "layoutOriginalSet": "Done: this is how anyone who opens this analysis will see it.",
+    "layoutOriginalCleared": "The original layout was removed.",
+    "layoutOriginalError": "The original layout could not be saved.",
+    "anAcomodoOriginal": "Original column layout",
     "savedSearchEditorNewTitle": "New search",
     "savedSearchEditorEditTitle": "Edit search",
     "savedSearchEditorNameLabel": "Name this search",
@@ -10628,6 +10639,10 @@
     "anComentarios": {
       "what": "A column where you write: each row can have several comments, one after another, with your name and the time. They are tied to the row key (not its position), so they stay with their row even if you sort or new data arrives. The cell shows the latest one and how many there are; one click opens the list. Anyone with the “Comment on the analysis” permission in the tree can write. Each version you extract keeps the comments of that moment, and the Excel carries all of them.",
       "example": "GAE 100013: “26 Nov 16:42 Luis: partial delivery” · 2 comments"
+    },
+    "layoutOriginal": {
+      "what": "The layout this analysis opens with for everyone: order, widths, pinned and hidden columns. Anyone who can change the analysis updates it with “Make my layout the original”. Everyone can move the columns as they like and that stays only for that person (the label says “My layout”); “Apply” or the ✕ on the label go back to the original, like “Clear”. Saved layouts (personal or shared) belong to each analysis.",
+      "example": "Daniel puts STOCK next to consumption and marks it as the original → Luis opens the analysis and sees it that way"
     },
     "anBloque": {
       "what": "A column that calculates with a group of columns at once, like an Excel range (F2:AM2): how many are empty, how many have data, how many are zero, the sum, the average, the smallest or the largest. You choose the columns with “From–to” or with “Mark on the table” (click the first and then the last); whatever lies between the two ends is included automatically, so a column you add in the middle counts. “Another block or column” adds more. An empty cell is not zero: “how many are zero” is separate.",

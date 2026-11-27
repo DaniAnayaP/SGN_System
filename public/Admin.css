@@ -5088,6 +5088,8 @@ button.data-table-layout-item{
     text-align: left;
     cursor: pointer;
 }
+.data-table-layout-original{ display: flex; flex-direction: column; }
+.data-table-layout-set{ color: var(--color-accent); font-weight: 600; }
 .data-table-layout-add{
     color: var(--color-accent);
     font-weight: 700;

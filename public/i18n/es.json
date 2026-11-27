@@ -2155,6 +2155,17 @@
     "arrangePreviewEmpty": "Todavía no hay columnas. Marca Normal o Fija en la lista y aparecen aquí.",
     "arrangePickOne": "Marca al menos una columna para continuar",
     "savedLayoutClearBtn": "Limpiar acomodo",
+    "layoutOriginalRow": "★ Acomodo original",
+    "layoutOriginalName": "★ Original",
+    "layoutMineName": "Mi acomodo",
+    "layoutOriginalDefined": "definido",
+    "layoutOriginalUndefined": "sin definir",
+    "layoutOriginalSetBtn": "Dejar mi acomodo como el original",
+    "layoutOriginalClear": "Quitar el original",
+    "layoutOriginalSet": "Listo: así lo verá quien abra este análisis.",
+    "layoutOriginalCleared": "Se quitó el acomodo original.",
+    "layoutOriginalError": "No se pudo guardar el acomodo original.",
+    "anAcomodoOriginal": "Acomodo original de las columnas",
     "savedSearchEditorNewTitle": "Nueva búsqueda",
     "savedSearchEditorEditTitle": "Editar búsqueda",
     "savedSearchEditorNameLabel": "Elige el nombre de la búsqueda",
@@ -10627,6 +10638,10 @@
     "anComentarios": {
       "what": "Una columna donde tú escribes: cada renglón puede tener varios comentarios, uno tras otro, con tu nombre y la hora. Se ligan a la llave del renglón (no a su posición), así que siguen con su renglón aunque se ordene o lleguen datos nuevos. En la celda se ve el último y cuántos hay; un clic abre la lista. Escribe quien tenga el permiso «Comentar en el análisis» del árbol. Cada versión que extraes guarda los comentarios de ese momento, y el Excel lleva todos.",
       "example": "GAE 100013: «26 nov 16:42 Luis: llegó parcial» · 2 comentarios"
+    },
+    "layoutOriginal": {
+      "what": "El acomodo con el que se abre este análisis para todos: orden, anchos, columnas fijas y ocultas. Quien puede cambiar el análisis lo actualiza con «Dejar mi acomodo como el original». Cada quien puede mover las columnas a su gusto y eso queda solo para esa persona (la etiqueta dice «Mi acomodo»); «Aplicar» o la ✕ de la etiqueta regresan al original, igual que «Limpiar». Los acomodos guardados (personales o compartidos) son de cada análisis.",
+      "example": "Daniel deja EXISTENCIA junto al consumo y lo marca como original → Luis abre el análisis y lo ve así"
     },
     "anBloque": {
       "what": "Una columna que calcula con un grupo de columnas a la vez, como el rango de Excel (F2:AM2): cuántas están vacías, cuántas tienen dato, cuántas valen cero, la suma, el promedio, el menor o el mayor. Eliges las columnas con «Desde–hasta» o con «Marcar en la tabla» (clic en la primera y clic en la última); lo que quede entre las dos puntas entra solo, así que si agregas una columna en medio, cuenta. «Otro bloque o columna» suma más. Una celda vacía no es cero: «cuántas valen cero» va aparte.",

@@ -530,6 +530,15 @@ async function confirmRemoval(keys) {
 }
 async function removeFileColumn(id) { const k = `f:${id}`; if (await confirmRemoval([k])) stageRemove([k]); }
 async function removeAdded(id) { const k = `a:${id}`; if (await confirmRemoval([k])) stageRemove([k]); }
+// El acomodo original de las columnas (layout = { order, hidden, pinned, widths } o null para quitarlo): lo guarda el servidor en el análisis y lo ve quien lo abra.
+async function saveOriginalLayout(layout) {
+    const res = await fetch(`${API}/${st.id}/layout`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout }) });
+    if (!res.ok) throw new Error('layout failed');
+    const body = await res.json();
+    const saved = body.layout || undefined;
+    if (st.analysis.design) st.analysis.design.layout = saved;
+    if (st.design) st.design.layout = saved; // la copia de trabajo también (no se pierde al guardar las columnas)
+}
 async function saveAdded(list) { st.design.added = list; afterStage(); }
 async function saveColumns(columns, extra = {}) {
     st.design.columns = columns;
@@ -1766,6 +1775,11 @@ async function loadFile() {
         st.drawn = 0;
         drawFileRows(FIRST_ROWS); // el resto se dibuja por partes: dibujar los 5,000 renglones de golpe tardaba más de 5 segundos en el navegador
         ensureEmpty(FILE_TABLE, columns.length);
+        // el acomodo de columnas es POR ANÁLISIS y hay un acomodo ORIGINAL que ve quien lo abra sin haberse acomodado nada (Daniel, 2026-11-27, «Sí a las recomendadas»)
+        if (first) {
+            wrapper.dataset.layoutScope = String(st.id);
+            if (Dashboard.registerOriginalLayout) Dashboard.registerOriginalLayout(FILE_TABLE, { get: () => (st.analysis.design && st.analysis.design.layout) || null, canEdit: () => !!st.canCreate, save: saveOriginalLayout });
+        }
         if (first && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 1);
         if (first && Dashboard.registerPartialTable) Dashboard.registerPartialTable(FILE_TABLE, { isComplete: () => !st.data || !st.view || st.drawn >= st.view.length, loadAll: drawAllFileRows, dataMode: true, sortRows: setFileSort, rowIndexes: () => (st.view || []).slice() });
         // el filtro por columna y sus listas de valores los resuelve el servidor sobre todos los renglones (queryRows, fileColumnValues)

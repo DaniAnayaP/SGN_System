@@ -7665,7 +7665,7 @@ const AN_COLS = { create: 'colAnCrearAuth', extract: 'colAnExtraerAuth', annul: 
 const AN_MESSAGES = {
     AN_NAME_REQUIRED: 'Ponle un nombre al análisis.', AN_NAME_TAKEN: 'Ya hay un análisis con ese nombre.', DESIGN_REGISTRIES: 'Elige al menos un registro.', DESIGN_COLUMN_REGISTRY: 'Una columna usa un registro que el análisis no tiene.',
     DESIGN_COLUMN_PERIODS: 'Cada columna consultada necesita al menos un periodo.', AN_NO_COLUMNS: 'Agrega al menos una columna consultada antes de extraer.', AN_EMPTY: 'Con este diseño no sale ningún renglón: revisa los periodos y los filtros.',
-    ADDED_NAME: 'Ponle un nombre a la columna.', ADDED_STEPS: 'Revisa los pasos de la operación.', ADDED_RULES: 'Revisa las reglas: cada una necesita su condición y su resultado.', ADDED_BLOCK: 'Revisa el bloque: elige qué calcular y las columnas de inicio y fin.', ADDED_KIND: 'Ese tipo de columna todavía no se puede agregar.', ADDED_TOO_MANY: 'Un análisis admite hasta 40 columnas agregadas.',
+    ADDED_NAME: 'Ponle un nombre a la columna.', ADDED_STEPS: 'Revisa los pasos de la operación.', ADDED_RULES: 'Revisa las reglas: cada una necesita su condición y su resultado.', ADDED_BLOCK: 'Revisa el bloque: elige qué calcular y las columnas de inicio y fin.', BAD_LAYOUT: 'El acomodo de columnas no es válido.', ADDED_KIND: 'Ese tipo de columna todavía no se puede agregar.', ADDED_TOO_MANY: 'Un análisis admite hasta 40 columnas agregadas.',
     BASE_KEY: 'Elige al menos una columna como llave.', BASE_MISSING: 'El archivo base no existe.', COL_REGISTRY: 'Una columna usa un archivo que no existe.', COL_KEY: 'Falta ligar la llave de una columna con una columna del archivo.', COL_VALUE: 'Elige qué columna del archivo se trae.', COL_COND: 'Una condición usa una columna que el archivo no tiene.', COL_NOT_FOUND: 'Esa columna no existe.',
     COMMENT_COLUMN: 'Esa columna de comentarios no existe.', COMMENT_KEY: 'No se sabe a qué renglón va el comentario.', COMMENT_EMPTY: 'Escribe el comentario.', COMMENT_TOO_LONG: 'El comentario es muy largo (máximo 1,000 letras).',
     BAD_FILTER: 'El filtro no es válido.', BAD_COLUMN: 'Esa columna no existe.', BAD_CALCS: 'Los cálculos de la fila de totales no son válidos.',
@@ -7838,6 +7838,7 @@ app.patch('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
         const sent = body.design && typeof body.design === 'object' ? { ...body.design } : body.design;
         if (sent && typeof sent === 'object' && sent.added === undefined) sent.added = (analysis.design && analysis.design.added) || [];
         if (sent && typeof sent === 'object' && sent.looks === undefined) sent.looks = (analysis.design && analysis.design.looks) || {};
+        if (sent && typeof sent === 'object' && sent.layout === undefined && analysis.design && analysis.design.layout) sent.layout = analysis.design.layout; // el acomodo original no se pierde al guardar las columnas
         const checked = manualAnalyses.normalizeDesign(sent, anRegistryKeys(req));
         if (checked.error) return anFail(res, checked.error);
         const bad = anCheckDesign(req, checked.design);
@@ -8288,6 +8289,24 @@ app.put('/api/business/manual-analyses/:id/added', requireAuth, (req, res) => {
     const before = ((analysis.design && analysis.design.added) || []).length;
     logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: updated.name, action: 'update', fieldKey: 'main.anColumnasAgregadas', oldValue: String(before), newValue: String(checked.added.length), changedBy: changedByLabel(req) });
     res.json({ analysis: anOut(updated, req) });
+});
+// El acomodo ORIGINAL de las columnas (Daniel, 2026-11-27): con el que se abre el análisis para quien no se haya acomodado nada. Lo cambia quien puede cambiar el análisis; { layout: null } lo quita.
+app.put('/api/business/manual-analyses/:id/layout', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    if (!anAbilities(req).canCreate) return anForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const raw = req.body ? req.body.layout : undefined;
+    const clearing = raw === null || raw === undefined;
+    const layout = clearing ? undefined : manualAnalyses.cleanLayout(raw);
+    if (!clearing && !layout) return anFail(res, 'BAD_LAYOUT');
+    const next = manualAnalyses.normalizeDesign({ ...analysis.design, layout }, anRegistryKeys(req));
+    if (next.error) return anFail(res, next.error);
+    const updated = updateAnalysis(analysis.id, clientId, isTestAccount, { design: next.design });
+    const had = !!(analysis.design && analysis.design.layout);
+    logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: updated.name, action: 'update', fieldKey: 'main.anAcomodoOriginal', oldValue: had ? 'definido' : '', newValue: layout ? 'definido' : '', changedBy: changedByLabel(req) });
+    res.set('Cache-Control', 'no-store');
+    res.json({ layout: layout || null });
 });
 // Vista previa de UNA columna agregada (sin guardar): su fórmula de Excel y lo que daría en los primeros renglones de esa versión.
 app.post('/api/business/manual-analyses/:id/extractions/:eid/added-preview', requireAuth, (req, res) => {

@@ -39,6 +39,20 @@ function cleanLooks(raw) {
     });
     return out;
 }
+// El acomodo original de las columnas de la tabla del Archivo (el mismo { order, hidden, pinned, widths } del acomodo de columnas de la pantalla; las claves son las de los encabezados: an_ref_…, an_c_…, an_a_…), revisado. undefined = no hay.
+const LAYOUT_KEY_RE = /^an_(ref_[A-Za-z0-9_]{1,60}|c_[A-Za-z0-9_]{1,40}|a_[A-Za-z0-9_]{1,40})$/;
+const MAX_LAYOUT_COLS = 400;
+function cleanLayout(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+    const keys = (v) => (Array.isArray(v) ? [...new Set(v.filter((k) => typeof k === 'string' && LAYOUT_KEY_RE.test(k)))].slice(0, MAX_LAYOUT_COLS) : []);
+    const order = keys(raw.order);
+    if (!order.length) return undefined;
+    const widths = {};
+    if (raw.widths && typeof raw.widths === 'object' && !Array.isArray(raw.widths)) {
+        Object.entries(raw.widths).slice(0, MAX_LAYOUT_COLS).forEach(([k, w]) => { const n = Number(w); if (LAYOUT_KEY_RE.test(k) && Number.isFinite(n) && n >= 40 && n <= 2000) widths[k] = Math.round(n); });
+    }
+    return { order, hidden: keys(raw.hidden), pinned: keys(raw.pinned).slice(0, 4), widths };
+}
 const LIVE_RE = /^(last|v:[a-z0-9 _.\-]{1,80})$/; // «la más reciente»: el último periodo o la familia de columnas de una tabla libre (su nombre sin mayúsculas ni acentos)
 const LINES = ['solid', 'dotted', 'dashed', 'double', 'thick'];
 
@@ -156,7 +170,7 @@ function normalizeV2(src, registryKeys) {
     const addedChecked = analysisAdded.normalizeAdded(src.added);
     if (addedChecked.error) return { error: addedChecked.error, field: 'added' };
     const registries = [...new Set([baseRegistry, ...columns.map((c) => c.registry)])];
-    return { design: { legacy: false, baseRegistry, base, dedupe, columns, registries, reference: [], consulted: [], added: addedChecked.added, looks: cleanLooks(src.looks), filters: { unidades: [], categorias: [], codigos: [] } } };
+    return { design: { legacy: false, baseRegistry, base, dedupe, columns, registries, reference: [], consulted: [], added: addedChecked.added, looks: cleanLooks(src.looks), layout: cleanLayout(src.layout), filters: { unidades: [], categorias: [], codigos: [] } } };
 }
 // El diseño que manda la pantalla, revisado y limpio. registryKeys = los registros que se pueden usar. Devuelve { design } o { error, field }.
 function normalizeDesign(raw, registryKeys) {
@@ -165,7 +179,7 @@ function normalizeDesign(raw, registryKeys) {
     if (src.baseRegistry && src.legacy !== true) return normalizeV2(src, registryKeys);
     const legacy = normalizeLegacy(src, registryKeys);
     if (legacy.error) return legacy;
-    return { design: { ...legacy.design, ...legacyAsV2(legacy.design), looks: cleanLooks(src.looks), legacy: true } };
+    return { design: { ...legacy.design, ...legacyAsV2(legacy.design), looks: cleanLooks(src.looks), layout: cleanLayout(src.layout), legacy: true } };
 }
 const isV2 = (design) => !!(design && design.baseRegistry && design.legacy !== true);
 
@@ -208,4 +222,4 @@ function buildExtraction(design, sources, { maxRows = MAX_ROWS } = {}) {
     ]);
     return { columns, rows, truncated };
 }
-module.exports = { FORMATS, CLASS_COLOR_COUNT, REFERENCE_DIMS, KEY_DIMS, AGGS, AGGS2, MAX_ROWS, MAX_CONSULTED, MAX_COLUMNS, normalizeDesign, normalizeStyle, isV2, periodsNeeded, buildExtraction, aggregate, keyOf, cleanText, periodColKey, cleanLooks, LOOK_KEY_RE };
+module.exports = { cleanLayout, FORMATS, CLASS_COLOR_COUNT, REFERENCE_DIMS, KEY_DIMS, AGGS, AGGS2, MAX_ROWS, MAX_CONSULTED, MAX_COLUMNS, normalizeDesign, normalizeStyle, isV2, periodsNeeded, buildExtraction, aggregate, keyOf, cleanText, periodColKey, cleanLooks, LOOK_KEY_RE };
