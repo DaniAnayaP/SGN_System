@@ -10782,6 +10782,21 @@ th.an-ref-key::after{ content: " ·"; opacity: 0.55; }
 .an-chip-tag{ align-self: center; font-size: 0.62rem; font-weight: 700; padding: 0 0.4rem; border-radius: 999px; background: var(--color-surface); margin-right: 0.3rem; }
 .an-addedchip .an-chip-undo{ text-decoration: underline; opacity: 1; font-size: 0.72rem; padding-left: 0.2rem; }
 .an-chip-box{ margin-right: 0.25rem; }
+/* fichas agrupadas por categoría (CmAnalisis.js: renderCats): cada categoría es un encabezado que se contrae o se abre en la misma fila */
+.an-cat{ display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; border: 1px solid var(--color-border); border-radius: 999px; padding: 0.1rem 0.25rem 0.1rem 0.15rem; background: var(--color-surface); min-width: 0; max-width: 100%; }
+.an-cat.is-open{ flex: 1 1 100%; border-radius: 0.9rem; padding: 0.3rem 0.45rem 0.35rem 0.3rem; background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface)); }
+.an-cath{ display: inline-flex; align-items: center; gap: 0.4rem; border: 0; background: transparent; color: inherit; font: inherit; font-size: 0.82rem; cursor: pointer; padding: 0.2rem 0.6rem 0.2rem 0.35rem; border-radius: 999px; }
+.an-cath:hover, .an-cath:focus-visible{ background: color-mix(in srgb, var(--color-accent) 10%, transparent); outline: none; }
+.an-car{ font-size: 0.7rem; color: var(--color-text-secondary); transition: transform 0.15s; }
+.an-cat.is-open .an-car{ transform: rotate(90deg); }
+.an-dot{ width: 0.7rem; height: 0.7rem; border-radius: 50%; flex: none; }
+.an-catn{ color: var(--color-text-secondary); font-size: 0.74rem; }
+.an-catbd{ font-size: 0.62rem; font-weight: 700; border-radius: 999px; padding: 0 0.4rem; }
+.an-catbd.is-new{ background: color-mix(in srgb, #2b8456 22%, var(--color-surface)); }
+.an-catbd.is-removed{ background: color-mix(in srgb, #c4473a 22%, var(--color-surface)); }
+.an-catbd.is-edited{ background: color-mix(in srgb, #b57a05 24%, var(--color-surface)); }
+.an-catchips{ display: inline-flex; flex-wrap: wrap; gap: 0.4rem 0.5rem; min-width: 0; }
+.an-added-bar .btn.an-cat-ctl, .an-added-bar .btn.an-cat-mark{ padding: 0.2rem 0.75rem; font-size: 0.76rem; }
 .an-badge{ background: var(--color-accent); color: #fff; border-radius: 999px; font-size: 0.68rem; padding: 0 0.45rem; margin-left: 0.2rem; }
 .an-selbar, .an-pending{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; border-radius: 0.8rem; padding: 0.5rem 0.8rem; margin: 0 0 0.6rem; font-size: 0.84rem; }
 .an-selbar{ background: color-mix(in srgb, var(--color-accent) 16%, var(--color-surface)); }

@@ -5431,6 +5431,20 @@
     "anCmHint": "En cada renglón se pueden escribir varios comentarios, uno tras otro, con tu nombre y la hora. Quedan ligados a la llave del renglón: si cambian los datos o se ordena, el comentario sigue con su renglón.",
     "anCmDupWarn": "Este análisis deja renglones con la misma llave: sus comentarios se van a compartir.",
     "anCmAdd": "Comentar",
+    "anCatNone": "Sin clasificación",
+    "anCatCount1": "1 columna",
+    "anCatCountN": "{n} columnas",
+    "anCatPicked": "{n} marcadas",
+    "anCatMark": "Marcar todas",
+    "anCatUnmark": "Quitar marcas",
+    "anCatCollapseAll": "Contraer todo",
+    "anCatExpandAll": "Expandir todo",
+    "anCatNew1": "1 nueva",
+    "anCatNewN": "{n} nuevas",
+    "anCatRemoved1": "1 quitada",
+    "anCatRemovedN": "{n} quitadas",
+    "anCatEdited1": "1 con cambios",
+    "anCatEditedN": "{n} con cambios",
     "totalsTitle": "Σ Totales · de {n} renglones",
     "totalsFiltered": " · los que cumplen el filtro",
     "totalsPartial": " · solo los cargados, de {total}",
@@ -10531,6 +10545,10 @@
     "anFdLive": {
       "what": "Una columna marcada con ⟳ «La más reciente» siempre trae la carga más nueva de esa columna (o, en un registro mensual o diario, el último periodo): cuando llega una carga nueva, la columna pasa sola a ella al actualizar o abrir el análisis. Las de «Una carga o periodo en particular» no se mueven. El encabezado siempre dice tu nombre; al pasar el cursor por él se ve de qué carga son los números de hoy.",
       "example": "⟳ Exist → hoy trae Exist 27/nov 06:00"
+    },
+    "anCategorias": {
+      "what": "Las columnas se juntan por su clasificación (la misma de la banda de color del encabezado); las que no tienen caen en «Sin clasificación». Un clic en el nombre de una categoría la abre o la contrae; entran contraídas y lo que abres se recuerda en tu navegador. Aunque esté contraída, su encabezado avisa si tiene columnas nuevas, quitadas o con cambios sin aplicar. En «Seleccionar», «Marcar todas» marca las de esa categoría de una vez. Para armar las categorías: Seleccionar → marca las columnas → Editar → Clasificación.",
+      "example": "Marco las 12 columnas de 2024 → Editar → clasificación «2024»: quedan en una sola ficha «2024 · 12 columnas»."
     },
     "dataTableTotals": {
       "what": "La franja de abajo suma o cuenta lo que dejó el filtro, aunque no se vea todo en pantalla. Toca la celda de una columna y elige el cálculo: suma, promedio, mínimo o máximo (columnas de números) o contar (con dato, vacíos, sin repetir, los que salen una sola vez, o solo los que cumplan lo que escribas, por ejemplo los que inician con «A»). Si cambias el filtro, los números se recalculan. Lo que eliges se queda guardado en tu navegador.",

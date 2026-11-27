@@ -330,7 +330,7 @@ document.addEventListener('click', (event) => {
     const cmCell = event.target.closest('td.an-cm');
     if (cmCell && cmCell.closest(`[data-table-id="${FILE_TABLE}"]`)) { openCommentsPanel(cmCell); return; } // un clic en una celda de comentarios abre su lista
     const q = (sel) => event.target.closest(sel);
-    if (q('[data-an-selmode],[data-an-pick],[data-an-selall],[data-an-selnone],[data-an-seldone],[data-an-bulkedit],[data-an-bulkclose],[data-an-bulkfmt],[data-an-bulkapply],[data-an-bulkremove],[data-an-undo],[data-an-discard]')) {
+    if (q('[data-an-selmode],[data-an-pick],[data-an-selall],[data-an-selnone],[data-an-seldone],[data-an-bulkedit],[data-an-bulkclose],[data-an-bulkfmt],[data-an-bulkapply],[data-an-bulkremove],[data-an-undo],[data-an-discard],[data-an-cat],[data-an-catmark],[data-an-catcollapse],[data-an-catexpand]')) {
         const m = document.querySelector('.an-addmenu'); if (m) m.hidden = true;
         if (q('[data-an-selmode]')) { if (st.selMode) endSelection(); else { st.selMode = true; renderAddedBar(); } }
         else if (q('[data-an-pick]')) toggleSel(q('[data-an-pick]').dataset.anPick, event.shiftKey);
@@ -344,6 +344,10 @@ document.addEventListener('click', (event) => {
         else if (q('[data-an-bulkremove]')) bulkRemove();
         else if (q('[data-an-undo]')) stageUndo(q('[data-an-undo]').dataset.anUndo);
         else if (q('[data-an-discard]')) discardPending();
+        else if (q('[data-an-cat]')) toggleCat(q('[data-an-cat]').dataset.anCat);
+        else if (q('[data-an-catmark]')) markCat(q('[data-an-catmark]').dataset.anCatmark);
+        else if (q('[data-an-catcollapse]')) setAllCats(false);
+        else if (q('[data-an-catexpand]')) setAllCats(true);
         return;
     }
     const addCol = event.target.closest('[data-an-addcol]'); const addKind = event.target.closest('[data-an-addkind]'); const editCol = event.target.closest('[data-an-editcol]'); const delCol = event.target.closest('[data-an-delcol]');
@@ -678,6 +682,60 @@ function buildMetaExtra(col, menu) {
     wrap.addEventListener('click', (event) => { if (event.target.closest('[data-meta="source"]')) { menu.close(); window.AnalysisPage.openFileColumn(id); } });
     return wrap;
 }
+// ---- las fichas agrupadas por categoría (Daniel, 2026-11-27: «engloba en categorías para que no se haga muchísimo espacio, contraer y así») ----
+// La categoría de una ficha es su Clasificación (la misma de la banda del encabezado y de su color); las que no tienen caen en «Sin clasificación». Cada categoría es una ficha-encabezado que se contrae o se abre
+// en la misma fila; entran contraídas y lo que la persona abre se recuerda en su navegador. Con pocas columnas la franja cabe sola y no se agrupa.
+const CAT_MIN_CHIPS = 7;
+const CAT_NONE = '__none';
+const CAT_NONE_COLOR = '#8a7d94';
+const catKeyOf = (e) => foldCls(e.item.cls) || CAT_NONE;
+const catsStorageKey = () => `anCats:${st.id}`;
+function loadCats() { try { const o = JSON.parse(localStorage.getItem(catsStorageKey()) || '{}'); return o && typeof o === 'object' ? o : {}; } catch { return {}; } }
+function saveCats() {
+    try {
+        const open = Object.keys(st.catOpen || {}).filter((k) => st.catOpen[k]);
+        if (open.length) localStorage.setItem(catsStorageKey(), JSON.stringify(Object.fromEntries(open.map((k) => [k, true])))); else localStorage.removeItem(catsStorageKey());
+    } catch { /* sin memoria del navegador: lo abierto no se recuerda */ }
+}
+function groupEntries(entries) {
+    const order = []; const map = new Map();
+    entries.forEach((e) => {
+        const k = catKeyOf(e);
+        if (!map.has(k)) { map.set(k, { k, name: k === CAT_NONE ? '' : String(e.item.cls || '').trim(), color: CAT_NONE_COLOR, colored: false, list: [] }); order.push(k); }
+        const g = map.get(k); g.list.push(e);
+        if (k !== CAT_NONE && !g.colored && window.AnalysisKit.hasClassColor(e.item.color)) { g.color = window.AnalysisKit.classColor(e.item.color); g.colored = true; }
+        else if (k !== CAT_NONE && !g.colored) g.color = window.AnalysisKit.classColor(e.item.color);
+    });
+    return order.map((k) => map.get(k));
+}
+function toggleCat(k) { if (!st.catOpen) st.catOpen = loadCats(); st.catOpen[k] = !st.catOpen[k]; saveCats(); renderAddedBar(); }
+function setAllCats(open) { if (!st.catOpen) st.catOpen = {}; groupEntries(st.entries || []).forEach((g) => { st.catOpen[g.k] = open; }); saveCats(); renderAddedBar(); }
+function markCat(k) { // «Marcar todas» de una categoría (o «Quitar marcas» si ya están todas), también con la categoría contraída
+    const g = groupEntries(st.entries || []).find((x) => x.k === k); if (!g) return;
+    const list = g.list.filter((e) => e.status !== 'removed');
+    const every = list.length && list.every((e) => st.sel.has(e.key));
+    list.forEach((e) => { if (every) st.sel.delete(e.key); else st.sel.add(e.key); });
+    renderAddedBar();
+}
+// lo que cambió dentro de una categoría contraída (nuevas, quitadas, con cambios) se ve en su encabezado
+function catBadges(list) {
+    const count = (s) => list.filter((e) => e.status === s).length;
+    const bit = (n, cls, one, many) => (n ? `<span class="an-catbd ${cls}">${esc(n === 1 ? t(one) : t(many, { n }))}</span>` : '');
+    return bit(count('new'), 'is-new', 'main.anCatNew1', 'main.anCatNewN') + bit(count('removed'), 'is-removed', 'main.anCatRemoved1', 'main.anCatRemovedN') + bit(count('edited'), 'is-edited', 'main.anCatEdited1', 'main.anCatEditedN');
+}
+function renderCats(entries, chip, pick) {
+    if (entries.length < CAT_MIN_CHIPS) return entries.map(chip).join('');
+    if (!st.catOpen) st.catOpen = loadCats();
+    const controls = `<button type="button" class="btn btn-secondary an-cat-ctl" data-an-catcollapse>${esc(t('main.anCatCollapseAll'))}</button><button type="button" class="btn btn-secondary an-cat-ctl" data-an-catexpand>${esc(t('main.anCatExpandAll'))}</button>`;
+    return controls + groupEntries(entries).map((g) => {
+        const open = !!st.catOpen[g.k]; const n = g.list.length;
+        const selectable = g.list.filter((e) => e.status !== 'removed'); const picked = selectable.filter((e) => st.sel.has(e.key)).length;
+        const name = g.k === CAT_NONE ? t('main.anCatNone') : g.name;
+        const head = `<button type="button" class="an-cath" data-an-cat="${esc(g.k)}" aria-expanded="${open ? 'true' : 'false'}" data-help-key="anCategorias"><span class="an-car" aria-hidden="true">▶</span><i class="an-dot" style="background:${esc(g.color)}" aria-hidden="true"></i><b>${esc(name)}</b><span class="an-catn">${esc(n === 1 ? t('main.anCatCount1') : t('main.anCatCountN', { n }))}${pick && picked ? ` · ${esc(t('main.anCatPicked', { n: picked }))}` : ''}</span>${open ? '' : catBadges(g.list)}</button>`;
+        const mark = pick && selectable.length ? `<button type="button" class="btn btn-secondary an-cat-mark" data-an-catmark="${esc(g.k)}">${esc(t(picked === selectable.length ? 'main.anCatUnmark' : 'main.anCatMark'))}</button>` : '';
+        return `<span class="an-cat${open ? ' is-open' : ''}">${head}${mark}${open ? `<span class="an-catchips">${g.list.map(chip).join('')}</span>` : ''}</span>`;
+    }).join('');
+}
 // la franja de arriba del Archivo: «＋ Agregar columna», «Seleccionar» y las columnas ya agregadas (un clic las edita; ✕ las quita; los cambios esperan al «Actualizar»)
 function renderAddedBar() {
     const bar = document.getElementById('an-added-bar');
@@ -708,7 +766,7 @@ function renderAddedBar() {
     };
     const addMenu = st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden>${live ? `<button type="button" data-an-addkind="file">${esc(t('main.an2KindFile'))}</button>` : ''}<button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button><button type="button" data-an-addkind="comment" data-help-key="anComentarios">${esc(t('main.anAddKindComment'))}</button></span></span>` : '';
     const selBtn = editable && entries.filter((e) => e.status !== 'removed').length > 1 ? `<button type="button" class="btn btn-secondary${st.selMode ? ' an-on' : ''}" data-an-selmode aria-pressed="${st.selMode ? 'true' : 'false'}" data-help-key="anSelect"><i class="bx bx-select-multiple" aria-hidden="true"></i> ${esc(t('main.anSelectBtn'))}</button>` : '';
-    bar.innerHTML = `${addMenu}${selBtn}${entries.map(chip).join('')}`;
+    bar.innerHTML = `${addMenu}${selBtn}${renderCats(entries, chip, pick)}`;
     // «Actualizar» (Daniel, 2026-11-26): vuelve a cargar el análisis En vivo con lo que hay hoy (datos de los registros, fórmulas, columnas agregadas y, desde 2026-11-27, los cambios sin aplicar)
     if (live) bar.insertAdjacentHTML('beforeend', `<button type="button" class="btn btn-secondary" data-an-refresh data-help-key="anRefresh"><i class="bx bx-refresh" aria-hidden="true"></i> <span data-an-refresh-label>${esc(t('main.anRefresh'))}</span>${pend && pend.total ? ` <span class="an-badge">${pend.total}</span>` : ''}</button>`);
     if (st.canExtract && st.analysis.status === 'active') bar.insertAdjacentHTML('beforeend', `<button type="button" class="btn" data-an-extract data-help-key="anExtract"><i class="bx bx-export" aria-hidden="true"></i> ${esc(t('main.anExtract'))}</button>`);
