@@ -794,6 +794,15 @@ function setupFileFormat(table, cols) {
 }
 // La descarga en Excel con el MISMO formato de la pantalla (Daniel, 2026-11-26): la tabla manda lo que se ve (columnas visibles en su orden y renglones que pasan los filtros y el orden) con el valor de cada celda
 // (el número tal cual, no el texto con formato) y el formato de cada columna; el servidor escribe el Excel (analysisExcel.js).
+// ¿Se baja TODO el análisis desde el servidor? Sí cuando trae más renglones de los que se ven aquí (En vivo manda 5,000, una versión 2,000) y no hay filtros por columna ni un orden elegido en la pantalla
+// (esos solo existen sobre lo que se ve: entonces se baja lo que se ve, con su aviso).
+function fullDownloadApplies() {
+    const table = tableOf(FILE_TABLE);
+    if (!st.data || !st.data.truncated || !table) return false;
+    if (table.tBodies[0].querySelector('tr.data-table-row-col-filtered')) return false;
+    if (table.querySelector('thead th.data-table-col-sort-asc, thead th.data-table-col-sort-desc')) return false;
+    return true;
+}
 function buildAnalysisXlsx({ columns, trs }) {
     if (!st.data || !trs) return null;
     const defs = st.data.columns;
@@ -801,7 +810,12 @@ function buildAnalysisXlsx({ columns, trs }) {
     const idx = columns.map((c) => at.get(c.key));
     if (idx.some((i) => i === undefined)) return null;
     const rows = trs.map((tr) => { const row = st.data.rows[Number(tr.dataset.r)] || []; return idx.map((i) => (row[i] === undefined ? null : row[i])); });
-    return { url: `${API}/${st.id}/export-xlsx`, body: { columns: idx.map((i) => ({ label: defs[i].label, ff: defs[i].ff || null, fmt: defs[i].fmt || '', style: defs[i].style || null })), rows } };
+    if (fullDownloadApplies()) {
+        Dashboard.showToast(t('main.downloadFullPreparing'), 'info');
+        return { url: `${API}/${st.id}/export-xlsx`, body: { full: true, v: st.extraction && !st.extraction.live ? st.extraction.id : 0, text: st.text || '', keys: idx.map((i) => defs[i].key) } };
+    }
+    const labelOf = (c) => c.label || (c.dim ? t(`main.regDim_${c.dim}`) : c.key);
+    return { url: `${API}/${st.id}/export-xlsx`, body: { columns: idx.map((i) => ({ label: labelOf(defs[i]), ff: defs[i].ff || null, fmt: defs[i].fmt || '', style: defs[i].style || null, decimals: Number.isInteger(defs[i].decimals) ? defs[i].decimals : null })), rows } };
 }
 function ensureEmpty(tableId, span, key) {
     const tbody = tableOf(tableId).tBodies[0];
@@ -949,7 +963,7 @@ async function loadFile() {
         setupFileFormat(tableOf(FILE_TABLE), cols); // el formato de cada encabezado y su menú ⋮ (va después del aspecto de la columna: el ⋮ manda)
         if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(FILE_TABLE);
         wrapper.setAttribute('data-help-key', 'anFile');
-        if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(FILE_TABLE, { getTitle: () => `${st.analysis.name}_${e.live ? t('main.an2Live') : `v${e.version}`}`, getNotice: () => (st.data && st.data.truncated ? t('main.anDownloadTruncated', { shown: st.data.rows.length, total: num(st.data.total) }) : ''), buildXlsx: buildAnalysisXlsx });
+        if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(FILE_TABLE, { getTitle: () => `${st.analysis.name}_${e.live ? t('main.an2Live') : `v${e.version}`}`, getNotice: (format) => (st.data && st.data.truncated && !(format === 'xlsx' && fullDownloadApplies()) ? t('main.anDownloadTruncated', { shown: st.data.rows.length, total: num(st.data.total) }) : ''), buildXlsx: buildAnalysisXlsx });
         updateFileNote();
         renderAddedBar();
         try { if (sessionStorage.getItem('anRefreshed') === String(st.id)) { sessionStorage.removeItem('anRefreshed'); Dashboard.showToast(t('main.anRefreshDone'), 'success'); } } catch { /* nada */ }

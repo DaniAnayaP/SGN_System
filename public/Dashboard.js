@@ -5868,7 +5868,7 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownlo
         const { columns, rows, trs } = getVisibleTableSnapshot(tableId);
         if (!columns.length) return;
         const title = String((getTitle && getTitle()) || tableId).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
-        const notice = getNotice && getNotice();
+        const notice = getNotice && getNotice(format); // el aviso puede depender del formato (Análisis: el Excel baja todo, el CSV y el PDF solo lo que se ve)
         if (notice) showToast(notice, 'info');
         if (format === 'xlsx' && buildXlsx) {
             try {

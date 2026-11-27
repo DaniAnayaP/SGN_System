@@ -7975,19 +7975,46 @@ app.post('/api/business/manual-analyses/:id/column-preview', requireAuth, (req, 
 // Guardar la lista de columnas agregadas (la lista completa, en orden). Es parte del diseño: se repite sola en cada versión.
 // La descarga del Análisis en Excel con el formato de pantalla (Daniel, 2026-11-26): la pantalla manda lo que se ve (las columnas visibles, los renglones que pasan los filtros, en su orden) y el formato de cada columna;
 // aquí se revisa y se escribe el Excel (analysisExcel.js): números como números con su formato real de Excel, estilos de celdas y encabezados.
+// Con `full: true` la pantalla NO manda los renglones: pide TODO el análisis (los renglones que trae la pantalla son solo los primeros 5,000 de En vivo o 2,000 de una versión): el servidor lo arma de nuevo con lo de hoy
+// (En vivo) o lo guardado (una versión), con las columnas que se ven (keys, en su orden) y la búsqueda de arriba (text); cada columna con su formato. Hasta 300,000 renglones (el máximo del análisis).
 app.post('/api/business/manual-analyses/:id/export-xlsx', requireAuth, async (req, res) => {
     const analysis = anLoad(req, res);
     if (!analysis) return;
-    const payload = analysisExcel.cleanPayload(req.body);
-    if (payload.error) return res.status(400).json({ message: payload.error });
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    let payload;
+    if (body.full === true) {
+        const text = String(body.text || '').trim().toLowerCase().slice(0, 200);
+        const keys = Array.isArray(body.keys) ? body.keys.map((k) => String(k)).slice(0, analysisExcel.MAX_COLUMNS) : [];
+        const eid = Number(body.v) || 0;
+        let shown;
+        if (!eid) {
+            const live = anLiveBuilt(req, analysis);
+            if (live.error) return anFail(res, live.error, live.status, { field: live.field });
+            const { built, design } = live;
+            const refCount = built.columns.filter((c) => c.group === 'reference').length;
+            const all = text ? built.rows.filter((r) => r.slice(0, refCount).join(' ').toLowerCase().includes(text)) : built.rows;
+            shown = anPresent({ ...analysis, design }, built.columns, all);
+        } else {
+            const extraction = getExtraction(eid, analysis.id);
+            if (!extraction || extraction.status === 'en_proceso') return res.status(404).json({ code: 'EXTRACTION_NOT_FOUND', message: 'Esa versión no existe.' });
+            const { rows } = listExtractionRows(extraction.id, { text, limit: 300000 });
+            shown = anPresent(analysis, extraction.columns, rows);
+        }
+        const at = new Map(shown.columns.map((c, i) => [c.key, i]));
+        const idx = (keys.length ? keys.map((k) => at.get(k)) : shown.columns.map((c, i) => i)).filter((i) => i !== undefined);
+        if (!idx.length) return res.status(400).json({ message: 'columns are required.' });
+        payload = { columns: idx.map((i) => analysisExcel.cleanColumn({ ...shown.columns[i], label: shown.columns[i].label || shown.columns[i].dim || shown.columns[i].key })), rows: shown.rows.map((r) => idx.map((i) => (r[i] === undefined ? null : r[i]))), title: String(body.title || '').slice(0, 100) };
+    } else {
+        payload = analysisExcel.cleanPayload(body);
+        if (payload.error) return res.status(400).json({ message: payload.error });
+    }
     try {
         const title = payload.title || analysis.name;
-        const wb = analysisExcel.buildWorkbook({ ...payload, title });
         res.set('Cache-Control', 'no-store');
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', buildContentDisposition(`${String(title).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'Analisis'}.xlsx`));
-        await wb.xlsx.write(res);
-        res.end();
+        await analysisExcel.writeWorkbook(res, { ...payload, title });
+        if (!res.writableEnded) res.end();
     } catch (err) {
         console.error('Análisis: la descarga en Excel falló:', err);
         if (!res.headersSent) res.status(500).json({ message: 'No se pudo armar la descarga.' }); else res.destroy();
