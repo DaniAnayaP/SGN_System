@@ -6,6 +6,12 @@
 // se cumple; si ninguna, vale «otherwise» (o queda vacía). Un resultado es un texto, un número, el valor de otra columna o vacío. Operadores: lt, lte, gt, gte, between, eq, neq, contains, empty, notEmpty.
 // Una celda vacía no cumple ninguna comparación (solo «está vacío» y «es distinto de»).
 //
+// Pieza «Varias columnas (bloque)» (Daniel, 2026-11-27, «Sí a las recomendadas»): { id, kind: 'block', name, cls, color, decimals, fn, blocks: [{ from, to }] } — una función sobre un grupo de columnas del archivo, como un rango de Excel
+// (F2:AM2): fn = blank (cuántas están vacías), filled (cuántas tienen dato), zero (cuántas valen cero), sum, avg, min, max. El bloque se guarda por sus DOS PUNTAS (from, to): lo que quede entre ellas, en el orden del archivo, entra solo.
+// Las columnas de referencia y las de comentarios no cuentan. Varios bloques se suman como en Excel (F2:H2; AK2).
+// «Criterio» suma una REGLA DE BLOQUE: { scan: { from, to, dir: 'asc' | 'desc', cond: { op, value, value2 } }, result } que recorre las columnas del bloque (de izquierda a derecha o al revés) y se queda con la primera donde se cumple
+// la condición; su resultado puede ser { name: true } (el nombre de esa columna), { found: true } (su valor), un texto, un número, el valor de otra columna o vacío. Y la condición nueva blankZero («vacío o 0»).
+//
 // Los pasos de «Operación» se aplican de arriba abajo sobre un acumulador: el primero toma una columna o un valor; los demás hacen una operación con otra columna o con un valor (o sobre el acumulador solo).
 //   con argumento (columna o valor): add, sub, mul, div, pow, min, max, logbase (base), round (decimales)
 //   sin argumento:                   sqrt, ln, log10, exp, abs
@@ -28,7 +34,9 @@ const VALUE_ONLY = new Set(['logbase', 'round']); // la base y los decimales son
 const MAX_RULES = 20;
 const MAX_CONDS = 5;
 const MAX_TEXT = 80;
-const COND_OPS = new Set(['lt', 'lte', 'gt', 'gte', 'between', 'eq', 'neq', 'contains', 'empty', 'notEmpty']);
+const COND_OPS = new Set(['lt', 'lte', 'gt', 'gte', 'between', 'eq', 'neq', 'contains', 'empty', 'notEmpty', 'blankZero']);
+const BLOCK_FNS = new Set(['blank', 'filled', 'zero', 'sum', 'avg', 'min', 'max']);
+const MAX_BLOCKS = 10;
 const NUMERIC_COND_OPS = new Set(['lt', 'lte', 'gt', 'gte']);
 
 const round6 = (n) => Math.round(n * 1e6) / 1e6;
@@ -73,7 +81,7 @@ const numericOf = (v) => {
 function normalizeCond(raw) {
     if (!raw || typeof raw !== 'object' || typeof raw.col !== 'string' || !COLUMN_KEY.test(raw.col) || !COND_OPS.has(raw.op)) return null;
     const cond = { col: raw.col, op: raw.op };
-    if (raw.op === 'empty' || raw.op === 'notEmpty') return cond;
+    if (raw.op === 'empty' || raw.op === 'notEmpty' || raw.op === 'blankZero') return cond;
     if (raw.op === 'between') {
         const a = numericOf(raw.value); const b = numericOf(raw.value2);
         if (a === null || b === null) return null;
@@ -87,9 +95,11 @@ function normalizeCond(raw) {
     const v = typeof raw.value === 'number' ? (Number.isFinite(raw.value) ? raw.value : null) : cleanText(raw.value, MAX_TEXT);
     return v === null || v === '' ? null : { ...cond, value: v };
 }
-function normalizeResult(raw) {
+function normalizeResult(raw, scan) {
     if (!raw || typeof raw !== 'object') return null;
     if (raw.empty === true) return { empty: true };
+    if (scan && raw.name === true) return { name: true }; // el nombre de la columna que cumplió (solo en una regla de bloque)
+    if (scan && raw.found === true) return { found: true }; // el valor de la columna que cumplió
     if (typeof raw.col === 'string' && COLUMN_KEY.test(raw.col)) return { col: raw.col };
     if (typeof raw.value === 'number' && Number.isFinite(raw.value) && Math.abs(raw.value) <= 1e12) return { value: raw.value };
     if (typeof raw.text === 'string') { const t = cleanText(raw.text, MAX_TEXT); return t === '' ? null : { text: t }; }
@@ -99,6 +109,19 @@ function normalizeRules(raw) {
     if (!Array.isArray(raw) || !raw.length || raw.length > MAX_RULES) return null;
     const rules = [];
     for (const r of raw) {
+        if (r && typeof r === 'object' && r.scan) {
+            const s = r.scan;
+            if (!s || typeof s !== 'object' || typeof s.from !== 'string' || !COLUMN_KEY.test(s.from)) return null;
+            const to = typeof s.to === 'string' && s.to ? s.to : s.from;
+            if (!COLUMN_KEY.test(to)) return null;
+            const c = normalizeCond({ ...(s.cond && typeof s.cond === 'object' ? s.cond : {}), col: s.from });
+            if (!c) return null;
+            const { col, ...cond } = c;
+            const sres = normalizeResult(r.result, true);
+            if (!sres) return null;
+            rules.push({ scan: { from: s.from, to, dir: s.dir === 'desc' ? 'desc' : 'asc', cond }, result: sres });
+            continue;
+        }
         if (!r || typeof r !== 'object' || !Array.isArray(r.conds) || !r.conds.length || r.conds.length > MAX_CONDS) return null;
         const conds = r.conds.map(normalizeCond);
         if (conds.some((c) => !c)) return null;
@@ -108,6 +131,17 @@ function normalizeRules(raw) {
     }
     return rules;
 }
+function normalizeBlocks(raw) {
+    if (!Array.isArray(raw) || !raw.length || raw.length > MAX_BLOCKS) return null;
+    const out = [];
+    for (const b of raw) {
+        if (!b || typeof b !== 'object' || typeof b.from !== 'string' || !COLUMN_KEY.test(b.from)) return null;
+        const to = typeof b.to === 'string' && b.to ? b.to : b.from;
+        if (!COLUMN_KEY.test(to)) return null;
+        out.push({ from: b.from, to });
+    }
+    return out;
+}
 // Devuelve { added } o { error }. Los ids no se repiten; el color es el de la paleta de clasificaciones (0 a 5) o vacío.
 function normalizeAdded(raw) {
     const list = Array.isArray(raw) ? raw : [];
@@ -116,7 +150,7 @@ function normalizeAdded(raw) {
     const ids = new Set();
     for (const c of list) {
         if (!c || typeof c !== 'object') continue;
-        if (c.kind !== 'op' && c.kind !== 'criterion' && c.kind !== 'comment') return { error: 'ADDED_KIND' };
+        if (c.kind !== 'op' && c.kind !== 'criterion' && c.kind !== 'comment' && c.kind !== 'block') return { error: 'ADDED_KIND' };
         const name = cleanText(c.name, MAX_NAME);
         if (!name) return { error: 'ADDED_NAME' };
         let body;
@@ -125,6 +159,10 @@ function normalizeAdded(raw) {
             const steps = normalizeSteps(c.steps);
             if (!steps) return { error: 'ADDED_STEPS' };
             body = { steps };
+        } else if (c.kind === 'block') {
+            const blocks = normalizeBlocks(c.blocks);
+            if (!blocks || !BLOCK_FNS.has(c.fn)) return { error: 'ADDED_BLOCK' };
+            body = { fn: c.fn, blocks };
         } else {
             const rules = normalizeRules(c.rules);
             if (!rules) return { error: 'ADDED_RULES' };
@@ -152,6 +190,30 @@ function columnLetter(index) {
     return out;
 }
 const numText = (n) => String(n);
+// El orden de las columnas del archivo (las de siempre y, después, las agregadas) para resolver un bloque: las columnas ENTRE sus dos puntas, solo las anteriores a la columna que se está calculando (limit),
+// sin las de referencia ni las de comentarios. Devuelve null si una punta ya no existe (la columna se quitó) o si el bloque no alcanza a una columna anterior.
+function makeContext(added, baseColumns) {
+    const order = baseColumns.map((c) => ({ key: c.key, group: c.group, kind: null, label: c.label || '' })).concat(added.map((c) => ({ key: `a_${c.id}`, group: 'added', kind: c.kind, label: c.name })));
+    const at = new Map(order.map((o, i) => [o.key, i]));
+    const memo = new Map();
+    const rangeOf = (from, to, limit) => {
+        const id = `${from}|${to}|${limit}`;
+        if (memo.has(id)) return memo.get(id);
+        let out = null;
+        if (at.has(from) && at.has(to)) {
+            const a = at.get(from); const b = at.get(to);
+            const lo = Math.min(a, b); const hi = Math.max(a, b);
+            if (hi < limit) {
+                const items = [];
+                for (let i = lo; i <= hi; i += 1) { const o = order[i]; if (o.group !== 'reference' && o.kind !== 'comment') items.push(o); }
+                if (items.length) out = { items, lo, hi };
+            }
+        }
+        memo.set(id, out);
+        return out;
+    };
+    return { rangeOf };
+}
 // ¿la expresión tiene una suma o resta fuera de paréntesis? Entonces va entre paréntesis antes de multiplicar o dividir.
 function hasTopLevelSum(expr) {
     let depth = 0;
@@ -197,7 +259,7 @@ function formulaOfSteps(steps, letterOf) {
 const quote = (text) => `"${String(text).replace(/"/g, '""')}"`;
 // un valor escrito en una regla: número si lo es, texto entre comillas si no
 const valueText = (v) => (typeof v === 'number' ? numText(v) : (numericOf(v) !== null ? numText(numericOf(v)) : quote(v)));
-function formulaOfCriterion(def, letterOf) {
+function formulaOfCriterion(def, letterOf, ctx, limit) {
     const ref = (key) => { const l = letterOf(key); return l ? `${l}2` : '#REF!'; };
     const condText = (c) => {
         const r = ref(c.col);
@@ -212,17 +274,61 @@ function formulaOfCriterion(def, letterOf) {
             case 'contains': return `ESNUMERO(HALLAR(${quote(c.value)};${r}))`;
             case 'empty': return `${r}=""`;
             case 'notEmpty': return `${r}<>""`;
+            case 'blankZero': return `O(${r}="";${r}=0)`;
             default: return '';
         }
     };
     const resultText = (res) => (res.empty ? '""' : (res.col !== undefined ? ref(res.col) : (res.text !== undefined ? quote(res.text) : numText(res.value))));
+    // una regla de bloque: «hay una columna del bloque donde se cumple» (SUMAPRODUCT) o, si el resultado es el nombre o el valor de esa columna, la primera/última que la cumple (SI.ERROR cae a lo que sigue)
+    const scanText = (rule, rest) => {
+        const rg = rangeFormulaOf(ctx, limit, rule.scan.from, rule.scan.to);
+        if (!rg) return `SI(#REF!;"";${rest})`;
+        const c = rule.scan.cond; const q = rg.row;
+        let bool;
+        switch (c.op) {
+            case 'lt': bool = `${q}<${numText(c.value)}`; break;
+            case 'lte': bool = `${q}<=${numText(c.value)}`; break;
+            case 'gt': bool = `${q}>${numText(c.value)}`; break;
+            case 'gte': bool = `${q}>=${numText(c.value)}`; break;
+            case 'between': bool = `((${q}>=${numText(c.value)})*(${q}<=${numText(c.value2)}))=1`; break;
+            case 'eq': bool = `${q}=${valueText(c.value)}`; break;
+            case 'neq': bool = `${q}<>${valueText(c.value)}`; break;
+            case 'contains': bool = `ESNUMERO(HALLAR(${quote(c.value)};${q}))`; break;
+            case 'empty': bool = `${q}=""`; break;
+            case 'notEmpty': bool = `${q}<>""`; break;
+            case 'blankZero': bool = `((${q}="")+(${q}=0))>0`; break;
+            default: bool = 'FALSO';
+        }
+        if (rule.result.name || rule.result.found) {
+            const target = rule.result.name ? rg.head : q;
+            const pick = rule.scan.dir === 'desc' ? `BUSCAR(2;1/(${bool});${target})` : `INDICE(${target};COINCIDIR(VERDADERO;INDICE(${bool};0);0))`;
+            return `SI.ERROR(${pick};${rest})`;
+        }
+        return `SI(SUMAPRODUCT(--(${bool}))>0;${resultText(rule.result)};${rest})`;
+    };
     let expr = def.otherwise ? resultText(def.otherwise) : '""';
     for (let i = def.rules.length - 1; i >= 0; i -= 1) {
         const rule = def.rules[i];
+        if (rule.scan) { expr = scanText(rule, expr); continue; }
         const cond = rule.conds.length === 1 ? condText(rule.conds[0]) : `${rule.join === 'or' ? 'O' : 'Y'}(${rule.conds.map(condText).join(';')})`;
         expr = `SI(${cond};${resultText(rule.result)};${expr})`;
     }
     return `=${expr}`;
+}
+// el bloque como en Excel: fila 2 de la primera a la última letra (F2:AM2), y sus títulos (fila 1, fijos). null si una punta ya no existe.
+function rangeFormulaOf(ctx, limit, from, to) {
+    const r = ctx ? ctx.rangeOf(from, to, limit) : null;
+    if (!r) return null;
+    const a = columnLetter(r.lo); const b = columnLetter(r.hi);
+    return { row: r.lo === r.hi ? `${a}2` : `${a}2:${b}2`, head: r.lo === r.hi ? `$${a}$1` : `$${a}$1:$${b}$1` };
+}
+const BLOCK_FORMULA = { blank: 'CONTAR.BLANCO', filled: 'CONTARA', zero: 'CONTAR.SI', sum: 'SUMA', avg: 'PROMEDIO', min: 'MIN', max: 'MAX' };
+function formulaOfBlock(def, ctx, limit) {
+    const parts = def.blocks.map((b) => { const rg = rangeFormulaOf(ctx, limit, b.from, b.to); return rg ? rg.row : '#REF!'; });
+    // CONTAR.BLANCO y CONTAR.SI reciben un solo rango: varios bloques se suman
+    if (def.fn === 'blank') return `=${parts.map((p) => `CONTAR.BLANCO(${p})`).join('+')}`;
+    if (def.fn === 'zero') return `=${parts.map((p) => `CONTAR.SI(${p};0)`).join('+')}`;
+    return `=${BLOCK_FORMULA[def.fn]}(${parts.join(';')})`;
 }
 
 // ---- calcular --------------------------------------------------------------------------------------------------------------------------------------------
@@ -262,9 +368,11 @@ function runSteps(steps, get) {
     return round6(acc);
 }
 
+const isBlank = (v) => v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
 const foldText = (v) => String(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 function testCond(c, v) {
-    const empty = v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
+    const empty = isBlank(v);
+    if (c.op === 'blankZero') return empty || toNumber(v) === 0; // «no tiene valor»: vacío o cero
     if (c.op === 'empty') return empty;
     if (c.op === 'notEmpty') return !empty;
     if (empty) return c.op === 'neq'; // una celda vacía no cumple una comparación; solo «es distinto de»
@@ -289,15 +397,57 @@ function resultOf(res, get) {
     if (res.text !== undefined) return res.text;
     return res.value;
 }
-function runCriterion(def, get) {
+// la regla de bloque: recorre las columnas del bloque (de izquierda a derecha o al revés) y devuelve la primera donde se cumple la condición; ctx/limit resuelven el bloque (sin ellos no encuentra nada)
+function scanHit(rule, get, ctx, limit) {
+    const r = ctx ? ctx.rangeOf(rule.scan.from, rule.scan.to, limit) : null;
+    if (!r) return null;
+    const items = rule.scan.dir === 'desc' ? r.items.slice().reverse() : r.items;
+    return items.find((o) => testCond(rule.scan.cond, get(o.key))) || null;
+}
+function runCriterion(def, get, ctx, limit) {
     for (const rule of def.rules) {
+        if (rule.scan) {
+            const hit = scanHit(rule, get, ctx, limit);
+            if (!hit) continue;
+            if (rule.result.name) return hit.label || hit.key;
+            if (rule.result.found) { const v = get(hit.key); return typeof v === 'number' ? round6(v) : (v === undefined ? null : v); }
+            return resultOf(rule.result, get);
+        }
         const results = rule.conds.map((c) => testCond(c, get(c.col)));
         if (rule.join === 'or' ? results.some(Boolean) : results.every(Boolean)) return resultOf(rule.result, get);
     }
     return def.otherwise ? resultOf(def.otherwise, get) : null;
 }
-const runColumn = (c, get) => (c.kind === 'comment' ? null : (c.kind === 'criterion' ? runCriterion(c, get) : runSteps(c.steps, get))); // una columna de comentarios la llena el servidor con lo que se escribió
-const formulaOfColumn = (c, letterOf) => (c.kind === 'comment' ? '' : (c.kind === 'criterion' ? formulaOfCriterion(c, letterOf) : formulaOfSteps(c.steps, letterOf)));
+// La columna de bloque: junta las celdas de todos sus bloques (como en Excel) y aplica la función. Vacías/con dato/ceros cuentan celdas; suma, promedio, menor y mayor usan solo las que son número (y quedan vacías si no hay ninguna).
+function runBlock(def, get, ctx, limit) {
+    const cells = [];
+    for (const b of def.blocks) {
+        const r = ctx ? ctx.rangeOf(b.from, b.to, limit) : null;
+        if (!r) return null;
+        r.items.forEach((o) => cells.push(get(o.key)));
+    }
+    const blanks = cells.filter(isBlank).length;
+    if (def.fn === 'blank') return blanks;
+    if (def.fn === 'filled') return cells.length - blanks;
+    if (def.fn === 'zero') return cells.filter((v) => !isBlank(v) && toNumber(v) === 0).length;
+    const nums = cells.map(toNumber).filter((n) => n !== null);
+    if (!nums.length) return null;
+    if (def.fn === 'sum') return round6(nums.reduce((a, b) => a + b, 0));
+    if (def.fn === 'avg') return round6(nums.reduce((a, b) => a + b, 0) / nums.length);
+    return def.fn === 'min' ? Math.min(...nums) : Math.max(...nums);
+}
+const runColumn = (c, get, ctx, limit) => {
+    if (c.kind === 'comment') return null; // una columna de comentarios la llena el servidor con lo que se escribió
+    if (c.kind === 'criterion') return runCriterion(c, get, ctx, limit);
+    if (c.kind === 'block') return runBlock(c, get, ctx, limit);
+    return runSteps(c.steps, get);
+};
+const formulaOfColumn = (c, letterOf, ctx, limit) => {
+    if (c.kind === 'comment') return '';
+    if (c.kind === 'criterion') return formulaOfCriterion(c, letterOf, ctx, limit);
+    if (c.kind === 'block') return formulaOfBlock(c, ctx, limit);
+    return formulaOfSteps(c.steps, letterOf);
+};
 
 const addedKey = (c) => `a_${c.id}`;
 // Las columnas que se agregan al final del archivo: [{ key, group: 'added', id, kind, label, cls, color, decimals, formula }]
@@ -305,15 +455,17 @@ function addedColumnDefs(added, baseColumns) {
     const keys = baseColumns.map((c) => c.key);
     const all = [...keys, ...added.map(addedKey)];
     const letterOf = (key) => { const i = all.indexOf(key); return i < 0 ? '' : columnLetter(i); };
+    const ctx = makeContext(added, baseColumns);
     return added.map((c, i) => ({
         key: addedKey(c), group: 'added', id: c.id, kind: c.kind, label: c.name, cls: c.cls || '', color: c.cls ? c.color : null, decimals: c.decimals,
-        letter: columnLetter(baseColumns.length + i), formula: formulaOfColumn(c, (key) => (all.indexOf(key) < i + baseColumns.length ? letterOf(key) : '')),
+        letter: columnLetter(baseColumns.length + i), formula: formulaOfColumn(c, (key) => (all.indexOf(key) < i + baseColumns.length ? letterOf(key) : ''), ctx, baseColumns.length + i),
     }));
 }
 // A cada renglón (arreglo de valores en el orden de baseColumns) le agrega lo calculado, en el orden de `added`; una columna agregada puede usar las anteriores.
 function applyAdded(added, baseColumns, rows) {
     if (!added.length) return rows;
     const index = new Map(baseColumns.map((c, i) => [c.key, i]));
+    const ctx = makeContext(added, baseColumns);
     return rows.map((row) => {
         const extra = [];
         const get = (key) => {
@@ -321,9 +473,9 @@ function applyAdded(added, baseColumns, rows) {
             const at = added.findIndex((c) => addedKey(c) === key);
             return at >= 0 && at < extra.length ? extra[at] : null;
         };
-        added.forEach((c) => { extra.push(runColumn(c, get)); });
+        added.forEach((c, k) => { extra.push(runColumn(c, get, ctx, baseColumns.length + k)); });
         return row.concat(extra);
     });
 }
 
-module.exports = { MAX_ADDED, MAX_STEPS, MAX_RULES, normalizeClassColor, normalizeAdded, columnLetter, formulaOfSteps, formulaOfCriterion, runSteps, runCriterion, addedColumnDefs, applyAdded, addedKey };
+module.exports = { MAX_ADDED, MAX_STEPS, MAX_RULES, MAX_BLOCKS, BLOCK_FNS, normalizeClassColor, normalizeAdded, columnLetter, formulaOfSteps, formulaOfCriterion, formulaOfBlock, runSteps, runCriterion, runBlock, makeContext, addedColumnDefs, applyAdded, addedKey };

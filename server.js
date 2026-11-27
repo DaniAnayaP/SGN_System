@@ -7665,7 +7665,7 @@ const AN_COLS = { create: 'colAnCrearAuth', extract: 'colAnExtraerAuth', annul: 
 const AN_MESSAGES = {
     AN_NAME_REQUIRED: 'Ponle un nombre al análisis.', AN_NAME_TAKEN: 'Ya hay un análisis con ese nombre.', DESIGN_REGISTRIES: 'Elige al menos un registro.', DESIGN_COLUMN_REGISTRY: 'Una columna usa un registro que el análisis no tiene.',
     DESIGN_COLUMN_PERIODS: 'Cada columna consultada necesita al menos un periodo.', AN_NO_COLUMNS: 'Agrega al menos una columna consultada antes de extraer.', AN_EMPTY: 'Con este diseño no sale ningún renglón: revisa los periodos y los filtros.',
-    ADDED_NAME: 'Ponle un nombre a la columna.', ADDED_STEPS: 'Revisa los pasos de la operación.', ADDED_RULES: 'Revisa las reglas: cada una necesita su condición y su resultado.', ADDED_KIND: 'Ese tipo de columna todavía no se puede agregar.', ADDED_TOO_MANY: 'Un análisis admite hasta 40 columnas agregadas.',
+    ADDED_NAME: 'Ponle un nombre a la columna.', ADDED_STEPS: 'Revisa los pasos de la operación.', ADDED_RULES: 'Revisa las reglas: cada una necesita su condición y su resultado.', ADDED_BLOCK: 'Revisa el bloque: elige qué calcular y las columnas de inicio y fin.', ADDED_KIND: 'Ese tipo de columna todavía no se puede agregar.', ADDED_TOO_MANY: 'Un análisis admite hasta 40 columnas agregadas.',
     BASE_KEY: 'Elige al menos una columna como llave.', BASE_MISSING: 'El archivo base no existe.', COL_REGISTRY: 'Una columna usa un archivo que no existe.', COL_KEY: 'Falta ligar la llave de una columna con una columna del archivo.', COL_VALUE: 'Elige qué columna del archivo se trae.', COL_COND: 'Una condición usa una columna que el archivo no tiene.', COL_NOT_FOUND: 'Esa columna no existe.',
     COMMENT_COLUMN: 'Esa columna de comentarios no existe.', COMMENT_KEY: 'No se sabe a qué renglón va el comentario.', COMMENT_EMPTY: 'Escribe el comentario.', COMMENT_TOO_LONG: 'El comentario es muy largo (máximo 1,000 letras).',
     BAD_FILTER: 'El filtro no es válido.', BAD_COLUMN: 'Esa columna no existe.', BAD_CALCS: 'Los cálculos de la fila de totales no son válidos.',
@@ -7926,11 +7926,11 @@ function anPresent(analysis, extractionColumns, rows, opts = {}) {
         if (!now) return c;
         return { ...c, ...(now.label ? { label: now.label } : {}), ...(now.cls ? { cls: now.cls, ...(analysisAdded.normalizeClassColor(now.color) !== null ? { color: now.color } : {}) } : {}), ...(now.fmt ? { fmt: now.fmt, ...(now.pat ? { pat: now.pat } : {}) } : {}), ...(now.style ? { style: now.style } : {}) };
     });
-    const columns = added.length ? [...baseColumns, ...analysisAdded.addedColumnDefs(added, extractionColumns)] : baseColumns;
+    const columns = added.length ? [...baseColumns, ...analysisAdded.addedColumnDefs(added, baseColumns)] : baseColumns;
     // el formato que la persona le dio a cada columna con el menú ⋮ de su encabezado (ff); vale para En vivo y para todas las versiones
     const looks = designNow.looks || {};
     const withLook = (c) => (looks[c.key] ? { ...c, ff: looks[c.key] } : c);
-    const shownRows = added.length ? analysisAdded.applyAdded(added, extractionColumns, rows) : rows;
+    const shownRows = added.length ? analysisAdded.applyAdded(added, baseColumns, rows) : rows;
     const result = { columns: columns.map(withLook), rows: shownRows, baseColumns: extractionColumns.length };
     const commentCols = added.filter((a) => a.kind === 'comment');
     if (commentCols.length) {
@@ -8311,8 +8311,9 @@ app.post('/api/business/manual-analyses/:id/extractions/:eid/added-preview', req
     const before = current.length;
     const all = [...current, def];
     const { rows } = liveRows ? { rows: liveRows } : listExtractionRows(extraction.id, { limit: 5 });
-    const computed = analysisAdded.applyAdded(all, extraction.columns, rows);
-    const defs = analysisAdded.addedColumnDefs(all, extraction.columns);
+    const nowColumns = anPresent({ ...analysis, design: { ...(analysis.design || {}), added: [] } }, extraction.columns, []).columns; // con los nombres de hoy (renombrar una columna con el ⋮ cambia lo que ve «el nombre de esa columna»)
+    const computed = analysisAdded.applyAdded(all, nowColumns, rows);
+    const defs = analysisAdded.addedColumnDefs(all, nowColumns);
     const codeAt = extraction.columns.findIndex((c) => c.key === 'ref_codigo');
     res.json({ formula: defs[before].formula, letter: defs[before].letter, rows: computed.map((row, i) => ({ label: String(codeAt >= 0 ? rows[i][codeAt] : rows[i][0] || ''), value: row[extraction.columns.length + before] })) });
 });

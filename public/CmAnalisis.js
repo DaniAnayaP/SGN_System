@@ -84,7 +84,7 @@ function renderFileInfo() {
     if (!el) return;
     const e = st.extraction;
     if (!e || st.tab !== 'file') { el.textContent = ''; return; }
-    if (e.live) { el.textContent = t('main.an2LiveInfo'); return; }
+    if (e.live) { el.textContent = ''; return; } // «En vivo» no lleva texto explicativo en pantalla: está en el Modo ayuda (anView)
     const used = Object.entries((e.notes && e.notes.periods) || {}).filter(([, list]) => list.length).map(([k, list]) => `${regName(registryByKey(k)) || k}: ${periodsText(list)}`).join(' · ');
     el.textContent = '';
     const when = document.createElement('span');
@@ -363,7 +363,7 @@ document.addEventListener('click', (event) => {
     else if (editFile) window.AnalysisPage.openFileColumn(editFile.dataset.anEditfile);
     else if (delFile) window.AnalysisPage.removeFileColumn(delFile.dataset.anDelfile);
     else if (addKind && addKind.dataset.anAddkind === 'file') window.AnalysisPage.openFileColumn(null);
-    else if (addKind) { if (addKind.dataset.anAddkind === 'criterion') openCriterionDialog(null); else if (addKind.dataset.anAddkind === 'comment') openCommentColumnDialog(null); else openAddedDialog(null); }
+    else if (addKind) { if (addKind.dataset.anAddkind === 'criterion') openCriterionDialog(null); else if (addKind.dataset.anAddkind === 'block') openBlockDialog(null); else if (addKind.dataset.anAddkind === 'comment') openCommentColumnDialog(null); else openAddedDialog(null); }
     else if (editCol) openAddedDialog(editCol.dataset.anEditcol);
     else if (delCol) removeAdded(delCol.dataset.anDelcol);
 });
@@ -787,7 +787,7 @@ function renderAddedBar() {
     const chip = (e) => {
         const isFile = e.kind === 'f';
         const letter = e.status === 'new' ? '' : letterOfKey(dataKeyOfEntry(e.key));
-        const icon = isFile ? '⊞' : (e.item.kind === 'criterion' ? '?' : (e.item.kind === 'comment' ? '✎' : 'ƒ'));
+        const icon = isFile ? '⊞' : (e.item.kind === 'criterion' ? '?' : (e.item.kind === 'comment' ? '✎' : (e.item.kind === 'block' ? 'Σ' : 'ƒ')));
         const picked = pick && st.sel.has(e.key);
         const cls = `an-addedchip${isFile ? ' an-filechip' : ''}${e.status !== 'saved' ? ` an-chip-${e.status}` : ''}${picked ? ' an-chip-picked' : ''}`;
         const attr = pick ? `data-an-pick="${esc(e.key)}"` : (isFile ? `data-an-editfile="${esc(e.id)}"` : `data-an-editcol="${esc(e.id)}"`);
@@ -799,7 +799,7 @@ function renderAddedBar() {
         else if (editable && !pick) tail = `<button type="button" ${isFile ? 'data-an-delfile' : 'data-an-delcol'}="${esc(e.id)}" aria-label="${esc(t(isFile ? 'main.an2RemoveFileCol' : 'main.anAddedRemove'))}" title="${esc(t(isFile ? 'main.an2RemoveFileCol' : 'main.anAddedRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button>`;
         return `<span class="${cls}">${head}${tail}</span>`;
     };
-    const addMenu = st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary an-sm" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden>${live ? `<button type="button" data-an-addkind="file">${esc(t('main.an2KindFile'))}</button>` : ''}<button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button><button type="button" data-an-addkind="comment" data-help-key="anComentarios">${esc(t('main.anAddKindComment'))}</button></span></span>` : '';
+    const addMenu = st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary an-sm" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden>${live ? `<button type="button" data-an-addkind="file">${esc(t('main.an2KindFile'))}</button>` : ''}<button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button><button type="button" data-an-addkind="block" data-help-key="anBloque">${esc(t('main.anAddKindBlock'))}</button><button type="button" data-an-addkind="comment" data-help-key="anComentarios">${esc(t('main.anAddKindComment'))}</button></span></span>` : '';
     const selBtn = editable && entries.filter((e) => e.status !== 'removed').length > 1 ? `<button type="button" class="btn btn-secondary an-sm${st.selMode ? ' an-on' : ''}" data-an-selmode aria-pressed="${st.selMode ? 'true' : 'false'}" data-help-key="anSelect"><i class="bx bx-select-multiple" aria-hidden="true"></i> ${esc(t('main.anSelectBtn'))}</button>` : '';
     // los botones en una sola fila chica (Daniel, 2026-11-27): agregar y seleccionar a la izquierda; actualizar y extraer a la derecha
     const nested = isNested();
@@ -841,6 +841,7 @@ function openAddedDialog(editId) {
     const added = (st.design.added || []);
     const editing = editId ? added.find((a) => a.id === editId) : null;
     if (editing && editing.kind === 'criterion') { openCriterionDialog(editId); return; }
+    if (editing && editing.kind === 'block') { openBlockDialog(editId); return; }
     if (editing && editing.kind === 'comment') { openCommentColumnDialog(editId); return; }
     // las columnas que se pueden usar: las consultadas y las agregadas ANTES de esta (cada una con su letra de Excel)
     const editAt = editing && allCols.some((c) => c.key === `a_${editing.id}`) ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length; // una columna agregada que aún no se arma (cambio sin aplicar) puede usar todas las que ya están
@@ -951,11 +952,167 @@ function openAddedDialog(editId) {
     });
 }
 
+// ---- «Varias columnas (bloque)» (Daniel, 2026-11-27, «Sí a las recomendadas»): una función sobre un grupo de columnas, como el rango de Excel (F2:AM2) ------------------------------------------------------
+// El bloque se guarda por sus dos puntas (Desde–hasta): lo que quede entre ellas, en el orden del archivo, entra solo. Se escoge con las listas o con «Marcar en la tabla» (clic en la primera columna y clic en la última, o Mayús + clic).
+const BLOCK_FNS = ['blank', 'filled', 'zero', 'sum', 'avg', 'min', 'max'];
+const blockCountText = (n) => (n === 1 ? t('main.anBlockCount1') : t('main.anBlockCount', { n }));
+// cuántas columnas hay entre dos puntas; cols = solo las que cuentan en un bloque (sin las de referencia ni las de comentarios), en el orden del archivo
+function blockCount(cols, from, to) {
+    const a = cols.findIndex((c) => c.key === from); const b = cols.findIndex((c) => c.key === to);
+    return a < 0 || b < 0 ? 0 : Math.abs(a - b) + 1;
+}
+// las puntas con las que arranca un bloque nuevo: la primera y la última de las columnas consultadas (si no hay, de todas)
+function defaultBlockEnds(cols) {
+    const pool = cols.some((c) => c.group === 'consulted') ? cols.filter((c) => c.group === 'consulted') : cols;
+    return { from: pool.length ? pool[0].key : '', to: pool.length ? pool[pool.length - 1].key : '' };
+}
+const blockSelect = (cols, attrs, value) => `<select ${attrs}>${cols.map((c) => `<option value="${esc(c.key)}"${value === c.key ? ' selected' : ''}>${esc(c.letter)} · ${esc(c.title)}</option>`).join('')}</select>`;
+// «Marcar en la tabla»: la ventana se esconde, la tabla muestra la letra de cada columna y se marca el bloque con un clic en la primera y otro en la última (o Mayús + clic); «Listo» devuelve las dos puntas, «Cancelar» o Esc las deja como estaban.
+function markOnTable({ cols, from, to, overlay, onDone }) {
+    const table = tableOf(FILE_TABLE); const host = document.querySelector('.page-content');
+    if (!table || !host || !cols.length) return;
+    const order = cols.map((c) => c.key); const letterOf = new Map(cols.map((c) => [c.key, c.letter]));
+    let a = order.includes(from) ? from : order[0]; let b = order.includes(to) ? to : a; let waiting = false;
+    const bar = document.createElement('div');
+    bar.className = 'an-markbar'; bar.setAttribute('role', 'status');
+    bar.innerHTML = `<span>${esc(t('main.anMarkHelp'))}</span><b class="an-mark-info"></b><span class="an-tools-sp"></span><button type="button" class="btn an-sm" data-mk="ok">${esc(t('main.anMarkDone'))}</button><button type="button" class="btn btn-secondary an-sm" data-mk="cancel">${esc(t('main.regCancel'))}</button>`;
+    host.appendChild(bar);
+    overlay.style.display = 'none';
+    table.classList.add('an-marking');
+    const ths = [...table.querySelectorAll('thead th[data-col]')];
+    ths.forEach((th) => { const l = letterOf.get(dataKeyOf(th.dataset.col)); if (l) { const tag = document.createElement('span'); tag.className = 'an-mark-letter'; tag.textContent = l; th.appendChild(tag); } });
+    const span = () => { const i = order.indexOf(a); const j = order.indexOf(b); return i < 0 || j < 0 ? [] : order.slice(Math.min(i, j), Math.max(i, j) + 1); };
+    const paint = () => {
+        const keys = span(); const set = new Set(keys);
+        ths.forEach((th) => th.classList.toggle('an-markon', set.has(dataKeyOf(th.dataset.col))));
+        bar.querySelector('.an-mark-info').textContent = !keys.length ? t('main.anMarkNone') : (keys.length === 1 ? t('main.anMarkOne', { from: letterOf.get(keys[0]) }) : t('main.anMarkInfo', { from: letterOf.get(keys[0]), to: letterOf.get(keys[keys.length - 1]), n: keys.length }));
+        bar.querySelector('[data-mk="ok"]').disabled = !keys.length;
+    };
+    const finish = (apply) => {
+        document.removeEventListener('click', onClick, true); document.removeEventListener('keydown', onKey, true);
+        bar.remove(); table.classList.remove('an-marking');
+        ths.forEach((th) => { th.classList.remove('an-markon'); th.querySelectorAll('.an-mark-letter').forEach((tag) => tag.remove()); });
+        overlay.style.display = '';
+        if (apply) { const keys = span(); if (keys.length) onDone({ from: keys[0], to: keys[keys.length - 1] }); }
+    };
+    function onClick(event) {
+        if (bar.contains(event.target)) { const mk = event.target.closest('[data-mk]'); if (mk) { event.stopPropagation(); finish(mk.dataset.mk === 'ok'); } return; }
+        const th = event.target.closest && event.target.closest('thead th');
+        if (!th || !table.contains(th)) return;
+        event.preventDefault(); event.stopPropagation(); // en este modo un clic en un encabezado marca: no ordena ni abre menús
+        const key = dataKeyOf(th.dataset.col || '');
+        if (!order.includes(key)) return;
+        if (event.shiftKey || waiting) { b = key; waiting = false; } else { a = key; b = key; waiting = true; }
+        paint();
+    }
+    function onKey(event) { if (event.key === 'Escape') { event.stopPropagation(); finish(false); } }
+    document.addEventListener('click', onClick, true); document.addEventListener('keydown', onKey, true);
+    paint();
+    const firstTh = ths.find((th) => dataKeyOf(th.dataset.col) === a);
+    if (firstTh) firstTh.scrollIntoView({ block: 'nearest', inline: 'center' });
+}
+function openBlockDialog(editId) {
+    const allCols = (st.data && st.data.columns) || [];
+    const added = (st.design.added || []);
+    const editing = editId ? added.find((a) => a.id === editId) : null;
+    // las columnas que cuentan en un bloque: las consultadas y las agregadas ANTES de esta (cada una con su letra de Excel); sin las de referencia ni las de comentarios
+    const editAt = editing && allCols.some((c) => c.key === `a_${editing.id}`) ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length;
+    const cols = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), group: c.group, kind: c.kind })).filter((c, i) => c.group !== 'reference' && c.kind !== 'comment' && i < editAt);
+    const newLetter = columnLetter(editing ? editAt : allCols.length);
+    const draft = editing
+        ? { name: editing.name, cls: editing.cls || '', decimals: editing.decimals, fn: editing.fn, blocks: editing.blocks.map((b) => ({ from: b.from, to: b.to })) }
+        : { name: t('main.anBlockName_blank'), cls: '', decimals: null, fn: 'blank', blocks: [defaultBlockEnds(cols)] };
+    let touchedName = !!editing;
+    const html = `<h3>${esc(t(editing ? 'main.anBlockEditTitle' : 'main.anBlockTitle'))}</h3>
+        <div class="an-f2">
+            <div><label for="an-bk-name">${esc(t('main.anColLabel'))}</label><input type="text" id="an-bk-name" maxlength="80" autocomplete="off" value="${esc(draft.name)}"></div>
+            <div><label for="an-bk-cls">${esc(t('main.anAddedClass'))}</label><input type="text" id="an-bk-cls" maxlength="40" autocomplete="off" list="an-bk-cls-list" placeholder="${esc(t('main.anAddedClassNone'))}" value="${esc(draft.cls)}"><datalist id="an-bk-cls-list">${[...new Set(added.map((a) => a.cls).filter(Boolean))].map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
+            <div><label for="an-bk-dec">${esc(t('main.anAddedFormat'))}</label><select id="an-bk-dec"><option value="">${esc(t('main.anFmtAuto'))}</option>${[0, 1, 2, 3, 4].map((n) => `<option value="${n}">${esc(t('main.anFmtDecimals', { n }))}</option>`).join('')}</select></div>
+        </div>
+        <p class="reg-field-label">${esc(t('main.anBlockWhat'))}</p>
+        <div class="an-seg" id="an-bk-fns"></div>
+        <p class="reg-field-label">${esc(t('main.anBlockCols'))}</p>
+        <div class="an-blocks" id="an-bk-blocks"></div>
+        <p><button type="button" class="btn btn-secondary an-sm" data-an-addblock><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anBlockAdd'))}</button></p>
+        <p class="reg-field-label">${esc(t('main.anFormulaExcel'))}</p>
+        <div class="an-formula" id="an-bk-formula">—</div>
+        <div id="an-bk-preview"></div>
+        <p class="admin-error" id="an-bk-error" role="alert" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" data-an-go>${esc(t(editing ? 'main.anAddedSave' : 'main.anAddedGo'))}</button><button type="button" class="btn btn-secondary" data-an-close>${esc(t('main.regCancel'))}</button></div>`;
+    modal(html, (overlay, close) => {
+        const $ = (sel) => overlay.querySelector(sel);
+        $('#an-bk-dec').value = draft.decimals === null || draft.decimals === undefined ? '' : String(draft.decimals);
+        const drawFns = () => { $('#an-bk-fns').innerHTML = BLOCK_FNS.map((f) => `<button type="button" class="btn btn-secondary an-sm${draft.fn === f ? ' an-on' : ''}" data-an-fn="${f}" aria-pressed="${draft.fn === f ? 'true' : 'false'}">${esc(t(`main.anBlockFn_${f}`))}</button>`).join(''); };
+        const drawBlocks = () => {
+            $('#an-bk-blocks').innerHTML = draft.blocks.map((b, i) => `<div class="an-range"><span class="an-lead">${esc(t('main.anBlockFrom'))}</span>${blockSelect(cols, `data-bi="${i}" data-f="from"`, b.from)}<span>${esc(t('main.anBlockTo'))}</span>${blockSelect(cols, `data-bi="${i}" data-f="to"`, b.to)}<button type="button" class="btn btn-secondary an-sm" data-an-markblock data-bi="${i}">⌖ ${esc(t('main.anBlockMark'))}</button><span class="an-cnt">${esc(blockCountText(blockCount(cols, b.from, b.to)))}</span>${draft.blocks.length > 1 ? `<button type="button" class="admin-icon-btn" data-an-delblock="${i}" aria-label="${esc(t('main.anBlockRemove'))}" title="${esc(t('main.anBlockRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</div>`).join('');
+        };
+        const colorFor = (cls) => colorOfClass(cls, editing);
+        const toDef = () => {
+            if (!draft.blocks.length || draft.blocks.some((b) => !cols.some((c) => c.key === b.from) || !cols.some((c) => c.key === b.to))) return null;
+            return { id: editing ? editing.id : undefined, kind: 'block', name: draft.name.trim(), cls: draft.cls.trim(), color: colorFor(draft.cls.trim()), decimals: draft.decimals, fn: draft.fn, blocks: draft.blocks.map((b) => ({ from: b.from, to: b.to })) };
+        };
+        let timer = null; let seq = 0;
+        const preview = () => {
+            clearTimeout(timer);
+            const def = toDef();
+            const box = $('#an-bk-preview'); const fx = $('#an-bk-formula');
+            if (!def) { fx.textContent = '—'; box.innerHTML = ''; return; }
+            timer = setTimeout(async () => {
+                const mine = ++seq;
+                try {
+                    const res = await fetch(`${API}/${st.id}/extractions/${st.extraction.id}/added-preview`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ def: { ...def, name: def.name || 'x' } }) });
+                    const out = await res.json().catch(() => ({}));
+                    if (mine !== seq) return;
+                    if (!res.ok) { fx.textContent = '—'; box.innerHTML = ''; return; }
+                    fx.textContent = out.formula;
+                    box.innerHTML = `<div class="wp-imp-table-wrap"><table class="wp-imp-table"><thead><tr><th>${esc(t('main.regDim_codigo'))}</th><th class="col-num">${esc(newLetter)} · ${esc(def.name || t('main.anBlockTitle'))}</th></tr></thead><tbody>${(out.rows || []).map((r) => `<tr><td>${esc(r.label)}</td><td class="col-num">${r.value === null ? '—' : esc(fmtCell(r.value, def.decimals))}</td></tr>`).join('')}</tbody></table></div>`;
+                } catch { /* sin vista previa */ }
+            }, 250);
+        };
+        drawFns(); drawBlocks(); preview();
+        overlay.addEventListener('input', (event) => {
+            const el = event.target;
+            if (el.id === 'an-bk-name') { draft.name = el.value; touchedName = true; return; }
+            if (el.id === 'an-bk-cls') draft.cls = el.value;
+        });
+        overlay.addEventListener('change', (event) => {
+            const el = event.target;
+            if (el.id === 'an-bk-dec') { draft.decimals = el.value === '' ? null : Number(el.value); preview(); return; }
+            if (el.id === 'an-bk-cls') { draft.cls = el.value; return; }
+            if (el.dataset && el.dataset.bi !== undefined && el.tagName === 'SELECT') { draft.blocks[Number(el.dataset.bi)][el.dataset.f] = el.value; drawBlocks(); preview(); }
+        });
+        overlay.addEventListener('click', (event) => {
+            const fnBtn = event.target.closest('[data-an-fn]'); const mark = event.target.closest('[data-an-markblock]'); const del = event.target.closest('[data-an-delblock]');
+            if (fnBtn) {
+                draft.fn = fnBtn.dataset.anFn;
+                if (!touchedName) { draft.name = t(`main.anBlockName_${draft.fn}`); $('#an-bk-name').value = draft.name; } // el nombre sugerido cambia con lo que se calcula mientras nadie lo escriba
+                drawFns(); preview();
+            } else if (mark) {
+                const b = draft.blocks[Number(mark.dataset.bi)];
+                if (b) markOnTable({ cols, from: b.from, to: b.to, overlay, onDone: (r) => { b.from = r.from; b.to = r.to; drawBlocks(); preview(); } });
+            } else if (event.target.closest('[data-an-addblock]')) {
+                if (draft.blocks.length < 10 && cols.length) { draft.blocks.push({ from: cols[0].key, to: cols[0].key }); drawBlocks(); preview(); }
+            } else if (del) { draft.blocks.splice(Number(del.dataset.anDelblock), 1); drawBlocks(); preview(); }
+        });
+        $('[data-an-go]').addEventListener('click', async () => {
+            const err = (text) => { const el = $('#an-bk-error'); el.textContent = text; el.hidden = !text; };
+            const def = toDef();
+            if (!draft.name.trim()) return err(t('main.anErr_ADDED_NAME'));
+            if (!def) return err(t('main.anErr_ADDED_BLOCK'));
+            if (!editing && added.length >= 40) return err(t('main.anErr_ADDED_TOO_MANY'));
+            const next = editing ? added.map((a) => (a.id === editing.id ? def : a)) : [...added, { ...def, id: `a${Date.now().toString(36)}` }];
+            try { await saveAdded(next); close(); } catch (e) { err(errorText(e.body)); }
+        });
+        setTimeout(() => { if (!draft.name) $('#an-bk-name').focus(); }, 0);
+    });
+}
+
 // ---- «Criterio» (pieza 2): reglas «si… entonces…», de arriba abajo; gana la primera que se cumple ----------------------------------------------------------------------------------------
-const COND_OPS = ['lt', 'lte', 'gt', 'gte', 'between', 'eq', 'neq', 'contains', 'empty', 'notEmpty'];
+const COND_OPS = ['lt', 'lte', 'gt', 'gte', 'between', 'eq', 'neq', 'contains', 'empty', 'notEmpty', 'blankZero'];
 const NUMERIC_COND_OPS = new Set(['lt', 'lte', 'gt', 'gte', 'between']);
-const NO_VALUE_COND_OPS = new Set(['empty', 'notEmpty']);
+const NO_VALUE_COND_OPS = new Set(['empty', 'notEmpty', 'blankZero']);
 const RESULT_TYPES = ['text', 'value', 'col', 'empty'];
+const SCAN_RESULT_TYPES = ['name', 'found', 'text', 'value', 'col', 'empty']; // una regla de bloque también puede poner el nombre o el valor de la columna que cumplió
 const numOf = (v) => { const s = String(v === null || v === undefined ? '' : v).trim(); if (s === '') return null; const n = Number(s.replace(',', '.')); return Number.isFinite(n) ? n : null; };
 
 function openCriterionDialog(editId) {
@@ -964,18 +1121,23 @@ function openCriterionDialog(editId) {
     const editing = editId ? added.find((a) => a.id === editId) : null;
     // las columnas que se pueden revisar: todas las del archivo y las agregadas ANTES de esta (cada una con su letra de Excel)
     const editAt = editing && allCols.some((c) => c.key === `a_${editing.id}`) ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length; // una columna agregada que aún no se arma (cambio sin aplicar) puede usar todas las que ya están
-    const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), kind: c.kind })).filter((c, i) => c.kind !== 'comment' && i < editAt);
+    const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), kind: c.kind, group: c.group })).filter((c, i) => c.kind !== 'comment' && i < editAt);
+    const blockCols = pickable.filter((c) => c.group !== 'reference'); // las que cuentan en un bloque
     const newLetter = columnLetter(editing ? editAt : allCols.length);
     const blankRes = (type) => ({ type, text: '', value: '', col: pickable[0] ? pickable[0].key : '' });
     const fromResult = (r) => {
         if (!r || r.empty) return blankRes('empty');
+        if (r.name) return blankRes('name');
+        if (r.found) return blankRes('found');
         if (r.col !== undefined) return { ...blankRes('col'), col: r.col };
         if (r.text !== undefined) return { ...blankRes('text'), text: r.text };
         return { ...blankRes('value'), value: String(r.value) };
     };
     const blankCond = () => ({ col: pickable[0] ? pickable[0].key : '', op: 'gt', value: '', value2: '' });
+    const blankScan = () => ({ scan: true, ...defaultBlockEnds(blockCols), dir: 'asc', cond: { op: 'gt', value: '0', value2: '' }, res: blankRes('name') });
+    const scanFromRule = (r) => ({ scan: true, from: r.scan.from, to: r.scan.to, dir: r.scan.dir === 'desc' ? 'desc' : 'asc', cond: { op: r.scan.cond.op, value: r.scan.cond.value === undefined ? '' : String(r.scan.cond.value), value2: r.scan.cond.value2 === undefined ? '' : String(r.scan.cond.value2) }, res: fromResult(r.result) });
     const draft = editing
-        ? { name: editing.name, cls: editing.cls || '', decimals: editing.decimals, rules: editing.rules.map((r) => ({ conds: r.conds.map((c) => ({ col: c.col, op: c.op, value: c.value === undefined ? '' : String(c.value), value2: c.value2 === undefined ? '' : String(c.value2) })), join: r.join === 'or' ? 'or' : 'and', res: fromResult(r.result) })), otherwise: fromResult(editing.otherwise) }
+        ? { name: editing.name, cls: editing.cls || '', decimals: editing.decimals, rules: editing.rules.map((r) => (r.scan ? scanFromRule(r) : ({ conds: r.conds.map((c) => ({ col: c.col, op: c.op, value: c.value === undefined ? '' : String(c.value), value2: c.value2 === undefined ? '' : String(c.value2) })), join: r.join === 'or' ? 'or' : 'and', res: fromResult(r.result) }))), otherwise: fromResult(editing.otherwise) }
         : { name: '', cls: '', decimals: null, rules: [{ conds: [blankCond()], join: 'and', res: blankRes('text') }], otherwise: blankRes('empty') };
     const html = `<h3>${esc(t(editing ? 'main.anCriterionEditTitle' : 'main.anCriterionTitle'))}</h3>
         <div class="an-f2">
@@ -985,7 +1147,7 @@ function openCriterionDialog(editId) {
         </div>
         <p class="reg-field-label">${esc(t('main.anRules'))}</p>
         <div class="an-rules" id="an-cr-rules"></div>
-        <p><button type="button" class="btn btn-secondary" data-an-addrule><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddRule'))}</button></p>
+        <p><button type="button" class="btn btn-secondary" data-an-addrule><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddRule'))}</button> <button type="button" class="btn btn-secondary" data-an-addscan data-help-key="anReglaBloque"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddScanRule'))}</button></p>
         <div class="an-step" id="an-cr-other"></div>
         <p class="reg-field-label">${esc(t('main.anFormulaExcel'))}</p>
         <div class="an-formula" id="an-cr-formula">—</div>
@@ -996,15 +1158,31 @@ function openCriterionDialog(editId) {
         const $ = (sel) => overlay.querySelector(sel);
         $('#an-cr-dec').value = draft.decimals === null || draft.decimals === undefined ? '' : String(draft.decimals);
         const colSel = (value, attrs) => `<select ${attrs}>${pickable.map((c) => `<option value="${esc(c.key)}"${value === c.key ? ' selected' : ''}>${esc(c.letter)} · ${esc(c.title)}</option>`).join('')}</select>`;
-        const resultEditor = (res, scope) => {
-            const typeSel = `<select data-cr="${scope}" data-f="rtype">${RESULT_TYPES.map((r) => `<option value="${r}"${res.type === r ? ' selected' : ''}>${esc(t(`main.anRes_${r}`))}</option>`).join('')}</select>`;
+        const resultEditor = (res, scope, types = RESULT_TYPES) => {
+            const typeSel = `<select data-cr="${scope}" data-f="rtype">${types.map((r) => `<option value="${r}"${res.type === r ? ' selected' : ''}>${esc(t(`main.anRes_${r}`))}</option>`).join('')}</select>`;
             if (res.type === 'text') return `${typeSel}<input type="text" maxlength="80" data-cr="${scope}" data-f="rtext" value="${esc(res.text)}" placeholder="${esc(t('main.anResTextPh'))}" aria-label="${esc(t('main.anRes_text'))}">`;
             if (res.type === 'value') return `${typeSel}<input type="text" inputmode="decimal" data-cr="${scope}" data-f="rvalue" value="${esc(res.value)}" placeholder="${esc(t('main.anArgValuePh'))}" aria-label="${esc(t('main.anRes_value'))}">`;
             if (res.type === 'col') return `${typeSel}${colSel(res.col, `data-cr="${scope}" data-f="rcol"`)}`;
             return typeSel;
         };
+        // la regla de bloque: recorre las columnas del bloque (de izquierda a derecha o al revés) y se queda con la primera donde se cumple la condición
+        const scanCard = (rule, i) => {
+            const attrs = (f) => `data-cr="r${i}" data-f="${f}"`;
+            const c = rule.cond; let vals = '';
+            if (!NO_VALUE_COND_OPS.has(c.op)) {
+                vals = `<input type="text" ${NUMERIC_COND_OPS.has(c.op) ? 'inputmode="decimal"' : ''} ${attrs('sval')} value="${esc(c.value)}" placeholder="${esc(t('main.anArgValuePh'))}" aria-label="${esc(t('main.anArgValuePh'))}">`;
+                if (c.op === 'between') vals += `<span>${esc(t('main.anBetweenAnd'))}</span><input type="text" inputmode="decimal" ${attrs('sval2')} value="${esc(c.value2)}" placeholder="${esc(t('main.anArgValuePh'))}" aria-label="${esc(t('main.anArgValuePh'))}">`;
+            }
+            const delBtn = draft.rules.length > 1 ? `<button type="button" class="admin-icon-btn" data-an-delrule="${i}" aria-label="${esc(t('main.anRemoveRule'))}" title="${esc(t('main.anRemoveRule'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : '';
+            return `<div class="an-rule an-rule-scan"><div class="an-rulehead"><b>${esc(t('main.anScanTitle', { n: i + 1 }))}</b>${delBtn}</div>
+                <div class="an-cond"><span class="an-lead">${esc(t('main.anScanReview'))}</span><span>${esc(t('main.anBlockFrom'))}</span>${blockSelect(blockCols, attrs('sfrom'), rule.from)}<span>${esc(t('main.anBlockTo'))}</span>${blockSelect(blockCols, attrs('sto'), rule.to)}<button type="button" class="btn btn-secondary an-sm" data-an-markblock data-cr-scan="${i}">⌖ ${esc(t('main.anBlockMark'))}</button><span class="an-cnt">${esc(blockCountText(blockCount(blockCols, rule.from, rule.to)))}</span></div>
+                <div class="an-cond"><span class="an-lead">${esc(t('main.anScanDir'))}</span><select ${attrs('sdir')}><option value="asc"${rule.dir === 'asc' ? ' selected' : ''}>${esc(t('main.anScanDir_asc'))}</option><option value="desc"${rule.dir === 'desc' ? ' selected' : ''}>${esc(t('main.anScanDir_desc'))}</option></select></div>
+                <div class="an-cond"><span class="an-lead">${esc(t('main.anScanWhere'))}</span><select ${attrs('sop')}>${COND_OPS.map((o) => `<option value="${o}"${c.op === o ? ' selected' : ''}>${esc(t(`main.anCond_${o}`))}</option>`).join('')}</select>${vals}</div>
+                <div class="an-cond"><span class="an-lead">${esc(t('main.anThen'))}</span>${resultEditor(rule.res, `r${i}`, SCAN_RESULT_TYPES)}</div></div>`;
+        };
         const draw = () => {
             $('#an-cr-rules').innerHTML = draft.rules.map((rule, i) => {
+                if (rule.scan) return scanCard(rule, i);
                 const conds = rule.conds.map((c, j) => {
                     const lead = j === 0 ? t('main.anIf') : t(rule.join === 'or' ? 'main.anOrElse' : 'main.anAndAlso');
                     const attrs = (f) => `data-cr="r${i}" data-c="${j}" data-f="${f}"`;
@@ -1023,6 +1201,8 @@ function openCriterionDialog(editId) {
         const colorFor = (cls) => colorOfClass(cls, editing); // el mismo nombre de clasificación lleva el mismo color en las columnas consultadas y en las agregadas
         const parseResult = (res) => {
             if (res.type === 'empty') return { empty: true };
+            if (res.type === 'name') return { name: true };
+            if (res.type === 'found') return { found: true };
             if (res.type === 'text') { const tx = res.text.trim(); return tx ? { text: tx } : null; }
             if (res.type === 'value') { const n = numOf(res.value); return n === null ? null : { value: n }; }
             return res.col ? { col: res.col } : null;
@@ -1030,6 +1210,18 @@ function openCriterionDialog(editId) {
         const toDef = () => {
             const rules = [];
             for (const rule of draft.rules) {
+                if (rule.scan) {
+                    if (!blockCols.some((c) => c.key === rule.from) || !blockCols.some((c) => c.key === rule.to)) return null;
+                    const k = rule.cond; let cond;
+                    if (NO_VALUE_COND_OPS.has(k.op)) cond = { op: k.op };
+                    else if (k.op === 'between') { const lo = numOf(k.value); const hi = numOf(k.value2); if (lo === null || hi === null) return null; cond = { op: k.op, value: lo, value2: hi }; }
+                    else if (NUMERIC_COND_OPS.has(k.op)) { const n = numOf(k.value); if (n === null) return null; cond = { op: k.op, value: n }; }
+                    else { const text = String(k.value).trim(); if (!text) return null; cond = { op: k.op, value: text }; }
+                    const sres = parseResult(rule.res);
+                    if (!sres) return null;
+                    rules.push({ scan: { from: rule.from, to: rule.to, dir: rule.dir, cond }, result: sres });
+                    continue;
+                }
                 const conds = [];
                 for (const c of rule.conds) {
                     if (!c.col) return null;
@@ -1083,6 +1275,16 @@ function openCriterionDialog(editId) {
             }
             const rule = draft.rules[Number(scope.slice(1))];
             if (!rule) return false;
+            if (rule.scan) {
+                if (f === 'sfrom') { rule.from = el.value; return true; }
+                if (f === 'sto') { rule.to = el.value; return true; }
+                if (f === 'sdir') rule.dir = el.value === 'desc' ? 'desc' : 'asc';
+                else if (f === 'sop') { rule.cond.op = el.value; return true; }
+                else if (f === 'sval') rule.cond.value = el.value; else if (f === 'sval2') rule.cond.value2 = el.value;
+                else if (f === 'rtype') { rule.res = { ...rule.res, type: el.value }; return true; }
+                else if (f === 'rtext') rule.res.text = el.value; else if (f === 'rvalue') rule.res.value = el.value; else if (f === 'rcol') rule.res.col = el.value;
+                return false;
+            }
             if (el.dataset.c !== undefined) {
                 const c = rule.conds[Number(el.dataset.c)];
                 if (f === 'col') c.col = el.value; else if (f === 'op') { c.op = el.value; return true; } else if (f === 'value') c.value = el.value; else if (f === 'value2') c.value2 = el.value;
@@ -1098,7 +1300,14 @@ function openCriterionDialog(editId) {
         overlay.addEventListener('click', (event) => {
             const addRule = event.target.closest('[data-an-addrule]'); const delRule = event.target.closest('[data-an-delrule]');
             const addCond = event.target.closest('[data-an-addcond]'); const delCond = event.target.closest('[data-an-delcond]');
-            if (addRule) { if (draft.rules.length < 20) draft.rules.push({ conds: [blankCond()], join: 'and', res: blankRes('text') }); }
+            const addScan = event.target.closest('[data-an-addscan]'); const markScan = event.target.closest('[data-an-markblock]');
+            if (markScan) {
+                const rule = draft.rules[Number(markScan.dataset.crScan)];
+                if (rule && rule.scan) markOnTable({ cols: blockCols, from: rule.from, to: rule.to, overlay, onDone: (r) => { rule.from = r.from; rule.to = r.to; draw(); preview(); } });
+                return;
+            }
+            if (addScan) { if (draft.rules.length < 20 && blockCols.length) draft.rules.push(blankScan()); }
+            else if (addRule) { if (draft.rules.length < 20) draft.rules.push({ conds: [blankCond()], join: 'and', res: blankRes('text') }); }
             else if (delRule) draft.rules.splice(Number(delRule.dataset.anDelrule), 1);
             else if (addCond) { const rule = draft.rules[Number(addCond.dataset.anAddcond)]; if (rule && rule.conds.length < 5) rule.conds.push(blankCond()); }
             else if (delCond) { const [i, j] = delCond.dataset.anDelcond.split(':').map(Number); const rule = draft.rules[i]; if (rule && rule.conds.length > 1) rule.conds.splice(j, 1); }
@@ -1540,7 +1749,7 @@ async function loadFile() {
                 if (c.group === 'added') {
                     let groupTable;
                     if (c.cls) { groupTable = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(groupTable, c.cls, window.AnalysisKit.classColor(c.color)); }
-                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: `${c.kind === 'criterion' ? '?' : (c.kind === 'comment' ? '✎' : 'ƒ')} ${c.label}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
+                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: `${c.kind === 'criterion' ? '?' : (c.kind === 'comment' ? '✎' : (c.kind === 'block' ? 'Σ' : 'ƒ'))} ${c.label}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
                 }
                 // una columna consultada con clasificación va bajo su propia banda (nombre y color de la persona); sin clasificación, bajo «Consultadas» como siempre
                 let consBand;
