@@ -746,6 +746,52 @@ function buildHeader(tableId, columns) {
     });
     return true;
 }
+// ---- el diseño de cada columna (Daniel, 2026-11-26): el menú ⋮ del encabezado, el mismo de Registros Información (FlexFormat.js). Se guarda en el análisis, vale para todos y para todas sus versiones ----
+const ffTimers = new Map();
+function saveFileFormat(key, f) {
+    clearTimeout(ffTimers.get(key));
+    ffTimers.set(key, setTimeout(async () => {
+        try {
+            const res = await fetch(`${API}/${st.id}/format/column`, { method: window.FlexFormat.hasFormat(f) ? 'PUT' : 'DELETE', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, format: f }) });
+            if (!res.ok) throw new Error('save failed');
+        } catch (err) { Dashboard.showToast(t('main.fmtSaveError'), 'error'); }
+    }, 350));
+}
+function setupFileFormat(table, cols) {
+    const FF = window.FlexFormat;
+    if (!FF || !table || !table.tHead) return;
+    cols.forEach((c) => { const th = table.querySelector(`thead th[data-col="${colKeyOf(c.key)}"]`); if (th) FF.applyHeader(th, c.ff); });
+    if (!st.canCreate) return;
+    cols.forEach((c) => {
+        const th = table.querySelector(`thead th[data-col="${colKeyOf(c.key)}"]`);
+        if (!th || th.querySelector('.reg-fm-btn')) return;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'reg-fm-btn';
+        btn.textContent = '⋮';
+        btn.title = t('main.fmtOpen', { name: c.label });
+        btn.setAttribute('aria-label', t('main.fmtOpen', { name: c.label }));
+        ['mousedown', 'mouseup', 'pointerdown', 'pointerup'].forEach((ev) => btn.addEventListener(ev, (event) => event.stopPropagation())); // tocar el ⋮ no ordena ni mueve la columna
+        btn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const current = (st.data && st.data.columns.find((x) => x.key === c.key)) || c;
+            FF.openMenu({
+                anchor: btn,
+                title: t('main.fmtTitle', { name: current.label }),
+                note: t('main.fmtSaveNoteAn'),
+                f: current.ff,
+                onChange: (f) => {
+                    if (FF.hasFormat(f)) current.ff = { ...f }; else delete current.ff;
+                    st.filePlan = fileCellPlan(st.data.columns); // los renglones que se dibujen después ya traen el formato nuevo
+                    const idx = st.data.columns.indexOf(current);
+                    FF.restyleColumn(table, { key: colKeyOf(current.key), fmt: current.ff, num: !!(st.filePlan[idx] && st.filePlan[idx].numeric) }, lang());
+                    saveFileFormat(current.key, f);
+                },
+            });
+        });
+        th.appendChild(btn);
+    });
+}
 function ensureEmpty(tableId, span, key) {
     const tbody = tableOf(tableId).tBodies[0];
     if (tbody.querySelectorAll('tr').length) return;
@@ -759,14 +805,26 @@ const FIRST_ROWS = 100; // los renglones que se dibujan al entrar
 const NEXT_ROWS = 200; // los que se agregan al bajar o con «Mostrar más»
 // Cómo se dibuja cada columna (la llave de la celda, su clase, cómo se escribe el valor y su aspecto), calculado una sola vez por carga.
 function fileCellPlan(cols) {
+    const FF = window.FlexFormat;
+    const sample = (st.data && st.data.rows) || [];
     return cols.map((c, i) => {
         const key = esc(colKeyOf(c.key));
         let cls = 'an-ref'; let fmt = (v) => v;
         if (c.group === 'added') { cls = c.kind === 'criterion' ? 'an-added' : 'an-added col-num'; fmt = (v) => (v === null ? '' : fmtCell(v, c.decimals)); }
         else if (c.group !== 'reference') { cls = 'an-cons col-num'; fmt = (v) => (v === null ? '' : window.AnalysisKit.fmtValue(v, c.fmt, c.pat)); }
         const look = c.group === 'consulted' && c.style ? window.AnalysisKit.lookCss(c.style).cell : null; // el aspecto va en cada celda: los renglones que se dibujan después también lo traen
-        const style = look && Object.keys(look).length ? ` style="${esc(Object.entries(look).map(([k, v]) => `${k}:${v}`).join(';'))}"` : '';
-        return { i, key, cls, fmt, style };
+        let style = look && Object.keys(look).length ? ` style="${esc(Object.entries(look).map(([k, v]) => `${k}:${v}`).join(';'))}"` : '';
+        // el formato que la persona le dio con el menú ⋮ del encabezado (el mismo de Registros Información): manda sobre lo anterior
+        const ff = FF && FF.hasFormat(c.ff) ? c.ff : null;
+        let numeric = false;
+        for (let r = 0; r < sample.length && r < 200; r += 1) if (typeof sample[r][i] === 'number') { numeric = true; break; }
+        if (ff) {
+            const base = fmt;
+            fmt = (v) => { if (v === null || v === undefined || v === '') return ''; const o = FF.formatValue(v, ff, lang()); return o ? o.text : base(v); };
+            const css = FF.cellCss(ff);
+            if (css) style = ` style="${esc(`${look && Object.keys(look).length ? `${Object.entries(look).map(([k, v]) => `${k}:${v}`).join(';')};` : ''}${css}`)}"`;
+        }
+        return { i, key, cls, fmt, style, ff: !!ff, numeric };
     });
 }
 function fileRowsHtml(from, to) {
@@ -775,8 +833,10 @@ function fileRowsHtml(from, to) {
         const row = rows[r];
         let tr = '<tr>';
         for (let k = 0; k < plan.length; k += 1) {
-            const p = plan[k]; const v = p.fmt(row[p.i]);
-            tr += `<td data-col="${p.key}" class="${p.cls}"${p.style}>${v === null || v === undefined || v === '' ? '—' : esc(String(v))}</td>`;
+            const p = plan[k]; const raw = row[p.i]; const v = p.fmt(raw);
+            // el número tal cual (data-v) para poder volver a darle formato sin recargar; con formato, también para ordenar por el número y no por el texto
+            const extra = typeof raw === 'number' ? ` data-v="${raw}"${p.ff ? ` data-sort-value="${raw}"` : ''}` : '';
+            tr += `<td data-col="${p.key}" class="${p.cls}"${p.style}${extra}>${v === null || v === undefined || v === '' ? '—' : esc(String(v))}</td>`;
         }
         html.push(`${tr}</tr>`);
     }
@@ -875,6 +935,7 @@ async function loadFile() {
         watchFileScroll(wrapper);
         // el aspecto de cada columna (negrita, colores, bordes…) se pone después de armar la tabla
         cols.forEach((c) => { if (c.group === 'consulted' && c.style) window.AnalysisKit.applyLook(tableOf(FILE_TABLE), colKeyOf(c.key), c.style); });
+        setupFileFormat(tableOf(FILE_TABLE), cols); // el formato de cada encabezado y su menú ⋮ (va después del aspecto de la columna: el ⋮ manda)
         if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(FILE_TABLE);
         wrapper.setAttribute('data-help-key', 'anFile');
         if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(FILE_TABLE, { getTitle: () => `${st.analysis.name}_${e.live ? t('main.an2Live') : `v${e.version}`}`, getNotice: () => (st.data && st.data.truncated ? t('main.anDownloadTruncated', { shown: st.data.rows.length, total: num(st.data.total) }) : '') });

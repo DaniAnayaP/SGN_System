@@ -5720,6 +5720,8 @@
     "fmtAlRight": "Derecha",
     "fmtSaveNote": "Se guarda para todos y sale igual en el Excel.",
     "fmtSaveError": "No se pudo guardar el formato. Vuelve a intentarlo.",
+    "fmtSaveNoteAn": "Se guarda en el análisis y lo ven todos.",
+    "anFormatoColumna": "Formato de columna del análisis",
     "fmtNf_general": "General",
     "fmtNf_numero": "Número",
     "fmtNf_moneda": "Moneda",

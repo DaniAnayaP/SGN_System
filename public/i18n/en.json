@@ -5721,6 +5721,8 @@
     "fmtAlRight": "Right",
     "fmtSaveNote": "Saved for everyone; the Excel looks the same.",
     "fmtSaveError": "The format could not be saved. Try again.",
+    "fmtSaveNoteAn": "Saved in the analysis for everyone.",
+    "anFormatoColumna": "Analysis column format",
     "fmtNf_general": "General",
     "fmtNf_numero": "Number",
     "fmtNf_moneda": "Currency",

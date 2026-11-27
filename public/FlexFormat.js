@@ -165,7 +165,7 @@
                 ${swatches('fill', SHADES, f.fill, T('main.fmtShade'))}${swatches('ink', INKS, f.ink, T('main.fmtInk'))}</div>
             <div class="reg-fm-g"><small>${esc(T('main.fmtHeader'))}</small><div class="reg-fm-r">${toggle('hb', !!f.hb, T('main.fmtBold'), '<b>N</b>')}</div>
                 ${swatches('hfill', HFILLS, f.hfill, T('main.fmtHFill'))}${swatches('hink', HINKS, f.hink, T('main.fmtInk'))}</div>
-            <div class="reg-fm-foot"><button type="button" class="reg-fm-clear" data-fm="clear">${esc(T('main.fmtClear'))}</button><span class="reg-fm-note">${esc(T('main.fmtSaveNote'))}</span></div>`;
+            <div class="reg-fm-foot"><button type="button" class="reg-fm-clear" data-fm="clear">${esc(T('main.fmtClear'))}</button><span class="reg-fm-note">${esc(opts.note || T('main.fmtSaveNote'))}</span></div>`;
         };
         draw();
         // la posición: debajo del botón, sin salirse de la ventana

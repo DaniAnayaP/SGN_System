@@ -25,6 +25,20 @@ const MAX_CONDS = 8;
 const MAX_COND_VALUES = 1000;
 const MAX_VALUE_COLS = 130;
 const COL_KEY_RE = /^[A-Za-z0-9_]{1,40}$/;
+const flexExcel = require('./flexExcel');
+const LOOK_KEY_RE = /^(ref_[A-Za-z0-9_]{1,60}|c_[A-Za-z0-9_]{1,40}|a_[A-Za-z0-9_]{1,40})$/; // la clave de una columna del análisis: de referencia (ref_…), de un archivo (c_…) o agregada (a_…)
+const MAX_LOOKS = 200;
+// El formato que la persona le dio a cada columna (número, estilo de celdas, encabezado: el mismo de Registros Información), revisado.
+function cleanLooks(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    Object.entries(raw).slice(0, MAX_LOOKS).forEach(([key, value]) => {
+        if (!LOOK_KEY_RE.test(key)) return;
+        const f = flexExcel.cleanColumnFormat(value);
+        if (Object.keys(f).length) out[key] = f;
+    });
+    return out;
+}
 const LIVE_RE = /^(last|v:[a-z0-9 _.\-]{1,80})$/; // «la más reciente»: el último periodo o la familia de columnas de una tabla libre (su nombre sin mayúsculas ni acentos)
 const LINES = ['solid', 'dotted', 'dashed', 'double', 'thick'];
 
@@ -142,7 +156,7 @@ function normalizeV2(src, registryKeys) {
     const addedChecked = analysisAdded.normalizeAdded(src.added);
     if (addedChecked.error) return { error: addedChecked.error, field: 'added' };
     const registries = [...new Set([baseRegistry, ...columns.map((c) => c.registry)])];
-    return { design: { legacy: false, baseRegistry, base, dedupe, columns, registries, reference: [], consulted: [], added: addedChecked.added, filters: { unidades: [], categorias: [], codigos: [] } } };
+    return { design: { legacy: false, baseRegistry, base, dedupe, columns, registries, reference: [], consulted: [], added: addedChecked.added, looks: cleanLooks(src.looks), filters: { unidades: [], categorias: [], codigos: [] } } };
 }
 // El diseño que manda la pantalla, revisado y limpio. registryKeys = los registros que se pueden usar. Devuelve { design } o { error, field }.
 function normalizeDesign(raw, registryKeys) {
@@ -151,7 +165,7 @@ function normalizeDesign(raw, registryKeys) {
     if (src.baseRegistry && src.legacy !== true) return normalizeV2(src, registryKeys);
     const legacy = normalizeLegacy(src, registryKeys);
     if (legacy.error) return legacy;
-    return { design: { ...legacy.design, ...legacyAsV2(legacy.design), legacy: true } };
+    return { design: { ...legacy.design, ...legacyAsV2(legacy.design), looks: cleanLooks(src.looks), legacy: true } };
 }
 const isV2 = (design) => !!(design && design.baseRegistry && design.legacy !== true);
 
@@ -194,4 +208,4 @@ function buildExtraction(design, sources) {
     ]);
     return { columns, rows, truncated };
 }
-module.exports = { FORMATS, CLASS_COLOR_COUNT, REFERENCE_DIMS, KEY_DIMS, AGGS, AGGS2, MAX_ROWS, MAX_CONSULTED, MAX_COLUMNS, normalizeDesign, normalizeStyle, isV2, periodsNeeded, buildExtraction, aggregate, keyOf, cleanText, periodColKey };
+module.exports = { FORMATS, CLASS_COLOR_COUNT, REFERENCE_DIMS, KEY_DIMS, AGGS, AGGS2, MAX_ROWS, MAX_CONSULTED, MAX_COLUMNS, normalizeDesign, normalizeStyle, isV2, periodsNeeded, buildExtraction, aggregate, keyOf, cleanText, periodColKey, cleanLooks, LOOK_KEY_RE };

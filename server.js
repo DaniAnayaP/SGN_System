@@ -7634,6 +7634,7 @@ const anExtracting = new Set();
 const analysisAdded = require('./analysisAdded');
 const analysisSources = require('./analysisSources');
 const analysisBuild = require('./analysisBuild');
+const flexExcelFormat = require('./flexExcel');
 // Las claves de columna de las tablas libres ya no son su posición (c0, c1…): se convierten, una vez, los análisis que todavía las traen.
 try { analysisSources.upgradeStoredKeys(); } catch (err) { console.error('[análisis] No se pudieron convertir las claves de columna:', err && err.message); }
 // Las tablas que usan los análisis se leen solas poco después de arrancar y se mantienen al día (así abrir un análisis casi siempre es instantáneo).
@@ -7794,6 +7795,7 @@ app.patch('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
         // guardar el Diseño (columnas de registros) no borra las columnas agregadas en el Archivo si quien lo manda no las trae
         const sent = body.design && typeof body.design === 'object' ? { ...body.design } : body.design;
         if (sent && typeof sent === 'object' && sent.added === undefined) sent.added = (analysis.design && analysis.design.added) || [];
+        if (sent && typeof sent === 'object' && sent.looks === undefined) sent.looks = (analysis.design && analysis.design.looks) || {};
         const checked = manualAnalyses.normalizeDesign(sent, anRegistryKeys(req));
         if (checked.error) return anFail(res, checked.error);
         const bad = anCheckDesign(req, checked.design);
@@ -7875,7 +7877,10 @@ function anPresent(analysis, extractionColumns, rows) {
         return { ...c, ...(now.label ? { label: now.label } : {}), ...(now.cls ? { cls: now.cls, ...(analysisAdded.normalizeClassColor(now.color) !== null ? { color: now.color } : {}) } : {}), ...(now.fmt ? { fmt: now.fmt, ...(now.pat ? { pat: now.pat } : {}) } : {}), ...(now.style ? { style: now.style } : {}) };
     });
     const columns = added.length ? [...baseColumns, ...analysisAdded.addedColumnDefs(added, extractionColumns)] : baseColumns;
-    return { columns, rows: added.length ? analysisAdded.applyAdded(added, extractionColumns, rows) : rows, baseColumns: extractionColumns.length };
+    // el formato que la persona le dio a cada columna con el menú ⋮ de su encabezado (ff); vale para En vivo y para todas las versiones
+    const looks = designNow.looks || {};
+    const withLook = (c) => (looks[c.key] ? { ...c, ff: looks[c.key] } : c);
+    return { columns: columns.map(withLook), rows: added.length ? analysisAdded.applyAdded(added, extractionColumns, rows) : rows, baseColumns: extractionColumns.length };
 }
 app.get('/api/business/manual-analyses/:id/extractions/:eid/data', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
@@ -7967,6 +7972,26 @@ app.post('/api/business/manual-analyses/:id/column-preview', requireAuth, (req, 
     res.json({ total: built.rows.length, withValue, columns: built.columns.slice(0, -1).map((c) => ({ key: c.key, label: c.label })), sample: built.rows.filter((r) => r[at] !== null && r[at] !== undefined).slice(0, 8).map((r) => ({ base: r.slice(0, at), value: r[at] })), truncated: !!built.truncated });
 });
 // Guardar la lista de columnas agregadas (la lista completa, en orden). Es parte del diseño: se repite sola en cada versión.
+// El formato de UNA columna del análisis (el menú ⋮ del encabezado, como en Registros Información): PUT { key, format } lo guarda, DELETE { key } lo borra. Se guarda con el diseño y vale para todos.
+['put', 'delete'].forEach((method) => {
+    app[method]('/api/business/manual-analyses/:id/format/column', requireAuth, (req, res) => {
+        const analysis = anLoad(req, res);
+        if (!analysis) return;
+        if (!anAbilities(req).canCreate) return anForbidden(res);
+        const { clientId, isTestAccount } = req.user;
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const key = String(body.key || '');
+        if (!manualAnalyses.LOOK_KEY_RE.test(key)) return anFail(res, 'COL_NOT_FOUND', 400);
+        const clean = method === 'DELETE' ? {} : flexExcelFormat.cleanColumnFormat(body.format);
+        const looks = { ...manualAnalyses.cleanLooks(analysis.design && analysis.design.looks) };
+        const had = !!looks[key];
+        if (Object.keys(clean).length) looks[key] = clean; else delete looks[key];
+        const updated = updateAnalysis(analysis.id, clientId, isTestAccount, { design: { ...analysis.design, looks } });
+        logTableChange({ clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: updated.name, action: 'update', fieldKey: 'main.anFormatoColumna', oldValue: had ? 'con formato' : 'sin formato', newValue: looks[key] ? 'con formato' : 'sin formato', changedBy: changedByLabel(req) });
+        res.set('Cache-Control', 'no-store');
+        return res.json({ key, ff: looks[key] || null });
+    });
+});
 app.put('/api/business/manual-analyses/:id/added', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
     if (!analysis) return;
