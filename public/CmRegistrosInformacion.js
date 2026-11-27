@@ -615,6 +615,15 @@ async function refreshData() {
     const seq = ++st.seq;
     const wrapper = wrapperOf(DATA_TABLE);
     wrapper?.classList.add('reg-busy');
+    // la primera vez (todavía no hay datos dibujados) la tabla vacía diría «no hay nada»: se dice que se está cargando
+    let loadingNote = document.getElementById('reg-loading-note');
+    if (!st.data && wrapper && !loadingNote) {
+        loadingNote = document.createElement('p');
+        loadingNote.id = 'reg-loading-note'; loadingNote.className = 'reg-loading-note'; loadingNote.setAttribute('role', 'status');
+        loadingNote.innerHTML = '<i class="bx bx-loader-alt bx-spin" aria-hidden="true"></i> ';
+        loadingNote.append(t('main.regLoadingData'));
+        wrapper.parentNode.insertBefore(loadingNote, wrapper);
+    }
     try {
         const params = new URLSearchParams({ lang: lang(), tz: String(tzOffset()) });
         if (st.text) params.set('text', st.text);
@@ -636,7 +645,7 @@ async function refreshData() {
         console.error('Registros: failed to load data', err);
         Dashboard.showToast(t('main.regLoadError'), 'error');
     } finally {
-        if (seq === st.seq) wrapper?.classList.remove('reg-busy');
+        if (seq === st.seq) { wrapper?.classList.remove('reg-busy'); const note = document.getElementById('reg-loading-note'); if (note) note.remove(); }
     }
 }
 // La lista de valores de una columna para su filtro: los de TODO el registro (no los dibujados).

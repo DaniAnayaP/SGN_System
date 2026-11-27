@@ -4,7 +4,8 @@
 // Cualquier registro (mensual, diario o de tabla libre) se ve igual: { columns: [{ key, label, kind }], rows: [[celdas en el orden de las columnas]] }.
 //   · mensual / diario: las 6 columnas fijas (unidad, descripción de la unidad, código, descripción, categoría, UDM) y una columna por cada periodo cargado (p_AAAA_MM o p_AAAA_MM_DD).
 //   · tabla libre: las columnas de datos y de valor de sus cargas vigentes (flexRegistries.buildColumns) y sus renglones (los que tienen llave y la última carga «tal cual»).
-// Una tabla se guarda unos segundos en memoria (firma = lo que cambia cuando se carga o se anula algo) para que armar una columna y ver sus valores no relea los 140 mil renglones.
+// La tabla de un registro se guarda en memoria MIENTRAS NO CAMBIEN SUS DATOS (firma = lo que cambia cuando se carga, se anula o se vuelve a considerar una carga, o se cambia el nombre o la clasificación de una columna):
+// leerla de nuevo son ~2 s por cada 140 mil renglones (y mientras se lee el servidor no atiende a nadie). Se lee sola al arrancar y se vuelve a leer sola, por tandas, cuando cambia (refreshCached), así abrir un análisis casi siempre es instantáneo.
 // ---------------------------------------------------------------------------
 const db = require('./db');
 const manual = require('./manualRegistries');
@@ -12,9 +13,13 @@ const flex = require('./flexRegistries');
 
 const DIMS = manual.DIMS;
 const MAX_TABLE_ROWS = 400000;
-const CACHE_MS = 30000;
-const CACHE_MAX = 8;
+const CACHE_MAX = 10;
+const CACHE_CELLS = 16000000; // ≈ 460 MB: una tabla de 140 mil renglones × 15 columnas ocupa ≈ 58 MB
+const CACHE_IDLE_MS = 12 * 3600 * 1000; // una tabla que nadie abre en 12 horas se suelta
+const REFRESH_EVERY_MS = 45000;
+const WARM_AFTER_MS = 20000;
 const cache = new Map();
+const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
 
 const periodColKey = (period) => `p_${String(period).replace(/-/g, '_')}`;
 const periodOfColKey = (key) => { const m = /^p_(\d{4})_(\d{2})(?:_(\d{2}))?$/.exec(String(key || '')); return m ? `${m[1]}-${m[2]}${m[3] ? `-${m[3]}` : ''}` : null; };
@@ -24,7 +29,7 @@ const isFlex = (registry) => registry && registry.kind === 'tabla';
 function signatureOf(clientId, isTest, registry) {
     if (isFlex(registry)) return JSON.stringify(db.flexVigenteLoads(clientId, isTest, registry.key).map((l) => [l.id, l.stamp, JSON.stringify(l.config)]));
     const last = db.registryLastLoad(clientId, isTest, registry.key);
-    return JSON.stringify([last ? last.id : 0, db.registryPeriods(clientId, isTest, registry.key)]);
+    return JSON.stringify([last ? last.id : 0, db.registrySignature(clientId, isTest ? 1 : 0, registry.key), db.registryPeriods(clientId, isTest, registry.key)]);
 }
 
 // ---- columnas (barato: no lee renglones) ----------------------------------------------------------------------------------------------------------------------
@@ -55,7 +60,8 @@ function loadPeriodic(clientId, isTest, registry, lang) {
     }
     return { columns, rows, truncated: map.size > rows.length };
 }
-function loadFlex(clientId, isTest, registry, lang) {
+// La lectura de una tabla libre, por tandas de 5,000 renglones: cada `yield` es un lugar donde se puede ceder el turno a los demás usuarios (loadFlexAsync); loadFlex la corre de corrido.
+function* flexSteps(clientId, isTest, registry, lang, batchSize = 5000) {
     const { loads, built, columns } = flexColumns(clientId, isTest, registry, lang);
     const cols = built.columns;
     const rolesLoads = loads.filter((l) => l.config && l.config.mode === 'roles');
@@ -67,7 +73,7 @@ function loadFlex(clientId, isTest, registry, lang) {
     if (loadIds.length) {
         let afterId = 0;
         outer: for (;;) {
-            const batch = db.flexListRows(clientId, isTest, registry.key, loadIds, { afterId, limit: 5000 });
+            const batch = db.flexListRows(clientId, isTest, registry.key, loadIds, { afterId, limit: batchSize });
             if (!batch.length) break;
             afterId = batch[batch.length - 1].id;
             const vals = db.flexValuesFor(batch.map((x) => x.id), loadIds);
@@ -80,6 +86,7 @@ function loadFlex(clientId, isTest, registry, lang) {
                     return null;
                 }));
             }
+            yield; // una tanda lista: aquí se puede dejar atender a los demás
         }
     }
     const colByName = new Map();
@@ -100,18 +107,90 @@ function loadFlex(clientId, isTest, registry, lang) {
     }
     return { columns, rows, truncated };
 }
-// La tabla completa del registro (con una pequeña memoria de unos segundos).
+function loadFlex(clientId, isTest, registry, lang) {
+    const it = flexSteps(clientId, isTest, registry, lang);
+    let step = it.next();
+    while (!step.done) step = it.next();
+    return step.value;
+}
+async function loadFlexAsync(clientId, isTest, registry, lang) {
+    const it = flexSteps(clientId, isTest, registry, lang, 1500); // tandas más chicas: cada una detiene al servidor menos tiempo
+    let step = it.next();
+    while (!step.done) { await nextTurn(); step = it.next(); }
+    return step.value;
+}
+// La tabla completa del registro, en memoria mientras no cambien sus datos.
+const cacheId = (clientId, isTest, registry, lang) => `${clientId}|${isTest ? 1 : 0}|${registry.key}|${lang}`;
+// Guarda la tabla (la más reciente al final) y suelta las más viejas si pasan de CACHE_MAX o del presupuesto de celdas.
+function remember(id, signature, table, args, used = Date.now()) {
+    cache.delete(id);
+    cache.set(id, { signature, used, table, cells: table.rows.length * Math.max(1, table.columns.length), args });
+    let cells = 0;
+    cache.forEach((e) => { cells += e.cells; });
+    while (cache.size > 1 && (cache.size > CACHE_MAX || cells > CACHE_CELLS)) { const [oldId, old] = cache.entries().next().value; cells -= old.cells; cache.delete(oldId); }
+}
 function loadTable(clientId, isTest, registry, lang = 'es') {
-    const id = `${clientId}|${isTest ? 1 : 0}|${registry.key}|${lang}`;
+    const id = cacheId(clientId, isTest, registry, lang);
     const signature = signatureOf(clientId, isTest, registry);
     const hit = cache.get(id);
-    if (hit && hit.signature === signature && Date.now() - hit.at < CACHE_MS) return hit.table;
+    if (hit && hit.signature === signature) { hit.used = Date.now(); cache.delete(id); cache.set(id, hit); return hit.table; }
     const table = isFlex(registry) ? loadFlex(clientId, isTest, registry, lang) : loadPeriodic(clientId, isTest, registry, lang);
-    cache.set(id, { signature, at: Date.now(), table });
-    while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
+    remember(id, signature, table, { clientId, isTest, registry: { key: registry.key, kind: registry.kind }, lang });
     return table;
 }
 function clearCache() { cache.clear(); }
+// Las tablas que ya están en memoria y cuyos datos cambiaron se leen de nuevo AQUÍ, sin que nadie las pida (por tandas, dejando atender a los demás); las que nadie abre en 12 horas se sueltan.
+let refreshing = false;
+async function refreshCached() {
+    if (refreshing) return 0;
+    refreshing = true;
+    let n = 0;
+    try {
+        for (const [id, e] of [...cache]) {
+            if (Date.now() - e.used > CACHE_IDLE_MS) { cache.delete(id); continue; }
+            const { clientId, isTest, registry, lang } = e.args;
+            let signature;
+            try { signature = signatureOf(clientId, isTest, registry); } catch { cache.delete(id); continue; }
+            if (signature === e.signature) continue;
+            try {
+                const table = isFlex(registry) ? await loadFlexAsync(clientId, isTest, registry, lang) : loadPeriodic(clientId, isTest, registry, lang);
+                remember(id, signature, table, e.args, e.used); // si cambió otra vez mientras se leía, la siguiente vuelta la corrige
+                n += 1;
+            } catch (err) { cache.delete(id); console.error(`[análisis] No se pudo actualizar la tabla de ${registry.key}:`, err && err.message); }
+            await nextTurn();
+        }
+    } finally { refreshing = false; }
+    return n;
+}
+// Al arrancar: las tablas de los registros que usan los análisis se leen solas (en español, que es lo normal; la otra lengua se guarda la primera vez que se abre).
+async function warmUp() {
+    let n = 0;
+    const memo = new Map();
+    for (const row of db.listAnalysisDesigns()) {
+        const d = row.design;
+        if (!d || !d.baseRegistry || !Array.isArray(d.columns)) continue;
+        const lane = `${row.clientId}|${row.isTest ? 1 : 0}`;
+        if (!memo.has(lane)) memo.set(lane, db.listRegistryDefs(row.clientId, row.isTest));
+        for (const key of new Set([d.baseRegistry, ...d.columns.map((c) => c && c.registry).filter(Boolean)])) {
+            const def = memo.get(lane).find((x) => x.key === key);
+            const registry = { key, kind: def ? def.kind : 'month' };
+            const id = cacheId(row.clientId, row.isTest, registry, 'es');
+            if (cache.has(id)) continue;
+            try {
+                const table = isFlex(registry) ? await loadFlexAsync(row.clientId, row.isTest, registry, 'es') : loadPeriodic(row.clientId, row.isTest, registry, 'es');
+                remember(id, signatureOf(row.clientId, row.isTest, registry), table, { clientId: row.clientId, isTest: row.isTest, registry, lang: 'es' });
+                n += 1;
+            } catch (err) { console.error(`[análisis] No se pudo leer de antemano la tabla de ${key}:`, err && err.message); }
+            await nextTurn();
+        }
+    }
+    return n;
+}
+// Arranca el trabajo de fondo: leer de antemano y mantener al día las tablas (los temporizadores no mantienen vivo el proceso).
+function startBackground() {
+    setTimeout(() => { warmUp().then((n) => { if (n) console.log(`[análisis] Se leyeron de antemano ${n} tablas de registros.`); }).catch((err) => console.error('[análisis] Lectura de antemano:', err && err.message)); }, WARM_AFTER_MS).unref();
+    setInterval(() => { refreshCached().catch((err) => console.error('[análisis] Actualizar tablas:', err && err.message)); }, REFRESH_EVERY_MS).unref();
+}
 
 // Los valores distintos de una columna (para elegirlos en una condición): { values: [texto], complete }.
 const compareText = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
@@ -182,4 +261,4 @@ function upgradeStoredKeys() {
     return n;
 }
 
-module.exports = { upgradeDesign, upgradeAnalysis, upgradeStoredKeys, DIMS, periodColKey, periodOfColKey, isFlex, describe, loadTable, clearCache, distinctValues, MAX_TABLE_ROWS };
+module.exports = { refreshCached, warmUp, startBackground, upgradeDesign, upgradeAnalysis, upgradeStoredKeys, DIMS, periodColKey, periodOfColKey, isFlex, describe, loadTable, clearCache, distinctValues, MAX_TABLE_ROWS };

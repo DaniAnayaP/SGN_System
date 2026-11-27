@@ -5322,6 +5322,8 @@
     "colAnExtraerAuth": "Extraer análisis",
     "colAnAnularAuth": "Anular extracción",
     "anLoadError": "No se pudo cargar el análisis.",
+    "anLoading": "Armando el análisis…",
+    "regLoadingData": "Cargando el registro…",
     "anNew": "Agregar nuevo análisis",
     "anNewTitle": "Agregar nuevo análisis",
     "anName": "Nombre de la pantalla",

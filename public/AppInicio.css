@@ -2751,3 +2751,9 @@ button.pm-app-pill-btn i{ font-size: 0.9rem; }
 .rg-app-cd .rg-app-pill[hidden]{ display: none; }
 .rg-app-flash{ margin: 0; padding: 0.45rem 0.8rem; border-radius: 0.7rem; background: #dcefde; color: #2a7a48; font-size: 0.82rem; font-weight: 600; }
 .rg-app-cdro .rg-app-role{ display: inline-flex; align-items: center; gap: 0.2rem; }
+
+/* la tarjeta de un registro mientras se abre */
+.rg-app-opening{ opacity: 0.6; pointer-events: none; }
+.rg-app-opening .rg-app-top::after{ content: ''; flex: none; width: 0.95rem; height: 0.95rem; margin-left: auto; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: rg-app-spin 0.8s linear infinite; }
+@keyframes rg-app-spin{ to{ transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce){ .rg-app-opening .rg-app-top::after{ animation: none; } }

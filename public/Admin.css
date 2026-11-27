@@ -10752,3 +10752,7 @@ th.an-ref-key::after{ content: " ·"; opacity: 0.55; }
 .reg-cm-link{ margin: 0.4rem 0 0; }
 .reg-cm .admin-form-actions{ flex-wrap: wrap; }
 @media (max-width: 860px){ .reg-cm-head{ display: none; } .reg-cm-row{ grid-template-columns: minmax(0, 1fr); } .reg-cm-state:empty{ display: none; } }
+
+/* «Cargando…» mientras se abre un análisis o un registro (antes la tabla se quedaba en blanco) */
+.reg-loading-note{ display: flex; align-items: center; gap: 0.5rem; margin: 0.4rem 0; font-size: 0.9rem; font-weight: 600; color: var(--color-accent, #b23fb8); }
+.reg-loading-note .bx{ font-size: 1.2rem; }

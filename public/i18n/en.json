@@ -5323,6 +5323,8 @@
     "colAnExtraerAuth": "Extract analysis",
     "colAnAnularAuth": "Void extraction",
     "anLoadError": "The analysis could not be loaded.",
+    "anLoading": "Building the analysis…",
+    "regLoadingData": "Loading the record…",
     "anNew": "Add new analysis",
     "anNewTitle": "Add new analysis",
     "anName": "Screen name",

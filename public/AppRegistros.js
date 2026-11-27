@@ -390,18 +390,24 @@ function registryCard(reg) {
     const load = reg.lastLoad;
     card.appendChild(el('span', 'rg-app-sub', load ? `${t('home.regLast')} ${dayText(load.createdAt)}${load.loadedBy ? ` · ${load.loadedBy}` : ''}` : t('main.regCardNone')));
     if (periods.length) card.appendChild(stripNode(reg, periods));
-    card.addEventListener('click', () => openRegistry(reg.key));
+    card.addEventListener('click', () => openRegistry(reg.key, card));
     return card;
 }
-async function openRegistry(key) {
-    listScroll = getScroll();
-    regKey = key;
-    search = ''; catFilter = ''; unitFilter = ''; shown = MAX_ROWS; tab = 'data'; loadSearch = '';
-    const [dataOk] = await Promise.all([loadRegistryData(key), loadRegistryLoads(key)]);
-    if (!dataOk) { showToast(t('main.regLoadError')); return; }
-    view = 'registry';
-    render();
-    setScroll(0);
+// La tarjeta que se toca se ve apagada con un giro mientras se traen los datos (con un registro grande tardaba y parecía que no pasaba nada).
+async function openRegistry(key, card) {
+    if (card) { if (card.classList.contains('rg-app-opening')) return; card.classList.add('rg-app-opening'); card.setAttribute('aria-busy', 'true'); }
+    try {
+        listScroll = getScroll();
+        regKey = key;
+        search = ''; catFilter = ''; unitFilter = ''; shown = MAX_ROWS; tab = 'data'; loadSearch = '';
+        const [dataOk] = await Promise.all([loadRegistryData(key), loadRegistryLoads(key)]);
+        if (!dataOk) { showToast(t('main.regLoadError')); return; }
+        view = 'registry';
+        render();
+        setScroll(0);
+    } finally {
+        if (card) { card.classList.remove('rg-app-opening'); card.removeAttribute('aria-busy'); }
+    }
 }
 
 // --- Un registro: la última carga y sus datos como tarjetas ------------------------------------------------------------------------------

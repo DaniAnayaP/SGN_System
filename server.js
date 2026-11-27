@@ -7636,6 +7636,8 @@ const analysisSources = require('./analysisSources');
 const analysisBuild = require('./analysisBuild');
 // Las claves de columna de las tablas libres ya no son su posición (c0, c1…): se convierten, una vez, los análisis que todavía las traen.
 try { analysisSources.upgradeStoredKeys(); } catch (err) { console.error('[análisis] No se pudieron convertir las claves de columna:', err && err.message); }
+// Las tablas que usan los análisis se leen solas poco después de arrancar y se mantienen al día (así abrir un análisis casi siempre es instantáneo).
+analysisSources.startBackground();
 function anAbilities(req) {
     const admin = !!req.user.isClientAdmin;
     const grants = admin ? null : getUserEffectiveGrants(req.user.sub);

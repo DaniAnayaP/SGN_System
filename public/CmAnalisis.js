@@ -812,10 +812,25 @@ function updateFileNote() {
         });
     }
 }
+// Mientras el análisis se arma (el servidor puede tardar unos segundos con reportes grandes) la tabla se ve apagada y dice qué está pasando, en vez de quedarse en blanco.
+function setFileBusy(wrapper, on) {
+    if (!wrapper) return;
+    wrapper.classList.toggle('reg-busy', on);
+    let note = document.getElementById('an-loading-note');
+    if (!on) { if (note) note.remove(); return; }
+    if (!note) {
+        note = document.createElement('p');
+        note.id = 'an-loading-note'; note.className = 'reg-loading-note'; note.setAttribute('role', 'status');
+        wrapper.parentNode.insertBefore(note, wrapper);
+    }
+    note.innerHTML = '<i class="bx bx-loader-alt bx-spin" aria-hidden="true"></i> ';
+    note.append(t('main.anLoading'));
+}
 async function loadFile() {
     const e = st.extraction;
     const wrapper = wrapperOf(FILE_TABLE);
     if (!e) { buildHeader(FILE_TABLE, [{ col: 'ref_unidad', group: 'main.anGroupRef', labelKey: 'main.regDim_unidad', cls: 'an-ref' }]); ensureEmpty(FILE_TABLE, 1, 'main.anFileNone'); return; }
+    setFileBusy(wrapper, true);
     try {
         const qs = st.text ? `?text=${encodeURIComponent(st.text)}` : '';
         const res = await fetch(e.live ? `${API}/${st.id}/live${qs}` : `${API}/${st.id}/extractions/${e.id}/data${qs}`, { credentials: 'include' });
@@ -857,6 +872,8 @@ async function loadFile() {
     } catch (err) {
         console.error('Análisis: failed to load the file', err);
         Dashboard.showToast(t('main.anLoadError'), 'error');
+    } finally {
+        setFileBusy(wrapper, false);
     }
 }
 function drawVersions() {
