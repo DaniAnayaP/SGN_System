@@ -10934,6 +10934,22 @@ td.an-added, th.an-added{ background: color-mix(in srgb, var(--color-accent) 7%,
 /* «Varias columnas (bloque)» y la regla de bloque de «Criterio» (Daniel, 2026-11-27): desde–hasta + «Marcar en la tabla» */
 .an-seg{ display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.2rem 0 0.5rem; }
 .an-seg .btn.an-on{ background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+/* «N ocultas ▾» al principio de la barra de iconos (Dashboard.js: refreshHiddenChip): Análisis */
+.data-table-hidden-chip{ font: inherit; font-size: 0.74rem; font-weight: 600; margin-right: 0.3rem; border: 1px solid var(--color-border); background: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface)); color: var(--color-accent, #6d3fc0); border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; white-space: nowrap; }
+.data-table-hidden-chip:hover{ border-color: var(--color-accent, #6d3fc0); }
+.data-table-hidden-menu{ position: fixed; z-index: 1200; min-width: 15rem; max-width: min(24rem, calc(100vw - 1rem)); display: flex; flex-direction: column; gap: 0.35rem; padding: 0.6rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); box-shadow: 0 10px 26px rgba(21, 24, 43, 0.22); font-size: 0.82rem; }
+.data-table-hidden-row{ display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
+.data-table-hidden-row > span{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.data-table-hidden-show{ font: inherit; font-size: 0.74rem; font-weight: 600; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-accent, #6d3fc0); border-radius: 999px; padding: 0.05rem 0.65rem; cursor: pointer; }
+.data-table-hidden-all{ align-self: flex-end; margin-top: 0.2rem; }
+/* Contraer grupos de columnas (Dashboard.js: collapsibleGroups, fillBandRow): el [−]/[+] de la banda y la tira delgada del grupo contraído */
+.data-table-band-toggle{ position: absolute; left: 0.4rem; top: 50%; transform: translateY(-50%); width: 1.1rem; height: 1.1rem; padding: 0; line-height: 1; font: inherit; font-size: 0.78rem; font-weight: 700; border: 1px solid currentColor; border-radius: 0.3rem; background: transparent; color: inherit; cursor: pointer; z-index: 1; -webkit-text-fill-color: currentColor; text-transform: none; letter-spacing: 0; }
+.data-table-group-band th.data-table-band-has-toggle{ padding-left: 1.9rem; }
+.data-table-group-band th.data-table-band-collapsed{ font-size: 0; padding-left: 0; padding-right: 0; }
+.data-table-group-band th.data-table-band-collapsed .data-table-band-toggle{ left: 50%; transform: translate(-50%, -50%); }
+.data-table th.data-table-col-strip, .data-table td.data-table-col-strip{ padding: 0 !important; font-size: 0 !important; color: transparent !important; -webkit-text-fill-color: transparent; overflow: hidden; cursor: pointer; background-image: repeating-linear-gradient(135deg, color-mix(in srgb, var(--color-accent, #6d3fc0) 16%, transparent) 0 6px, transparent 6px 12px) !important; }
+.data-table th.data-table-col-strip > *{ display: none !important; }
+.data-table th.data-table-col-strip::before, .data-table td.data-table-col-strip::after{ display: none !important; }
 /* Operación: las pestañas «Paso a paso» / «Fórmula» y la fórmula escrita (Daniel, 2026-11-27) */
 .an-ad-tabs{ margin: 0.5rem 0 0.7rem; }
 .an-fx{ display: block; width: 100%; box-sizing: border-box; font-family: ui-monospace, Consolas, monospace; font-size: 0.95rem; padding: 0.5rem 0.7rem; border-radius: 0.6rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); color: inherit; }

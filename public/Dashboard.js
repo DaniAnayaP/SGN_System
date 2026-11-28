@@ -2149,7 +2149,7 @@ function abbreviateDataTableTexts(tableId) {
     const bands = Array.from(table.tHead ? table.tHead.querySelectorAll('tr.data-table-group-band th') : []).map((th) => {
         if (state.abbrResizeObserver) state.abbrResizeObserver.observe(th);
         const node = Array.from(th.childNodes).find((n) => n.nodeType === 3 && n.nodeValue.trim());
-        return { el: th, text: node && th.childNodes.length === 1 ? node.nodeValue.trim() : '', spec: tableAbbrSpec(th) };
+        return { el: th, text: node && Array.from(th.childNodes).filter((n) => !(n.nodeType === 1 && n.classList.contains('data-table-band-toggle'))).length === 1 ? node.nodeValue.trim() : '', spec: tableAbbrSpec(th) };
     });
     const rows = table.tBodies[0] ? Array.from(table.tBodies[0].rows) : [];
     const colSpecs = new Map();
@@ -3836,9 +3836,99 @@ function applyRowColumnState(tr, tableId) {
         if (!td) return;
         if (!inOrder) tr.appendChild(td);
         applyPinStyle(td, key, state);
+        td.classList.toggle('data-table-col-strip', !!(state.collapsedStrips && state.collapsedStrips.has(key)));
     });
 }
 
+// ---- Contraer grupos de columnas (Daniel, 2026-11-28, «Sí a las recomendadas», como el Esquema de Excel): cada banda de arriba (la de origen y la de clasificación) trae un [−] que contrae su grupo a una tira delgada y un [+] que lo abre.
+// Contraer NO es ocultar: las columnas siguen en la descarga, en la fila de totales y en los filtros; solo se ven menos. Se recuerda por persona y tabla. Un grupo con una columna fija no se contrae. «Contraer todo» / «Expandir todo» (aviso al principio
+// de la barra) actúa sobre los grupos de la banda de clasificación (o sobre la única banda que haya).
+const COLLAPSED_W = 34;
+const collapsedKey = (tableId) => `dataTableCollapsed:${layoutKeyOf(tableId)}`;
+function readCollapsed(tableId) {
+    try {
+        const v = JSON.parse(localStorage.getItem(collapsedKey(tableId)) || 'null');
+        return new Set(Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 200) : []);
+    } catch { return new Set(); }
+}
+function saveCollapsed(tableId, set) {
+    try {
+        if (set.size) localStorage.setItem(collapsedKey(tableId), JSON.stringify([...set]));
+        else localStorage.removeItem(collapsedKey(tableId));
+    } catch { /* sin almacenamiento */ }
+}
+// Los grupos que se pueden contraer: id ('g|<grupo>' de la banda de origen, 't|<grupo>' de la de clasificación) → { id, kind, groupKey, keys } con sus columnas en el orden en que se ven
+function collapsibleGroups(state) {
+    const fade = isFadeTable(state.wrapper);
+    const order = getVisualColumnOrder(state.config).filter((k) => fade || !state.config.hidden.includes(k));
+    const pinned = new Set(state.config.pinned);
+    const groups = new Map();
+    order.forEach((k) => {
+        [['g', state.groupKeys], ['t', state.groupTableKeys]].forEach(([kind, map]) => {
+            const gk = map && map.get(k);
+            if (!gk) return;
+            const id = kind + '|' + gk;
+            if (!groups.has(id)) groups.set(id, { id, kind, groupKey: gk, keys: [] });
+            groups.get(id).keys.push(k);
+        });
+    });
+    groups.forEach((g, id) => { if (g.keys.some((k) => pinned.has(k))) groups.delete(id); });
+    return groups;
+}
+// { hidden: columnas que se colapsan del todo, strips: Map(columna que queda como tira → { id, label, n }) }
+function computeCollapsed(state) {
+    const out = { hidden: new Set(), strips: new Map() };
+    if (!state.collapsed || !state.collapsed.size) return out;
+    const groups = collapsibleGroups(state);
+    state.collapsed.forEach((id) => {
+        const g = groups.get(id);
+        if (!g) return;
+        const free = g.keys.filter((k) => !out.hidden.has(k));
+        if (!free.length) return;
+        free.slice(1).forEach((k) => { out.hidden.add(k); out.strips.delete(k); });
+        out.strips.set(free[0], { id, label: resolveGroupLabel(g.groupKey), n: g.keys.length });
+    });
+    return out;
+}
+function toggleCollapsedGroup(tableId, id) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    if (!state.collapsed) state.collapsed = new Set();
+    if (state.collapsed.has(id)) state.collapsed.delete(id); else state.collapsed.add(id);
+    saveCollapsed(tableId, state.collapsed);
+    applyDataTableColumnLayout(tableId);
+}
+// «Contraer todo» / «Expandir todo»: un aviso al principio de la barra, solo si hay dos o más grupos que se puedan contraer
+function refreshCollapseChip(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || state.external) return;
+    const bar = state.wrapper.previousElementSibling;
+    if (!bar || !bar.classList || !bar.classList.contains('data-table-zoom')) return;
+    const kind = state.groupTableKeys && state.groupTableKeys.size ? 't' : 'g';
+    const ids = Array.from(collapsibleGroups(state).values()).filter((g) => g.kind === kind).map((g) => g.id);
+    let chip = bar.querySelector('.data-table-collapse-chip');
+    if (ids.length < 2) { if (chip) chip.remove(); return; }
+    const anyOpen = ids.some((id) => !(state.collapsed && state.collapsed.has(id)));
+    if (!chip) {
+        chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'data-table-hidden-chip data-table-collapse-chip';
+        chip.dataset.helpKey = 'collapseGroups';
+        chip.addEventListener('click', () => {
+            const st = dataTableColumnState.get(tableId);
+            if (!st) return;
+            const k = st.groupTableKeys && st.groupTableKeys.size ? 't' : 'g';
+            const all = Array.from(collapsibleGroups(st).values()).filter((g) => g.kind === k).map((g) => g.id);
+            const open = all.some((id) => !(st.collapsed && st.collapsed.has(id)));
+            if (!st.collapsed) st.collapsed = new Set();
+            all.forEach((id) => { if (open) st.collapsed.add(id); else st.collapsed.delete(id); });
+            saveCollapsed(tableId, st.collapsed);
+            applyDataTableColumnLayout(tableId);
+        });
+        bar.insertBefore(chip, bar.firstChild);
+    }
+    chip.textContent = t(anyOpen ? 'main.collapseAll' : 'main.expandAll');
+}
 // Ancho final de cada columna visible, para que la tabla nunca deje espacio
 // en blanco a la derecha: las columnas FIJAS conservan su ancho (el que se
 // les dio o que el usuario arrastró -- nunca se estiran), y las NORMALES se
@@ -3851,9 +3941,11 @@ function distributeDataTableColumnWidths(tableId) {
     if (!state) return;
     const { table, colgroup, config, wrapper } = state;
     const hiddenSet = isFadeTable(wrapper) ? new Set() : new Set(config.hidden); // una columna difuminada sigue ocupando su lugar
-    const visible = getVisualColumnOrder(config).filter((k) => !hiddenSet.has(k));
-    const pinnedSet = new Set(state.visiblePinned);
-    const baseOf = (k) => config.widths[k] || DATA_TABLE_COL_MIN_WIDTH;
+    const collapsedHidden = state.collapsedHidden || new Set(); // las columnas de un grupo contraído (menos la tira) no ocupan lugar
+    const strips = state.collapsedStrips || new Map();
+    const visible = getVisualColumnOrder(config).filter((k) => !hiddenSet.has(k) && !collapsedHidden.has(k));
+    const pinnedSet = new Set([...state.visiblePinned, ...strips.keys()]); // la tira de un grupo contraído tiene su ancho fijo: no se estira
+    const baseOf = (k) => (strips.has(k) ? COLLAPSED_W : (config.widths[k] || DATA_TABLE_COL_MIN_WIDTH));
     const sumOf = (keys) => keys.reduce((total, k) => total + baseOf(k), 0);
     const normals = visible.filter((k) => !pinnedSet.has(k));
     const normalSum = sumOf(normals);
@@ -3899,18 +3991,20 @@ function applyDataTableColumnLayout(tableId) {
     const hiddenSet = fadeMode ? new Set() : new Set(config.hidden); // en una tabla «fade» lo oculto no se colapsa: se queda en su lugar, difuminado (ver updateFadeStyle)
     const visiblePinned = config.pinned.filter((k) => !hiddenSet.has(k));
     state.visiblePinned = visiblePinned;
+    const collapsedNow = computeCollapsed(state); // los grupos contraídos: todas sus columnas se colapsan menos la primera, que queda como tira
+    state.collapsedHidden = collapsedNow.hidden; state.collapsedStrips = collapsedNow.strips;
 
     visualOrder.forEach((key) => {
         const col = Array.from(colgroup.children).find((c) => c.dataset.col === key);
         if (col) {
             colgroup.appendChild(col);
-            col.style.width = `${config.widths[key] || DATA_TABLE_COL_MIN_WIDTH}px`;
+            col.style.width = `${collapsedNow.strips.has(key) ? COLLAPSED_W : (config.widths[key] || DATA_TABLE_COL_MIN_WIDTH)}px`;
             // visibility:collapse, not display:none — <col display:none>
             // doesn't reliably collapse the column's rendered width under
             // border-collapse:separate (confirmed live: cells kept their
             // natural width). visibility:collapse is the CSS-Tables-spec
             // property made for exactly this and does collapse it to 0.
-            col.style.visibility = hiddenSet.has(key) ? 'collapse' : '';
+            col.style.visibility = hiddenSet.has(key) || collapsedNow.hidden.has(key) ? 'collapse' : '';
         }
         const th = Array.from(headerRow.cells).find((c) => c.dataset.col === key);
         if (th) headerRow.appendChild(th);
@@ -3937,6 +4031,7 @@ function applyDataTableColumnLayout(tableId) {
     Array.from(headerRow.cells).forEach((th) => {
         applyPinStyle(th, th.dataset.col, state);
         th.draggable = !config.pinned.includes(th.dataset.col) && hasColumnSearchGrant(tableId, th.dataset.col, 'reorder');
+        th.classList.toggle('data-table-col-strip', collapsedNow.strips.has(th.dataset.col)); // la tira de un grupo contraído
     });
 
     // <col display:none> already shrinks the empty-state colspan cell's
@@ -3974,6 +4069,8 @@ function applyDataTableColumnLayout(tableId) {
     renderColumnGroupBand(tableId);
     applyTotalsRowLayout(tableId); // la franja de totales (ver registerTotalsRow) sigue el orden, lo oculto y lo fijo de las columnas
     refreshSavedLayoutPillForTable(tableId);
+    refreshHiddenChip(tableId);
+    refreshCollapseChip(tableId);
 }
 // Las tablas con data-hidden-style="fade" (Cargas Manuales: Daniel, 2026-11-25, «que se queden en el mismo lugar, pero con un color difuminado») no esconden la columna que la persona oculta con Personalizar columnas:
 // la dejan en su lugar con el color apagado (una hoja de estilos por tabla, sin tocar cada celda). Una columna difuminada no baja en las descargas (getVisibleTableSnapshot) y su filtro, si lo tiene, sigue aplicando.
@@ -6481,11 +6578,22 @@ function initDataTableColumns(wrapper, index) {
         table, wrapper, colgroup, columnKeys, labels, config, groupKeys, groupTableKeys, typeKeys, naturalWidths,
         widthMode: savedWidthMode ? savedWidthMode.mode : null, widthsBefore: savedWidthMode ? savedWidthMode.before : null, noStretch: !!savedWidthMode,
         sized: !hadNoStoredLayout && readSized(tableId), // sin acomodo guardado ya no hay anchos «a mano» que respetar
+        collapsed: readCollapsed(tableId), // los grupos que la persona dejó contraídos (ver collapsibleGroups)
         look: readLook(tableId),
         sortKey: null, sortDir: null, originalRowOrder: null,
         columnFilters: new Map(),
         columnRules: new Map(),
     });
+    // el [−]/[+] de las bandas y la tira de un grupo contraído se atienden aquí (antes que el orden por clic del encabezado)
+    table.addEventListener('click', (event) => {
+        const current = dataTableColumnState.get(tableId);
+        if (!current) return;
+        const toggle = event.target.closest('.data-table-band-toggle');
+        if (toggle) { event.stopPropagation(); event.preventDefault(); toggleCollapsedGroup(tableId, toggle.dataset.groupId); return; }
+        const strip = event.target.closest('th.data-table-col-strip, td.data-table-col-strip');
+        const meta = strip && current.collapsedStrips ? current.collapsedStrips.get(strip.dataset.col) : null;
+        if (meta) { event.stopPropagation(); event.preventDefault(); toggleCollapsedGroup(tableId, meta.id); }
+    }, true);
     applyDataTableColumnLayout(tableId);
     refreshWidthButtons(tableId);
     applyDataTableLook(tableId);
@@ -6547,8 +6655,9 @@ function initDataTableColumns(wrapper, index) {
 // table it was chosen for, not just the tree's own preview. Classifications
 // never explicitly colored keep rendering exactly as before (columnGroupColor
 // itself falls back to COLUMN_GROUP_META's own static swatch, or neutral).
-function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey, state, applyOwnColor, tableId) {
+function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey, state, applyOwnColor, tableId, rowKind) {
     bandRow.innerHTML = '';
+    const collapsible = tableId && rowKind ? collapsibleGroups(state) : null; // la vista previa del editor de columnas no lleva botones
     const pinnedSet = new Set(state?.visiblePinned || []);
     const lastPinnedKey = pinnedSet.size ? state.visiblePinned[state.visiblePinned.length - 1] : null;
     const segments = [];
@@ -6606,6 +6715,21 @@ function fillBandRow(bandRow, visualOrder, keyMap, emptyLabelKey, state, applyOw
                 th.dataset.endKey = s.endKey;
                 th.dataset.helpKey = 'groupBandDrag';
             }
+        }
+        const group = collapsible && s.groupKey && !s.pinned ? collapsible.get(rowKind + '|' + s.groupKey) : null;
+        if (group) {
+            const closed = !!(state.collapsed && state.collapsed.has(group.id));
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'data-table-band-toggle';
+            toggle.dataset.groupId = group.id;
+            toggle.textContent = closed ? '+' : '−';
+            const label = t(closed ? 'main.bandExpand' : 'main.bandCollapse', { name: th.textContent });
+            toggle.setAttribute('aria-label', label);
+            toggle.title = label;
+            th.insertBefore(toggle, th.firstChild);
+            th.classList.add('data-table-band-has-toggle');
+            if (closed) th.classList.add('data-table-band-collapsed');
         }
         bandRow.appendChild(th);
     });
@@ -6757,9 +6881,9 @@ function renderColumnGroupBand(tableId) {
     // renders at 0 width either way, so there's no need to special-case it.
     const visualOrder = getVisualColumnOrder(state.config);
     const tableBandRow = state.table.tHead.querySelector('tr.data-table-group-band-table');
-    if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map(), null, state, true, tableId); // el color propio solo lo trae una clasificación registrada (setColumnClassMeta); las demás bandas de tabla siguen igual
+    if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map(), null, state, true, tableId, 't'); // el color propio solo lo trae una clasificación registrada (setColumnClassMeta); las demás bandas de tabla siguen igual
     const classBandRow = state.table.tHead.querySelector('tr.data-table-group-band-classification');
-    if (classBandRow) fillBandRow(classBandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending', state, true, tableId);
+    if (classBandRow) fillBandRow(classBandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending', state, true, tableId, 'g');
     const typeBandRow = state.table.tHead.querySelector('tr.data-table-group-band-type');
     if (typeBandRow) fillTypeBandRow(typeBandRow, visualOrder, state.typeKeys || new Map(), state);
 }
@@ -7804,6 +7928,92 @@ function refreshSavedLayoutPill(pill) {
     pill.classList.toggle('named', !!active);
 }
 
+// ---- «N ocultas ▾» (Daniel, 2026-11-28, «Sí a las recomendadas»): en las tablas con data-hidden-chip="1" (Análisis) una columna oculta sale de la vista (no se sombrea, a diferencia de Registros) y este aviso, al principio de la barra de iconos,
+// dice cuántas hay y deja traerlas de vuelta, una por una o todas. Ocultar y mostrar muchas a la vez sigue en «Personalizar columnas».
+let hiddenChipMenu = null;
+function closeHiddenChipMenu() {
+    if (!hiddenChipMenu) return;
+    document.removeEventListener('click', hiddenChipMenu.onDoc, true);
+    document.removeEventListener('keydown', hiddenChipMenu.onKey, true);
+    hiddenChipMenu.el.remove();
+    hiddenChipMenu = null;
+}
+function hiddenColumnsOf(state) { return state.config.hidden.filter((k) => state.columnKeys.includes(k)); }
+function showHiddenColumns(tableId, keys) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const gone = new Set(keys);
+    state.config.hidden = state.config.hidden.filter((k) => !gone.has(k));
+    saveDataTableConfig(tableId, state.config);
+    applyDataTableColumnLayout(tableId);
+}
+function openHiddenChipMenu(tableId, anchor) {
+    const reopening = hiddenChipMenu && hiddenChipMenu.tableId === tableId;
+    closeHiddenChipMenu();
+    if (reopening) return;
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const el = document.createElement('div');
+    el.className = 'data-table-hidden-menu';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', t('main.hiddenChipTitle'));
+    const title = document.createElement('b');
+    title.textContent = t('main.hiddenChipTitle');
+    el.appendChild(title);
+    hiddenColumnsOf(state).forEach((key) => {
+        const row = document.createElement('div');
+        row.className = 'data-table-hidden-row';
+        const name = document.createElement('span');
+        name.textContent = state.labels[key] || key;
+        const show = document.createElement('button');
+        show.type = 'button';
+        show.className = 'data-table-hidden-show';
+        show.textContent = t('main.hiddenChipShow');
+        show.addEventListener('click', () => showHiddenColumns(tableId, [key]));
+        row.append(name, show);
+        el.appendChild(row);
+    });
+    const all = document.createElement('button');
+    all.type = 'button';
+    all.className = 'data-table-hidden-show data-table-hidden-all';
+    all.textContent = t('main.hiddenChipShowAll');
+    all.addEventListener('click', () => showHiddenColumns(tableId, hiddenColumnsOf(state)));
+    el.appendChild(all);
+    document.body.appendChild(el);
+    const r = anchor.getBoundingClientRect();
+    el.style.left = String(Math.max(8, Math.min(r.left, window.innerWidth - el.offsetWidth - 8))) + 'px';
+    el.style.top = String(Math.max(8, Math.min(r.bottom + 6, window.innerHeight - el.offsetHeight - 8))) + 'px';
+    const onDoc = (event) => { if (!el.contains(event.target) && !anchor.contains(event.target)) closeHiddenChipMenu(); };
+    const onKey = (event) => { if (event.key === 'Escape') closeHiddenChipMenu(); };
+    document.addEventListener('click', onDoc, true);
+    document.addEventListener('keydown', onKey, true);
+    hiddenChipMenu = { el, tableId, onDoc, onKey };
+}
+function refreshHiddenChip(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || state.wrapper.dataset.hiddenChip !== '1') return;
+    const bar = state.wrapper.previousElementSibling;
+    if (!bar || !bar.classList || !bar.classList.contains('data-table-zoom')) return;
+    let chip = bar.querySelector('.data-table-hidden-chip');
+    const hidden = hiddenColumnsOf(state);
+    if (!hidden.length) {
+        if (chip) chip.remove();
+        if (hiddenChipMenu && hiddenChipMenu.tableId === tableId) closeHiddenChipMenu();
+        return;
+    }
+    if (!chip) {
+        chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'data-table-hidden-chip';
+        chip.setAttribute('aria-haspopup', 'true');
+        chip.dataset.helpKey = 'hiddenChip';
+        chip.addEventListener('click', () => openHiddenChipMenu(tableId, chip));
+        bar.insertBefore(chip, bar.firstChild);
+    }
+    chip.textContent = t(hidden.length === 1 ? 'main.hiddenChipOne' : 'main.hiddenChipN', { n: hidden.length }) + ' ▾';
+    chip.setAttribute('aria-label', chip.textContent);
+    if (hiddenChipMenu && hiddenChipMenu.tableId === tableId) { const anchor = chip; closeHiddenChipMenu(); openHiddenChipMenu(tableId, anchor); } // la lista se vuelve a armar con las que quedan
+}
 function refreshSavedLayoutPillForTable(tableId) {
     const pill = document.querySelector(`.data-table-layout-pill[data-pill-table-id="${CSS.escape(tableId)}"]`);
     if (pill) refreshSavedLayoutPill(pill);

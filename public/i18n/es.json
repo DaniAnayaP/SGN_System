@@ -2229,6 +2229,15 @@
     "lookBtn": "Encabezados y celdas",
     "lookTitles": "Títulos",
     "lookCells": "Celdas",
+    "bandCollapse": "Contraer «{name}»",
+    "bandExpand": "Abrir «{name}»",
+    "collapseAll": "Contraer todo",
+    "expandAll": "Expandir todo",
+    "hiddenChipOne": "1 oculta",
+    "hiddenChipN": "{n} ocultas",
+    "hiddenChipTitle": "Columnas ocultas",
+    "hiddenChipShow": "Mostrar",
+    "hiddenChipShowAll": "Mostrar todas",
     "lookAbbr": "Abreviar los títulos",
     "lookDec0": "Sin decimales",
     "lookDecLess": "Disminuir decimales",
@@ -10784,6 +10793,14 @@
     "anFormulaTab": {
       "what": "La operación se arma de dos formas que se llenan una a la otra: «Paso a paso» (eliges cada paso) o «Fórmula» (la escribes como en Excel, con las letras de las columnas). Si la fórmula cabe en pasos de izquierda a derecha (una columna o un número en cada uno), se guarda como pasos; si lleva paréntesis o varias columnas mezcladas (=H*(I+J)), se guarda como fórmula libre y solo se ve en «Fórmula». Funciones: REDONDEAR, RAIZ, ABS, MIN, MAX, POTENCIA, LN, LOG10, LOG, EXP, separando los datos con ;",
       "example": "=REDONDEAR(H*I;0) → costo × existencia, sin decimales."
+    },
+    "collapseGroups": {
+      "what": "Cada banda de arriba lleva un [−] que contrae su grupo de columnas a una tira delgada y un [+] que lo abre; «Contraer todo» y «Expandir todo» lo hacen con todos los grupos de clasificación. Contraer no oculta: las columnas siguen en la descarga, en los totales y en los filtros, solo se ven menos. Cada quien deja sus grupos como los quiera.",
+      "example": "Consumos 2025 [−] → una tira «+»"
+    },
+    "hiddenChip": {
+      "what": "Las columnas que ocultaste ya no se ven en esta tabla ni bajan en la descarga. Este aviso dice cuántas hay y, al tocarlo, deja traerlas de vuelta una por una o todas. Para ocultar o mostrar muchas a la vez usa «Personalizar columnas».",
+      "example": "2 ocultas ▾ → Mostrar IVA"
     },
     "anTypeBand": {
       "what": "La franja de arriba del nombre dice de qué tipo es cada columna agregada: Operación (cuentas paso a paso), Criterio (si… entonces…), Bloque (varias columnas juntas) o Comentarios (lo escribes tú). Las columnas que vienen de los archivos no la llevan: arriba ya dicen de dónde son.",
