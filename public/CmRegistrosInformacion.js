@@ -467,7 +467,7 @@ function drawData() {
     if (Dashboard.refreshTotalsRow) Dashboard.refreshTotalsRow(DATA_TABLE);
     wrapper.setAttribute('data-help-key', flex ? 'regTableLibre' : 'regTable');
     if (Dashboard.attachTableDownloadButton) {
-        Dashboard.attachTableDownloadButton(DATA_TABLE, { getTitle: () => `${regName(currentRegistry())}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : ''),
+        Dashboard.attachTableDownloadButton(DATA_TABLE, { getKind: () => (st.data && isFlex(st.data) ? 'flex' : 'fixed'), getRegistryKey: () => st.key, getTitle: () => `${regName(currentRegistry())}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : ''),
             getFullDownload: (format) => (st.data && (st.data.truncated || isFlex(st.data)) ? `${API}/${encodeURIComponent(st.key)}/export?format=${format}&lang=${lang()}&tz=${tzOffset()}&text=${encodeURIComponent(st.text || '')}${st.cf ? `&cf=${encodeURIComponent(JSON.stringify(st.cf))}` : ''}${visibleColsParam()}${decParam()}&file=${encodeURIComponent(`${regName(currentRegistry())}_${todayStamp()}`)}` : null) });
     }
     updateNote();

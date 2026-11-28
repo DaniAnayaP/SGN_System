@@ -7587,7 +7587,7 @@ app.get('/api/business/manual-registries/:key/export', requireAuth, async (req, 
             res.end();
         } else {
             const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: decOverride !== null || !!picked, useSharedStrings: false });
-            const sheet = workbook.addWorksheet(String(registry.name || 'Datos').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Datos', { views: [{ state: 'frozen', ySplit: picked && !picked.frozenHeader ? 0 : 1 }] });
+            const sheet = workbook.addWorksheet(String(registry.name || 'Datos').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Datos', { views: [{ state: 'frozen', ySplit: picked && !picked.frozenHeader ? 0 : (picked && picked.title ? 2 : 1) }] });
             // con decimales elegidos, las columnas de periodos llevan su formato de número (0, 0.0, 0.00…): se ven igual que en pantalla y el dato sigue completo
             // (con una personalización: su coma de miles y sus negativos; sin ella, con coma como siempre)
             if (decOverride !== null) {
@@ -7595,13 +7595,14 @@ app.get('/api/business/manual-registries/:key/export', requireAuth, async (req, 
                 const numFmt = pickedNumbers && pickedNumbers.neg === 'rojo' ? `${base};[Red]-${base}` : pickedNumbers && pickedNumbers.neg === 'par' ? `${base}_);(${base})` : base;
                 sheet.columns = headers.map((h, i) => ({ key: `c${i}`, ...(i >= 6 ? { style: { numFmt } } : {}) }));
             }
+            if (picked && picked.title) { const titleRow = sheet.addRow([picked.title]); titleRow.getCell(1).font = { bold: true, size: 14 }; titleRow.commit(); } // el título de la personalización, arriba del encabezado
             const headRow = sheet.addRow(headers);
             if (picked) {
                 headRow.eachCell((cell) => {
                     cell.font = { bold: picked.bold, color: { argb: `FF${picked.ink.slice(1).toUpperCase()}` } };
                     if (picked.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${picked.fill.slice(1).toUpperCase()}` } };
                 });
-                if (picked.filter) sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
+                if (picked.filter) sheet.autoFilter = { from: { row: picked.title ? 2 : 1, column: 1 }, to: { row: picked.title ? 2 : 1, column: headers.length } };
             }
             headRow.commit();
             for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters, 2000, parsedCf.filter)) {
@@ -9295,9 +9296,28 @@ function drawPdfBrand(doc, brand) {
 
 // Llena UNA hoja de Excel: datos de arriba opcionales (y la marca de la compañía), columnas y renglones.
 // groupFirst: los renglones con la primera celda vacía pertenecen al grupo de arriba: esa celda se combina hacia abajo (celda combinada por grupo).
-function fillXlsxSheet(workbook, sheet, { header, columns, rows, brand, groupFirst }) {
+function fillXlsxSheet(workbook, sheet, { header, columns, rows, brand, groupFirst, preset }) {
     const cellText = (cell) => (cell == null ? '' : String(cell));
-    if (!header.length) {
+    if (!header.length && preset) {
+        // Mi personalización de Descarga: título arriba, encabezado con su relleno, letra y negritas, filtro y encabezado fijo (las celdas siguen siendo texto)
+        const hasTitle = !!preset.title;
+        sheet.columns = columns.map((col) => ({ width: Math.max(12, String(col?.label ?? '').length + 4) }));
+        if (hasTitle) { const tr = sheet.addRow([preset.title]); tr.getCell(1).font = { bold: true, size: 14 }; tr.height = 22; }
+        const headNo = hasTitle ? 2 : 1;
+        const head = sheet.addRow(columns.map((col) => String(col?.label ?? '')));
+        const argbOf = (hex) => `FF${String(hex).slice(1).toUpperCase()}`;
+        head.eachCell((c) => {
+            c.font = { bold: preset.bold, color: { argb: argbOf(preset.ink) } };
+            if (preset.fill) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argbOf(preset.fill) } };
+        });
+        rows.forEach((row) => { sheet.addRow(Array.isArray(row) ? row.map(cellText) : []); });
+        if (preset.filter && columns.length) sheet.autoFilter = { from: { row: headNo, column: 1 }, to: { row: headNo, column: columns.length } };
+        if (preset.frozenHeader) sheet.views = [{ state: 'frozen', ySplit: headNo }];
+        columns.forEach((col, i) => {
+            const widest = rows.reduce((m, row) => Math.max(m, cellText(Array.isArray(row) ? row[i] : '').length), String(col?.label ?? '').length);
+            sheet.getColumn(i + 1).width = Math.min(60, Math.max(12, widest + 3));
+        });
+    } else if (!header.length) {
         sheet.columns = columns.map((col) => {
             const label = String(col?.label ?? '');
             return { header: label, width: Math.max(12, label.length + 4) };
@@ -9335,7 +9355,7 @@ function fillXlsxSheet(workbook, sheet, { header, columns, rows, brand, groupFir
 }
 // Escribe un Excel (título, datos de arriba opcionales, columnas y renglones) como respuesta; lo usan la ruta de exportar de siempre y el QR del Pedido Manual. brand (opcional): el formato de la compañía arriba.
 // sections (opcional): varias tablas, cada una en su propia hoja ({ title, columns, rows }); sin ellas, una sola hoja con columns y rows.
-async function sendXlsxExport(res, { title, fileBase, header, columns, rows, brand, sections }) {
+async function sendXlsxExport(res, { title, fileBase, header, columns, rows, brand, sections, preset = null }) {
     const workbook = new ExcelJS.Workbook();
     const parts = Array.isArray(sections) && sections.length ? sections : [{ title, columns, rows }];
     const used = new Set();
@@ -9344,7 +9364,7 @@ async function sendXlsxExport(res, { title, fileBase, header, columns, rows, bra
         let name = String(part.title || title).replace(/[\\/*?:[\]]/g, ' ').slice(0, 31).trim() || 'Reporte';
         while (used.has(name.toLowerCase())) name = `${name.slice(0, 28)} ${used.size + 1}`;
         used.add(name.toLowerCase());
-        fillXlsxSheet(workbook, workbook.addWorksheet(name), { header, columns: part.columns, rows: part.rows, brand, groupFirst: !!part.groupFirst });
+        fillXlsxSheet(workbook, workbook.addWorksheet(name), { header, columns: part.columns, rows: part.rows, brand, groupFirst: !!part.groupFirst, preset });
     });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -9372,7 +9392,9 @@ app.post('/api/business/export/xlsx', requireAuth, async (req, res) => {
     const title = String(req.body.title || 'Reporte').trim() || 'Reporte';
     const fileBase = String(req.body.filename || title).trim() || title;
     const header = exportHeaderPairs(req.body.header); // datos que van ARRIBA de la tabla (por ejemplo, los del pedido): [[etiqueta, valor], ...]
-    await sendXlsxExport(res, { title, fileBase, header, columns, rows, brand: exportBrandFromRequest(req), sections });
+    // Mi personalización de Descarga: solo si la descarga la manda (?p= o ?preset=): las demás pantallas que bajan por aquí no cambian solas
+    const chosen = dlApi.resolve(req, { explicitOnly: true }).preset;
+    await sendXlsxExport(res, { title, fileBase, header, columns, rows, brand: exportBrandFromRequest(req), sections, preset: chosen });
 });
 
 // pdfkit has no built-in table widget -- draws a simple even-width grid by
@@ -9380,7 +9402,7 @@ app.post('/api/business/export/xlsx', requireAuth, async (req, res) => {
 // a row would run past the bottom margin. Long cell text is clipped with
 // an ellipsis rather than wrapped, so every row stays the same height and
 // the grid lines stay simple to draw.
-function drawPdfTable(doc, columns, rows) {
+function drawPdfTable(doc, columns, rows, style = null) {
     const startX = doc.page.margins.left;
     const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const colWidth = pageWidth / columns.length;
@@ -9393,10 +9415,11 @@ function drawPdfTable(doc, columns, rows) {
             y = doc.page.margins.top;
         }
         let x = startX;
-        doc.font(isHeader ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
+        doc.font(isHeader && (!style || style.bold) ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
         values.forEach((val) => {
-            doc.rect(x, y, colWidth, rowHeight).stroke('#CCCCCC');
-            doc.fillColor('#000000').text(String(val ?? ''), x + 3, y + 5, {
+            if (isHeader && style && style.fill) doc.rect(x, y, colWidth, rowHeight).fillAndStroke(style.fill, '#CCCCCC'); // el encabezado de la personalización
+            else doc.rect(x, y, colWidth, rowHeight).stroke('#CCCCCC');
+            doc.fillColor(isHeader && style ? style.ink : '#000000').text(String(val ?? ''), x + 3, y + 5, {
                 width: colWidth - 6, height: rowHeight - 6, ellipsis: true, lineBreak: false,
             });
             x += colWidth;
@@ -9504,16 +9527,19 @@ function drawPdfTableWrapped(doc, columns, rows, weights, headFill, groupFirst =
 
 // Escribe un PDF (título, datos de arriba opcionales y una tabla) como respuesta; lo usan la ruta de exportar de siempre y el QR del Pedido Manual.
 // sections (opcional): varias tablas una debajo de otra, cada una con su subtítulo ({ title, columns, rows, widths }).
-function sendPdfExport(res, { title, fileBase, header, columns, rows, wrap, widths, brand, sections }) {
+function sendPdfExport(res, { title, fileBase, header, columns, rows, wrap, widths, brand, sections, preset = null }) {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', buildContentDisposition(`${fileBase}.pdf`));
     const parts = Array.isArray(sections) && sections.length ? sections : null;
     const widest = parts ? Math.max(...parts.map((p) => p.columns.length)) : columns.length;
-    const doc = new PDFDocument({ margin: 30, size: 'A4', layout: widest > 5 ? 'landscape' : 'portrait' });
+    // Mi personalización de Descarga: hoja (vertical u horizontal, papel), título, encabezado y pie con fecha y número de página
+    const pdfOpt = preset ? downloadPresets.pdfOptions(preset) : null;
+    const headStyle = pdfOpt ? { fill: preset.fill, ink: preset.ink, bold: preset.bold } : null;
+    const doc = new PDFDocument({ margin: 30, size: pdfOpt ? pdfOpt.size : 'A4', layout: pdfOpt ? pdfOpt.layout : (widest > 5 ? 'landscape' : 'portrait'), bufferPages: !!(pdfOpt && pdfOpt.footer) });
     doc.pipe(res);
     if (brand) drawPdfBrand(doc, brand);
     else {
-        doc.font('Helvetica-Bold').fontSize(14).text(title, { align: 'center' });
+        doc.font('Helvetica-Bold').fontSize(14).text(pdfOpt && pdfOpt.title ? pdfOpt.title : title, { align: 'center' });
         doc.moveDown(0.6);
     }
     if (header.length) {
@@ -9532,10 +9558,27 @@ function sendPdfExport(res, { title, fileBase, header, columns, rows, wrap, widt
             doc.moveDown(0.4);
             doc.x = doc.page.margins.left;
             if (wrap) drawPdfTableWrapped(doc, part.columns, part.rows, part.widths, brand ? brand.scale[1] : undefined, !!part.groupFirst);
-            else drawPdfTable(doc, part.columns, part.rows);
+            else drawPdfTable(doc, part.columns, part.rows, headStyle);
         });
     } else if (wrap) drawPdfTableWrapped(doc, columns, rows, Array.isArray(widths) ? widths : null, brand ? brand.scale[1] : undefined);
-    else drawPdfTable(doc, columns, rows);
+    else drawPdfTable(doc, columns, rows, headStyle);
+    if (pdfOpt && pdfOpt.footer) {
+        // el pie: la fecha a la izquierda y «Página x de y» a la derecha, en cada hoja (se escribe debajo del margen sin abrir hojas nuevas)
+        const range = doc.bufferedPageRange();
+        const stamp = new Date().toISOString().slice(0, 10);
+        for (let i = range.start; i < range.start + range.count; i += 1) {
+            doc.switchToPage(i);
+            const left = doc.page.margins.left;
+            const width = doc.page.width - left - doc.page.margins.right;
+            const bottomMargin = doc.page.margins.bottom;
+            doc.page.margins.bottom = 0;
+            doc.font('Helvetica').fontSize(7).fillColor('#666666');
+            doc.text(stamp, left, doc.page.height - 22, { width: width / 2, align: 'left', lineBreak: false });
+            doc.text(`${i - range.start + 1} / ${range.count}`, left + width / 2, doc.page.height - 22, { width: width / 2, align: 'right', lineBreak: false });
+            doc.page.margins.bottom = bottomMargin;
+        }
+        doc.fillColor('#000000');
+    }
     doc.end();
 }
 app.post('/api/business/export/pdf', requireAuth, (req, res) => {
@@ -9547,7 +9590,8 @@ app.post('/api/business/export/pdf', requireAuth, (req, res) => {
     const header = exportHeaderPairs(req.body.header);
     const sections = exportSectionsFrom(req.body.sections);
     if (sections === false) return res.status(400).json({ message: 'sections are not valid.' });
-    sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: !!req.body.wrap, widths: Array.isArray(req.body.widths) ? req.body.widths : null, brand: exportBrandFromRequest(req), sections });
+    const chosen = dlApi.resolve(req, { explicitOnly: true }).preset; // Mi personalización de Descarga: solo si la descarga la manda
+    sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: !!req.body.wrap, widths: Array.isArray(req.body.widths) ? req.body.widths : null, brand: exportBrandFromRequest(req), sections, preset: chosen });
 });
 
 app.post('/api/business/intelligent-reports', requireAuth, (req, res) => {

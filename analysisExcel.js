@@ -77,6 +77,7 @@ async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHE
         });
     }
     const head0 = preset && preset.header ? preset.header : null; // el encabezado de la personalización (sin ella, el de siempre)
+    const titleRows = preset && preset.title ? 1 : 0;
     const dateAt = fmts.map(isDateFormat);
     const sheetColumns = columns.map((c, i) => {
         let max = String(c.label).length + 3;
@@ -86,8 +87,9 @@ async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHE
     const parts = Math.max(1, Math.ceil(rows.length / sheetRows));
     for (let p = 0; p < parts; p += 1) {
         const suffix = p === 0 ? '' : ` ${p + 1}`;
-        const sheet = wb.addWorksheet(`${name.slice(0, 31 - suffix.length)}${suffix}`, { views: [{ state: 'frozen', ySplit: preset && preset.freezeHeader === false ? 0 : 1 }] });
+        const sheet = wb.addWorksheet(`${name.slice(0, 31 - suffix.length)}${suffix}`, { views: [{ state: 'frozen', ySplit: preset && preset.freezeHeader === false ? 0 : 1 + titleRows }] });
         sheet.columns = sheetColumns.map((c) => ({ ...c }));
+        if (titleRows) { const tr = sheet.addRow([preset.title]); tr.getCell(1).font = { bold: true, size: 14 }; tr.commit(); } // el título de la personalización, arriba del encabezado
         // el encabezado de cada columna: el de siempre del sistema y, encima, el que la persona le puso a esa columna
         const head = sheet.addRow(columns.map((c) => String(c.label)));
         columns.forEach((c, i) => {
@@ -100,7 +102,7 @@ async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHE
             };
         });
         head.commit();
-        if (columns.length && (!head0 || head0.filter)) sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
+        if (columns.length && (!head0 || head0.filter)) sheet.autoFilter = { from: { row: 1 + titleRows, column: 1 }, to: { row: 1 + titleRows, column: columns.length } };
         const from = p * sheetRows;
         const to = Math.min(rows.length, from + sheetRows);
         for (let n = from; n < to; n += 1) {

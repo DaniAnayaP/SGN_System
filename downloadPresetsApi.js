@@ -27,7 +27,8 @@ module.exports = function createDownloadPresetsApi(deps) {
 
     // La que se aplica a esta descarga: { preset, source } con preset = null cuando no hay ninguna (la descarga sale como siempre).
     // source: 'inline' | 'chosen' | 'active' | 'registry' | 'factory' | null
-    function resolve(req, { registryKey = '' } = {}) {
+    // explicitOnly: solo vale lo que la descarga manda (?p= o ?preset=); sin ello no se mira la elegida ni la del registro (las descargas genéricas de otras pantallas no cambian solas)
+    function resolve(req, { registryKey = '', explicitOnly = false } = {}) {
         const owner = ownerOf(req);
         const query = (req.method === 'GET' ? req.query : { ...(req.query || {}), ...(req.body || {}) }) || {};
         if (typeof query.p === 'string' && query.p) {
@@ -39,6 +40,7 @@ module.exports = function createDownloadPresetsApi(deps) {
             const mine = id ? db.getDownloadPreset(owner.clientId, owner.isTest, owner.userId, id) : null;
             if (mine) return { preset: presets.cleanPreset(mine.preset), source: 'chosen' };
         }
+        if (explicitOnly) return { preset: null, source: null };
         if (owner) {
             const active = db.getActiveDownloadPreset(owner.clientId, owner.isTest, owner.userId);
             if (active) return { preset: presets.cleanPreset(active.kind === 'factory' ? presets.FACTORY : active.preset), source: active.kind === 'factory' ? 'factory' : 'active' };

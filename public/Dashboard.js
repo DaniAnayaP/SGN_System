@@ -6823,7 +6823,38 @@ function getVisibleColumnKeys(tableId) {
 // Es del icono iconDownload del árbol (el administrador del cliente lo ve siempre). getTitle() da el nombre del archivo; getNotice() puede devolver un aviso (p. ej. la tabla solo trae una parte de los renglones).
 // Va en la misma barra .data-table-zoom que los demás iconos; se llama una vez por tabla, cuando ya se armó.
 // buildXlsx({ columns, trs }) (opcional): la pantalla arma su propio Excel con formato; devuelve { url, body } (se manda por POST y baja el archivo) o null para usar el Excel de siempre.
-function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownload, buildXlsx } = {}) {
+// «Mi personalización de Descarga» (Daniel, 2026-11-28): el cuadro que se abre al descargar y su administrador viven en DownloadDialog.js, que se carga la primera vez que se necesita.
+let downloadDialogPromise = null;
+function loadDownloadDialog() {
+    if (window.DownloadDialog) return Promise.resolve(window.DownloadDialog);
+    if (!downloadDialogPromise) {
+        downloadDialogPromise = new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'DownloadDialog.js';
+            script.onload = () => resolve(window.DownloadDialog);
+            script.onerror = () => { downloadDialogPromise = null; reject(new Error('DownloadDialog')); };
+            document.head.appendChild(script);
+        });
+    }
+    return downloadDialogPromise;
+}
+// Los primeros renglones que se ven (para la vista previa «Así queda» del cuadro de descarga): no recorre toda la tabla.
+function getTableSnapshotSample(tableId, limit = 6) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return { columns: [], rows: [] };
+    const hiddenSet = new Set(state.config.hidden);
+    const visualOrder = getVisualColumnOrder(state.config).filter((k) => !hiddenSet.has(k));
+    const columns = visualOrder.map((key) => ({ key, label: columnLabelOf(state, key) }));
+    const rows = [];
+    for (const tr of Array.from(state.table.tBodies[0]?.rows || [])) {
+        if (rows.length >= limit) break;
+        if (tr.querySelector('td.data-table-empty-cell') || tr.hidden || tr.classList.contains('data-table-row-col-filtered')) continue;
+        if (!rows.length) visualOrder.forEach((key, i) => { columns[i].num = !!tr.querySelector(`[data-col="${key}"]`)?.classList.contains('col-num'); }); // las columnas de números (la vista previa solo les cambia los decimales a ellas)
+        rows.push(visualOrder.map((key) => (tr.querySelector(`[data-col="${key}"]`)?.textContent || '').trim()));
+    }
+    return { columns, rows };
+}
+function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownload, buildXlsx, getKind, getRegistryKey } = {}) {
     const wrapper = document.querySelector(`.data-table-wrapper[data-table-id="${CSS.escape(tableId)}"]`);
     const zoom = wrapper?.previousElementSibling;
     if (!zoom?.classList?.contains('data-table-zoom') || zoom.querySelector('[data-download-btn]')) return;
@@ -6836,13 +6867,19 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownlo
         document.body.appendChild(link); link.click(); link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 4000);
     };
-    const run = async (format) => {
+    const csvCell = (value, sep) => { const text = String(value ?? ''); return text.includes(sep) || /["\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; };
+    // dl (opcional): lo que decidió el cuadro de descarga { format, preset, param }: param dice cuál personalización aplica el servidor ({ preset: id | 'factory' }, { p: <JSON> } o {})
+    const run = async (format, dl = null) => {
+        const dlParam = dl && dl.param ? dl.param : {};
+        const dlQuery = dlParam.preset !== undefined ? `preset=${encodeURIComponent(dlParam.preset)}` : (dlParam.p ? `p=${encodeURIComponent(dlParam.p)}` : '');
+        const dlBody = dlParam.preset !== undefined ? { preset: dlParam.preset } : (dlParam.p ? { p: dlParam.p } : {});
+        const dlPreset = dl && dl.preset ? dl.preset : null;
         // getFullDownload(format) da la dirección de la descarga COMPLETA (del servidor) cuando la tabla solo trae una parte de los renglones; vale para Excel y CSV (el PDF baja lo que se ve, con su aviso)
         const fullUrl = getFullDownload && (format === 'xlsx' || format === 'csv') ? getFullDownload(format) : null;
         if (fullUrl) {
             showToast(t('main.downloadFullPreparing'), 'info');
             const link = document.createElement('a');
-            link.href = fullUrl;
+            link.href = dlQuery ? `${fullUrl}${fullUrl.includes('?') ? '&' : '?'}${dlQuery}` : fullUrl;
             document.body.appendChild(link); link.click(); link.remove();
             return;
         }
@@ -6862,7 +6899,7 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownlo
             try {
                 const custom = await buildXlsx({ columns, trs });
                 if (custom) {
-                    const res = await fetch(custom.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ ...custom.body, title }) });
+                    const res = await fetch(custom.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ ...custom.body, ...dlBody, title }) });
                     if (!res.ok) throw new Error('export failed');
                     saveBlob(await res.blob(), `${title}.xlsx`);
                     return;
@@ -6875,11 +6912,15 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownlo
         }
         try {
             if (format === 'csv') {
-                const lines = [columns.map((c) => csvEscape(c.label)).join(',')];
-                rows.forEach((row) => lines.push(row.map(csvEscape).join(',')));
-                saveBlob(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `${title}.csv`); // con BOM: Excel adivina mal los acentos sin él
+                // la personalización: separador, codificación y título arriba (sin ella, comas y con BOM como siempre)
+                const sep = dlPreset ? dlPreset.sep : ',';
+                const lines = [];
+                if (dlPreset && dlPreset.csvTitle) lines.push(csvCell(dlPreset.title || title, sep));
+                lines.push(columns.map((c) => csvCell(c.label, sep)).join(sep));
+                rows.forEach((row) => lines.push(row.map((v) => csvCell(v, sep)).join(sep)));
+                saveBlob(new Blob([(dlPreset && dlPreset.enc !== 'bom' ? '' : '\ufeff') + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `${title}.csv`); // con BOM: Excel adivina mal los acentos sin él
             } else {
-                const res = await fetch(`/api/business/export/${format}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ columns, rows, title }) });
+                const res = await fetch(`/api/business/export/${format}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ columns, rows, title, ...dlBody }) });
                 if (!res.ok) throw new Error('export failed');
                 saveBlob(await res.blob(), `${title}.${format}`);
             }
@@ -6887,6 +6928,22 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownlo
             console.error('Descargar: no se pudo bajar la tabla', err);
             showToast(t('main.downloadError'), 'error');
         }
+    };
+    // qué tipo de descarga es cada formato (decide lo que el cuadro deja ajustar): un registro baja del servidor en Excel y CSV, Análisis arma su Excel, y lo demás (PDF, CSV y Excel de otras pantallas) sale de lo que se ve
+    const kindFor = (format) => {
+        const own = (getKind && getKind()) || 'generic';
+        if (getFullDownload && (format === 'xlsx' || format === 'csv') && getFullDownload(format)) return own;
+        if (buildXlsx && format === 'xlsx') return own;
+        return 'generic';
+    };
+    const registryKey = () => String((getRegistryKey && getRegistryKey()) || '');
+    const openDialog = async (format) => {
+        let dialog = null;
+        try { dialog = await loadDownloadDialog(); } catch (err) { dialog = null; }
+        if (!dialog) { run(format); return; } // sin el cuadro, la descarga sale como siempre
+        let snapshot = { columns: [], rows: [] };
+        try { snapshot = getTableSnapshotSample(tableId, 6); } catch (err) { /* sin vista previa */ }
+        dialog.open({ format, kindOf: kindFor, registryKey: registryKey(), snapshot, title: String((getTitle && getTitle()) || tableId), onDownload: (dl) => run(dl.format, dl) });
     };
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -6907,13 +6964,39 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownlo
         option.type = 'button';
         option.className = 'data-table-col-filter-mode-option';
         option.textContent = `${t(labelKey)} — ${t(hintKey)}`;
-        option.addEventListener('click', (event) => { event.stopPropagation(); menu.hidden = true; run(format); });
+        option.addEventListener('click', (event) => { event.stopPropagation(); menu.hidden = true; openDialog(format); });
         menu.appendChild(option);
     });
     btn.addEventListener('click', (event) => { event.stopPropagation(); menu.hidden = !menu.hidden; });
     document.addEventListener('click', (event) => { if (!menu.hidden && !btn.contains(event.target)) menu.hidden = true; });
     btn.appendChild(menu);
     zoom.appendChild(btn);
+    // El icono de «Mi personalización de Descarga» (décimo de la barra, junto al de Descargar) con la etiqueta «Descarga con: X»; abre el administrador
+    const presetBtn = document.createElement('button');
+    presetBtn.type = 'button';
+    presetBtn.className = 'data-table-zoom-btn data-table-dl-btn';
+    presetBtn.dataset.colAction = 'download-preset';
+    presetBtn.dataset.helpKey = 'downloadPreset';
+    presetBtn.setAttribute('aria-label', t('main.dlIconTitle'));
+    presetBtn.title = t('main.dlIconTitle');
+    presetBtn.innerHTML = '<i class="bx bx-slider-alt" aria-hidden="true"></i><span class="data-table-dl-pill" hidden></span>';
+    const pill = presetBtn.querySelector('.data-table-dl-pill');
+    const refreshPill = async () => {
+        try {
+            const dialog = await loadDownloadDialog();
+            const text = await dialog.pillText(registryKey());
+            pill.textContent = text;
+            pill.hidden = !text;
+            presetBtn.hidden = !text; // una cuenta sin personalizaciones (sin centro de trabajo) no ve el icono
+        } catch (err) { presetBtn.hidden = true; }
+    };
+    presetBtn.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        try { const dialog = await loadDownloadDialog(); dialog.manage({ registryKey: registryKey() }); } catch (err) { showToast(t('main.dlError'), 'error'); }
+    });
+    document.addEventListener('download-presets:changed', refreshPill);
+    zoom.appendChild(presetBtn);
+    refreshPill();
     groupDataTableToolbar(zoom); // la descarga cierra el grupo de Generales
 }
 
@@ -10677,7 +10760,7 @@ const TOOLBAR_GROUPS = ['design', 'search', 'general'];
 const TOOLBAR_ICONS = {
     'zoom-out': ['design', 'zoomOut'], 'zoom-in': ['design', 'zoomIn'], 'width-min': ['design', 'widthMinBtn'], 'width-fit': ['design', 'widthFitBtn'], look: ['design', 'lookBtn'], columns: ['design', 'columnsEditor'], 'saved-layout': ['design', 'savedLayout'],
     filter: ['search', 'filterToggle'], 'filter-clear': ['search', 'filterClear'], 'saved-search': ['search', 'savedSearch'],
-    history: ['general', 'changeHistory'], legend: ['general', 'columnLegend'], 'field-rules': ['general', 'fieldRules'], download: ['general', 'download'],
+    history: ['general', 'changeHistory'], legend: ['general', 'columnLegend'], 'field-rules': ['general', 'fieldRules'], download: ['general', 'download'], 'download-preset': ['general', 'downloadPreset'],
 };
 const TOOLBAR_WORD_CLASS = 'data-table-zoom-word';
 const TOOLBAR_BACK_CLASS = 'data-table-zoom-back';
@@ -17858,6 +17941,7 @@ window.Dashboard = {
     getVisibleTableSnapshot,
     getDataTableLook,
     collapseColumn,
+    getTableSnapshotSample,
     attachTableDownloadButton,
     getVisibleColumnKeys,
     showToast,

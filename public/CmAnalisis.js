@@ -2026,7 +2026,7 @@ async function loadFile() {
         if (Dashboard.reapplyColumnFilters) Dashboard.reapplyColumnFilters(FILE_TABLE);
         if (Dashboard.refreshTotalsRow) Dashboard.refreshTotalsRow(FILE_TABLE);
         wrapper.setAttribute('data-help-key', 'anFile');
-        if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(FILE_TABLE, { getTitle: () => `${st.analysis.name}_${e.live ? t('main.an2Live') : `v${e.version}`}`, getNotice: (format) => (st.data && st.data.truncated && !(format === 'xlsx' && fullDownloadApplies()) ? t('main.anDownloadTruncated', { shown: st.data.rows.length, total: num(st.data.total) }) : ''), buildXlsx: buildAnalysisXlsx });
+        if (Dashboard.attachTableDownloadButton) Dashboard.attachTableDownloadButton(FILE_TABLE, { getKind: () => 'analysis', getTitle: () => `${st.analysis.name}_${e.live ? t('main.an2Live') : `v${e.version}`}`, getNotice: (format) => (st.data && st.data.truncated && !(format === 'xlsx' && fullDownloadApplies()) ? t('main.anDownloadTruncated', { shown: st.data.rows.length, total: num(st.data.total) }) : ''), buildXlsx: buildAnalysisXlsx });
         updateFileNote();
         renderAddedBar();
         try { if (sessionStorage.getItem('anRefreshed') === String(st.id)) { sessionStorage.removeItem('anRefreshed'); Dashboard.showToast(t('main.anRefreshDone'), 'success'); } } catch { /* nada */ }

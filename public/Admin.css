@@ -10955,6 +10955,70 @@ td.an-added, th.an-added{ background: color-mix(in srgb, var(--color-accent) 7%,
 .data-table-wrapper[data-header-tools="row"] .data-table thead th[data-col] > .data-table-col-collapse-btn:hover, .data-table-wrapper[data-header-tools="row"] .data-table thead th[data-col] > .data-table-col-collapse-btn:focus-visible{ opacity: 1; background: color-mix(in srgb, var(--color-accent, #d05bcd) 18%, transparent); }
 .data-table th.data-table-col-strip-single::after{ content: "+" !important; display: flex !important; position: absolute !important; top: 0.3rem !important; left: 50% !important; right: auto !important; transform: translateX(-50%) !important; width: 1.15rem; height: 1.15rem; align-items: center; justify-content: center; border: 1px solid var(--color-accent, #6d3fc0); border-radius: 0.35rem; background: var(--color-surface, #fff); color: var(--color-accent, #6d3fc0); -webkit-text-fill-color: var(--color-accent, #6d3fc0); font-size: 0.85rem; font-weight: 700; line-height: 1; letter-spacing: 0; text-transform: none; }
 .data-table th.data-table-col-strip::before, .data-table td.data-table-col-strip::after{ display: none !important; }
+/* Mi personalización de Descarga (Daniel, 2026-11-28; DownloadDialog.js): el icono con su etiqueta «Descarga con: X», el cuadro que se abre al descargar con su vista previa «Así queda» y el administrador de personalizaciones */
+.data-table-zoom-btn.data-table-dl-btn{ width: auto; min-width: 1.7rem; border-radius: 999px; padding: 0 0.5rem; gap: 0.35rem; }
+.data-table-zoom-btn.data-table-dl-btn[hidden]{ display: none; }
+.data-table-dl-pill{ font: inherit; font-size: 0.7rem; font-weight: 600; white-space: nowrap; max-width: 15rem; overflow: hidden; text-overflow: ellipsis; color: var(--color-accent, #6d3fc0); }
+.data-table-dl-pill[hidden]{ display: none; }
+.dl-dialog, .dl-manage{ display: flex; flex-direction: column; gap: 0.8rem; max-height: min(92vh, 52rem); overflow: auto; }
+.dl-head{ display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+.dl-head h3{ margin: 0; flex: 1 1 auto; }
+.dl-x{ border: 0; background: transparent; color: inherit; font-size: 1.4rem; line-height: 1; cursor: pointer; border-radius: 0.4rem; padding: 0 0.4rem; }
+.dl-x:hover{ background: color-mix(in srgb, var(--color-accent, #d05bcd) 16%, transparent); }
+.dl-fmts{ display: inline-flex; gap: 0.2rem; padding: 0.2rem; border: 1px dashed var(--color-border); border-radius: 999px; }
+.dl-fmts button{ font: inherit; font-size: 0.8rem; font-weight: 600; border: 0; background: transparent; color: var(--color-text-secondary); padding: 0.2rem 0.85rem; border-radius: 999px; cursor: pointer; }
+.dl-fmts button[aria-selected="true"]{ background: color-mix(in srgb, var(--color-accent, #6d3fc0) 16%, var(--color-surface)); color: var(--color-accent, #6d3fc0); box-shadow: inset 0 0 0 1px var(--color-accent, #6d3fc0); }
+.dl-body{ display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+@media (max-width: 760px){ .dl-body{ grid-template-columns: 1fr; } }
+.dl-left, .dl-right{ display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; }
+.dl-right{ position: sticky; top: 0; }
+.dl-mine{ display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.dl-mine label, .dl-l, .dl-tag{ font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-secondary); }
+.dl-mod{ font-size: 0.7rem; font-weight: 700; color: var(--color-accent, #6d3fc0); background: color-mix(in srgb, var(--color-accent, #6d3fc0) 14%, var(--color-surface)); border-radius: 999px; padding: 0.05rem 0.6rem; }
+.dl-mod[hidden]{ display: none; }
+.dl-field{ font: inherit; font-size: 0.85rem; padding: 0.35rem 0.6rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-bg); color: inherit; min-width: 0; }
+.dl-wide{ width: 100%; box-sizing: border-box; }
+.dl-left details{ border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); }
+.dl-left summary{ cursor: pointer; padding: 0.45rem 0.75rem; font-size: 0.85rem; }
+.dl-fields{ display: flex; flex-direction: column; gap: 0.5rem; padding: 0.2rem 0.75rem 0.7rem; }
+.dl-row{ display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.dl-row .dl-l{ flex: 0 0 5.5rem; }
+.dl-c{ flex: 1 1 12rem; min-width: 0; display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.dl-seg{ display: inline-flex; flex-wrap: wrap; gap: 0.25rem; }
+.dl-seg button{ font: inherit; font-size: 0.78rem; font-weight: 600; border: 1px solid var(--color-border); background: var(--color-bg); color: inherit; border-radius: 999px; padding: 0.15rem 0.7rem; cursor: pointer; }
+.dl-seg button[aria-pressed="true"]{ border-color: var(--color-accent, #6d3fc0); background: color-mix(in srgb, var(--color-accent, #6d3fc0) 16%, var(--color-surface)); color: var(--color-accent, #6d3fc0); }
+.dl-seg button[style*="--sw"]::before{ content: ""; display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 0.2rem; margin-right: 0.35rem; vertical-align: -0.05rem; background: var(--sw); }
+.dl-checks{ display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; }
+.dl-chk{ display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; cursor: pointer; }
+.dl-foot-bar{ display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.dl-dialog .dl-foot-bar{ position: sticky; bottom: 0; background: var(--color-surface); padding: 0.55rem 0 0.1rem; border-top: 1px solid var(--color-border); z-index: 2; } /* Descargar siempre a la vista, aunque el cuadro sea largo (celular) */
+.dl-saverow{ display: inline-flex; align-items: center; gap: 0.4rem; }
+.dl-saverow[hidden]{ display: none; }
+.dl-msg{ font-size: 0.8rem; color: var(--color-accent, #2a7a48); }
+.dl-msg.bad{ color: #b3261e; }
+.dl-scr{ overflow-x: auto; border: 1px solid var(--color-border); border-radius: 0.6rem; background: #fff; color: #222; }
+table.dl-xl{ border-collapse: collapse; font-size: 0.72rem; width: 100%; background: #fff; color: #222; }
+table.dl-xl th, table.dl-xl td{ border: 1px solid #d9d9d9; padding: 0.25rem 0.45rem; white-space: nowrap; text-align: left; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; }
+table.dl-xl th b{ font-weight: 400; opacity: 0.8; margin-left: 0.3rem; }
+table.dl-xl td.dl-ttl{ border: 0; font-size: 0.95rem; font-weight: 700; padding: 0.4rem 0.45rem; }
+table.dl-xl td.dl-key{ background: #ead0f0; }
+.dl-cover{ display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.dl-chip{ font-size: 0.68rem; font-weight: 600; border: 1px dashed var(--color-border); border-radius: 999px; padding: 0.05rem 0.55rem; color: var(--color-text-secondary); align-self: flex-start; }
+.dl-csv{ margin: 0; padding: 0.6rem 0.7rem; border: 1px solid var(--color-border); border-radius: 0.6rem; background: var(--color-bg); font: 0.74rem/1.5 ui-monospace, Consolas, monospace; overflow-x: auto; }
+.dl-csv i{ color: var(--color-accent, #6d3fc0); font-style: normal; font-weight: 700; padding: 0 0.1rem; }
+.dl-page{ border: 1px solid var(--color-border); background: #fff; color: #222; border-radius: 0.3rem; padding: 0.7rem; display: flex; flex-direction: column; gap: 0.4rem; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12); position: relative; margin: 0 auto; max-width: 100%; }
+.dl-page.portrait{ width: 15rem; aspect-ratio: 8.5 / 11; }
+.dl-page.landscape{ width: 22rem; aspect-ratio: 11 / 8.5; }
+.dl-page .dl-pt{ font-weight: 700; font-size: 0.8rem; text-align: center; }
+.dl-page .dl-foot{ position: absolute; left: 0.7rem; right: 0.7rem; bottom: 0.4rem; display: flex; justify-content: space-between; font-size: 0.6rem; color: #666; }
+.dl-list{ display: flex; flex-direction: column; gap: 0.4rem; }
+.dl-item{ display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); padding: 0.45rem 0.7rem; }
+.dl-nm{ font-weight: 600; flex: 1 1 8rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dl-badge{ font-size: 0.6rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.05rem 0.5rem; border-radius: 999px; background: color-mix(in srgb, var(--color-accent, #6d3fc0) 12%, var(--color-surface)); color: var(--color-text-secondary); }
+.dl-badge.on{ background: color-mix(in srgb, var(--color-accent, #6d3fc0) 22%, var(--color-surface)); color: var(--color-accent, #6d3fc0); }
+.dl-mini{ font: inherit; font-size: 0.74rem; font-weight: 600; border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-accent, #6d3fc0); border-radius: 999px; padding: 0.1rem 0.65rem; cursor: pointer; }
+.dl-mini.bad{ color: #b3261e; border-color: #b3261e; }
+.dl-sure{ font-size: 0.78rem; font-weight: 600; }
 /* Operación: las pestañas «Paso a paso» / «Fórmula» y la fórmula escrita (Daniel, 2026-11-27) */
 .an-ad-tabs{ margin: 0.5rem 0 0.7rem; }
 .an-fx{ display: block; width: 100%; box-sizing: border-box; font-family: ui-monospace, Consolas, monospace; font-size: 0.95rem; padding: 0.5rem 0.7rem; border-radius: 0.6rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); color: inherit; }
