@@ -5929,6 +5929,57 @@
     "regColumnaNombre": "Column name",
     "regColumnaClasificacion": "Column classification",
     "regToTabla": "Convert to free table",
+    "regMigrate": "Move to single table",
+    "regMigrateTitle": "Move “{name}” to the single table",
+    "regMigrateIntro": "A copy of “{name}” is made in a new single-table record set with the same information: Unit and Code as the key and each period as a column. The original is not touched. When it finishes, the figures are checked to be equal and you decide whether the original goes to Obsolete.",
+    "regMigrateName": "Name of the new record set",
+    "regMigrateGo": "Copy",
+    "regMigrateRunning": "Copying… {done} of {total} rows",
+    "regMigrateChecking": "Checking that the figures match…",
+    "regMigrateWait": "You can close this window: the copy keeps going and you will see the progress when you open it again.",
+    "regMigrateOk": "The figures match. You can confirm.",
+    "regMigrateBad": "A figure does not match. It cannot be confirmed: discard the copy.",
+    "regMigrateRowsLine": "Rows: {old} → {new}",
+    "regMigrateValuesLine": "Values: {old} → {new}",
+    "regMigrateColPeriod": "Period",
+    "regMigrateColBefore": "Values before",
+    "regMigrateColAfter": "Values after",
+    "regMigrateSumBefore": "Sum before",
+    "regMigrateSumAfter": "Sum after",
+    "regMigrateDataTitle": "Reference columns with text (before → after)",
+    "regMigrateConfirm": "Confirm and send the original to Obsolete",
+    "regMigrateDiscard": "Discard the copy",
+    "regMigrateDone": "Done. “{name}” went to Obsolete and the new table is now in the Records menu.",
+    "regMigrateDoneAnalyses": "{count} analyses now read the new table.",
+    "regMigrateDoneAnalysesOne": "1 analysis now reads the new table.",
+    "regMigrateDoneKept": "{count} analyses kept reading the old record.",
+    "regMigrateDoneKeptOne": "1 analysis kept reading the old record.",
+    "regMigrateAnalysisChecking": "Checking that the analyses come out the same…",
+    "regMigrateAnalysesTitle": "Analyses that read this record",
+    "regMigrateAnalysesNone": "No analysis reads this record.",
+    "regMigrateAnalysesOk": "move to the new table by themselves and come out the same: {names}",
+    "regMigrateAnalysesSkip": "keep reading the old record (no new data)",
+    "regMigrateAnalysesFailed": "The analyses could not be checked: they keep reading the old record.",
+    "regMigrateWhy_FILTERS": "uses filters from its old design",
+    "regMigrateWhy_ADDED_REF": "an added column uses a reference column",
+    "regMigrateWhy_COLUMN": "a column with no equivalent in the new table",
+    "regMigrateWhy_PERIOD": "a period with no column in the new table",
+    "regMigrateWhy_LIVE": "uses another “latest”",
+    "regMigrateWhy_DIFF": "the result did not come out the same",
+    "regMigrateWhy_DESIGN": "its design is not valid",
+    "regMigrateWhy_ERROR": "could not be checked",
+    "regMigrateOpen": "Open the new table",
+    "regMigrateErr_INTERRUPTED": "The copy was interrupted (the server restarted). Discard it and try again.",
+    "regMigrateErr_DISK_FULL": "The server ran out of space for the copy. Nothing was added: discard it.",
+    "regMigrateErr_NO_DATA": "That record set has no data to copy.",
+    "regMigrateErr_ERROR": "The copy could not be completed. The original was not touched: discard it and try again.",
+    "regClose": "Close",
+    "regErr_REG_MIGRATE_KIND": "That record set is already a free table.",
+    "regErr_REG_NO_DATA": "That record set has no data: convert it to a free table.",
+    "regErr_REG_MIGRATION_EXISTS": "That record set already has a copy in progress or not confirmed.",
+    "regErr_REG_MIGRATION_STATE": "There is no copy ready for that action.",
+    "regErr_REG_MIGRATION_UNVERIFIED": "The figures did not match: discard the copy.",
+    "regErr_REG_BUSY": "A load of this record set is already in progress. Wait for it to finish.",
     "regToTablaTitle": "Convert to free table",
     "regToTablaText": "“{name}” will become a free table: you will be able to load any Excel and choose the role of its columns on every load. It can only be done while it has no loads.",
     "regToTablaGo": "Convert",
@@ -10745,6 +10796,30 @@
       "what": "Right-click a column title (on a phone, hold your finger for half a second): “Pin up to here” pins this column and those to its left, like Excel's “Freeze Panes”; “Pin only this one” adds it to the ones already pinned; “Unpin” removes them. Up to 4 can be pinned.",
       "example": "Right-click CODE › “Pin up to here”"
     },
+    "regMigrateBtn": {
+      "what": "Copies this record set (Monthly or Daily) to a new single-table record set with the same information. The original is not touched until you confirm.",
+      "example": "Monthly charges by site › Move to single table"
+    },
+    "regMigrateDialog": {
+      "what": "Copies the record set to the single table (Unit and Code as the key, each period as a column with its classification), checks against the original the number of rows, the values of each period and their sum, and only if everything matches lets you confirm. It also checks the analyses that read this record: each one is built with the original and with the new table, and only the one that comes out identical moves to the new table (the others stay as they were, with no new data, and you are told why). On confirming, the original goes to Obsolete and those analyses move to the new table. If something does not match, you discard the copy and nothing happened.",
+      "example": "Copy › check the figures › Confirm and send the original to Obsolete"
+    },
+    "widthMinBtn": {
+      "what": "Sets all columns (except the pinned ones) to the narrowest width, to see many at once. Each full name shows when you hover. Another click brings back the table's previous widths.",
+      "example": "Collapse a 30-column table to see almost all of it"
+    },
+    "widthFitBtn": {
+      "what": "Gives each column (except the pinned ones) the width needed to read its whole header on one line. The data below is shortened as usual. Another click brings back the table's previous widths.",
+      "example": "Fit to read “AVERAGE MONTHLY CONSUMPTION” without cutting it"
+    },
+    "lookBtn": {
+      "what": "Choose how the column headers and the data of the whole table look: align top, middle or bottom, “Wrap text” (the text splits into lines instead of being cut with “…”) and align left, center, right or like the data. It is just for you; “Back to default” leaves it as usual.",
+      "example": "Centered headers with wrapped text"
+    },
+    "lookMenu": {
+      "what": "The buttons are the ones from Excel's “Alignment” ribbon, once for the headers and once for the cells. What you set in a column's format panel wins over this for that column.",
+      "example": "Cells › Wrap text"
+    },
     "anRefresh": {
       "what": "Reloads the analysis with what exists today: the data of the records, the formulas and the added columns. ⟳ \"The most recent\" columns move to the newest load; the ones pointing to a specific load do not change. If there are pending column changes (adding, removing or changing), it saves them together before rebuilding. Versions already extracted never change.",
       "example": "Today's load arrived → Refresh"
@@ -10778,22 +10853,6 @@
       "example": "You paste into the template what your register gives you: the receipt number, the date and time, the center code (PARQU-COC), the item, the quantity and the price with VAT."
     },
     "venTable": {
-    "widthMinBtn": {
-      "what": "Sets all columns (except the pinned ones) to the narrowest width, to see many at once. Each full name shows when you hover. Another click brings back the table's previous widths.",
-      "example": "Collapse a 30-column table to see almost all of it"
-    },
-    "widthFitBtn": {
-      "what": "Gives each column (except the pinned ones) the width needed to read its whole header on one line. The data below is shortened as usual. Another click brings back the table's previous widths.",
-      "example": "Fit to read “AVERAGE MONTHLY CONSUMPTION” without cutting it"
-    },
-    "lookBtn": {
-      "what": "Choose how the column headers and the data of the whole table look: align top, middle or bottom, “Wrap text” (the text splits into lines instead of being cut with “…”) and align left, center, right or like the data. It is just for you; “Back to default” leaves it as usual.",
-      "example": "Centered headers with wrapped text"
-    },
-    "lookMenu": {
-      "what": "The buttons are the ones from Excel's “Alignment” ribbon, once for the headers and once for the cells. What you set in a column's format panel wins over this for that column.",
-      "example": "Cells › Wrap text"
-    },
       "what": "The loaded receipts, one per receipt number, from the most recent to the oldest. The subtotal, the VAT and the total are calculated by the system from the prices (which include VAT). Each receipt's history says who loaded it and from which file.",
       "example": "Receipt 000482 of Table 12: 5 items, subtotal 512.93, VAT 82.07 and total 595.00."
     },

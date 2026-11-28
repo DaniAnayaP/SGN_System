@@ -5817,6 +5817,51 @@ th.data-table-group-band-draggable:active{ cursor: grabbing; }
     opacity: 0.55;
     cursor: not-allowed;
 }
+/* Pasar un registro a tabla única (CmRegistrosInformacion.js: openMigrateRegistry): avance y comprobación. */
+.reg-mg-bar{
+    height: 0.7rem;
+    border-radius: 999px;
+    background: var(--color-bg);
+    overflow: hidden;
+}
+.reg-mg-bar span{
+    display: block;
+    height: 100%;
+    background: var(--color-accent, #6d3fc0);
+    transition: width 0.4s ease;
+}
+.reg-mg-scroll{
+    max-height: 15rem;
+    overflow: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    margin: 0.5rem 0;
+}
+.reg-mg-table{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.74rem;
+}
+.reg-mg-table th,
+.reg-mg-table td{
+    padding: 0.3rem 0.6rem;
+    text-align: right;
+    border-bottom: 1px solid var(--color-border);
+    font-variant-numeric: tabular-nums;
+}
+.reg-mg-table th:first-child,
+.reg-mg-table td:first-child{ text-align: left; }
+.reg-mg-table thead th{
+    position: sticky;
+    top: 0;
+    background: var(--color-bg);
+    font-size: 0.64rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-secondary);
+}
+.reg-mg-ok{ color: var(--color-success, #0f8a6b); font-weight: 700; }
+.reg-mg-bad{ color: #c23b3b; font-weight: 700; }
 /* Cada fila de columna -- nombre + punto de clasificación + control de 3
    vías. "pending" (aún sin tocar en esta sesión de edición) se atenúa
    SOLO aquí, nunca en la banda/tabla real -- ver Dashboard.js. */

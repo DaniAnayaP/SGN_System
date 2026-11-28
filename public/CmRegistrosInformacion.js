@@ -103,10 +103,12 @@ function renderManage() {
         btn.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i> <span>${esc(t(key))}</span>`;
         btn.addEventListener('click', onClick);
         bar.appendChild(btn);
+        return btn;
     };
     if (!canManage && !st.canObsolete) return; // sin ningún permiso de administrar registros solo se ve el nombre
     if (canManage && reg.custom) make('bx-edit', 'main.regRename', () => openRenameRegistry(reg));
     if (canManage && reg.custom && reg.kind !== 'tabla' && !reg.lastLoad && !reg.obsolete) make('bx-table', 'main.regToTabla', () => openConvertRegistry(reg)); // solo mientras no tenga cargas
+    if (canManage && reg.kind !== 'tabla' && !reg.obsolete && reg.periods && reg.periods.length) make('bx-transfer', 'main.regMigrate', () => openMigrateRegistry(reg)).dataset.helpKey = 'regMigrateBtn'; // pasar a tabla única (Daniel, 2026-11-27)
     if (st.canObsolete) make(reg.obsolete ? 'bx-archive-out' : 'bx-archive-in', reg.obsolete ? 'main.regRestoreObsolete' : 'main.regMakeObsolete', () => toggleObsolete(reg));
     if (canManage && reg.custom) make(reg.status === 'active' ? 'bx-hide' : 'bx-show', reg.status === 'active' ? 'main.regDeactivate' : 'main.regActivate', () => toggleRegistry(reg));
 }
@@ -120,7 +122,7 @@ function openNewFromMenu() {
 }
 function regErrorText(body) {
     const code = body && body.code;
-    return ['REG_NAME_REQUIRED', 'REG_NAME_TAKEN', 'REG_KIND', 'REG_FORBIDDEN', 'REG_STATUS', 'REG_BUILTIN', 'REG_HAS_DATA', 'REG_OBSOLETE'].includes(code) ? t(`main.regErr_${code}`) : t('admin.saveError');
+    return ['REG_NAME_REQUIRED', 'REG_NAME_TAKEN', 'REG_KIND', 'REG_FORBIDDEN', 'REG_STATUS', 'REG_BUILTIN', 'REG_HAS_DATA', 'REG_OBSOLETE', 'REG_MIGRATE_KIND', 'REG_NO_DATA', 'REG_MIGRATION_EXISTS', 'REG_MIGRATION_STATE', 'REG_MIGRATION_UNVERIFIED', 'REG_BUSY'].includes(code) ? t(`main.regErr_${code}`) : t('admin.saveError');
 }
 function openModal(html, helpKey, onReady, afterClose) {
     const overlay = document.createElement('div');
@@ -173,6 +175,93 @@ function openRenameRegistry(reg) {
             } catch (e) { btn.disabled = false; const el = overlay.querySelector('#reg-r-error'); el.textContent = regErrorText(e.body); el.hidden = false; }
         });
     });
+}
+// Pasar un registro Mensual o Diaria al tipo único (la tabla libre; Daniel, 2026-11-27, «tú pasa los datos y pégalos como deben de estar»): copiar → comprobar → confirmar. El servidor hace la copia en segundo plano (ver registryMigrate.js);
+// aquí se elige el nombre, se ve el avance y, al terminar, la comprobación contra lo anterior. Solo con las cifras iguales se puede confirmar; lo anterior no se toca hasta entonces.
+function openMigrateRegistry(reg) {
+    let timer = null;
+    let lastStatus = '';
+    openModal(`<h3>${esc(t('main.regMigrateTitle', { name: regName(reg) }))}</h3><div id="reg-mg-body"></div>`, 'regMigrateDialog', (overlay, close) => {
+        const body = overlay.querySelector('#reg-mg-body');
+        const base = `${API}/${encodeURIComponent(reg.key)}`;
+        const fmtN = (n) => Number(n).toLocaleString(lang() === 'en' ? 'en-US' : 'es-MX', { maximumFractionDigits: 2 });
+        const get = async () => { const res = await fetch(`${base}/migration?lang=${lang()}`, { credentials: 'include' }); if (!res.ok) throw new Error('failed'); return res.json(); };
+        const send = async (path, payload) => {
+            const res = await fetch(`${base}${path}`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload || {}) });
+            const out = await res.json().catch(() => ({}));
+            if (!res.ok) throw Object.assign(new Error('failed'), { body: out });
+            return out;
+        };
+        const showError = (e) => { const el = body.querySelector('#reg-mg-error'); if (!el) return; el.textContent = regErrorText(e && e.body); el.hidden = false; };
+        const buttons = (...list) => `<div class="admin-form-actions">${list.join('')}</div>`;
+        const btn = (id, key, cls = '') => `<button type="button" class="btn ${cls}" data-mg="${id}">${esc(t(key))}</button>`;
+        const stopTimer = () => { clearInterval(timer); timer = null; };
+        const startTimer = () => { if (!timer) timer = setInterval(refresh, 1500); };
+        const bind = (id, fn) => { const b = body.querySelector(`[data-mg="${id}"]`); if (b) b.addEventListener('click', async () => { b.disabled = true; try { await fn(); } catch (e) { b.disabled = false; showError(e); } }); };
+        // el final: el anterior pasó a Obsoletos, cuántos análisis ya leen la tabla nueva y cuántos se quedaron leyendo el anterior
+        const doneHtml = (mg) => {
+            const rep = (mg && mg.report) || {};
+            const moved = rep.applied ? rep.applied.moved : 0;
+            const kept = (Array.isArray(rep.analyses) ? rep.analyses.length : 0) - moved;
+            return `<p class="reg-mg-ok">${esc(t('main.regMigrateDone', { name: regName(reg) }))}</p>${moved ? `<p class="reg-mg-ok">${esc(t(moved === 1 ? 'main.regMigrateDoneAnalysesOne' : 'main.regMigrateDoneAnalyses', { count: String(moved) }))}</p>` : ''}${kept > 0 ? `<p class="note">${esc(t(kept === 1 ? 'main.regMigrateDoneKeptOne' : 'main.regMigrateDoneKept', { count: String(kept) }))}</p>` : ''}${buttons(btn('open', 'main.regMigrateOpen'))}`;
+        };
+        const draw = (info) => {
+            const mg = info.migration;
+            const status = mg ? mg.status : 'none';
+            if (status === 'copiando') {
+                const p = mg.progress || {};
+                const pct = p.total ? Math.min(100, Math.round((p.done / p.total) * 100)) : 0;
+                body.innerHTML = `<p>${esc(p.phase === 'analisis' ? t('main.regMigrateAnalysisChecking') : (p.phase === 'comprobando' ? t('main.regMigrateChecking') : t('main.regMigrateRunning', { done: fmtN(p.done || 0), total: fmtN(p.total || 0) })))}</p><div class="reg-mg-bar"><span style="width:${pct}%"></span></div><p class="note">${esc(t('main.regMigrateWait'))}</p>`;
+                startTimer();
+                return;
+            }
+            stopTimer();
+            if (status === 'none') {
+                body.innerHTML = `<p>${esc(t('main.regMigrateIntro', { name: regName(reg) }))}</p>
+                    <label for="reg-mg-name">${esc(t('main.regMigrateName'))}</label><input type="text" id="reg-mg-name" maxlength="80" autocomplete="off" value="${esc(`${regName(reg)} (tabla)`)}">
+                    <p class="admin-error" id="reg-mg-error" role="alert" hidden></p>
+                    ${buttons(btn('go', 'main.regMigrateGo'), btn('cancel', 'main.regCancel', 'btn-secondary'))}`;
+                bind('go', async () => { await send('/migrate?lang=' + lang(), { name: body.querySelector('#reg-mg-name').value }); await refresh(); });
+                bind('cancel', async () => close());
+            } else if (status === 'copiado') {
+                const rep = mg.report || { ok: false, rows: { old: 0, new: 0 }, periods: [], data: [], values: { old: 0, new: 0 } };
+                const mark = (ok) => `<span class="${ok ? 'reg-mg-ok' : 'reg-mg-bad'}">${ok ? '✓' : '✗'}</span>`;
+                // los análisis que leen este registro: cuáles pasan solos a la tabla nueva (salen idénticos) y cuáles se quedan leyendo el anterior, con el motivo
+                const analyses = Array.isArray(rep.analyses) ? rep.analyses : [];
+                const anOk = analyses.filter((a) => a.status === 'ok');
+                const anSkip = analyses.filter((a) => a.status !== 'ok');
+                const analysesHtml = rep.analysesFailed ? `<p class="note">${esc(t('main.regMigrateAnalysesFailed'))}</p>`
+                    : (!analyses.length ? `<p class="note">${esc(t('main.regMigrateAnalysesNone'))}</p>`
+                        : `<p class="note"><b>${esc(t('main.regMigrateAnalysesTitle'))}</b>${anOk.length ? `: ${mark(true)} ${esc(t('main.regMigrateAnalysesOk', { names: anOk.map((a) => a.name).join(', ') }))}` : ''}</p>${anSkip.length ? `<p class="note">${mark(false)} ${esc(t('main.regMigrateAnalysesSkip'))}: ${anSkip.map((a) => `${esc(a.name)} (${esc(t(`main.regMigrateWhy_${a.reason}`))})`).join(' · ')}</p>` : ''}`);
+                body.innerHTML = `<p class="${rep.ok ? 'reg-mg-ok' : 'reg-mg-bad'}">${esc(t(rep.ok ? 'main.regMigrateOk' : 'main.regMigrateBad'))}</p>
+                    <p>${esc(t('main.regMigrateRowsLine', { old: fmtN(rep.rows.old), new: fmtN(rep.rows.new) }))} ${mark(rep.rows.ok)}<br>${esc(t('main.regMigrateValuesLine', { old: fmtN(rep.values.old), new: fmtN(rep.values.new) }))}</p>
+                    <div class="reg-mg-scroll"><table class="reg-mg-table"><thead><tr><th>${esc(t('main.regMigrateColPeriod'))}</th><th>${esc(t('main.regMigrateColBefore'))}</th><th>${esc(t('main.regMigrateColAfter'))}</th><th>${esc(t('main.regMigrateSumBefore'))}</th><th>${esc(t('main.regMigrateSumAfter'))}</th><th></th></tr></thead><tbody>${rep.periods.map((p) => `<tr><td>${esc(p.label)}</td><td>${fmtN(p.oldCount)}</td><td>${fmtN(p.newCount)}</td><td>${fmtN(p.oldSum)}</td><td>${fmtN(p.newSum)}</td><td>${mark(p.ok)}</td></tr>`).join('')}</tbody></table></div>
+                    <p class="note">${esc(t('main.regMigrateDataTitle'))}: ${rep.data.map((d) => `${esc(d.name)} ${fmtN(d.old)} → ${fmtN(d.new)} ${mark(d.ok)}`).join(' · ')}</p>
+                    ${analysesHtml}
+                    <p class="admin-error" id="reg-mg-error" role="alert" hidden></p>
+                    ${buttons(...(rep.ok && st.canObsolete ? [btn('confirm', 'main.regMigrateConfirm')] : []), btn('discard', 'main.regMigrateDiscard', 'btn-secondary'), btn('close', 'main.regClose', 'btn-secondary'))}`;
+                bind('confirm', async () => {
+                    const out = await send('/migrate/confirm');
+                    body.innerHTML = doneHtml(out.migration);
+                    bind('open', async () => { sessionStorage.setItem('regCurrent', out.newKey); location.href = `CmRegistrosInformacion.html?registry=${encodeURIComponent(out.newKey)}`; });
+                });
+                bind('discard', async () => { await send('/migrate/discard'); await refresh(); });
+                bind('close', async () => close());
+            } else if (status === 'error') {
+                body.innerHTML = `<p class="reg-mg-bad">${esc(t('main.regMigrateErr_' + (['INTERRUPTED', 'DISK_FULL', 'NO_DATA'].includes(mg.error) ? mg.error : 'ERROR')))}</p>
+                    <p class="admin-error" id="reg-mg-error" role="alert" hidden></p>
+                    ${buttons(btn('discard', 'main.regMigrateDiscard'), btn('close', 'main.regClose', 'btn-secondary'))}`;
+                bind('discard', async () => { await send('/migrate/discard'); await refresh(); });
+                bind('close', async () => close());
+            } else if (status === 'confirmado') {
+                body.innerHTML = doneHtml(mg);
+                bind('open', async () => { sessionStorage.setItem('regCurrent', mg.newKey); location.href = `CmRegistrosInformacion.html?registry=${encodeURIComponent(mg.newKey)}`; });
+            }
+            lastStatus = status;
+        };
+        const refresh = async () => { try { draw(await get()); } catch { /* sin conexión: la próxima vuelta lo reintenta */ } };
+        refresh();
+    }, () => { clearInterval(timer); });
 }
 // Convertir un registro vacío (mensual o diario) en tabla libre: cualquier Excel, eligiendo el papel de sus columnas en cada carga. Solo se puede mientras no tenga cargas.
 function openConvertRegistry(reg) {

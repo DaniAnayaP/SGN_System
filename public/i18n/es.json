@@ -5928,6 +5928,57 @@
     "regColumnaNombre": "Nombre de columna",
     "regColumnaClasificacion": "Clasificación de columna",
     "regToTabla": "Convertir a tabla libre",
+    "regMigrate": "Pasar a tabla única",
+    "regMigrateTitle": "Pasar «{name}» a la tabla única",
+    "regMigrateIntro": "Se hace una copia de «{name}» en un registro nuevo de tabla única, con la misma información: Unidad y Código como llave y cada periodo como una columna. Lo anterior no se toca. Al terminar se comprueba que las cifras salgan iguales y tú decides si lo anterior pasa a Obsoletos.",
+    "regMigrateName": "Nombre del registro nuevo",
+    "regMigrateGo": "Copiar",
+    "regMigrateRunning": "Copiando… {done} de {total} renglones",
+    "regMigrateChecking": "Comprobando que las cifras salgan iguales…",
+    "regMigrateWait": "Puedes cerrar esta ventana: la copia sigue y, al volver a abrirla, verás el avance.",
+    "regMigrateOk": "Las cifras salieron iguales. Puedes confirmar.",
+    "regMigrateBad": "Alguna cifra no salió igual. No se puede confirmar: descarta la copia.",
+    "regMigrateRowsLine": "Renglones: {old} → {new}",
+    "regMigrateValuesLine": "Valores: {old} → {new}",
+    "regMigrateColPeriod": "Periodo",
+    "regMigrateColBefore": "Valores antes",
+    "regMigrateColAfter": "Valores después",
+    "regMigrateSumBefore": "Suma antes",
+    "regMigrateSumAfter": "Suma después",
+    "regMigrateDataTitle": "Columnas de referencia con texto (antes → después)",
+    "regMigrateConfirm": "Confirmar y dejar el anterior en Obsoletos",
+    "regMigrateDiscard": "Descartar la copia",
+    "regMigrateDone": "Listo. «{name}» pasó a Obsoletos y la tabla nueva ya está en el menú de Registros.",
+    "regMigrateDoneAnalyses": "{count} análisis ya leen la tabla nueva.",
+    "regMigrateDoneAnalysesOne": "1 análisis ya lee la tabla nueva.",
+    "regMigrateDoneKept": "{count} análisis se quedaron leyendo el registro anterior.",
+    "regMigrateDoneKeptOne": "1 análisis se quedó leyendo el registro anterior.",
+    "regMigrateAnalysisChecking": "Revisando que los análisis salgan iguales…",
+    "regMigrateAnalysesTitle": "Análisis que leen este registro",
+    "regMigrateAnalysesNone": "Ningún análisis lee este registro.",
+    "regMigrateAnalysesOk": "pasan solos a la tabla nueva y salen iguales: {names}",
+    "regMigrateAnalysesSkip": "se quedan leyendo el registro anterior (sin datos nuevos)",
+    "regMigrateAnalysesFailed": "No se pudieron revisar los análisis: se quedan leyendo el registro anterior.",
+    "regMigrateWhy_FILTERS": "usa filtros de su diseño anterior",
+    "regMigrateWhy_ADDED_REF": "una columna agregada usa una columna de referencia",
+    "regMigrateWhy_COLUMN": "una columna sin equivalente en la tabla nueva",
+    "regMigrateWhy_PERIOD": "un periodo sin columna en la tabla nueva",
+    "regMigrateWhy_LIVE": "usa otra «más reciente»",
+    "regMigrateWhy_DIFF": "el resultado no salió igual",
+    "regMigrateWhy_DESIGN": "su diseño no es válido",
+    "regMigrateWhy_ERROR": "no se pudo revisar",
+    "regMigrateOpen": "Abrir la tabla nueva",
+    "regMigrateErr_INTERRUPTED": "La copia se interrumpió (el servidor se reinició). Descártala y vuelve a intentar.",
+    "regMigrateErr_DISK_FULL": "El servidor se quedó sin espacio para la copia. No se agregó nada: descártala.",
+    "regMigrateErr_NO_DATA": "Ese registro no tiene datos que copiar.",
+    "regMigrateErr_ERROR": "La copia no se pudo completar. Lo anterior no se tocó: descártala y vuelve a intentar.",
+    "regClose": "Cerrar",
+    "regErr_REG_MIGRATE_KIND": "Ese registro ya es de tabla libre.",
+    "regErr_REG_NO_DATA": "Ese registro no tiene datos: conviértelo a tabla libre.",
+    "regErr_REG_MIGRATION_EXISTS": "Ese registro ya tiene una copia en curso o sin confirmar.",
+    "regErr_REG_MIGRATION_STATE": "No hay una copia lista para esa acción.",
+    "regErr_REG_MIGRATION_UNVERIFIED": "Las cifras no salieron iguales: descarta la copia.",
+    "regErr_REG_BUSY": "Ya hay una carga de este registro en curso. Espera a que termine.",
     "regToTablaTitle": "Convertir a tabla libre",
     "regToTablaText": "«{name}» pasará a ser una tabla libre: podrás cargar cualquier Excel y elegir el papel de sus columnas en cada carga. Solo se puede mientras no tenga cargas.",
     "regToTablaGo": "Convertir",
@@ -10744,6 +10795,30 @@
       "what": "Clic derecho sobre el título de una columna (en el celular, mantén el dedo medio segundo): «Fijar hasta aquí» deja fijas esta columna y las de su izquierda, como «Inmovilizar paneles» de Excel; «Fijar solo esta» la suma a las que ya están fijas; «Soltar» las quita. Caben hasta 4 fijas.",
       "example": "Clic derecho en CÓDIGO › «Fijar hasta aquí»"
     },
+    "regMigrateBtn": {
+      "what": "Copia este registro (Mensual o Diaria) a un registro nuevo de tabla única, con la misma información. Lo anterior no se toca hasta que confirmes.",
+      "example": "Cargos por sitio mensuales › Pasar a tabla única"
+    },
+    "regMigrateDialog": {
+      "what": "Copia el registro a la tabla única (Unidad y Código como llave, cada periodo como una columna con su clasificación), comprueba contra lo anterior el número de renglones, los valores de cada periodo y su suma, y solo si todo sale igual te deja confirmar. También revisa los análisis que leen este registro: arma cada uno con el registro anterior y con la tabla nueva y solo pasa a leer la tabla nueva el que sale idéntico (los demás se quedan como estaban, sin datos nuevos, y se dice por qué). Al confirmar, el anterior pasa a Obsoletos y esos análisis pasan a la tabla nueva. Si algo no sale igual, descartas la copia y no pasó nada.",
+      "example": "Copiar › revisar las cifras › Confirmar y dejar el anterior en Obsoletos"
+    },
+    "widthMinBtn": {
+      "what": "Deja todas las columnas (menos las fijas) en el ancho más angosto, para ver muchas a la vez. El nombre completo de cada una sale al sobreponer el ratón. Otro clic regresa los anchos que tenía la tabla.",
+      "example": "Contraer una tabla de 30 columnas para verla casi completa"
+    },
+    "widthFitBtn": {
+      "what": "Da a cada columna (menos las fijas) el ancho justo para leer su encabezado completo, en un renglón. Los datos de abajo se abrevian como siempre. Otro clic regresa los anchos que tenía la tabla.",
+      "example": "Ajustar para leer «CONSUMO PROMEDIO MENSUAL» sin cortarse"
+    },
+    "lookBtn": {
+      "what": "Elige cómo se ven los títulos de las columnas y los datos de toda la tabla: alinear arriba, en medio o abajo, «Ajustar texto» (el texto se parte en renglones en vez de cortarse con «…») y alinear a la izquierda, al centro, a la derecha o como los datos. Es solo para ti; «Como estaba» lo deja como siempre.",
+      "example": "Títulos centrados y con el texto ajustado"
+    },
+    "lookMenu": {
+      "what": "Los botones son los de la cinta «Alineación» de Excel, una vez para los títulos y otra para las celdas. Lo que pongas en el panel de formato de una columna manda sobre esto para esa columna.",
+      "example": "Celdas › Ajustar texto"
+    },
     "anRefresh": {
       "what": "Vuelve a cargar el análisis con lo que hay hoy: los datos de los registros, las fórmulas y las columnas agregadas. Las columnas ⟳ «La más reciente» pasan a la carga más nueva; las que apuntan a una carga concreta no cambian. Si hay cambios de columnas sin aplicar (agregar, quitar o cambiar), los guarda juntos antes de volver a armar. Las versiones ya extraídas no cambian nunca.",
       "example": "Llegó la carga de hoy → Actualizar"
@@ -10777,22 +10852,6 @@
       "example": "Pegas en la plantilla lo que te da tu caja: el folio del ticket, la fecha y hora, el código del centro (PARQU-COC), el concepto, la cantidad y el precio con IVA."
     },
     "venTable": {
-    "widthMinBtn": {
-      "what": "Deja todas las columnas (menos las fijas) en el ancho más angosto, para ver muchas a la vez. El nombre completo de cada una sale al sobreponer el ratón. Otro clic regresa los anchos que tenía la tabla.",
-      "example": "Contraer una tabla de 30 columnas para verla casi completa"
-    },
-    "widthFitBtn": {
-      "what": "Da a cada columna (menos las fijas) el ancho justo para leer su encabezado completo, en un renglón. Los datos de abajo se abrevian como siempre. Otro clic regresa los anchos que tenía la tabla.",
-      "example": "Ajustar para leer «CONSUMO PROMEDIO MENSUAL» sin cortarse"
-    },
-    "lookBtn": {
-      "what": "Elige cómo se ven los títulos de las columnas y los datos de toda la tabla: alinear arriba, en medio o abajo, «Ajustar texto» (el texto se parte en renglones en vez de cortarse con «…») y alinear a la izquierda, al centro, a la derecha o como los datos. Es solo para ti; «Como estaba» lo deja como siempre.",
-      "example": "Títulos centrados y con el texto ajustado"
-    },
-    "lookMenu": {
-      "what": "Los botones son los de la cinta «Alineación» de Excel, una vez para los títulos y otra para las celdas. Lo que pongas en el panel de formato de una columna manda sobre esto para esa columna.",
-      "example": "Celdas › Ajustar texto"
-    },
       "what": "Los tickets cargados, uno por folio, del más reciente al más antiguo. El subtotal, el IVA y el total los calcula el sistema con los precios (que van con IVA incluido). El historial de cada ticket dice quién lo cargó y de qué archivo.",
       "example": "El ticket 000482 de la Mesa 12: 5 artículos, subtotal 512.93, IVA 82.07 y total 595.00."
     },

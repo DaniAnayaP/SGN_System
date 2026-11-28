@@ -1231,6 +1231,26 @@ db.exec(`
     CREATE INDEX IF NOT EXISTS idx_mf_fills_load ON manual_flex_fills(load_id, row_id);
 `);
 
+// PASAR un registro Mensual o Diaria al tipo único (la tabla libre; Daniel, 2026-11-27, «tú pasa los datos y pégalos como deben de estar»): se COPIA a un registro nuevo (lo anterior no se toca), se COMPRUEBA que las cifras
+// salgan iguales y solo al confirmar el anterior pasa a «Obsoletos». status: copiando | copiado | confirmado | descartado | error.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_registry_migrations (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data INTEGER NOT NULL DEFAULT 0,
+        old_key      TEXT NOT NULL,
+        new_key      TEXT NOT NULL,
+        status       TEXT NOT NULL DEFAULT 'copiando',
+        report_json  TEXT NOT NULL DEFAULT '',
+        error        TEXT NOT NULL DEFAULT '',
+        load_ids     TEXT NOT NULL DEFAULT '[]',
+        created_by   TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_mrm_old ON manual_registry_migrations(client_id, is_test_data, old_key, id);
+`);
+
 // El FORMATO DE LA DESCARGA de un registro de tabla libre (Daniel, 2026-11-26): un formato por registro (encabezado, fila de apoyo, formato de cada columna, paneles fijos, portada). Sin fila = el formato de siempre.
 db.exec(`
     CREATE TABLE IF NOT EXISTS manual_registry_formats (
@@ -5593,6 +5613,28 @@ function setRegistryObsolete(clientId, forTestAccount, key, on, byLabel) {
     const lane = forTestAccount ? 1 : 0;
     if (on) db.prepare('INSERT OR REPLACE INTO manual_registry_obsolete (client_id, is_test_data, registry_key, marked_by) VALUES (?, ?, ?, ?)').run(clientId, lane, key, byLabel || '');
     else db.prepare('DELETE FROM manual_registry_obsolete WHERE client_id = ? AND is_test_data = ? AND registry_key = ?').run(clientId, lane, key);
+}
+// ---- pasar un registro al tipo único (ver arriba) ----
+function mapRegistryMigration(row) {
+    if (!row) return null;
+    return { id: row.id, oldKey: row.old_key, newKey: row.new_key, status: row.status, report: parseJsonObject(row.report_json), error: row.error, loadIds: parseJsonList(row.load_ids), createdBy: row.created_by, createdAt: row.created_at, updatedAt: row.updated_at };
+}
+// La última que sigue viva de un registro (las descartadas no cuentan: se puede volver a intentar).
+function getRegistryMigration(clientId, forTestAccount, oldKey) {
+    return mapRegistryMigration(db.prepare("SELECT * FROM manual_registry_migrations WHERE client_id = ? AND is_test_data = ? AND old_key = ? AND status <> 'descartado' ORDER BY id DESC LIMIT 1").get(clientId, forTestAccount ? 1 : 0, oldKey));
+}
+function createRegistryMigration({ clientId, isTestData = false, oldKey, newKey, createdBy }) {
+    return db.prepare('INSERT INTO manual_registry_migrations (client_id, is_test_data, old_key, new_key, created_by) VALUES (?, ?, ?, ?, ?)').run(clientId, isTestData ? 1 : 0, oldKey, newKey, createdBy || '').lastInsertRowid;
+}
+function updateRegistryMigration(id, patch) {
+    const sets = []; const params = [];
+    if (patch.status !== undefined) { sets.push('status = ?'); params.push(patch.status); }
+    if (patch.report !== undefined) { sets.push('report_json = ?'); params.push(JSON.stringify(patch.report)); }
+    if (patch.error !== undefined) { sets.push('error = ?'); params.push(String(patch.error || '').slice(0, 300)); }
+    if (patch.loadIds !== undefined) { sets.push('load_ids = ?'); params.push(JSON.stringify(patch.loadIds)); }
+    if (!sets.length) return;
+    sets.push("updated_at = datetime('now')");
+    db.prepare(`UPDATE manual_registry_migrations SET ${sets.join(', ')} WHERE id = ?`).run(...params, id);
 }
 function listRegistryDefs(clientId, forTestAccount = false) {
     return db.prepare('SELECT * FROM manual_registry_defs WHERE client_id = ? AND is_test_data = ? ORDER BY id').all(clientId, forTestAccount ? 1 : 0).map(mapRegistryDef);
@@ -23446,7 +23488,7 @@ module.exports = {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
-    listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete,
+    listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete, getRegistryMigration, createRegistryMigration, updateRegistryMigration,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources, ANALYSIS_COMMENT_MAX, addAnalysisComment, listAnalysisComments, analysisCommentsMap, snapshotAnalysisComments, extractionCommentsMap, listExtractionComments,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, reconsiderRegistryLoad, deleteFlexLoadData, flexConfigHistory, diskSpace, getRegistryFormat, setRegistryFormat, clearRegistryFormat, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexConfigLoads, updateFlexConfigs, listAnalysisDesigns, setAnalysisDesignRaw, registrySignature, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,

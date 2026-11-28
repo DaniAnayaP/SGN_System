@@ -83,7 +83,7 @@ const {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
-    listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete,
+    listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete, getRegistryMigration, createRegistryMigration, updateRegistryMigration,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources, ANALYSIS_COMMENT_MAX, addAnalysisComment, listAnalysisComments, analysisCommentsMap, snapshotAnalysisComments, extractionCommentsMap, listExtractionComments,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, MR_SCREEN,
@@ -7364,6 +7364,93 @@ app.patch('/api/business/manual-registries/:key', requireAuth, (req, res) => {
     if (patch.name) logTableChange({ clientId, tableKey: REG_TABLE, recordId: registry.defId, recordLabel: patch.name, action: 'update', fieldKey: 'main.regNombre', oldValue: registry.name, newValue: patch.name, changedBy: by });
     if (patch.status) logTableChange({ clientId, tableKey: REG_TABLE, recordId: registry.defId, recordLabel: patch.name || registry.name, action: 'update', fieldKey: 'main.regEstado', oldValue: registry.status, newValue: patch.status, changedBy: by });
     res.json({ registry: regClientRegistries(clientId, isTestAccount).find((r) => r.key === registry.key) });
+});
+// ---- Pasar un registro Mensual o Diaria al tipo único (la tabla libre; Daniel, 2026-11-27): copiar → comprobar → confirmar. Ver registryMigrate.js. De los botones «Crear registro» (copiar y descartar) y «Pasar a obsoletos» (confirmar).
+const registryMigrate = require('./registryMigrate');
+const REG_MIGRATE_NAMES = { 'cargos-sitio-mensuales': { name: 'Cargos por sitio mensuales', value: 'Cargos' }, 'existencias-diarias': { name: 'Existencias diarias', value: 'Existencias' } };
+function regMigrationView(migration, progress) {
+    if (!migration) return null;
+    // la pantalla no necesita los diseños de los análisis (van en el reporte guardado para aplicarlos al confirmar): solo cuáles se pasan y cuáles no, y por qué
+    const report = migration.report && Object.keys(migration.report).length ? { ...migration.report, ...(Array.isArray(migration.report.analyses) ? { analyses: migration.report.analyses.map(({ id, name, status, reason, detail, rows }) => ({ id, name, status, ...(reason ? { reason } : {}), ...(detail ? { detail } : {}), ...(rows !== undefined ? { rows } : {}) })) } : {}) } : null;
+    return { id: migration.id, newKey: migration.newKey, status: migration.status, error: migration.error, report, createdAt: migration.createdAt, ...(progress ? { progress } : {}) };
+}
+// Si el servidor se reinició a medias, una copia «en curso» sin trabajo vivo quedó interrumpida: se marca para poder descartarla.
+function regMigrationNow(clientId, isTestAccount, key) {
+    let migration = getRegistryMigration(clientId, isTestAccount, key);
+    if (migration && migration.status === 'copiando' && !registryMigrate.isRunning(clientId, isTestAccount ? 1 : 0, key)) {
+        updateRegistryMigration(migration.id, { status: 'error', error: 'INTERRUPTED' });
+        migration = getRegistryMigration(clientId, isTestAccount, key);
+    }
+    return migration;
+}
+app.get('/api/business/manual-registries/:key/migration', requireAuth, (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    const { clientId, isTestAccount } = req.user;
+    res.set('Cache-Control', 'no-store');
+    const migration = regMigrationNow(clientId, isTestAccount, registry.key);
+    res.json({ eligible: ['month', 'day'].includes(registry.kind) && !registry.obsolete && registryPeriods(clientId, isTestAccount, registry.key).length > 0, migration: regMigrationView(migration, migration && migration.status === 'copiando' ? registryMigrate.progressOf(clientId, isTestAccount ? 1 : 0, registry.key) : null) });
+});
+app.post('/api/business/manual-registries/:key/migrate', requireAuth, (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    if (!regAbilities(req).canCreateRegistry) return regForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const lane = isTestAccount ? 1 : 0;
+    if (!['month', 'day'].includes(registry.kind)) return res.status(400).json({ code: 'REG_MIGRATE_KIND', message: 'Ese registro ya es de tabla libre.' });
+    if (registry.obsolete) return res.status(409).json({ code: 'REG_OBSOLETE', message: 'Ese registro es obsoleto.' });
+    if (!registryPeriods(clientId, isTestAccount, registry.key).length) return res.status(409).json({ code: 'REG_NO_DATA', message: 'Ese registro no tiene datos: conviértelo a tabla libre.' });
+    const current = regMigrationNow(clientId, isTestAccount, registry.key);
+    if (current) return res.status(409).json({ code: 'REG_MIGRATION_EXISTS', message: 'Ese registro ya tiene una copia en curso o sin confirmar.', migration: regMigrationView(current) });
+    const lockKey = `${clientId}:${lane}:${registry.key}`;
+    if (regLoading.has(lockKey)) return res.status(409).json({ code: 'REG_BUSY', message: 'Ya hay una carga de este registro en curso. Espera a que termine.' });
+    const base = REG_MIGRATE_NAMES[registry.key] || { name: registry.name || registry.key, value: registry.valueName || 'Valor' };
+    const body = req.body || {};
+    const name = manualAnalyses.cleanText(body.name, 80) || `${base.name} (tabla)`.slice(0, 80);
+    if (regNameTaken(req, name)) return res.status(409).json({ code: 'REG_NAME_TAKEN', message: 'Ya hay un registro con ese nombre.' });
+    const taken = new Set(regClientRegistries(clientId, isTestAccount).map((r) => r.key));
+    const slug = regFoldName(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'registro';
+    let newKey = `c-${slug}`;
+    for (let n = 2; taken.has(newKey); n += 1) newKey = `c-${slug}-${n}`;
+    const by = changedByLabel(req);
+    const defId = createRegistryDef({ clientId, isTestData: isTestAccount, key: newKey, name, kind: 'tabla', valueName: '', createdBy: by, createdByUserId: req.user.sub });
+    logTableChange({ clientId, tableKey: REG_TABLE, recordId: defId, recordLabel: name, action: 'create', fieldKey: 'main.regNombre', newValue: name, changedBy: by });
+    const migrationId = createRegistryMigration({ clientId, isTestData: isTestAccount, oldKey: registry.key, newKey, createdBy: by });
+    // mientras se copia nadie carga ni en el anterior ni en el nuevo
+    const newLock = `${clientId}:${lane}:${newKey}`;
+    regLoading.add(lockKey); regLoading.add(newLock);
+    registryMigrate.start({ clientId, lane, oldKey: registry.key, oldName: base.name, newKey, kind: registry.kind, valueName: base.value, lang: req.query.lang === 'en' ? 'en' : 'es', byLabel: by, byUserId: req.user.sub, migrationId, listRegistries: () => regClientRegistries(clientId, isTestAccount), onDone: () => { regLoading.delete(lockKey); regLoading.delete(newLock); } });
+    res.status(202).json({ migration: regMigrationView(getRegistryMigration(clientId, isTestAccount, registry.key)) });
+});
+app.post('/api/business/manual-registries/:key/migrate/confirm', requireAuth, (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    const abilities = regAbilities(req);
+    if (!abilities.canObsolete || !abilities.canCreateRegistry) return regForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const migration = regMigrationNow(clientId, isTestAccount, registry.key);
+    if (!migration || migration.status !== 'copiado') return res.status(409).json({ code: 'REG_MIGRATION_STATE', message: 'No hay una copia lista para confirmar.' });
+    if (!migration.report || !migration.report.ok) return res.status(409).json({ code: 'REG_MIGRATION_UNVERIFIED', message: 'Las cifras no salieron iguales: descarta la copia.' });
+    const by = changedByLabel(req);
+    setRegistryObsolete(clientId, isTestAccount, registry.key, true, by);
+    // los análisis que la comprobación dejó listos pasan a leer la tabla nueva (los demás se quedan leyendo el anterior)
+    const analyses = registryMigrate.applyAnalyses(clientId, isTestAccount ? 1 : 0, migration.report && migration.report.analyses);
+    updateRegistryMigration(migration.id, { status: 'confirmado', report: { ...migration.report, applied: analyses, analyses: (migration.report.analyses || []).map(({ before, design, ...rest }) => rest) } });
+    if (analyses.moved) logTableChange({ clientId, tableKey: REG_TABLE, recordId: registry.defId || 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.regMigrateAnalysesTitle', oldValue: '', newValue: `${analyses.moved} análisis pasaron a la tabla nueva`, changedBy: by });
+    logTableChange({ clientId, tableKey: REG_TABLE, recordId: registry.defId || 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.regObsoleto', oldValue: 'en uso', newValue: 'obsoleto (pasado a tabla única)', changedBy: by });
+    res.json({ migration: regMigrationView(getRegistryMigration(clientId, isTestAccount, registry.key)), newKey: migration.newKey });
+});
+app.post('/api/business/manual-registries/:key/migrate/discard', requireAuth, async (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    if (!regAbilities(req).canCreateRegistry) return regForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const migration = regMigrationNow(clientId, isTestAccount, registry.key);
+    if (!migration || !['copiado', 'error'].includes(migration.status)) return res.status(409).json({ code: 'REG_MIGRATION_STATE', message: 'No hay una copia que descartar.' });
+    await registryMigrate.discard(migration);
+    updateRegistryDef(clientId, isTestAccount, migration.newKey, { status: 'inactive' });
+    updateRegistryMigration(migration.id, { status: 'descartado' });
+    res.json({ migration: null });
 });
 app.get('/api/business/manual-registries/:key/data', requireAuth, (req, res) => {
     const registry = regRegistry(req, res);

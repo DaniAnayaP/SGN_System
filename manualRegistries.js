@@ -77,6 +77,17 @@ function parseDayText(text) {
     const date = new Date(Date.UTC(y, mo - 1, d));
     return y >= 2000 && y <= 2100 && date.getUTCFullYear() === y && date.getUTCMonth() === mo - 1 && date.getUTCDate() === d ? `${m[1]}-${m[2]}-${m[3]}` : null;
 }
+// El periodo (un mes «AAAA-MM» o un día «AAAA-MM-DD») que dice el NOMBRE de una columna de valor de nombre fijo: «ene-25», «Existencias 25/nov/2026». null si no dice uno.
+// Sirve para «la más reciente» en una tabla libre: un mes es solo una columna llamada «ene-25», y la más reciente es la de la fecha más nueva (Daniel, 2026-11-27).
+function periodOfValueName(name) {
+    const text = String(name || '').trim();
+    const month = parsePeriodHeader(text);
+    if (month) return month;
+    const m = /(\d{1,2})\/([A-Za-zñÑ]{3,4})\.?\/(\d{4})\s*$/.exec(text);
+    if (!m) return null;
+    const ym = parsePeriodHeader(`${m[2]} ${m[3]}`);
+    return ym ? parseDayText(`${ym}-${String(Number(m[1])).padStart(2, '0')}`) : null;
+}
 const nextMonth = (period) => {
     const m = /^(\d{4})-(\d{2})$/.exec(period || '');
     if (!m) return null;
@@ -544,6 +555,6 @@ function parseColumnFilter(raw, lang = 'es') {
 module.exports = {
     parseColumnFilter, columnInfo, shownDim, shownPeriod,
     REGISTRIES, registryOf, DIMS, KEY_DIMS, MAX_DATA_ROWS, MAX_ISSUES, BATCH_ROWS,
-    fold, parsePeriodHeader, parseDayText, nextMonth, periodLabel,
+    fold, parsePeriodHeader, parseDayText, periodOfValueName, nextMonth, periodLabel,
     openWorkbook, streamSheet, inspectWorkbook, suggestMapping, mappingProblems, runImport, buildTemplate, exportDimHeaders, parseNumber, scoreHeader,
 };

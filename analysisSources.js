@@ -23,6 +23,7 @@ const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
 const periodColKey = (period) => `p_${String(period).replace(/-/g, '_')}`;
 const periodOfColKey = (key) => { const m = /^p_(\d{4})_(\d{2})(?:_(\d{2}))?$/.exec(String(key || '')); return m ? `${m[1]}-${m[2]}${m[3] ? `-${m[3]}` : ''}` : null; };
 const isFlex = (registry) => registry && registry.kind === 'tabla';
+const periodOfValueName = manual.periodOfValueName; // «ene-25», «Existencias 25/nov/2026» → su periodo (ver manualRegistries.js)
 
 // Lo que cambia cuando cambian los datos del registro (cargas vigentes y sus periodos).
 function signatureOf(clientId, isTest, registry) {
@@ -41,7 +42,7 @@ function periodicColumns(clientId, isTest, registry, lang) {
 function flexColumns(clientId, isTest, registry, lang) {
     const loads = db.flexVigenteLoads(clientId, isTest, registry.key);
     const built = flex.buildColumns(loads, { tz: 0, lang });
-    return { loads, built, columns: built.columns.map((c) => ({ key: c.sid, label: c.label, name: c.name, kind: c.kind === 'value' ? 'value' : (c.kind === 'carga' ? 'load' : 'text'), group: c.group, cls: c.cls || '', ...(c.liveId ? { liveId: c.liveId, at: c.at, loadId: c.loadId } : {}) })) };
+    return { loads, built, columns: built.columns.map((c) => { const period = c.kind === 'value' && !c.liveId ? periodOfValueName(c.name) : null; return ({ key: c.sid, label: c.label, name: c.name, kind: c.kind === 'value' ? 'value' : (c.kind === 'carga' ? 'load' : 'text'), group: c.group, cls: c.cls || '', ...(c.liveId ? { liveId: c.liveId, at: c.at, loadId: c.loadId } : {}), ...(period ? { period } : {}) }); }) };
 }
 function describe(clientId, isTest, registry, lang = 'es') {
     return isFlex(registry) ? flexColumns(clientId, isTest, registry, lang).columns : periodicColumns(clientId, isTest, registry, lang);
@@ -221,6 +222,9 @@ function liveOptions(clientId, isTest, registry, lang = 'es') {
             if (!cur || (c.at || '') > (cur.at || '') || ((c.at || '') === (cur.at || '') && (c.loadId || 0) > (cur.loadId || 0))) best.set(c.liveId, c);
         });
         best.forEach((c, id) => out.push({ id, name: c.name, today: c.label }));
+        // las columnas de nombre fijo que dicen un mes o un día («ene-25»): «la más reciente» es la de la fecha más nueva
+        const periodic = cols.filter((c) => c.period);
+        if (periodic.length) { const last = periodic.reduce((a, c) => (c.period > a.period ? c : a)); out.push({ id: 'last', today: last.label }); }
     } else {
         const periodic = cols.filter((c) => c.period);
         if (periodic.length) { const last = periodic.reduce((a, c) => (c.period > a.period ? c : a)); out.push({ id: 'last', today: last.label }); }
@@ -292,4 +296,4 @@ function upgradeStoredKeys() {
     return n;
 }
 
-module.exports = { liveOptions, renameLive, refreshCached, warmUp, startBackground, upgradeDesign, upgradeAnalysis, upgradeStoredKeys, DIMS, periodColKey, periodOfColKey, isFlex, describe, loadTable, clearCache, distinctValues };
+module.exports = { periodOfValueName, liveOptions, renameLive, refreshCached, warmUp, startBackground, upgradeDesign, upgradeAnalysis, upgradeStoredKeys, DIMS, periodColKey, periodOfColKey, isFlex, describe, loadTable, clearCache, distinctValues };
