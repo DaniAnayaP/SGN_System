@@ -10866,7 +10866,7 @@
       "example": "Títulos centrados y con el texto ajustado"
     },
     "lookMenu": {
-      "what": "Los botones son los de la cinta «Alineación» de Excel, una vez para los títulos y otra para las celdas. Lo que pongas en el panel de formato de una columna manda sobre esto para esa columna.",
+      "what": "Los botones son los de la cinta «Alineación» de Excel, una vez para los títulos y otra para las celdas. Lo que elijas aquí vale para TODAS las columnas, aunque alguna traiga su propio formato en su panel; «Como estaba» le devuelve a cada columna lo suyo.",
       "example": "Celdas › Ajustar texto"
     },
     "anRefresh": {

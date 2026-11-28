@@ -4374,7 +4374,7 @@ function readLook(tableId) {
         const v = JSON.parse(localStorage.getItem(lookKey(tableId)) || 'null');
         if (!v || typeof v !== 'object') return null;
         const out = {};
-        Object.keys(LOOK_VALUES).forEach((k) => { if (LOOK_VALUES[k].includes(v[k]) && v[k] !== LOOK_DEFAULTS[k]) out[k] = v[k]; });
+        Object.keys(LOOK_VALUES).forEach((k) => { if (LOOK_VALUES[k].includes(v[k])) out[k] = v[k]; }); // también el valor de siempre: elegirlo es pedirlo para TODAS las columnas (ver applyDataTableLook)
         ['hwrap', 'cwrap'].forEach((k) => { if (v[k]) out[k] = 1; });
         return Object.keys(out).length ? out : null;
     } catch { return null; }
@@ -4394,7 +4394,7 @@ function refreshHeaderAutoAlign(tableId) {
     const headerRow = getHeaderRow(state.table);
     if (!headerRow) return;
     Array.from(headerRow.cells).forEach((th) => {
-        if (!th.dataset.col || th.dataset.fmHal) return; // la columna que trae su propia alineación en el panel de formato (FlexFormat.js) no se toca
+        if (!th.dataset.col || (th.dataset.fmHal && !(state.look && state.look.hal === 'a'))) return; // la columna que trae su propia alineación en el panel de formato (FlexFormat.js) no se toca, salvo que se haya elegido «Como los datos» para todas
         if (!auto) { if (th.dataset.autoAlign) { th.style.textAlign = ''; delete th.dataset.autoAlign; } return; }
         const td = state.table.querySelector(`tbody td[data-col="${CSS.escape(th.dataset.col)}"]`);
         const align = td ? getComputedStyle(td).textAlign : '';
@@ -4407,7 +4407,9 @@ function applyDataTableLook(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
     const w = state.wrapper;
-    const set = (name, key) => { const v = lookValue(state, key); if (v === LOOK_DEFAULTS[key]) delete w.dataset[name]; else w.dataset[name] = String(v); };
+    // Lo elegido en «Encabezados y celdas» vale para TODAS las columnas, también las que traen su propio formato (Daniel, 2026-11-28, «debe poder aplicar para todo, rompe el acomodo particular»): el atributo se pone con lo que la persona eligió, incluido el valor de siempre;
+    // sin elegir nada (o con «Como estaba») no hay atributo y cada columna se ve con lo suyo. Los estilos con !important viven en Admin.css.
+    const set = (name, key) => { if (state.look && state.look[key] !== undefined) w.dataset[name] = String(state.look[key]); else delete w.dataset[name]; };
     set('lookHv', 'hv'); set('lookHwrap', 'hwrap'); set('lookHal', 'hal'); set('lookCv', 'cv'); set('lookCwrap', 'cwrap'); set('lookCal', 'cal');
     refreshHeaderAutoAlign(tableId);
     scheduleDataTableAbbreviation(tableId);
@@ -4505,9 +4507,8 @@ function openDataTableLookMenu(tableId, anchor) {
         if (!b) return;
         const k = b.dataset.look;
         const look = { ...(state.look || {}) };
-        if (k.endsWith('wrap')) { if (look[k]) delete look[k]; else look[k] = 1; }
-        else if (b.dataset.value === LOOK_DEFAULTS[k]) delete look[k];
-        else look[k] = b.dataset.value;
+        if (k.endsWith('wrap')) { if (look[k]) delete look[k]; else look[k] = 1; } // «Ajustar texto»: puesto vale para todas; quitado, cada columna con lo suyo
+        else look[k] = b.dataset.value; // alinear o centrar también si es lo de siempre: se aplica a todas las columnas (con «Como estaba» cada una vuelve a lo suyo)
         state.look = Object.keys(look).length ? look : null;
         saveLook(tableId, state.look);
         applyDataTableLook(tableId);

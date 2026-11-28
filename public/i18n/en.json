@@ -10867,7 +10867,7 @@
       "example": "Centered headers with wrapped text"
     },
     "lookMenu": {
-      "what": "The buttons are the ones from Excel's “Alignment” ribbon, once for the headers and once for the cells. What you set in a column's format panel wins over this for that column.",
+      "what": "The buttons are the ones from Excel's “Alignment” ribbon, once for the headers and once for the cells. What you choose here applies to ALL columns, even those with their own format in their panel; “As it was” gives each column its own back.",
       "example": "Cells › Wrap text"
     },
     "anRefresh": {
