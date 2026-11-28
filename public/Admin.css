@@ -11190,6 +11190,18 @@ th.an-ref-key::after{ content: " ·"; opacity: 0.55; }
 .an-fd .reg-field-label, #an-c-blank .reg-field-label{ margin: 0.6rem 0 0.2rem; font-size: 0.78rem; font-weight: 600; opacity: 1; }
 
 /* El formato de cada columna en pantalla (Daniel, 2026-11-26, menú ⋮ en el encabezado): el botón y el cuadro de opciones */
+/* Los tres puntitos (⋮) y el embudo del encabezado (Daniel, 2026-11-28, «Opción B»; antes el ⋮ quedaba pegado al final del título, en un lugar distinto en cada columna, y se encimaba): en las tablas con data-header-tools="row"
+   (Registros Información y Análisis) el título ocupa todo el ancho arriba y abajo va una fila de herramientas, separada por una raya punteada: el embudo a la izquierda y el ⋮ a la derecha. La flecha de orden se queda
+   junto al título. El título se mide sin el ⋮ (Dashboard.js tableAbbrSpec salta los botones flotantes). */
+.data-table-wrapper[data-header-tools="row"] .data-table thead th[data-col]{
+    padding-top: 0.3rem; padding-bottom: 1.8rem; padding-left: 0.55rem; vertical-align: top; /* el embudo ya no ocupa el lado izquierdo del título */
+    background-image: repeating-linear-gradient(90deg, var(--color-border) 0 3px, transparent 3px 6px);
+    background-repeat: no-repeat; background-size: calc(100% - 0.8rem) 1px; background-position: 0.4rem calc(100% - 1.55rem);
+}
+.data-table-wrapper[data-header-tools="row"] .data-table thead th[data-col] > .data-table-col-filter-trigger{ top: auto; bottom: 0.2rem; left: 0.4rem; transform: none; }
+.data-table-wrapper[data-header-tools="row"] .data-table thead th[data-col] > .reg-fm-btn{ position: absolute; right: 0.4rem; bottom: 0.2rem; margin: 0; height: 1.15rem; display: flex; align-items: center; }
+.data-table-wrapper[data-header-tools="row"] .data-table thead th[data-col].data-table-col-sort-asc::after,
+.data-table-wrapper[data-header-tools="row"] .data-table thead th[data-col].data-table-col-sort-desc::after{ top: calc((100% - 1.55rem) / 2); }
 .reg-fm-btn{ margin-left: 0.3rem; border: 0; background: transparent; color: inherit; opacity: 0.5; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0.2rem; border-radius: 0.3rem; }
 .reg-fm-btn:hover, .reg-fm-btn:focus-visible{ opacity: 1; background: color-mix(in srgb, var(--color-accent, #d05bcd) 18%, transparent); }
 .reg-fm-neg{ color: #c00000; }
