@@ -10506,7 +10506,7 @@
       "example": "Site, Description"
     },
     "regFormatoColumna": {
-      "what": "Tap the ⋮ in a column header to format it: number (decimals, currency, thousands, percentage, dates…), font (bold, italic, underline, color), alignment, cell shading and header color. It shows right away, is saved for everyone and applies to every load of that column; the downloaded Excel comes out with the same format.",
+      "what": "Tap the ⋮ in a column header to format it: number (decimals, currency, thousands, percentage, dates…), font (bold, italic, underline, color), alignment (top, middle, bottom, left, center, right) and Wrap text for the cells and for that column's header, cell shading and header color. What you set on a column wins over Headers and cells for the whole table. It shows right away, is saved for everyone and applies to every load of that column; the downloaded Excel comes out with the same format.",
       "example": "COST → Currency with 2 decimals and yellow shading"
     },
     "regFlexWhen": {

@@ -18,6 +18,7 @@ const CURRENCIES = { MXN: '$', USD: 'US$', EUR: '€' };
 const SUPPORT_KINDS = ['none', 'days', 'sum', 'avg'];
 const KPI_KEYS = ['rows', 'distinct', 'last', 'change'];
 const ALIGNS = ['left', 'center', 'right'];
+const VALIGNS = ['top', 'middle', 'bottom'];
 const MAX_COLUMN_FORMATS = 500;
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const fold = (v) => manual.fold(v);
@@ -51,6 +52,12 @@ function cleanColumnFormat(raw) {
     if (pickColor(raw.hink)) f.hink = pickColor(raw.hink);
     if (raw.hb === true) f.hb = true;
     if (ALIGNS.includes(raw.al)) f.al = raw.al;
+    // «Ajustar texto» y la alineación vertical de las celdas (va, wrap) y del encabezado (hal, hva, hwrap) de ESTA columna (Daniel, 2026-11-27): mandan sobre lo que la persona puso para toda la tabla
+    if (VALIGNS.includes(raw.va)) f.va = raw.va;
+    if (raw.wrap === true) f.wrap = true;
+    if (ALIGNS.includes(raw.hal)) f.hal = raw.hal;
+    if (VALIGNS.includes(raw.hva)) f.hva = raw.hva;
+    if (raw.hwrap === true) f.hwrap = true;
     if (NUMBER_FORMATS.includes(raw.nf) && raw.nf !== 'general') f.nf = raw.nf;
     if (Number.isInteger(raw.dec) && raw.dec >= 0 && raw.dec <= 6) f.dec = raw.dec;
     if (CURRENCIES[raw.cur]) f.cur = raw.cur;
@@ -137,6 +144,14 @@ function numFmtOf(f) {
     }
 }
 const argb = (hex) => `FF${hex.slice(1).toUpperCase()}`;
+// La alineación del encabezado de una columna: lo que lleve en su panel (horizontal, vertical, «Ajustar texto») y, si no lleva, la de siempre (`horizontal`).
+function headerAlignment(f, horizontal) {
+    const a = { vertical: f.hva || 'middle' };
+    const h = f.hal || horizontal;
+    if (h) a.horizontal = h;
+    if (f.hwrap) a.wrapText = true;
+    return a;
+}
 function styleOf(f, extra = {}) {
     const style = {};
     const font = {};
@@ -150,7 +165,12 @@ function styleOf(f, extra = {}) {
     const fill = f.fill || extra.fill;
     if (fill) style.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(fill) } };
     const al = f.al || extra.al;
-    if (al) style.alignment = { horizontal: al, vertical: 'middle' };
+    // sin pedir alineación ni «Ajustar texto» no se le pone estilo a las celdas (3 millones de celdas con estilo hacían la descarga el doble de lenta)
+    if (al || f.va || f.wrap) {
+        style.alignment = { vertical: f.va || 'middle' };
+        if (al) style.alignment.horizontal = al;
+        if (f.wrap) style.alignment.wrapText = true;
+    }
     if (f.bd || extra.bd) { const side = { style: 'thin', color: { argb: 'FF000000' } }; style.border = { top: side, left: side, bottom: side, right: side }; }
     const nf = numFmtOf(f);
     if (nf) style.numFmt = nf;
@@ -270,7 +290,7 @@ async function writeWorkbook({ stream, batches, columns, format, meta }) {
     const head = sheet.addRow(columns.map((c) => c.label));
     columns.forEach((c, i) => {
         const mine = eff[i].f; // el encabezado de esta columna (si la persona le puso uno) manda sobre el de todo el registro
-        head.getCell(i + 1).style = { font: { bold: mine.hb === true || fmt.header.bold, color: { argb: argb(mine.hink || fmt.header.ink) } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(mine.hfill || fmt.header.fill) } }, alignment: { horizontal: c.group === 'value' ? 'center' : 'left', vertical: 'middle' } };
+        head.getCell(i + 1).style = { font: { bold: mine.hb === true || fmt.header.bold, color: { argb: argb(mine.hink || fmt.header.ink) } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(mine.hfill || fmt.header.fill) } }, alignment: headerAlignment(mine, c.group === 'value' ? 'center' : 'left') };
     });
     head.commit();
     if (fmt.header.filter) sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: headerRow, column: columns.length } };
@@ -333,4 +353,4 @@ async function writeWorkbook({ stream, batches, columns, format, meta }) {
     await wb.commit();
 }
 
-module.exports = { DEFAULTS, FONTS, NUMBER_FORMATS, CURRENCIES, cleanFormat, cleanColumnFormat, mergeFormat, columnKey, screenFormats, setColumnFormat, renameColumnFormat, numFmtOf, styleOf, writeWorkbook, daysInMonth, effectiveColumns };
+module.exports = { DEFAULTS, FONTS, NUMBER_FORMATS, CURRENCIES, cleanFormat, cleanColumnFormat, mergeFormat, columnKey, screenFormats, setColumnFormat, renameColumnFormat, numFmtOf, styleOf, headerAlignment, writeWorkbook, daysInMonth, effectiveColumns };

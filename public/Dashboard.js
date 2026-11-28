@@ -2214,6 +2214,10 @@ function scheduleDataTableAbbreviation(tableId) {
         try { abbreviateDataTableTexts(tableId); refreshHeaderAutoAlign(tableId); } catch (err) { console.warn('Abreviar tabla:', err); }
     }, 40);
 }
+// Una columna cambió su «Ajustar texto» o su alineación (FlexFormat.js): se vuelve a revisar lo que se abrevia y la alineación de «Como los datos».
+function refreshTableLook(table) {
+    dataTableColumnState.forEach((state, tableId) => { if (state.table === table) scheduleDataTableAbbreviation(tableId); });
+}
 function scheduleAllDataTableAbbreviations() {
     dataTableColumnState.forEach((state, tableId) => scheduleDataTableAbbreviation(tableId));
 }
@@ -4278,6 +4282,7 @@ function clearWidthMode(tableId) {
 }
 // El ancho para leer el encabezado completo: el texto (con su letra y espaciado), el relleno de la celda (donde viven el embudo y la flecha de orden) y lo que lleve en su línea (el ⋮ del formato).
 function headerFitWidth(th, wrap = false) {
+    wrap = wrap || !!th.dataset.fmHwrap; // «Ajustar texto» puesto solo a esta columna (su panel de formato) también la deja en dos renglones
     const cs = getComputedStyle(th);
     const full = th.dataset.abbrFull || Array.from(th.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
     const spec = { font: `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`, spacing: parseFloat(cs.letterSpacing) || 0, upper: cs.textTransform === 'uppercase' };
@@ -4355,11 +4360,13 @@ function refreshHeaderAutoAlign(tableId) {
     const headerRow = getHeaderRow(state.table);
     if (!headerRow) return;
     Array.from(headerRow.cells).forEach((th) => {
-        if (!th.dataset.col) return;
-        if (!auto) { if (th.style.textAlign) th.style.textAlign = ''; return; }
+        if (!th.dataset.col || th.dataset.fmHal) return; // la columna que trae su propia alineación en el panel de formato (FlexFormat.js) no se toca
+        if (!auto) { if (th.dataset.autoAlign) { th.style.textAlign = ''; delete th.dataset.autoAlign; } return; }
         const td = state.table.querySelector(`tbody td[data-col="${CSS.escape(th.dataset.col)}"]`);
         const align = td ? getComputedStyle(td).textAlign : '';
-        th.style.textAlign = align === 'right' || align === 'end' ? 'right' : (align === 'center' ? 'center' : '');
+        const value = align === 'right' || align === 'end' ? 'right' : (align === 'center' ? 'center' : '');
+        th.style.textAlign = value;
+        if (value) th.dataset.autoAlign = '1'; else delete th.dataset.autoAlign;
     });
 }
 function applyDataTableLook(tableId) {
@@ -17041,6 +17048,7 @@ function openTotalsMenu(tableId, key, anchor) {
 
 window.Dashboard = {
     ensureColumnMinWidth,
+    refreshTableLook,
     registerTotalsRow,
     refreshTotalsRow,
     initDashboard,

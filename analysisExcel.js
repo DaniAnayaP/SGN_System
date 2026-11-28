@@ -70,7 +70,7 @@ async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHE
             head.getCell(i + 1).style = {
                 font: { bold: f.hb !== false, color: { argb: argb(f.hink || HEADER.ink) } },
                 fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(f.hfill || HEADER.fill) } },
-                alignment: { vertical: 'middle' },
+                alignment: flexExcel.headerAlignment(f),
             };
         });
         head.commit();

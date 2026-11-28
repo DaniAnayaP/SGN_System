@@ -10505,7 +10505,7 @@
       "example": "Sitio, Descripción"
     },
     "regFormatoColumna": {
-      "what": "Toca el ⋮ del encabezado de una columna para darle formato: número (decimales, moneda, miles, porcentaje, fechas…), letra (negritas, cursiva, subrayado, color), alineación, sombreado de las celdas y color del encabezado. Se ve al momento, se guarda para todos y vale para todas las cargas de esa columna; el Excel que se descarga sale con el mismo formato.",
+      "what": "Toca el ⋮ del encabezado de una columna para darle formato: número (decimales, moneda, miles, porcentaje, fechas…), letra (negritas, cursiva, subrayado, color), alineación (arriba, en medio, abajo, izquierda, centro, derecha) y «Ajustar texto» para las celdas y para el encabezado de esa columna, sombreado de las celdas y color del encabezado. Lo que le pongas a una columna manda sobre «Encabezados y celdas» de toda la tabla. Se ve al momento, se guarda para todos y vale para todas las cargas de esa columna; el Excel que se descarga sale con el mismo formato.",
       "example": "COSTO → Moneda con 2 decimales y sombreado amarillo"
     },
     "regFlexWhen": {

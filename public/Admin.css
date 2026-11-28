@@ -11065,6 +11065,8 @@ th.an-ref-key::after{ content: " ·"; opacity: 0.55; }
 .reg-fm-pop select{ font: inherit; font-size: 0.8rem; padding: 0.25rem 0.5rem; border: 1px dashed color-mix(in srgb, var(--color-accent, #d05bcd) 55%, transparent); border-radius: 0.5rem; background: color-mix(in srgb, var(--color-accent, #d05bcd) 9%, var(--color-surface, #fff)); color: inherit; }
 .reg-fm-ic{ min-width: 1.8rem; height: 1.8rem; padding: 0 0.45rem; border: 1px dashed color-mix(in srgb, var(--color-accent, #d05bcd) 55%, transparent); border-radius: 0.45rem; background: color-mix(in srgb, var(--color-accent, #d05bcd) 9%, var(--color-surface, #fff)); color: inherit; font: inherit; font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .reg-fm-ic[aria-pressed="true"]{ background: var(--color-accent-soft, #f7d9f5); border-style: solid; font-weight: 700; }
+.reg-fm-ic svg{ display: block; }
+.reg-fm-sep{ width: 1px; align-self: stretch; margin: 0.15rem 0.1rem; background: var(--color-border, #e3d4e6); }
 .reg-fm-sw{ display: inline-flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; }
 .reg-fm-lab{ min-width: 4rem; font-size: 0.74rem; opacity: 0.75; }
 .reg-fm-sw button{ width: 1.2rem; height: 1.2rem; padding: 0; border-radius: 50%; border: 2px solid var(--color-surface, #fff); box-shadow: 0 0 0 1px var(--color-border, #cdbfd2); cursor: pointer; }
