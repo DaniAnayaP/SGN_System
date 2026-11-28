@@ -197,7 +197,7 @@ const HEAD_KEYS = ['background-color', 'color', 'font-weight', 'vertical-align',
                 ${swatches('fill', SHADES, f.fill, T('main.fmtShade'))}${swatches('ink', INKS, f.ink, T('main.fmtInk'))}</div>
             <div class="reg-fm-g"><small>${esc(T('main.fmtHeader'))}</small><div class="reg-fm-r">${toggle('hb', !!f.hb, T('main.fmtBold'), '<b>N</b>')}<span class="reg-fm-sep"></span>${aligns('h', f)}</div>
                 ${swatches('hfill', HFILLS, f.hfill, T('main.fmtHFill'))}${swatches('hink', HINKS, f.hink, T('main.fmtInk'))}</div>
-            <div class="reg-fm-foot"><button type="button" class="reg-fm-clear" data-fm="clear">${esc(T('main.fmtClear'))}</button><span class="reg-fm-note">${esc(opts.note || T('main.fmtSaveNote'))}</span></div>`;
+            <div class="reg-fm-foot"><button type="button" class="reg-fm-clear" data-fm="clear">${esc(T('main.fmtClear'))}</button>${opts.onCollapse ? `<button type="button" class="reg-fm-clear" data-fm="collapse">${esc(T('main.colCollapse'))}</button>` : ''}<span class="reg-fm-note">${esc(opts.note || T('main.fmtSaveNote'))}</span></div>`;
             if (extraNode) { const slot = box.querySelector('[data-fm-extra]'); if (slot) slot.appendChild(extraNode); }
         };
         draw();
@@ -212,6 +212,7 @@ const HEAD_KEYS = ['background-color', 'color', 'font-weight', 'vertical-align',
             const act = b.dataset.fm; const f = state.f;
             if (act === 'close') { closeMenu(); return; }
             if (act === 'clear') { state.f = {}; opts.onChange({}); draw(); return; }
+            if (act === 'collapse') { closeMenu(); if (opts.onCollapse) opts.onCollapse(); return; }
             if (act === 'dec+' || act === 'dec-') { const d = Number.isInteger(f.dec) ? f.dec : 2; change({ nf: f.nf || 'numero', dec: Math.max(0, Math.min(6, d + (act === 'dec+' ? 1 : -1))) }); return; }
             if (act === 'miles') { change({ miles: f.miles ? null : true, nf: f.nf || 'numero' }); return; }
             if (act === 'b' || act === 'i' || act === 'u' || act === 'bd' || act === 'hb') { change({ [act]: f[act] ? null : true }); return; }

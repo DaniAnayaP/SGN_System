@@ -2231,6 +2231,9 @@
     "lookCells": "Celdas",
     "bandCollapse": "Contraer «{name}»",
     "bandExpand": "Abrir «{name}»",
+    "colCollapse": "Contraer columna",
+    "colCollapseBtn": "Contraer «{name}»",
+    "colStripTitle": "{name} (contraída): toca para abrir",
     "collapseAll": "Contraer todo",
     "expandAll": "Expandir todo",
     "hiddenChipOne": "1 oculta",
@@ -10794,6 +10797,10 @@
     "anFormulaTab": {
       "what": "La operación se arma de dos formas que se llenan una a la otra: «Paso a paso» (eliges cada paso) o «Fórmula» (la escribes como en Excel, con las letras de las columnas). Si la fórmula cabe en pasos de izquierda a derecha (una columna o un número en cada uno), se guarda como pasos; si lleva paréntesis o varias columnas mezcladas (=H*(I+J)), se guarda como fórmula libre y solo se ve en «Fórmula». Funciones: REDONDEAR, RAIZ, ABS, MIN, MAX, POTENCIA, LN, LOG10, LOG, EXP, separando los datos con ;",
       "example": "=REDONDEAR(H*I;0) → costo × existencia, sin decimales."
+    },
+    "colCollapse": {
+      "what": "El [−] de la fila de herramientas de cada encabezado (entre el embudo y el ⋮) contrae esa columna a una tira angosta; el [+] de la tira, o tocar cualquier parte de ella, la abre, y al pasar el ratón por la tira sale el nombre. Contraer no oculta: la columna sigue en la descarga, en los totales y en los filtros. Se recuerda por persona y tabla. Una columna fija no se contrae, y «Expandir todo» abre también las columnas contraídas.",
+      "example": "Existencia total [−] → una tira «+»"
     },
     "collapseGroups": {
       "what": "Cada banda de arriba lleva un [−] que contrae su grupo de columnas a una tira delgada y un [+] que lo abre; «Contraer todo» y «Expandir todo» lo hacen con todos los grupos de clasificación. Contraer no oculta: las columnas siguen en la descarga, en los totales y en los filtros, solo se ven menos. Cada quien deja sus grupos como los quiera.",

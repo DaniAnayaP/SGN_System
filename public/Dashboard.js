@@ -3844,6 +3844,11 @@ function applyRowColumnState(tr, tableId) {
 // Contraer NO es ocultar: las columnas siguen en la descarga, en la fila de totales y en los filtros; solo se ven menos. Se recuerda por persona y tabla. Un grupo con una columna fija no se contrae. «Contraer todo» / «Expandir todo» (aviso al principio
 // de la barra) actúa sobre los grupos de la banda de clasificación (o sobre la única banda que haya).
 const COLLAPSED_W = 34;
+// Contraer UNA columna (Daniel, 2026-11-28, «Sí a las recomendadas»): el [−] de la fila de herramientas del encabezado (tablas con data-header-tools="row") la contrae a una tira de 22 px (más angosta que la de un grupo) con un [+];
+// se guarda en el mismo conjunto de los grupos con el id 'c|<columna>'. Si la columna ya está dentro de un grupo contraído manda el grupo; una columna fija no se contrae.
+const COLLAPSED_COL_W = 22;
+const colCollapseId = (key) => 'c|' + key;
+const stripWidth = (strips, key) => (strips.get(key) && strips.get(key).single ? COLLAPSED_COL_W : COLLAPSED_W);
 const collapsedKey = (tableId) => `dataTableCollapsed:${layoutKeyOf(tableId)}`;
 function readCollapsed(tableId) {
     try {
@@ -3881,6 +3886,7 @@ function computeCollapsed(state) {
     if (!state.collapsed || !state.collapsed.size) return out;
     const groups = collapsibleGroups(state);
     state.collapsed.forEach((id) => {
+        if (id.startsWith('c|')) return; // las columnas sueltas van después de los grupos
         const g = groups.get(id);
         if (!g) return;
         const free = g.keys.filter((k) => !out.hidden.has(k));
@@ -3888,8 +3894,49 @@ function computeCollapsed(state) {
         free.slice(1).forEach((k) => { out.hidden.add(k); out.strips.delete(k); });
         out.strips.set(free[0], { id, label: resolveGroupLabel(g.groupKey), n: g.keys.length });
     });
+    const pinnedKeys = new Set(state.config.pinned);
+    const shown = new Set(getVisualColumnOrder(state.config).filter((k) => isFadeTable(state.wrapper) || !state.config.hidden.includes(k)));
+    state.collapsed.forEach((id) => {
+        if (!id.startsWith('c|')) return;
+        const key = id.slice(2);
+        if (!shown.has(key) || pinnedKeys.has(key) || out.hidden.has(key) || out.strips.has(key)) return;
+        out.strips.set(key, { id, label: columnLabelOf(state, key), n: 1, single: true });
+    });
     return out;
 }
+// el nombre de una columna sin los botones del encabezado (el ⋮ y el [−] viven dentro del <th>)
+const columnLabelOf = (state, key) => String((state.labels && state.labels[key]) || key).replace(/[⋮−+]/g, '').trim() || String(key);
+// El [−] de la fila de herramientas del encabezado, entre el embudo y el ⋮: solo en las tablas con data-header-tools="row", y no en una columna fija. Se vuelve a poner si el encabezado se redibuja o cambia el idioma.
+function syncColumnCollapseButton(th, state) {
+    const key = th.dataset.col;
+    const eligible = !state.external && state.wrapper && state.wrapper.dataset.headerTools === 'row' && key && key !== 'actions' && !state.config.pinned.includes(key);
+    let btn = th.querySelector(':scope > .data-table-col-collapse-btn');
+    if (!eligible) { if (btn) btn.remove(); return; }
+    const label = t('main.colCollapseBtn', { name: columnLabelOf(state, key) });
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'data-table-col-collapse-btn';
+        btn.dataset.collapseId = colCollapseId(key);
+        btn.dataset.helpKey = 'colCollapse';
+        btn.textContent = '−';
+        ['mousedown', 'mouseup', 'pointerdown', 'pointerup'].forEach((ev) => btn.addEventListener(ev, (event) => event.stopPropagation())); // tocar el [−] no ordena ni mueve la columna
+        th.appendChild(btn);
+    }
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+}
+// La tira de una columna contraída dice su nombre al pasar el ratón (y recupera su título de antes al abrirse)
+function syncColumnStripTitle(th, meta) {
+    if (meta && meta.single) {
+        if (th.dataset.stripPrevTitle === undefined) th.dataset.stripPrevTitle = th.getAttribute('title') || '';
+        th.setAttribute('title', t('main.colStripTitle', { name: meta.label }));
+    } else if (th.dataset.stripPrevTitle !== undefined) {
+        if (th.dataset.stripPrevTitle) th.setAttribute('title', th.dataset.stripPrevTitle); else th.removeAttribute('title');
+        delete th.dataset.stripPrevTitle;
+    }
+}
+function collapseColumn(tableId, key) { toggleCollapsedGroup(tableId, colCollapseId(key)); }
 function toggleCollapsedGroup(tableId, id) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
@@ -3907,8 +3954,9 @@ function refreshCollapseChip(tableId) {
     const kind = state.groupTableKeys && state.groupTableKeys.size ? 't' : 'g';
     const ids = Array.from(collapsibleGroups(state).values()).filter((g) => g.kind === kind).map((g) => g.id);
     let chip = bar.querySelector('.data-table-collapse-chip');
-    if (ids.length < 2) { if (chip) chip.remove(); return; }
-    const anyOpen = ids.some((id) => !(state.collapsed && state.collapsed.has(id)));
+    const singles = state.collapsedStrips ? Array.from(state.collapsedStrips.values()).filter((m) => m.single).length : 0; // columnas sueltas contraídas
+    if (ids.length < 2 && !singles) { if (chip) chip.remove(); return; }
+    const anyOpen = ids.length >= 2 && ids.some((id) => !(state.collapsed && state.collapsed.has(id)));
     if (!chip) {
         chip = document.createElement('button');
         chip.type = 'button';
@@ -3919,9 +3967,10 @@ function refreshCollapseChip(tableId) {
             if (!st) return;
             const k = st.groupTableKeys && st.groupTableKeys.size ? 't' : 'g';
             const all = Array.from(collapsibleGroups(st).values()).filter((g) => g.kind === k).map((g) => g.id);
-            const open = all.some((id) => !(st.collapsed && st.collapsed.has(id)));
+            const open = all.length >= 2 && all.some((id) => !(st.collapsed && st.collapsed.has(id)));
             if (!st.collapsed) st.collapsed = new Set();
             all.forEach((id) => { if (open) st.collapsed.add(id); else st.collapsed.delete(id); });
+            if (!open) Array.from(st.collapsed).forEach((id) => { if (id.startsWith('c|')) st.collapsed.delete(id); }); // «Expandir todo» abre también las columnas sueltas
             saveCollapsed(tableId, st.collapsed);
             applyDataTableColumnLayout(tableId);
         });
@@ -3945,7 +3994,7 @@ function distributeDataTableColumnWidths(tableId) {
     const strips = state.collapsedStrips || new Map();
     const visible = getVisualColumnOrder(config).filter((k) => !hiddenSet.has(k) && !collapsedHidden.has(k));
     const pinnedSet = new Set([...state.visiblePinned, ...strips.keys()]); // la tira de un grupo contraído tiene su ancho fijo: no se estira
-    const baseOf = (k) => (strips.has(k) ? COLLAPSED_W : (config.widths[k] || DATA_TABLE_COL_MIN_WIDTH));
+    const baseOf = (k) => (strips.has(k) ? stripWidth(strips, k) : (config.widths[k] || DATA_TABLE_COL_MIN_WIDTH));
     const sumOf = (keys) => keys.reduce((total, k) => total + baseOf(k), 0);
     const normals = visible.filter((k) => !pinnedSet.has(k));
     const normalSum = sumOf(normals);
@@ -3998,7 +4047,7 @@ function applyDataTableColumnLayout(tableId) {
         const col = Array.from(colgroup.children).find((c) => c.dataset.col === key);
         if (col) {
             colgroup.appendChild(col);
-            col.style.width = `${collapsedNow.strips.has(key) ? COLLAPSED_W : (config.widths[key] || DATA_TABLE_COL_MIN_WIDTH)}px`;
+            col.style.width = `${collapsedNow.strips.has(key) ? stripWidth(collapsedNow.strips, key) : (config.widths[key] || DATA_TABLE_COL_MIN_WIDTH)}px`;
             // visibility:collapse, not display:none — <col display:none>
             // doesn't reliably collapse the column's rendered width under
             // border-collapse:separate (confirmed live: cells kept their
@@ -4032,6 +4081,10 @@ function applyDataTableColumnLayout(tableId) {
         applyPinStyle(th, th.dataset.col, state);
         th.draggable = !config.pinned.includes(th.dataset.col) && hasColumnSearchGrant(tableId, th.dataset.col, 'reorder');
         th.classList.toggle('data-table-col-strip', collapsedNow.strips.has(th.dataset.col)); // la tira de un grupo contraído
+        const stripMeta = collapsedNow.strips.get(th.dataset.col);
+        th.classList.toggle('data-table-col-strip-single', !!(stripMeta && stripMeta.single)); // la de UNA columna: más angosta y con su propio [+]
+        syncColumnStripTitle(th, stripMeta);
+        syncColumnCollapseButton(th, state);
     });
 
     // <col display:none> already shrinks the empty-state colspan cell's
@@ -6435,7 +6488,7 @@ function attachColumnFilterTrigger(th, tableId) {
 }
 document.addEventListener('dashboard:language-changed', () => {
     dataTableColumnState.forEach((state, tableId) => {
-        Array.from(getHeaderRow(state.table)?.cells || []).forEach((th) => attachColumnFilterTrigger(th, tableId));
+        Array.from(getHeaderRow(state.table)?.cells || []).forEach((th) => { attachColumnFilterTrigger(th, tableId); syncColumnCollapseButton(th, state); });
     });
 });
 
@@ -6590,6 +6643,8 @@ function initDataTableColumns(wrapper, index) {
         if (!current) return;
         const toggle = event.target.closest('.data-table-band-toggle');
         if (toggle) { event.stopPropagation(); event.preventDefault(); toggleCollapsedGroup(tableId, toggle.dataset.groupId); return; }
+        const colBtn = event.target.closest('.data-table-col-collapse-btn');
+        if (colBtn) { event.stopPropagation(); event.preventDefault(); toggleCollapsedGroup(tableId, colBtn.dataset.collapseId); return; }
         const strip = event.target.closest('th.data-table-col-strip, td.data-table-col-strip');
         const meta = strip && current.collapsedStrips ? current.collapsedStrips.get(strip.dataset.col) : null;
         if (meta) { event.stopPropagation(); event.preventDefault(); toggleCollapsedGroup(tableId, meta.id); }
@@ -17802,6 +17857,7 @@ window.Dashboard = {
     initDataTableColumns,
     getVisibleTableSnapshot,
     getDataTableLook,
+    collapseColumn,
     attachTableDownloadButton,
     getVisibleColumnKeys,
     showToast,

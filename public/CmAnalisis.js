@@ -1630,6 +1630,7 @@ function setupFileFormat(table, cols) {
                 note: t('main.fmtSaveNoteAn'),
                 f: current.ff,
                 extra: (menu) => buildMetaExtra(current, menu),
+                onCollapse: Dashboard.collapseColumn ? () => Dashboard.collapseColumn(FILE_TABLE, colKeyOf(current.key)) : null, // «Contraer columna»: la tira angosta (Dashboard.js)
                 onChange: (f) => {
                     if (FF.hasFormat(f)) current.ff = { ...f }; else delete current.ff;
                     st.filePlan = fileCellPlan(st.data.columns); // los renglones que se dibujen después ya traen el formato nuevo

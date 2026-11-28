@@ -402,6 +402,7 @@ function setupFlexFormat(table, body) {
                 anchor: btn,
                 title: t('main.fmtTitle', { name: current.label }),
                 f: current.fmt,
+                onCollapse: Dashboard.collapseColumn ? () => Dashboard.collapseColumn(DATA_TABLE, c.key) : null, // «Contraer columna»: la tira angosta (Dashboard.js)
                 onChange: (f) => {
                     const key = fmtKey(current.name);
                     st.data.columns.forEach((x) => { if (fmtKey(x.name) === key) { if (FF.hasFormat(f)) x.fmt = { ...f }; else delete x.fmt; FF.restyleColumn(table, x, lang()); } });

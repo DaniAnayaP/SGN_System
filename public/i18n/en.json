@@ -2232,6 +2232,9 @@
     "lookCells": "Cells",
     "bandCollapse": "Collapse “{name}”",
     "bandExpand": "Open “{name}”",
+    "colCollapse": "Collapse column",
+    "colCollapseBtn": "Collapse “{name}”",
+    "colStripTitle": "{name} (collapsed): tap to open",
     "collapseAll": "Collapse all",
     "expandAll": "Expand all",
     "hiddenChipOne": "1 hidden",
@@ -10795,6 +10798,10 @@
     "anFormulaTab": {
       "what": "The operation is built in two ways that fill each other in: “Step by step” (you pick each step) or “Formula” (you write it like in Excel, with the column letters). If the formula fits in steps from left to right (one column or a number in each), it is saved as steps; if it has parentheses or several columns mixed (=H*(I+J)), it is saved as a free formula and only shows in “Formula”. Functions: REDONDEAR, RAIZ, ABS, MIN, MAX, POTENCIA, LN, LOG10, LOG, EXP, separating the values with ;",
       "example": "=REDONDEAR(H*I;0) → cost × stock, no decimals."
+    },
+    "colCollapse": {
+      "what": "The [−] on the tools row of each header (between the funnel and the ⋮) collapses that column into a narrow strip; the strip's [+], or tapping anywhere on it, opens it again, and hovering the strip shows the name. Collapsing does not hide: the column stays in the download, in the totals and in the filters. It is remembered per person and table. A pinned column does not collapse, and “Expand all” also opens collapsed columns.",
+      "example": "Total stock [−] → a “+” strip"
     },
     "collapseGroups": {
       "what": "Each band on top has a [−] that collapses its group of columns into a thin strip and a [+] that opens it; “Collapse all” and “Expand all” do it for every classification group. Collapsing does not hide: the columns stay in the download, in the totals and in the filters, they are just shown smaller. Everyone leaves their groups as they like.",
