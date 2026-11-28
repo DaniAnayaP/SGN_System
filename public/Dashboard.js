@@ -4013,6 +4013,7 @@ function resetDataTableColumnLayout(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
     clearWidthMode(tableId);
+    forgetSizedWidths(tableId); // «Limpiar»: los anchos vuelven a los de origen y se miden otra vez con los datos
     resetDataTableLook(tableId);
     if (returnToOriginalLayout(tableId)) return; // con acomodo original, «Limpiar» regresa a él (no al orden de los datos)
     state.config = {
@@ -4045,7 +4046,7 @@ const DATA_TABLE_WIDTH_SAMPLE_ROWS = 80;
 function refreshDataTableColumnWidths(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
-    if (state.widthMode) return; // «Contraer al mínimo» / «Ajustar al encabezado»: los anchos son los que se pidieron, no los de una columna aún sin medir
+    if (state.widthMode || state.sized) return; // «Contraer al mínimo» / «Ajustar al encabezado» o un borde arrastrado a mano: los anchos son los que se pidieron, no los de una columna aún sin medir
     let changed = false;
     const sampleRows = state.table.tBodies[0] ? Array.from(state.table.tBodies[0].rows).slice(0, DATA_TABLE_WIDTH_SAMPLE_ROWS) : [];
     // Cada lectura de scrollWidth obliga al navegador a calcular el diseño de toda la tabla. Una tabla que se llena por tandas (ver renderTableRowsInChunks) avisaba aquí en cada tanda, y las columnas
@@ -4053,8 +4054,17 @@ function refreshDataTableColumnWidths(tableId) {
     if (!state.widthMeasuredRows) state.widthMeasuredRows = new WeakSet();
     if (!sampleRows.length || sampleRows.every((tr) => state.widthMeasuredRows.has(tr))) return;
     sampleRows.forEach((tr) => state.widthMeasuredRows.add(tr));
+    // Una columna se mide UNA vez, cuando ya trae datos (Daniel, 2026-11-27, «cuando ordeno las columnas, se abren otra vez el ancho»): ordenar o filtrar dibuja filas nuevas y, sin esto, toda columna que la persona dejó en el mínimo
+    // (por ejemplo con «Contraer» y luego arrastrando un borde) se volvía a medir y se abría al ancho de su contenido.
+    if (!state.widthMeasuredKeys) state.widthMeasuredKeys = new Set();
     state.columnKeys.forEach((key) => {
+        if (state.widthMeasuredKeys.has(key)) return;
         if (state.config.widths[key] !== DATA_TABLE_COL_MIN_WIDTH) return;
+        const hasData = sampleRows.some((tr) => {
+            const cell = tr.querySelector(`td[data-col="${key}"]`);
+            return !!cell && (cell.textContent.trim() !== '' || !!cell.querySelector('button, input, select, img, svg, a'));
+        });
+        if (hasData) state.widthMeasuredKeys.add(key);
         // table-layout:fixed is already applied by the time this runs, so
         // re-measuring the <th> (like the initial measureNaturalColumnWidths
         // does) would just read back the same clamped width -- look at each
@@ -4266,6 +4276,24 @@ function saveWidthMode(tableId, mode, before) {
         if (mode) localStorage.setItem(widthModeKey(tableId), JSON.stringify({ mode, before: before || null }));
         else localStorage.removeItem(widthModeKey(tableId));
     } catch { /* sin almacenamiento */ }
+}
+// «Ya los acomodé a mano» (se arrastró un borde): los anchos que se ven son los que valen, y volver a medir las columnas del mínimo al dibujar filas nuevas (ordenar, filtrar, recargar) las abriría de nuevo. Se guarda por tabla, como el modo.
+const sizedKey = (tableId) => `dataTableSized:${layoutKeyOf(tableId)}`;
+function readSized(tableId) {
+    try { return localStorage.getItem(sizedKey(tableId)) === '1'; } catch { return false; }
+}
+function saveSized(tableId, on) {
+    try {
+        if (on) localStorage.setItem(sizedKey(tableId), '1');
+        else localStorage.removeItem(sizedKey(tableId));
+    } catch { /* sin almacenamiento */ }
+}
+// Los anchos vuelven a los de origen (Limpiar, regresar al acomodo original): se olvida lo acomodado a mano y las columnas se miden otra vez con sus datos.
+function forgetSizedWidths(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    state.sized = false; saveSized(tableId, false);
+    state.widthMeasuredKeys = null; state.widthMeasuredRows = null;
 }
 // Los iconos de la barra reflejan el modo que está puesto.
 function refreshWidthButtons(tableId) {
@@ -4834,6 +4862,7 @@ function attachResizeHandle(th, tableId) {
             if (rafId != null) cancelAnimationFrame(rafId);
             if (!moved) return;
             clearWidthMode(tableId);
+            state.sized = true; saveSized(tableId, true);
             state.config.widths[key] = pendingWidth;
             saveDataTableConfig(tableId, state.config);
             applyDataTableColumnLayout(tableId);
@@ -6357,6 +6386,7 @@ function initDataTableColumns(wrapper, index) {
     dataTableColumnState.set(tableId, {
         table, wrapper, colgroup, columnKeys, labels, config, groupKeys, groupTableKeys, naturalWidths,
         widthMode: savedWidthMode ? savedWidthMode.mode : null, widthsBefore: savedWidthMode ? savedWidthMode.before : null, noStretch: !!savedWidthMode,
+        sized: !hadNoStoredLayout && readSized(tableId), // sin acomodo guardado ya no hay anchos «a mano» que respetar
         look: readLook(tableId),
         sortKey: null, sortDir: null, originalRowOrder: null,
         columnFilters: new Map(),
@@ -7670,6 +7700,7 @@ function returnToOriginalLayout(tableId) {
     const state = dataTableColumnState.get(tableId);
     const original = originalLayoutOf(tableId);
     if (!state || !original) return false;
+    forgetSizedWidths(tableId);
     try { localStorage.removeItem(dataTableConfigStorageKey(tableId)); } catch { /* ignore */ }
     state.config = reconcileDataTableConfig(original, state.columnKeys);
     state.columnKeys.forEach((key) => {
@@ -7763,6 +7794,7 @@ async function clearSavedLayoutForTable(tableId) {
     if (!state) return;
     closeSavedLayoutMenu();
     clearActiveSavedLayout(tableId);
+    forgetSizedWidths(tableId);
     try { localStorage.removeItem(dataTableConfigStorageKey(tableId)); } catch { /* ignore */ }
     state.config = reconcileDataTableConfig(originalLayoutOf(tableId), state.columnKeys);
     state.columnKeys.forEach((key) => {
@@ -9962,6 +9994,7 @@ function applyColumnLayoutConfig(tableId, rawLayout) {
     if (!state) return;
     clearWidthMode(tableId);
     state.config = reconcileDataTableConfig(rawLayout, state.columnKeys);
+    state.widthMeasuredKeys = new Set(Object.keys(state.config.widths)); // los anchos que trae un acomodo guardado son a propósito: dibujar filas nuevas (ordenar, filtrar) no los reabre; las columnas que no trae sí se miden
     state.columnKeys.forEach((key) => {
         if (state.config.widths[key] == null) state.config.widths[key] = state.naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
     });
