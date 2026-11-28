@@ -180,6 +180,26 @@ function normalizeBlockCond(raw) {
     return { op: raw.op, value };
 }
 // Devuelve { added } o { error }. Los ids no se repiten; el color es el de la paleta de clasificaciones (0 a 5) o vacío.
+// Las opciones de una columna de «Selección»: de 1 a 12, cada una con su texto (sin repetirse), su color y un id corto que no cambia aunque se le cambie el nombre.
+const SELECT_COLORS = ['gris', 'azul', 'verde', 'ambar', 'rojo', 'morado'];
+const MAX_OPTIONS = 12;
+function normalizeOptions(raw) {
+    if (!Array.isArray(raw) || raw.length < 1 || raw.length > MAX_OPTIONS) return null;
+    const out = [];
+    const ids = new Set();
+    const texts = new Set();
+    for (const o of raw) {
+        if (!o || typeof o !== 'object') return null;
+        const text = cleanText(o.t, 30);
+        if (!text || texts.has(text.toLowerCase())) return null;
+        texts.add(text.toLowerCase());
+        let id = cleanText(o.id, 8).replace(/[^a-zA-Z0-9]/g, '');
+        if (!id || ids.has(id)) { let n = out.length + 1; id = `o${n}`; while (ids.has(id)) { n += 1; id = `o${n}`; } }
+        ids.add(id);
+        out.push({ id, t: text, c: SELECT_COLORS.includes(o.c) ? o.c : SELECT_COLORS[out.length % SELECT_COLORS.length] });
+    }
+    return out;
+}
 function normalizeAdded(raw) {
     const list = Array.isArray(raw) ? raw : [];
     if (list.length > MAX_ADDED) return { error: 'ADDED_TOO_MANY' };
@@ -187,11 +207,12 @@ function normalizeAdded(raw) {
     const ids = new Set();
     for (const c of list) {
         if (!c || typeof c !== 'object') continue;
-        if (c.kind !== 'op' && c.kind !== 'criterion' && c.kind !== 'comment' && c.kind !== 'block') return { error: 'ADDED_KIND' };
+        if (c.kind !== 'op' && c.kind !== 'criterion' && c.kind !== 'comment' && c.kind !== 'block' && c.kind !== 'select') return { error: 'ADDED_KIND' };
         const name = cleanText(c.name, MAX_NAME);
         if (!name) return { error: 'ADDED_NAME' };
         let body;
         if (c.kind === 'comment') body = {}; // «Comentarios» (2026-11-27): no se calcula, la persona la escribe renglón por renglón (analysis_comments)
+        else if (c.kind === 'select') { const options = normalizeOptions(c.options); if (!options) return { error: 'ADDED_OPTIONS' }; body = { options }; } // «Selección» (2026-11-28): no se calcula, la persona elige una opción por renglón (analysis_selections)
         else if (c.kind === 'op') {
             if (c.expr !== undefined && c.expr !== null) {
                 const expr = normalizeExpr(c.expr);
@@ -221,7 +242,7 @@ function normalizeAdded(raw) {
         while (ids.has(id)) id += '_';
         ids.add(id);
         const cls = cleanText(c.cls, MAX_CLASS);
-        const decimals = c.kind !== 'comment' && Number.isInteger(c.decimals) && c.decimals >= 0 && c.decimals <= 6 ? c.decimals : null;
+        const decimals = c.kind !== 'comment' && c.kind !== 'select' && Number.isInteger(c.decimals) && c.decimals >= 0 && c.decimals <= 6 ? c.decimals : null;
         added.push({ id, kind: c.kind, name, cls, color: cls ? normalizeClassColor(c.color) : null, decimals, ...body });
     }
     return { added };
@@ -251,7 +272,7 @@ function makeContext(added, baseColumns) {
             const lo = Math.min(a, b); const hi = Math.max(a, b);
             if (hi < limit) {
                 const items = [];
-                for (let i = lo; i <= hi; i += 1) { const o = order[i]; if (o.group !== 'reference' && o.kind !== 'comment') items.push(o); }
+                for (let i = lo; i <= hi; i += 1) { const o = order[i]; if (o.group !== 'reference' && o.kind !== 'comment' && o.kind !== 'select') items.push(o); }
                 if (items.length) out = { items, lo, hi };
             }
         }
@@ -564,13 +585,13 @@ function runBlock(def, get, ctx, limit) {
     return def.fn === 'min' ? Math.min(...nums) : Math.max(...nums);
 }
 const runColumn = (c, get, ctx, limit) => {
-    if (c.kind === 'comment') return null; // una columna de comentarios la llena el servidor con lo que se escribió
+    if (c.kind === 'comment' || c.kind === 'select') return null; // una columna de comentarios o de selección la llena el servidor con lo que se escribió o se eligió
     if (c.kind === 'criterion') return runCriterion(c, get, ctx, limit);
     if (c.kind === 'block') return runBlock(c, get, ctx, limit);
     return c.expr ? runExpr(c.expr, get) : runSteps(c.steps, get);
 };
 const formulaOfColumn = (c, letterOf, ctx, limit) => {
-    if (c.kind === 'comment') return '';
+    if (c.kind === 'comment' || c.kind === 'select') return '';
     if (c.kind === 'criterion') return formulaOfCriterion(c, letterOf, ctx, limit);
     if (c.kind === 'block') return formulaOfBlock(c, ctx, limit);
     return c.expr ? formulaOfExpr(c.expr, letterOf) : formulaOfSteps(c.steps, letterOf);
@@ -584,7 +605,7 @@ function addedColumnDefs(added, baseColumns) {
     const letterOf = (key) => { const i = all.indexOf(key); return i < 0 ? '' : columnLetter(i); };
     const ctx = makeContext(added, baseColumns);
     return added.map((c, i) => ({
-        key: addedKey(c), group: 'added', id: c.id, kind: c.kind, label: c.name, cls: c.cls || '', color: c.cls ? c.color : null, decimals: c.decimals,
+        key: addedKey(c), group: 'added', id: c.id, kind: c.kind, label: c.name, cls: c.cls || '', color: c.cls ? c.color : null, decimals: c.decimals, ...(c.kind === 'select' ? { options: c.options } : {}),
         letter: columnLetter(baseColumns.length + i), formula: formulaOfColumn(c, (key) => (all.indexOf(key) < i + baseColumns.length ? letterOf(key) : ''), ctx, baseColumns.length + i),
     }));
 }
@@ -605,4 +626,4 @@ function applyAdded(added, baseColumns, rows) {
     });
 }
 
-module.exports = { normalizeExpr, runExpr, formulaOfExpr, MAX_ADDED, MAX_STEPS, MAX_RULES, MAX_BLOCKS, BLOCK_FNS, normalizeClassColor, normalizeAdded, columnLetter, formulaOfSteps, formulaOfCriterion, formulaOfBlock, runSteps, runCriterion, runBlock, makeContext, addedColumnDefs, applyAdded, addedKey };
+module.exports = { SELECT_COLORS, MAX_OPTIONS, normalizeOptions, normalizeExpr, runExpr, formulaOfExpr, MAX_ADDED, MAX_STEPS, MAX_RULES, MAX_BLOCKS, BLOCK_FNS, normalizeClassColor, normalizeAdded, columnLetter, formulaOfSteps, formulaOfCriterion, formulaOfBlock, runSteps, runCriterion, runBlock, makeContext, addedColumnDefs, applyAdded, addedKey };

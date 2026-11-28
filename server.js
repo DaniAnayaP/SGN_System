@@ -85,7 +85,7 @@ const {
     getPosSalesLastLoad,
     listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete, getRegistryLayout, setRegistryLayout, getRegistryMigration, createRegistryMigration, updateRegistryMigration,
     analysisOrdersBySite,
-    AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources, ANALYSIS_COMMENT_MAX, addAnalysisComment, listAnalysisComments, analysisCommentsMap, snapshotAnalysisComments, extractionCommentsMap, listExtractionComments,
+    AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources, ANALYSIS_COMMENT_MAX, addAnalysisComment, listAnalysisComments, analysisCommentsMap, snapshotAnalysisComments, extractionCommentsMap, listExtractionComments, analysisSelectionsMap, setAnalysisSelection, snapshotAnalysisSelections, extractionSelectionsMap,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,
@@ -7830,6 +7830,7 @@ const AN_MESSAGES = {
     DESIGN_COLUMN_PERIODS: 'Cada columna consultada necesita al menos un periodo.', AN_NO_COLUMNS: 'Agrega al menos una columna consultada antes de extraer.', AN_EMPTY: 'Con este diseño no sale ningún renglón: revisa los periodos y los filtros.',
     ADDED_NAME: 'Ponle un nombre a la columna.', ADDED_STEPS: 'Revisa los pasos de la operación.', ADDED_RULES: 'Revisa las reglas: cada una necesita su condición y su resultado.', ADDED_BLOCK: 'Revisa el bloque: elige qué calcular y las columnas de inicio y fin.', BAD_LAYOUT: 'El acomodo de columnas no es válido.', ADDED_KIND: 'Ese tipo de columna todavía no se puede agregar.', ADDED_TOO_MANY: 'Un análisis admite hasta 40 columnas agregadas.',
     BASE_KEY: 'Elige al menos una columna como llave.', BASE_MISSING: 'El archivo base no existe.', COL_REGISTRY: 'Una columna usa un archivo que no existe.', COL_KEY: 'Falta ligar la llave de una columna con una columna del archivo.', COL_VALUE: 'Elige qué columna del archivo se trae.', COL_COND: 'Una condición usa una columna que el archivo no tiene.', COL_NOT_FOUND: 'Esa columna no existe.',
+    ADDED_OPTIONS: 'Escribe de 1 a 12 opciones, cada una con su texto y sin repetirse.', SELECT_COLUMN: 'Esa columna de selección no existe.', SELECT_KEY: 'No se sabe a qué renglón va la elección.', SELECT_OPTION: 'Esa opción ya no existe en la columna.',
     COMMENT_COLUMN: 'Esa columna de comentarios no existe.', COMMENT_KEY: 'No se sabe a qué renglón va el comentario.', COMMENT_EMPTY: 'Escribe el comentario.', COMMENT_TOO_LONG: 'El comentario es muy largo (máximo 1,000 letras).',
     BAD_FILTER: 'El filtro no es válido.', BAD_COLUMN: 'Esa columna no existe.', BAD_CALCS: 'Los cálculos de la fila de totales no son válidos.',
     AN_INACTIVE: 'El análisis está desactivado.', AN_BUSY: 'Ya se está extrayendo este análisis. Espera a que termine.', AN_FORBIDDEN: 'No tienes permiso para esto.',
@@ -8068,6 +8069,8 @@ app.post('/api/business/manual-analyses/:id/extract', requireAuth, async (req, r
         // una versión es una copia: guarda también los comentarios de ese momento
         const commentIds = (design.added || []).filter((a) => a.kind === 'comment').map((a) => a.id);
         if (commentIds.length) snapshotAnalysisComments(record.id, analysis.id, commentIds);
+        const selectIds = (design.added || []).filter((a) => a.kind === 'select').map((a) => a.id);
+        if (selectIds.length) snapshotAnalysisSelections(record.id, analysis.id, selectIds);
         logTableChange({ clientId, tableKey: AN_EXT_TABLE, recordId: record.id, recordLabel: `${analysis.name} v${record.version}`, action: 'create', fieldKey: 'main.anExtraccion', newValue: `v${record.version}`, changedBy: changedByLabel(req) });
         notifyButtonAction(req, AN_TABLE, 'extract', `${analysis.name} v${record.version}`);
         res.status(201).json({ extraction: getExtraction(record.id, analysis.id) });
@@ -8101,6 +8104,21 @@ function anPresent(analysis, extractionColumns, rows, opts = {}) {
     const shownRows = added.length ? analysisAdded.applyAdded(added, baseColumns, rows) : rows;
     const result = { columns: columns.map(withLook), rows: shownRows, baseColumns: extractionColumns.length };
     const commentCols = added.filter((a) => a.kind === 'comment');
+    const selectCols = added.filter((a) => a.kind === 'select');
+    if (selectCols.length) {
+        // «Selección»: en cada renglón va el texto de la opción elegida (la llave del renglón es la misma de los comentarios)
+        const keyAt = extractionColumns.map((c, i) => (c.isKey ? i : -1)).filter((i) => i >= 0);
+        const ids = selectCols.map((a) => a.id);
+        const map = opts.extractionId ? extractionSelectionsMap(opts.extractionId, ids) : analysisSelectionsMap(analysis.id, ids);
+        const keys = shownRows.map((r) => keyAt.map((i) => analysisBuild.norm(r[i])).join('\u0001'));
+        selectCols.forEach((a) => {
+            const at = extractionColumns.length + added.indexOf(a);
+            const byRow = map.get(a.id) || new Map();
+            const byId = new Map((a.options || []).map((o) => [o.id, o.t]));
+            shownRows.forEach((r, i) => { const text = byId.get(byRow.get(keys[i])); r[at] = text === undefined ? null : text; });
+        });
+        result.keys = keys;
+    }
     if (commentCols.length) {
         const keyAt = extractionColumns.map((c, i) => (c.isKey ? i : -1)).filter((i) => i >= 0);
         const ids = commentCols.map((a) => a.id);
@@ -8179,7 +8197,7 @@ app.get('/api/business/manual-analyses/:id/extractions/:eid/data', requireAuth, 
     if (run.error) return anFail(res, run.error);
     const shown = run.shown;
     res.set('Cache-Control', 'no-store');
-    res.json({ extraction: src.extraction, columns: shown.columns, rows: shown.rows, total: run.total, truncated: run.total > shown.rows.length, baseColumns: shown.baseColumns, ...(shown.cm ? { keys: shown.keys, cm: shown.cm } : {}) });
+    res.json({ extraction: src.extraction, columns: shown.columns, rows: shown.rows, total: run.total, truncated: run.total > shown.rows.length, baseColumns: shown.baseColumns, ...(shown.keys ? { keys: shown.keys } : {}), ...(shown.cm ? { cm: shown.cm } : {}) });
 });
 // «En vivo» (Daniel, 2026-11-26): el Análisis con el diseño de hoy y los datos de hoy, sin guardar una versión; «Extraer análisis» guarda una copia con fecha.
 const AN_LIVE_LIMIT = 5000;
@@ -8221,7 +8239,7 @@ app.get('/api/business/manual-analyses/:id/live', requireAuth, (req, res) => {
     if (run.error) return anFail(res, run.error);
     const shown = run.shown;
     res.set('Cache-Control', 'no-store');
-    res.json({ extraction: { id: 0, version: 0, live: true, status: 'vigente', createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '), createdBy: '', rowsCount: src.built.rows.length }, columns: shown.columns, rows: shown.rows, total: run.total, truncated: run.total > shown.rows.length || !!src.built.truncated, baseColumns: shown.baseColumns, ...(shown.cm ? { keys: shown.keys, cm: shown.cm } : {}) });
+    res.json({ extraction: { id: 0, version: 0, live: true, status: 'vigente', createdAt: new Date().toISOString().slice(0, 19).replace('T', ' '), createdBy: '', rowsCount: src.built.rows.length }, columns: shown.columns, rows: shown.rows, total: run.total, truncated: run.total > shown.rows.length || !!src.built.truncated, baseColumns: shown.baseColumns, ...(shown.keys ? { keys: shown.keys } : {}), ...(shown.cm ? { cm: shown.cm } : {}) });
 });
 // La lista de casillas del filtro de una columna: los valores distintos de TODOS los renglones (con la búsqueda de arriba); con demasiados solo se avisa (complete: false).
 app.get('/api/business/manual-analyses/:id/column-values', requireAuth, (req, res) => {
@@ -8419,6 +8437,31 @@ app.post('/api/business/manual-analyses/:id/comments', requireAuth, (req, res) =
     addAnalysisComment({ analysisId: analysis.id, columnId: col, rowKey: key, author: by, userId: req.user.sub, body: text });
     logTableChange({ clientId: req.user.clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: analysis.name, action: 'update', fieldKey: 'main.anComentario', oldValue: '', newValue: text.slice(0, 200), changedBy: by });
     res.status(201).json({ comments: listAnalysisComments(analysis.id, col, key) });
+});
+// ---- Selección (Daniel, 2026-11-28): elegir la opción de un renglón (o quitarla). Quien tenga el permiso «Comentar» del árbol; solo en el En vivo de un análisis activo.
+const anSelectColumn = (analysis, id) => ((analysis.design && analysis.design.added) || []).find((a) => a.id === id && a.kind === 'select') || null;
+app.put('/api/business/manual-analyses/:id/selection', requireAuth, (req, res) => {
+    const analysis = anLoad(req, res);
+    if (!analysis) return;
+    if (!anAbilities(req).canComment) return anForbidden(res);
+    if (analysis.status !== 'active') return anFail(res, 'AN_INACTIVE', 409);
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const col = String(body.col || '');
+    const key = String(body.key || '');
+    const column = anSelectColumn(analysis, col);
+    if (!column) return anFail(res, 'SELECT_COLUMN', 404);
+    if (!key || key.length > 400) return anFail(res, 'SELECT_KEY');
+    let option = null;
+    if (body.option !== null && body.option !== undefined && body.option !== '') {
+        option = (column.options || []).find((o) => o.id === String(body.option));
+        if (!option) return anFail(res, 'SELECT_OPTION');
+    }
+    const by = changedByLabel(req);
+    const beforeId = setAnalysisSelection({ analysisId: analysis.id, columnId: col, rowKey: key, optionId: option ? option.id : null, author: by, userId: req.user.sub });
+    const before = (column.options || []).find((o) => o.id === beforeId);
+    logTableChange({ clientId: req.user.clientId, tableKey: AN_TABLE, recordId: analysis.id, recordLabel: analysis.name, action: 'update', fieldKey: 'main.anSeleccion', oldValue: before ? before.t : '', newValue: option ? option.t : '', changedBy: by });
+    res.set('Cache-Control', 'no-store');
+    res.json({ text: option ? option.t : null, color: option ? option.c : null });
 });
 // Nombre y clasificación de columnas del Archivo (Daniel, 2026-11-27): lo que solo cambia cómo se VE una columna se guarda al momento, sin esperar al «Actualizar» ni tocar lo demás del diseño.
 // PUT { items: [{ kind: 'f' (columna de archivo) | 'a' (agregada), id, label?, cls?, color? }] }: cls '' quita la clasificación.

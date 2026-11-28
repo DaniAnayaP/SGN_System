@@ -1363,6 +1363,26 @@ db.exec(`
 
 // Análisis › columna «Comentarios» (Daniel, 2026-11-27): los comentarios los escribe la persona, uno tras otro (nunca se reescriben ni se borran), y van ligados a la LLAVE del renglón (no a su posición): row_key = las columnas llave ya normalizadas, unidas con \u0001.
 // Cada versión extraída guarda una COPIA de los comentarios de ese momento (analysis_comment_versions): como todo lo de una versión, no cambia después.
+// Análisis › columna «Selección» (Daniel, 2026-11-28): una opción elegida por renglón (la última manda), ligada a la LLAVE del renglón como los comentarios; cada versión extraída guarda su copia (analysis_selection_versions).
+db.exec(`
+    CREATE TABLE IF NOT EXISTS analysis_selections (
+        analysis_id    INTEGER NOT NULL REFERENCES manual_analyses(id) ON DELETE CASCADE,
+        column_id      TEXT NOT NULL,
+        row_key        TEXT NOT NULL,
+        option_id      TEXT NOT NULL,
+        author         TEXT NOT NULL DEFAULT '',
+        author_user_id INTEGER,
+        updated_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (analysis_id, column_id, row_key)
+    );
+    CREATE TABLE IF NOT EXISTS analysis_selection_versions (
+        extraction_id INTEGER NOT NULL REFERENCES manual_analysis_extractions(id) ON DELETE CASCADE,
+        column_id     TEXT NOT NULL,
+        row_key       TEXT NOT NULL,
+        option_id     TEXT NOT NULL,
+        PRIMARY KEY (extraction_id, column_id, row_key)
+    );
+`);
 db.exec(`
     CREATE TABLE IF NOT EXISTS analysis_comments (
         id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -5918,6 +5938,40 @@ function extractionCommentsMap(extractionId, columnIds) {
 function listExtractionComments(extractionId, columnId, rowKey) {
     const row = db.prepare('SELECT comments_json FROM analysis_comment_versions WHERE extraction_id = ? AND column_id = ? AND row_key = ?').get(extractionId, String(columnId), String(rowKey));
     try { return row ? JSON.parse(row.comments_json) : []; } catch { return []; }
+}
+// ---- «Selección» de una columna del Análisis: la opción elegida de cada renglón ----
+// Elige (o quita, con optionId null) la opción de un renglón. Devuelve la opción anterior (o null).
+function setAnalysisSelection({ analysisId, columnId, rowKey, optionId, author, userId }) {
+    const before = db.prepare('SELECT option_id FROM analysis_selections WHERE analysis_id = ? AND column_id = ? AND row_key = ?').get(analysisId, String(columnId), String(rowKey));
+    if (optionId === null || optionId === undefined) db.prepare('DELETE FROM analysis_selections WHERE analysis_id = ? AND column_id = ? AND row_key = ?').run(analysisId, String(columnId), String(rowKey));
+    else db.prepare("INSERT OR REPLACE INTO analysis_selections (analysis_id, column_id, row_key, option_id, author, author_user_id, updated_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))").run(analysisId, String(columnId), String(rowKey), String(optionId), String(author || '').slice(0, 120), userId || null);
+    return before ? before.option_id : null;
+}
+// Todas las elecciones de unas columnas: Map(columna → Map(llave del renglón → id de la opción)).
+function analysisSelectionsMap(analysisId, columnIds) {
+    const out = new Map();
+    if (!columnIds.length) return out;
+    columnIds.forEach((c) => out.set(c, new Map()));
+    const stmt = db.prepare(`SELECT column_id, row_key, option_id FROM analysis_selections WHERE analysis_id = ? AND column_id IN (${columnIds.map(() => '?').join(',')})`);
+    for (const r of stmt.iterate(analysisId, ...columnIds)) out.get(r.column_id).set(r.row_key, r.option_id);
+    return out;
+}
+// Al extraer una versión: guarda una copia de las elecciones de ese momento.
+function snapshotAnalysisSelections(extractionId, analysisId, columnIds) {
+    const map = analysisSelectionsMap(analysisId, columnIds);
+    const insert = db.prepare('INSERT OR REPLACE INTO analysis_selection_versions (extraction_id, column_id, row_key, option_id) VALUES (?, ?, ?, ?)');
+    let n = 0;
+    db.transaction(() => { map.forEach((byRow, col) => byRow.forEach((optionId, key) => { insert.run(extractionId, col, key, optionId); n += 1; })); })();
+    return n;
+}
+// Lo mismo, pero de una versión ya extraída (la copia de ese momento).
+function extractionSelectionsMap(extractionId, columnIds) {
+    const out = new Map();
+    if (!columnIds.length) return out;
+    columnIds.forEach((c) => out.set(c, new Map()));
+    const stmt = db.prepare(`SELECT column_id, row_key, option_id FROM analysis_selection_versions WHERE extraction_id = ? AND column_id IN (${columnIds.map(() => '?').join(',')})`);
+    for (const r of stmt.iterate(extractionId, ...columnIds)) out.get(r.column_id).set(r.row_key, r.option_id);
+    return out;
 }
 // Lo vigente de un registro en los periodos pedidos, como el análisis lo necesita: Map(unidad\u0001codigo → { dims, values: { periodo: valor } }). filters: { unidades, categorias, codigos } (exactos, sin importar mayúsculas).
 function registrySources(clientId, forTestAccount, registryKey, periods, filters = {}) {
@@ -23614,7 +23668,7 @@ module.exports = {
     getPosSalesLastLoad,
     listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete, getRegistryLayout, setRegistryLayout, listDownloadPresets, getDownloadPreset, countDownloadPresets, downloadPresetNameTaken, createDownloadPreset, updateDownloadPreset, deleteDownloadPreset, setActiveDownloadPreset, getActiveDownloadPreset, getRegistryPreset, setRegistryPreset, getRegistryMigration, createRegistryMigration, updateRegistryMigration,
     analysisOrdersBySite,
-    AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources, ANALYSIS_COMMENT_MAX, addAnalysisComment, listAnalysisComments, analysisCommentsMap, snapshotAnalysisComments, extractionCommentsMap, listExtractionComments,
+    AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources, ANALYSIS_COMMENT_MAX, addAnalysisComment, listAnalysisComments, analysisCommentsMap, setAnalysisSelection, analysisSelectionsMap, snapshotAnalysisSelections, extractionSelectionsMap, snapshotAnalysisComments, extractionCommentsMap, listExtractionComments,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, reconsiderRegistryLoad, deleteFlexLoadData, flexConfigHistory, diskSpace, getRegistryFormat, setRegistryFormat, clearRegistryFormat, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexConfigLoads, updateFlexConfigs, listAnalysisDesigns, setAnalysisDesignRaw, registrySignature, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
     getPosSaleByToken,
     listPosSaleLines,

@@ -7034,9 +7034,9 @@ function renderColumnGroupBand(tableId) {
 // La franja del tipo de columna: UNA celda por columna (no se juntan las vecinas del mismo tipo), con la palabra de su tipo (clave de idioma en data-type-band del encabezado); las que no traen tipo quedan vacías.
 // Las columnas fijas llevan su celda fija también, igual que el encabezado de abajo.
 // El tipo de llenado de las columnas de una tabla que no lo trae escrito (Daniel, 2026-11-28, «pon la franja del tipo en las demás tablas»): Automática = la pone el sistema (las columnas de Control Interno), Capturada = la escribe o la elige
-// una persona (las demás columnas de la pantalla), y la propia pantalla puede decir `data-fill-type="catalog"` (De catálogo: se elige de una lista) o `"calc"` (Calculada) en el <th> de una columna, o `"auto"` / `"captured"` para corregir
+// una persona (las demás columnas de la pantalla), y la propia pantalla puede decir `data-fill-type="select"` (Selección: se elige de una lista) o `"calc"` (Calculada) en el <th> de una columna, o `"auto"` / `"captured"` para corregir
 // la de siempre. Solo sale la franja si hay al menos dos tipos distintos (si todo fuera Capturada no diría nada).
-const FILL_TYPE_KEYS = { auto: 'main.anBandAuto', captured: 'main.anBandCaptured', catalog: 'main.anBandCatalog', calc: 'main.anBandCalc' };
+const FILL_TYPE_KEYS = { auto: 'main.anBandAuto', captured: 'main.anBandCaptured', select: 'main.anBandSelect', calc: 'main.anBandCalc' };
 function inferFillTypes(table, typeKeys) {
     const cells = Array.from(getHeaderRow(table).cells).filter((th) => th.dataset.col && th.dataset.col !== 'actions');
     const found = new Map();
@@ -10913,7 +10913,7 @@ function buildLegendIconRow(iconHtml, name, desc) {
 // así que un icono nuevo se da de alta aquí y aparece en los dos lados (todo lo que no es texto lleva su explicación en la Simbología). El orden de las claves es el orden dentro del grupo.
 const TOOLBAR_GROUPS = ['design', 'search', 'general'];
 const TOOLBAR_ICONS = {
-    'zoom-out': ['design', 'zoomOut'], 'zoom-in': ['design', 'zoomIn'], 'width-min': ['design', 'widthMinBtn'], 'width-fit': ['design', 'widthFitBtn'], look: ['design', 'lookBtn'], columns: ['design', 'columnsEditor'], 'saved-layout': ['design', 'savedLayout'], bands: ['design', 'bandsToggle'], 'an-panel': ['design', 'anPanelToggle'],
+    'zoom-out': ['design', 'zoomOut'], 'zoom-in': ['design', 'zoomIn'], 'width-min': ['design', 'widthMinBtn'], 'width-fit': ['design', 'widthFitBtn'], look: ['design', 'lookBtn'], columns: ['design', 'columnsEditor'], 'saved-layout': ['design', 'savedLayout'], bands: ['design', 'bandsToggle'],
     filter: ['search', 'filterToggle'], 'filter-clear': ['search', 'filterClear'], 'saved-search': ['search', 'savedSearch'],
     history: ['general', 'changeHistory'], legend: ['general', 'columnLegend'], 'field-rules': ['general', 'fieldRules'], download: ['general', 'download'], 'download-preset': ['general', 'downloadPreset'],
 };
@@ -11055,6 +11055,10 @@ function watchToolbarDots() {
     });
     toolbarDotObserver.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'aria-pressed', 'aria-expanded', 'hidden'] });
 }
+// Iconos que una pantalla pone FUERA de la barra de la tabla (por ejemplo en una pestaña) pero que también llevan su explicación en la Simbología: la pantalla los registra con una función que devuelve
+// filas { group, iconHtml, name, desc } y se leen cada vez que se abre la Simbología (así siguen el idioma).
+const legendExtraIcons = new Map();
+function registerLegendIcons(tableId, rowsFn) { if (typeof rowsFn === 'function') legendExtraIcons.set(tableId, rowsFn); else legendExtraIcons.delete(tableId); }
 function collectLegendIcons(tableId) {
     const state = dataTableColumnState.get(tableId);
     const wrapper = state?.wrapper || document.querySelector(`.data-table-wrapper[data-table-id="${CSS.escape(tableId)}"]`);
@@ -11073,6 +11077,8 @@ function collectLegendIcons(tableId) {
         // un icono sin grupo conocido (uno que una pantalla puso a mano) va en Generales, con su nombre y la explicación si la tiene
         rows.push({ group: meta ? meta[0] : 'general', iconHtml: icon ? icon.outerHTML : btn.innerHTML, name, desc: text && text !== `help.${helpKey}.what` ? text : '' });
     });
+    const extra = legendExtraIcons.get(tableId);
+    if (extra) { try { (extra() || []).forEach((row) => rows.push(row)); } catch { /* una fila manual mal armada no rompe la Simbología */ } }
     return rows;
 }
 
@@ -11102,7 +11108,7 @@ function openColumnLegend(tableId) {
     // los tipos de llenado de la franja de arriba (Análisis): cómo se llena cada columna (Daniel, 2026-11-28, «esto va en simbologías»)
     if (state?.typeKeys && state.typeKeys.size) {
         const present = new Set(Array.from(state.typeKeys.values()).map((k) => k.replace(/^main\.anBand/, '')));
-        [['Auto', '#6b7280'], ['Captured', '#c4473a'], ['Catalog', '#0f8b8d'], ['Calc', '#9a3cc2'], ['Base', '#6b7280'], ['Cons', '#2f6fb0'], ['Fx', '#9a3cc2'], ['Criterion', '#b57a05'], ['Block', '#2b8456'], ['Comment', '#8a8a8a']].forEach(([key, color]) => {
+        [['Auto', '#6b7280'], ['Captured', '#c4473a'], ['Select', '#0f8b8d'], ['Calc', '#9a3cc2'], ['Base', '#6b7280'], ['Cons', '#2f6fb0'], ['Fx', '#9a3cc2'], ['Criterion', '#b57a05'], ['Block', '#2b8456'], ['Comment', '#8a8a8a']].forEach(([key, color]) => {
             if (!present.has(key)) return;
             columnLegendList.appendChild(buildLegendRow(color, `${t('main.bandsRowType')}: ${t(`main.anBand${key}`)}`, t(`main.anBandDesc${key}`)));
         });
@@ -18104,6 +18110,7 @@ window.Dashboard = {
     getVisibleTableSnapshot,
     getDataTableLook,
     groupDataTableToolbar,
+    registerLegendIcons,
     collapseColumn,
     getTableSnapshotSample,
     attachTableDownloadButton,

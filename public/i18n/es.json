@@ -2340,17 +2340,19 @@
     "bandsRowType": "Tipo de llenado",
     "bandsRowOrigin": "Origen",
     "bandsRowClass": "Clasificación",
-    "anPanelHide": "Ocultar las columnas consultadas y agregadas",
-    "anPanelShow": "Mostrar las columnas consultadas y agregadas",
+    "anPanelHide": "Cerrar la Relación de Consultas de Archivos",
+    "anPanelShow": "Abrir la Relación de Consultas de Archivos",
+    "anAddRelation": "Agregar relación",
+    "anRelationToggle": "Abrir o cerrar la Relación de Consultas de Archivos",
     "bandsSelectAll": "Seleccionar todo",
     "bandsUnselectAll": "Deseleccionar todo",
     "anBandAuto": "Automática",
     "anBandCaptured": "Capturada",
-    "anBandCatalog": "De catálogo",
+    "anBandSelect": "Selección",
     "anBandCalc": "Calculada",
     "anBandDescAuto": "La pone el sistema (fecha, usuario, módulo, centro de costos, registro único…).",
     "anBandDescCaptured": "La escribe o la elige una persona al registrar.",
-    "anBandDescCatalog": "Se elige de una lista (un catálogo).",
+    "anBandDescSelect": "Se elige de una lista de opciones: un catálogo de la empresa o las que se escribieron al armar la columna.",
     "anBandDescCalc": "El sistema la calcula a partir de otras columnas.",
     "dlSecLines": "Líneas",
     "dlBrand": "Logo de la compañía",
@@ -5684,14 +5686,31 @@
     "anRefreshing": "Actualizando…",
     "anRefreshDone": "Listo: datos y fórmulas al día.",
     "anAddKindComment": "Comentarios (tú escribes)",
+    "anAddKindSelect": "Selección (eliges de una lista)",
+    "anSelTitle": "Agregar columna › Selección",
+    "anSelEditTitle": "Columna de selección",
+    "anSelOptions": "Opciones",
+    "anSelOptionPh": "Escribe una opción y Enter",
+    "anSelAdd": "Agregar",
+    "anSelRemove": "Quitar esta opción",
+    "anSelColor": "Cambiar el color",
+    "anSelOptionN": "Opción {n}",
+    "anSelDup": "Dos opciones se llaman igual.",
+    "anSelPick": "Elegir…",
+    "anSelClear": "Quitar elección",
+    "anSeleccion": "Selección",
+    "anErr_ADDED_OPTIONS": "Escribe de 1 a 12 opciones, cada una con su texto y sin repetirse.",
+    "anErr_SELECT_COLUMN": "Esa columna de selección no existe.",
+    "anErr_SELECT_KEY": "No se sabe a qué renglón va la elección.",
+    "anErr_SELECT_OPTION": "Esa opción ya no existe en la columna.",
     "anCmTitle": "Agregar columna › Comentarios",
     "anCmEditTitle": "Columna de comentarios",
     "anCmHint": "En cada renglón se pueden escribir varios comentarios, uno tras otro, con tu nombre y la hora. Quedan ligados a la llave del renglón: si cambian los datos o se ordena, el comentario sigue con su renglón.",
     "anCmDupWarn": "Este análisis deja renglones con la misma llave: sus comentarios se van a compartir.",
     "anCmAdd": "Comentar",
     "anCatNone": "Sin clasificación",
-    "anPanelConsulted": "Columnas consultadas",
-    "anPanelAdded": "Columnas agregadas",
+    "anPanelConsulted": "Relación de Consultas de Archivos",
+    "anPanelAdded": "Agregados de Análisis",
     "anPanelFile1": "1 archivo",
     "anPanelFilesN": "{n} archivos",
     "anFileKind": "Archivo",
@@ -10953,7 +10972,7 @@
       "example": "⟳ Exist → hoy trae Exist 27/nov 06:00"
     },
     "anColumnas": {
-      "what": "Las columnas que traes de tus archivos (registros) se ordenan por Archivo → Categoría → Columna: una pestaña por archivo; dentro, sus categorías (la clasificación) en una fila y, al abrir una, las fichas de sus columnas. Las pestañas de los otros archivos avisan si tienen columnas nuevas, quitadas o con cambios sin aplicar. Las que tú creas en el análisis (operación, criterio, comentarios) no vienen de un archivo y van en una línea aparte, «Columnas agregadas». Con pocas columnas se ven sueltas. Un clic en una categoría la abre o la cierra y lo que abres se recuerda en tu navegador; «Contraer todo» y «Expandir todo» lo hacen de golpe. Los botones de arriba (agregar, seleccionar, actualizar, extraer) van en una sola fila.",
+      "what": "Las columnas que traes de tus archivos (registros) se ordenan por Archivo → Categoría → Columna: una pestaña por archivo; dentro, sus categorías (la clasificación) en una fila y, al abrir una, las fichas de sus columnas. Las pestañas de los otros archivos avisan si tienen columnas nuevas, quitadas o con cambios sin aplicar. Las que tú creas en el análisis (operación, criterio, bloque, comentarios, selección) no vienen de un archivo y van en la primera pestaña, que es fija: «Agregados de Análisis», y también se junta por clasificación. Con pocas columnas se ven sueltas. La flecha de la pastilla «Análisis» abre o cierra todo el panel y el «+» agrega una relación (un archivo para consultar). Un clic en una categoría la abre o la cierra y lo que abres se recuerda en tu navegador; «Contraer todo» y «Expandir todo» lo hacen de golpe. Los botones de arriba (agregar, seleccionar, actualizar, extraer) van en una sola fila.",
       "example": "Archivo «Existencias Globales» → categoría «Existencias» → Exist Total Hospital, FAR."
     },
     "anCategorias": {
@@ -10989,12 +11008,20 @@
       "example": "2 ocultas ▾ → Mostrar IVA"
     },
     "anTypeBand": {
-      "what": "La franja de hasta arriba dice cómo se llena cada columna. En Análisis: Del registro (las del registro base), Consultada (se extrae de otro registro o archivo), Fórmula (se calcula con una operación), Criterio (sí o no según una condición), Bloque (calcula sobre un grupo de columnas: la combinada) o Comentarios (lo escribes tú). En las demás tablas: Automática (la pone el sistema, como las columnas de Control Interno), Capturada (la escribe o la elige una persona), De catálogo (se elige de una lista) o Calculada (el sistema la calcula). Las columnas vecinas del mismo tipo se juntan en una sola celda con su cuenta.",
+      "what": "La franja de hasta arriba dice cómo se llena cada columna. En Análisis: Del registro (las del registro base), Consultada (se extrae de otro registro o archivo), Fórmula (se calcula con una operación), Criterio (sí o no según una condición), Bloque (calcula sobre un grupo de columnas: la combinada) o Comentarios (lo escribes tú). En las demás tablas: Automática (la pone el sistema, como las columnas de Control Interno), Capturada (la escribe o la elige una persona), Selección (se elige de una lista de opciones) o Calculada (el sistema la calcula). Las columnas vecinas del mismo tipo se juntan en una sola celda con su cuenta.",
       "example": "Del registro · 6 | Consultada · 2 | Fórmula | Criterio | Bloque | Comentarios"
     },
+    "anSeleccion": {
+      "what": "Una columna de selección te deja escribir las opciones al armarla (por ejemplo Pendiente, En proceso, Listo; de 1 a 12, cada una con su color) y cada renglón se llena eligiendo una. Elige quien tenga el permiso de comentar, en el análisis En vivo; la elección se guarda con el renglón y cada versión extraída conserva la suya. El filtro de la columna lista las opciones y el Excel baja el texto con el color de su opción. Si quitas una opción que ya se usó, esos renglones quedan sin elección.",
+      "example": "Prioridad: Pendiente · En proceso · Listo → cada renglón elige una"
+    },
     "anPanelToggle": {
-      "what": "Oculta o muestra el panel de arriba de la tabla con las columnas consultadas (por archivo y clasificación) y las columnas agregadas, para ganar espacio cuando solo trabajas en la tabla. Se recuerda por persona. Al tocar «Seleccionar» el panel se muestra mientras eliges y luego vuelve a ocultarse.",
-      "example": "Ocultar el panel → la tabla sube y ocupa ese espacio"
+      "what": "La flecha de la pastilla «Análisis» abre o cierra el panel «Relación de Consultas de Archivos» de arriba de la tabla: la pestaña fija «Agregados de Análisis» (las columnas que armas aquí, agrupadas por su clasificación) y una pestaña por cada archivo consultado. Cerrado queda una sola línea con el resumen, para ganar espacio cuando solo trabajas en la tabla. Se recuerda por persona. Al tocar «Seleccionar» el panel se abre mientras eliges y luego vuelve a como lo dejaste.",
+      "example": "Cerrar el panel → la tabla sube y queda una línea: «42 columnas · 2 archivos | Agregados de Análisis · 3 columnas»"
+    },
+    "anAddRelation": {
+      "what": "El «+» de la pastilla «Análisis» agrega una relación: eliges un archivo (registro) y las columnas que quieres consultar de él, y se suma a la «Relación de Consultas de Archivos». Siempre está ahí; con relaciones, junto a la flecha de abrir y cerrar.",
+      "example": "+ → Existencias Diarias Globales → elijo las columnas que necesito"
     },
     "bandsToggle": {
       "what": "Oculta o muestra las franjas de arriba del encabezado (tipo de llenado, origen y clasificación), una por una. Se recuerda por persona y tabla. Ocultar una franja no cambia el orden, los filtros, los totales ni la descarga.",

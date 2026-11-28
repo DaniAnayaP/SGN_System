@@ -2341,17 +2341,19 @@
     "bandsRowType": "Fill type",
     "bandsRowOrigin": "Origin",
     "bandsRowClass": "Classification",
-    "anPanelHide": "Hide the queried and added columns",
-    "anPanelShow": "Show the queried and added columns",
+    "anPanelHide": "Close the Relation of File Queries",
+    "anPanelShow": "Open the Relation of File Queries",
+    "anAddRelation": "Add relation",
+    "anRelationToggle": "Open or close the Relation of File Queries",
     "bandsSelectAll": "Select all",
     "bandsUnselectAll": "Clear all",
     "anBandAuto": "Automatic",
     "anBandCaptured": "Captured",
-    "anBandCatalog": "From catalog",
+    "anBandSelect": "Selection",
     "anBandCalc": "Calculated",
     "anBandDescAuto": "Filled in by the system (date, user, module, cost center, unique registration…).",
     "anBandDescCaptured": "Typed or chosen by a person when registering.",
-    "anBandDescCatalog": "Chosen from a list (a catalog).",
+    "anBandDescSelect": "Chosen from a list of options: a company catalog or the ones written when the column was built.",
     "anBandDescCalc": "The system calculates it from other columns.",
     "dlSecLines": "Lines",
     "dlBrand": "Company logo",
@@ -5685,14 +5687,31 @@
     "anRefreshing": "Refreshing…",
     "anRefreshDone": "Done: data and formulas are up to date.",
     "anAddKindComment": "Comments (you type)",
+    "anAddKindSelect": "Selection (you pick from a list)",
+    "anSelTitle": "Add column › Selection",
+    "anSelEditTitle": "Selection column",
+    "anSelOptions": "Options",
+    "anSelOptionPh": "Type an option and Enter",
+    "anSelAdd": "Add",
+    "anSelRemove": "Remove this option",
+    "anSelColor": "Change the color",
+    "anSelOptionN": "Option {n}",
+    "anSelDup": "Two options have the same name.",
+    "anSelPick": "Choose…",
+    "anSelClear": "Clear choice",
+    "anSeleccion": "Selection",
+    "anErr_ADDED_OPTIONS": "Type 1 to 12 options, each with its own text and no repeats.",
+    "anErr_SELECT_COLUMN": "That selection column does not exist.",
+    "anErr_SELECT_KEY": "It is not known which row the choice belongs to.",
+    "anErr_SELECT_OPTION": "That option no longer exists in the column.",
     "anCmTitle": "Add column › Comments",
     "anCmEditTitle": "Comments column",
     "anCmHint": "Each row can have several comments, one after another, with your name and the time. They are tied to the row key: if the data changes or you sort, the comment stays with its row.",
     "anCmDupWarn": "This analysis keeps rows with the same key: their comments will be shared.",
     "anCmAdd": "Comment",
     "anCatNone": "No classification",
-    "anPanelConsulted": "Queried columns",
-    "anPanelAdded": "Added columns",
+    "anPanelConsulted": "Relation of File Queries",
+    "anPanelAdded": "Analysis Additions",
     "anPanelFile1": "1 file",
     "anPanelFilesN": "{n} files",
     "anFileKind": "File",
@@ -10954,7 +10973,7 @@
       "example": "⟳ Stock → today it brings Stock 27/nov 06:00"
     },
     "anColumnas": {
-      "what": "The columns you bring from your files (record sets) are ordered by File → Category → Column: one tab per file; inside, its categories (the classification) in a row and, when you open one, the chips of its columns. The tabs of the other files warn you if they have new, removed or changed columns that are not applied yet. The ones you create in the analysis (operation, criterion, comments) do not come from a file and go on a separate line, \"Added columns\". With few columns they show loose. A click on a category opens or closes it and what you open is remembered in your browser; \"Collapse all\" and \"Expand all\" do it at once. The buttons on top (add, select, refresh, extract) sit in a single row.",
+      "what": "The columns you bring from your files (record sets) are ordered by File → Category → Column: one tab per file; inside, its categories (the classification) in a row and, when you open one, the chips of its columns. The tabs of the other files warn you if they have new, removed or changed columns that are not applied yet. The ones you create in the analysis (operation, criterion, block, comments, selection) do not come from a file and go on the first tab, which is fixed: \"Analysis Additions\", also grouped by classification. With few columns they show loose. The arrow on the “Analysis” pill opens or closes the whole panel and the “+” adds a relation (a file to query). A click on a category opens or closes it and what you open is remembered in your browser; \"Collapse all\" and \"Expand all\" do it at once. The buttons on top (add, select, refresh, extract) sit in a single row.",
       "example": "File \"Existencias Globales\" → category \"Existencias\" → Exist Total Hospital, FAR."
     },
     "anCategorias": {
@@ -10990,12 +11009,20 @@
       "example": "2 hidden ▾ → Show VAT"
     },
     "anTypeBand": {
-      "what": "The top band says how each column is filled. In Analysis: From the record (the base record’s), Queried (pulled from another record or file), Formula (calculated with an operation), Criterion (yes or no depending on a condition), Block (calculates over a group of columns: the combined one) or Comments (you type them). In other tables: Automatic (filled in by the system, like the Internal Control columns), Captured (typed or chosen by a person), From catalog (chosen from a list) or Calculated (the system calculates it). Neighboring columns of the same type are merged into one cell with their count.",
+      "what": "The top band says how each column is filled. In Analysis: From the record (the base record’s), Queried (pulled from another record or file), Formula (calculated with an operation), Criterion (yes or no depending on a condition), Block (calculates over a group of columns: the combined one) or Comments (you type them). In other tables: Automatic (filled in by the system, like the Internal Control columns), Captured (typed or chosen by a person), Selection (chosen from a list of options) or Calculated (the system calculates it). Neighboring columns of the same type are merged into one cell with their count.",
       "example": "From the record · 6 | Queried · 2 | Formula | Criterion | Block | Comments"
     },
+    "anSeleccion": {
+      "what": "A selection column lets you write the options when building it (for example Pending, In progress, Done; 1 to 12, each with its own color) and each row is filled by choosing one. Anyone with the comment permission chooses, in the Live analysis; the choice is saved with the row and each extracted version keeps its own. The column filter lists the options and the Excel downloads the text with its option color. If you remove an option already in use, those rows end up with no choice.",
+      "example": "Priority: Pending · In progress · Done → each row picks one"
+    },
     "anPanelToggle": {
-      "what": "Hides or shows the panel above the table with the queried columns (by file and classification) and the added columns, to gain space when you only work on the table. It is remembered per person. When you tap “Select” the panel shows while you choose and then hides again.",
-      "example": "Hide the panel → the table moves up and takes that space"
+      "what": "The arrow on the “Analysis” pill opens or closes the “Relation of File Queries” panel above the table: the fixed “Analysis Additions” tab (the columns you build here, grouped by their classification) and one tab per queried file. Closed, it leaves a single summary line, to gain space when you only work on the table. It is remembered per person. When you tap “Select” the panel opens while you choose and then goes back to how you left it.",
+      "example": "Close the panel → the table moves up and one line is left: “42 columns · 2 files | Analysis Additions · 3 columns”"
+    },
+    "anAddRelation": {
+      "what": "The “+” on the “Analysis” pill adds a relation: you pick a file (record set) and the columns you want to query from it, and it joins the “Relation of File Queries”. It is always there; with relations, next to the open/close arrow.",
+      "example": "+ → Existencias Diarias Globales → I pick the columns I need"
     },
     "bandsToggle": {
       "what": "Hides or shows the bands above the header (fill type, origin and classification), one by one. It is remembered per person and table. Hiding a band does not change the order, filters, totals or the download.",

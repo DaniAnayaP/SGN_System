@@ -30,35 +30,31 @@ const colKeyOf = (key) => `an_${key}`;
 const params = new URLSearchParams(location.search);
 const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, sources: [], tab: params.get('tab') || '', extraction: null, data: null, text: '', selMode: false, sel: new Set(), bulkOpen: false, lastPick: -1, entries: [], leaving: false, refreshing: false, view: null, sortSpec: null, cf: null, canComment: false, canTotals: false, numCols: new Set() };
 const wrapperOf = (id) => document.querySelector(`[data-table-id="${id}"]`);
-// El panel de «Columnas consultadas» y «Columnas agregadas» se puede ocultar con un icono de la barra de la tabla (Daniel, 2026-11-28, «ya solo trabajo en la tabla y me ocupa espacio»): se recuerda por persona. Con el panel oculto,
-// «Seleccionar» lo muestra mientras dura la selección.
+// El panel «Relación de Consultas de Archivos» (con la pestaña fija «Agregados de Análisis») se abre y se cierra con una flecha DENTRO de la pastilla «Análisis», junto al «＋ Agregar relación» (Daniel, 2026-11-28: «ya solo trabajo
+// en la tabla y me ocupa espacio»; «en el botón de Análisis coloca el icono de agregar relación… se abre el icono de abrir relación»). Cerrado deja UNA línea con el resumen. Se recuerda por persona; «Seleccionar» lo abre mientras dura.
 const PANEL_KEY = 'anColsPanelHidden';
 const readPanelHidden = () => { try { return localStorage.getItem(PANEL_KEY) === '1'; } catch { return false; } };
 const savePanelHidden = (on) => { try { if (on) localStorage.setItem(PANEL_KEY, '1'); else localStorage.removeItem(PANEL_KEY); } catch { /* sin almacenamiento */ } };
-function syncPanelToggle() {
-    const btn = document.querySelector('[data-col-action="an-panel"]');
-    if (!btn) return;
-    const hidden = !!st.panelHidden;
-    const label = t(hidden ? 'main.anPanelShow' : 'main.anPanelHide');
-    btn.setAttribute('aria-label', label); btn.title = label;
-    btn.classList.toggle('active', hidden); btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
-}
-function ensurePanelToggle() {
-    if (st.panelHidden === undefined) st.panelHidden = readPanelHidden(); // lo que la persona dejó la última vez, aunque la barra de la tabla todavía no esté
-    const wrapper = wrapperOf(FILE_TABLE);
-    const bar = wrapper && wrapper.previousElementSibling;
-    if (!bar || !bar.classList.contains('data-table-zoom')) return;
-    if (bar.querySelector('[data-col-action="an-panel"]')) { syncPanelToggle(); return; }
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'data-table-zoom-btn';
-    btn.dataset.colAction = 'an-panel';
-    btn.dataset.helpKey = 'anPanelToggle';
-    btn.innerHTML = '<i class="bx bx-collapse-vertical" aria-hidden="true"></i>';
-    btn.addEventListener('click', () => { st.panelHidden = !st.panelHidden; savePanelHidden(st.panelHidden); syncPanelToggle(); renderAddedBar(); });
-    bar.appendChild(btn);
-    if (Dashboard.groupDataTableToolbar) Dashboard.groupDataTableToolbar(bar);
-    syncPanelToggle();
+const panelShut = () => { if (st.panelHidden === undefined) st.panelHidden = readPanelHidden(); return !!st.panelHidden; };
+let legendRegistered = false;
+// «＋» Agregar relación (siempre que se pueda crear) y la flecha (cuando hay algo que abrir o cerrar), dentro de la pastilla «Análisis»; también explicados en la Simbología (ya no están en la barra de la tabla)
+function syncTabTools(show, canAdd, hasPanel) {
+    if (!legendRegistered && Dashboard.registerLegendIcons) {
+        legendRegistered = true;
+        Dashboard.registerLegendIcons(FILE_TABLE, () => [
+            { group: 'design', iconHtml: '<i class="bx bx-plus" aria-hidden="true"></i>', name: t('main.anAddRelation'), desc: t('help.anAddRelation.what') },
+            { group: 'design', iconHtml: '<i class="bx bx-chevron-down" aria-hidden="true"></i>', name: t('main.anRelationToggle'), desc: t('help.anPanelToggle.what') },
+        ]);
+    }
+    const host = document.getElementById('an-tabtools'); const split = host && host.parentElement;
+    if (!host || !split) return;
+    const items = [];
+    if (show && canAdd) { const label = t('main.anAddRelation'); items.push(`<button type="button" class="an-tabtool an-tabtool-add" data-an-addrel data-help-key="anAddRelation" aria-label="${esc(label)}" title="${esc(label)}"><i class="bx bx-plus" aria-hidden="true"></i></button>`); }
+    if (show && hasPanel) { const shut = panelShut(); const label = t(shut ? 'main.anPanelShow' : 'main.anPanelHide'); items.push(`<button type="button" class="an-tabtool${shut ? ' is-shut' : ''}" data-an-paneltoggle data-help-key="anPanelToggle" aria-expanded="${shut ? 'false' : 'true'}" aria-controls="an-added-bar" aria-label="${esc(label)}" title="${esc(label)}"><i class="bx bx-chevron-down" aria-hidden="true"></i></button>`); }
+    host.innerHTML = items.join('');
+    host.hidden = !items.length;
+    split.classList.remove('an-tools-0', 'an-tools-1', 'an-tools-2');
+    split.classList.add(`an-tools-${items.length}`);
 }
 const tableOf = (id) => wrapperOf(id)?.querySelector('table.data-table');
 const registryByKey = (k) => st.registries.find((r) => r.key === k) || (st.sources || []).find((r) => r.key === k);
@@ -195,7 +191,7 @@ function setDirty() {
 function showError(text) { const el = document.getElementById('an-d-error'); if (el) { el.textContent = text; el.hidden = !text; } }
 function errorText(body) {
     const code = body && body.code;
-    return ['AN_NAME_REQUIRED', 'AN_NAME_TAKEN', 'DESIGN_REGISTRIES', 'DESIGN_COLUMN_REGISTRY', 'DESIGN_COLUMN_PERIODS', 'ADDED_NAME', 'ADDED_STEPS', 'ADDED_RULES', 'ADDED_KIND', 'ADDED_TOO_MANY', 'BASE_KEY', 'BASE_MISSING', 'COL_REGISTRY', 'COL_KEY', 'COL_VALUE', 'COL_COND', 'COL_NOT_FOUND', 'AN_NO_COLUMNS', 'AN_EMPTY', 'AN_INACTIVE', 'AN_BUSY', 'AN_FORBIDDEN', 'AN_ERROR'].includes(code) ? t(`main.anErr_${code}`) : t('admin.saveError');
+    return ['AN_NAME_REQUIRED', 'AN_NAME_TAKEN', 'DESIGN_REGISTRIES', 'DESIGN_COLUMN_REGISTRY', 'DESIGN_COLUMN_PERIODS', 'ADDED_NAME', 'ADDED_STEPS', 'ADDED_RULES', 'ADDED_KIND', 'ADDED_OPTIONS', 'SELECT_COLUMN', 'SELECT_KEY', 'SELECT_OPTION', 'ADDED_TOO_MANY', 'BASE_KEY', 'BASE_MISSING', 'COL_REGISTRY', 'COL_KEY', 'COL_VALUE', 'COL_COND', 'COL_NOT_FOUND', 'AN_NO_COLUMNS', 'AN_EMPTY', 'AN_INACTIVE', 'AN_BUSY', 'AN_FORBIDDEN', 'AN_ERROR'].includes(code) ? t(`main.anErr_${code}`) : t('admin.saveError');
 }
 function readFilters() {
     document.querySelectorAll('[data-an-filter]').forEach((input) => {
@@ -372,8 +368,12 @@ async function refreshAnalysis() {
 }
 document.addEventListener('click', (event) => {
     if (event.target.closest('[data-an-refresh]')) { refreshAnalysis(); return; }
+    if (event.target.closest('[data-an-addrel]')) { window.AnalysisPage.openFileColumn(null); return; } // «＋ Agregar relación» de la pastilla «Análisis»
+    if (event.target.closest('[data-an-paneltoggle]')) { st.panelHidden = !panelShut(); savePanelHidden(st.panelHidden); renderAddedBar(); return; } // la flecha de la pastilla abre o cierra el panel
     const cmCell = event.target.closest('td.an-cm');
     if (cmCell && cmCell.closest(`[data-table-id="${FILE_TABLE}"]`)) { openCommentsPanel(cmCell); return; } // un clic en una celda de comentarios abre su lista
+    const selCell = event.target.closest('td.an-sel');
+    if (selCell && selCell.closest(`[data-table-id="${FILE_TABLE}"]`)) { openSelectMenu(selCell); return; } // un clic en una celda de selección abre sus opciones
     const q = (sel) => event.target.closest(sel);
     if (q('[data-an-selmode],[data-an-pick],[data-an-selall],[data-an-selnone],[data-an-seldone],[data-an-bulkedit],[data-an-bulkclose],[data-an-bulkfmt],[data-an-bulkapply],[data-an-bulkremove],[data-an-undo],[data-an-discard],[data-an-cat],[data-an-filetab],[data-an-catmark],[data-an-catcollapse],[data-an-catexpand]')) {
         const m = document.querySelector('.an-addmenu'); if (m) m.hidden = true;
@@ -404,10 +404,11 @@ document.addEventListener('click', (event) => {
     else if (editFile) window.AnalysisPage.openFileColumn(editFile.dataset.anEditfile);
     else if (delFile) window.AnalysisPage.removeFileColumn(delFile.dataset.anDelfile);
     else if (addKind && addKind.dataset.anAddkind === 'file') window.AnalysisPage.openFileColumn(null);
-    else if (addKind) { if (addKind.dataset.anAddkind === 'criterion') openCriterionDialog(null); else if (addKind.dataset.anAddkind === 'block') openBlockDialog(null); else if (addKind.dataset.anAddkind === 'comment') openCommentColumnDialog(null); else openAddedDialog(null); }
+    else if (addKind) { if (addKind.dataset.anAddkind === 'criterion') openCriterionDialog(null); else if (addKind.dataset.anAddkind === 'block') openBlockDialog(null); else if (addKind.dataset.anAddkind === 'comment') openCommentColumnDialog(null); else if (addKind.dataset.anAddkind === 'select') openSelectColumnDialog(null); else openAddedDialog(null); }
     else if (editCol) openAddedDialog(editCol.dataset.anEditcol);
     else if (delCol) removeAdded(delCol.dataset.anDelcol);
 });
+document.addEventListener('keydown', (event) => { if (event.key === 'Enter' && event.target.matches && event.target.matches('td.an-sel') && event.target.closest(`[data-table-id="${FILE_TABLE}"]`)) openSelectMenu(event.target); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Enter' && event.target.matches && event.target.matches('td.an-cm') && event.target.closest(`[data-table-id="${FILE_TABLE}"]`)) openCommentsPanel(event.target); });
 document.addEventListener('change', (event) => {
     if (event.target.id === 'an-bk-mode') { const input = document.getElementById('an-bk-cls'); if (input) { input.disabled = event.target.value !== 'set'; if (!input.disabled) input.focus(); } return; } // edición en grupo: solo «Poner…» deja escribir la clasificación
@@ -760,23 +761,31 @@ function saveFlags(key, flags) {
 const catOpenFlags = () => { if (!st.catOpen) st.catOpen = loadFlags(catsStorageKey()); return st.catOpen; }; // categorías abiertas
 const fileTabKey = () => { if (st.fileTab === undefined) { try { st.fileTab = localStorage.getItem(filesStorageKey()) || ''; } catch { st.fileTab = ''; } } return st.fileTab; }; // el archivo que se ve (su pestaña); de fábrica, el primero
 function setFileTab(k) { st.fileTab = k; try { localStorage.setItem(filesStorageKey(), k); } catch { /* sin memoria del navegador */ } renderAddedBar(); }
-// las columnas consultadas por archivo y, dentro, por categoría; la llave de una categoría lleva su archivo (la misma clasificación puede estar en dos archivos)
+// una columna entra en su categoría (la clasificación): la llave lleva el archivo, o ADD_TAB en las agregadas (la misma clasificación puede estar en dos lugares)
+function pushCat(cats, catMap, prefix, e) {
+    const ck = catKeyOf(e);
+    if (!catMap.has(ck)) { const g = { k: `${prefix}|${ck}`, name: ck === CAT_NONE ? '' : String(e.item.cls || '').trim(), none: ck === CAT_NONE, color: CAT_NONE_COLOR, colored: false, list: [] }; catMap.set(ck, g); cats.push(g); }
+    const g = catMap.get(ck); g.list.push(e);
+    if (!g.none && !g.colored) { g.color = window.AnalysisKit.classColor(e.item.color); g.colored = window.AnalysisKit.hasClassColor(e.item.color); }
+}
+// las columnas consultadas por archivo y, dentro, por categoría; la llave de una categoría lleva su archivo
 function groupFiles(list) {
     const order = []; const map = new Map();
     list.forEach((e) => {
         const fk = String(e.item.registry || '');
         if (!map.has(fk)) { map.set(fk, { key: fk, name: (window.AnalysisPage && regName(registryByKey(fk))) || fk, list: [], cats: [], catMap: new Map() }); order.push(fk); }
         const f = map.get(fk); f.list.push(e);
-        const ck = catKeyOf(e); const full = `${fk}|${ck}`;
-        if (!f.catMap.has(ck)) { const g = { k: full, name: ck === CAT_NONE ? '' : String(e.item.cls || '').trim(), none: ck === CAT_NONE, color: CAT_NONE_COLOR, colored: false, list: [] }; f.catMap.set(ck, g); f.cats.push(g); }
-        const g = f.catMap.get(ck); g.list.push(e);
-        if (!g.none && !g.colored) { g.color = window.AnalysisKit.classColor(e.item.color); g.colored = window.AnalysisKit.hasClassColor(e.item.color); }
+        pushCat(f.cats, f.catMap, fk, e);
     });
     return order.map((k) => map.get(k));
 }
+// las columnas agregadas (operación, criterio, bloque, comentarios, selección) también llevan clasificación: se agrupan igual, en la pestaña fija «Agregados de Análisis»
+const ADD_TAB = '__added';
+function groupAdded(list) { const cats = []; const catMap = new Map(); list.forEach((e) => pushCat(cats, catMap, ADD_TAB, e)); return cats; }
 const consultedEntries = () => (st.entries || []).filter((e) => e.kind === 'f');
-const isNested = () => consultedEntries().length >= CAT_MIN_CHIPS;
-const allCats = () => groupFiles(consultedEntries()).flatMap((f) => f.cats);
+const addedEntries = () => (st.entries || []).filter((e) => e.kind === 'a');
+const isNested = () => consultedEntries().length >= CAT_MIN_CHIPS || addedEntries().length >= CAT_MIN_CHIPS;
+const allCats = () => groupFiles(consultedEntries()).flatMap((f) => f.cats).concat(groupAdded(addedEntries()));
 function toggleCat(k) { const f = catOpenFlags(); f[k] = !f[k]; saveFlags(catsStorageKey(), f); renderAddedBar(); }
 function setAllCats(open) {
     const f = catOpenFlags();
@@ -797,38 +806,45 @@ function catBadges(list) {
     return bit(count('new'), 'is-new', 'main.anCatNew1', 'main.anCatNewN') + bit(count('removed'), 'is-removed', 'main.anCatRemoved1', 'main.anCatRemovedN') + bit(count('edited'), 'is-edited', 'main.anCatEdited1', 'main.anCatEditedN');
 }
 const colsText = (n) => (n === 1 ? t('main.anCatCount1') : t('main.anCatCountN', { n }));
-// Una pestaña por archivo (Daniel eligió la forma C de la maqueta); dentro, sus categorías en una fila y, debajo, las fichas de las categorías abiertas (cada grupo con el punto de su color).
-function renderConsultedPanel(list, chip, pick) {
-    if (!list.length) return '';
+// «Relación de Consultas de Archivos» (Daniel, 2026-11-28): una sola pieza con las pestañas en la misma línea del título; la PRIMERA es fija, «Agregados de Análisis» (las columnas que armas en el análisis), y luego una por archivo
+// (forma C de la maqueta). Dentro de cada pestaña, sus categorías en una fila y, debajo, las fichas de las categorías abiertas (cada grupo con el punto de su color). Con pocas columnas las categorías van abiertas y sin interruptor;
+// si lo único que hay es «Sin clasificación», las fichas van sueltas. Cerrada con la flecha de la pastilla «Análisis», queda una línea con el resumen.
+function renderCatBody(cats, nested, chip, pick) {
+    if (!cats.length) return '<div class="an-ftab-body"></div>';
+    if (!nested && cats.length === 1 && cats[0].none) return `<div class="an-ftab-body"><div class="an-catchips">${cats[0].list.map(chip).join('')}</div></div>`;
     const open = catOpenFlags();
-    const nested = list.length >= CAT_MIN_CHIPS;
-    const files = nested ? groupFiles(list) : [];
-    const count = nested ? `${colsText(list.length)} · ${esc(files.length === 1 ? t('main.anPanelFile1') : t('main.anPanelFilesN', { n: files.length }))}` : colsText(list.length);
-    const head = `<header class="an-panel-h" data-help-key="anColumnas"><b>${esc(t('main.anPanelConsulted'))}</b><small>${count}</small></header>`;
-    if (!nested) return `<section class="an-panel">${head}<div class="an-panel-chips">${list.map(chip).join('')}</div></section>`;
-    const wanted = fileTabKey();
-    const active = files.find((f) => f.key === wanted) || files[0];
-    const tabs = `<div class="an-ftabs" role="tablist">${files.map((f) => { const on = f === active; return `<button type="button" class="an-ftab${on ? ' is-on' : ''}" role="tab" aria-selected="${on ? 'true' : 'false'}" data-an-filetab="${esc(f.key)}">${esc(f.name)}<small>${f.list.length}</small>${on ? '' : catBadges(f.list)}</button>`; }).join('')}</div>`;
-    const pills = active.cats.map((g) => {
-        const isOpen = !!open[g.k]; const selectable = g.list.filter((e) => e.status !== 'removed'); const picked = selectable.filter((e) => st.sel.has(e.key)).length;
+    const pills = cats.map((g) => {
+        const isOpen = !nested || !!open[g.k]; const selectable = g.list.filter((e) => e.status !== 'removed'); const picked = selectable.filter((e) => st.sel.has(e.key)).length;
         const name = g.none ? t('main.anCatNone') : g.name;
-        const pill = `<button type="button" class="an-cpill${isOpen ? ' is-on' : ''}" data-an-cat="${esc(g.k)}" aria-expanded="${isOpen ? 'true' : 'false'}" data-help-key="anCategorias"><i class="an-dot" style="background:${esc(g.color)}" aria-hidden="true"></i>${esc(name)}<small>${g.list.length}${pick && picked ? ` · ${esc(t('main.anCatPicked', { n: picked }))}` : ''}</small>${isOpen ? '' : catBadges(g.list)}</button>`;
+        const label = `<i class="an-dot" style="background:${esc(g.color)}" aria-hidden="true"></i>${esc(name)}<small>${g.list.length}${pick && picked ? ` · ${esc(t('main.anCatPicked', { n: picked }))}` : ''}</small>${isOpen ? '' : catBadges(g.list)}`;
+        const pill = nested ? `<button type="button" class="an-cpill${isOpen ? ' is-on' : ''}" data-an-cat="${esc(g.k)}" aria-expanded="${isOpen ? 'true' : 'false'}" data-help-key="anCategorias">${label}</button>` : `<span class="an-cpill is-on" data-help-key="anCategorias">${label}</span>`;
         const mark = pick && selectable.length ? `<button type="button" class="btn btn-secondary an-sm" data-an-catmark="${esc(g.k)}">${esc(t(picked === selectable.length ? 'main.anCatUnmark' : 'main.anCatMark'))}</button>` : '';
         return `<span class="an-cpillwrap">${pill}${mark}</span>`;
     }).join('');
-    const blocks = active.cats.filter((g) => open[g.k]).map((g) => `<div class="an-copen"><i class="an-dot" style="background:${esc(g.color)}" aria-hidden="true"></i><span class="an-catchips">${g.list.map(chip).join('')}</span></div>`).join('');
-    return `<section class="an-panel">${head}${tabs}<div class="an-ftab-body"><div class="an-cpills">${pills}</div>${blocks}</div></section>`;
+    const blocks = cats.filter((g) => !nested || open[g.k]).map((g) => `<div class="an-copen"><i class="an-dot" style="background:${esc(g.color)}" aria-hidden="true"></i><span class="an-catchips">${g.list.map(chip).join('')}</span></div>`).join('');
+    return `<div class="an-ftab-body"><div class="an-cpills">${pills}</div>${blocks}</div>`;
 }
-// las columnas agregadas (operación, criterio, comentarios): una sola línea, sin recuadro
-function renderAddedPanel(list, chip) {
-    if (!list.length) return '';
-    return `<section class="an-panel an-panel-inline"><span class="an-panel-h-inline" data-help-key="anColumnas"><b>${esc(t('main.anPanelAdded'))}</b><small>${esc(colsText(list.length))}</small></span><span class="an-catchips">${list.map(chip).join('')}</span></section>`;
+function renderRelationPanel(consulted, added, chip, pick) {
+    if (!consulted.length && !added.length) return '';
+    const files = groupFiles(consulted);
+    const countText = `${colsText(consulted.length)} · ${esc(files.length === 1 ? t('main.anPanelFile1') : t('main.anPanelFilesN', { n: files.length }))}`;
+    if (panelShut() && !pick) { // cerrado: una línea con lo que hay
+        return `<section class="an-panel an-panel-shut" data-help-key="anColumnas"><span class="an-panel-h-inline"><b>${esc(t('main.anPanelConsulted'))}</b><small>${countText}</small></span><span class="an-sep" aria-hidden="true"></span><span class="an-panel-h-inline"><b>${esc(t('main.anPanelAdded'))}</b><small>${esc(colsText(added.length))}</small></span></section>`;
+    }
+    const wanted = fileTabKey();
+    const addOn = wanted === ADD_TAB || !files.length; // de fábrica abre el primer archivo; después, la pestaña que la persona usó por última vez
+    const active = addOn ? null : (files.find((f) => f.key === wanted) || files[0]);
+    const tab = (cls, attr, on, label, n, list) => `<button type="button" class="an-ftab${cls}${on ? ' is-on' : ''}" role="tab" aria-selected="${on ? 'true' : 'false'}" ${attr}>${label}<small>${n}</small>${on ? '' : catBadges(list)}</button>`;
+    const tabs = `<div class="an-ftabs" role="tablist">${tab(' is-fixed', `data-an-filetab="${ADD_TAB}"`, addOn, esc(t('main.anPanelAdded')), added.length, added)}${files.length ? '<span class="an-ftabs-sep" aria-hidden="true"></span>' : ''}${files.map((f) => tab('', `data-an-filetab="${esc(f.key)}"`, f === active, esc(f.name), f.list.length, f.list)).join('')}</div>`;
+    const head = `<header class="an-panel-h" data-help-key="anColumnas"><b>${esc(t('main.anPanelConsulted'))}</b><small>${countText}</small>${tabs}</header>`;
+    const body = addOn ? renderCatBody(groupAdded(added), added.length >= CAT_MIN_CHIPS, chip, pick) : renderCatBody(active.cats, consulted.length >= CAT_MIN_CHIPS, chip, pick);
+    return `<section class="an-panel">${head}${body}</section>`;
 }
 // la franja de arriba del Archivo: «＋ Agregar columna», «Seleccionar» y las columnas ya agregadas (un clic las edita; ✕ las quita; los cambios esperan al «Actualizar»)
 function renderAddedBar() {
     const bar = document.getElementById('an-added-bar'); const tools = document.getElementById('an-tools');
     if (!bar || !tools) return;
-    if (st.tab !== 'file' || !st.extraction || !st.data) { bar.hidden = true; tools.hidden = true; renderSelBar(); renderPendingBar(); return; }
+    if (st.tab !== 'file' || !st.extraction || !st.data) { bar.hidden = true; tools.hidden = true; syncTabTools(false); renderSelBar(); renderPendingBar(); return; }
     const live = !!(st.extraction && st.extraction.live);
     const editable = st.canCreate && live;
     const cols = st.data.columns || [];
@@ -840,7 +856,7 @@ function renderAddedBar() {
     const chip = (e) => {
         const isFile = e.kind === 'f';
         const letter = e.status === 'new' ? '' : letterOfKey(dataKeyOfEntry(e.key));
-        const icon = isFile ? '⊞' : (e.item.kind === 'criterion' ? '?' : (e.item.kind === 'comment' ? '✎' : (e.item.kind === 'block' ? 'Σ' : 'ƒ')));
+        const icon = isFile ? '⊞' : (e.item.kind === 'criterion' ? '?' : (e.item.kind === 'comment' ? '✎' : (e.item.kind === 'select' ? '▾' : (e.item.kind === 'block' ? 'Σ' : 'ƒ'))));
         const picked = pick && st.sel.has(e.key);
         const cls = `an-addedchip${isFile ? ' an-filechip' : ''}${e.status !== 'saved' ? ` an-chip-${e.status}` : ''}${picked ? ' an-chip-picked' : ''}`;
         const attr = pick ? `data-an-pick="${esc(e.key)}"` : (isFile ? `data-an-editfile="${esc(e.id)}"` : `data-an-editcol="${esc(e.id)}"`);
@@ -852,7 +868,7 @@ function renderAddedBar() {
         else if (editable && !pick) tail = `<button type="button" ${isFile ? 'data-an-delfile' : 'data-an-delcol'}="${esc(e.id)}" aria-label="${esc(t(isFile ? 'main.an2RemoveFileCol' : 'main.anAddedRemove'))}" title="${esc(t(isFile ? 'main.an2RemoveFileCol' : 'main.anAddedRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button>`;
         return `<span class="${cls}">${head}${tail}</span>`;
     };
-    const addMenu = st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary an-sm" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden>${live ? `<button type="button" data-an-addkind="file">${esc(t('main.an2KindFile'))}</button>` : ''}<button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button><button type="button" data-an-addkind="block" data-help-key="anBloque">${esc(t('main.anAddKindBlock'))}</button><button type="button" data-an-addkind="comment" data-help-key="anComentarios">${esc(t('main.anAddKindComment'))}</button></span></span>` : '';
+    const addMenu = st.canCreate ? `<span class="an-addwrap"><button type="button" class="btn btn-secondary an-sm" data-an-addcol aria-haspopup="true" data-help-key="anAddedBar"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddColumnFile'))} <i class="bx bx-chevron-down" aria-hidden="true"></i></button><span class="an-addmenu" hidden>${live ? `<button type="button" data-an-addkind="file">${esc(t('main.an2KindFile'))}</button>` : ''}<button type="button" data-an-addkind="op">${esc(t('main.anAddKindOp'))}</button><button type="button" data-an-addkind="criterion">${esc(t('main.anAddKindCriterion'))}</button><button type="button" data-an-addkind="block" data-help-key="anBloque">${esc(t('main.anAddKindBlock'))}</button><button type="button" data-an-addkind="comment" data-help-key="anComentarios">${esc(t('main.anAddKindComment'))}</button><button type="button" data-an-addkind="select" data-help-key="anSeleccion">${esc(t('main.anAddKindSelect'))}</button></span></span>` : '';
     const selBtn = editable && entries.filter((e) => e.status !== 'removed').length > 1 ? `<button type="button" class="btn btn-secondary an-sm${st.selMode ? ' an-on' : ''}" data-an-selmode aria-pressed="${st.selMode ? 'true' : 'false'}" data-help-key="anSelect"><i class="bx bx-select-multiple" aria-hidden="true"></i> ${esc(t('main.anSelectBtn'))}</button>` : '';
     // los botones en una sola fila chica (Daniel, 2026-11-27): agregar y seleccionar a la izquierda; actualizar y extraer a la derecha
     const nested = isNested();
@@ -861,10 +877,10 @@ function renderAddedBar() {
     const refreshBtn = live ? `<button type="button" class="btn btn-secondary an-sm" data-an-refresh data-help-key="anRefresh"><i class="bx bx-refresh" aria-hidden="true"></i> <span data-an-refresh-label>${esc(t('main.anRefresh'))}</span>${pend && pend.total ? ` <span class="an-badge">${pend.total}</span>` : ''}</button>` : '';
     const extractBtn = st.canExtract && st.analysis.status === 'active' ? `<button type="button" class="btn an-sm" data-an-extract data-help-key="anExtract"><i class="bx bx-export" aria-hidden="true"></i> ${esc(t('main.anExtract'))}</button>` : '';
     tools.innerHTML = `${addMenu}${selBtn}${ghost}<span class="an-tools-sp"></span>${refreshBtn}${extractBtn}`;
-    bar.innerHTML = `${renderConsultedPanel(entries.filter((e) => e.kind === 'f'), chip, pick)}${renderAddedPanel(entries.filter((e) => e.kind === 'a'), chip)}`;
+    bar.innerHTML = renderRelationPanel(entries.filter((e) => e.kind === 'f'), entries.filter((e) => e.kind === 'a'), chip, pick);
     tools.hidden = false;
-    ensurePanelToggle();
-    bar.hidden = !!st.panelHidden && !pick; // oculto con el icono de la barra de la tabla (salvo mientras se selecciona)
+    bar.hidden = false;
+    syncTabTools(true, editable, entries.length > 0);
     renderSelBar();
     renderPendingBar();
 }
@@ -1003,9 +1019,10 @@ function openAddedDialog(editId) {
     if (editing && editing.kind === 'criterion') { openCriterionDialog(editId); return; }
     if (editing && editing.kind === 'block') { openBlockDialog(editId); return; }
     if (editing && editing.kind === 'comment') { openCommentColumnDialog(editId); return; }
+    if (editing && editing.kind === 'select') { openSelectColumnDialog(editId); return; }
     // las columnas que se pueden usar: las consultadas y las agregadas ANTES de esta (cada una con su letra de Excel)
     const editAt = editing && allCols.some((c) => c.key === `a_${editing.id}`) ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length; // una columna agregada que aún no se arma (cambio sin aplicar) puede usar todas las que ya están
-    const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), group: c.group })).filter((c, i) => c.group !== 'reference' && c.kind !== 'comment' && i < editAt); // una columna de comentarios no entra en una fórmula
+    const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), group: c.group })).filter((c, i) => c.group !== 'reference' && c.kind !== 'comment' && c.kind !== 'select' && i < editAt); // una columna de comentarios o de selección no entra en una fórmula
     const newLetter = columnLetter(editing ? editAt : allCols.length);
     const toDraftStep = (s) => (s.op === 'start' || s.arg
         ? { op: s.op, kind: s.arg && s.arg.col !== undefined ? 'col' : 'value', col: s.arg && s.arg.col !== undefined ? s.arg.col : '', value: s.arg && s.arg.value !== undefined ? String(s.arg.value) : '' }
@@ -1264,7 +1281,7 @@ function openBlockDialog(editId) {
     const editing = editId ? added.find((a) => a.id === editId) : null;
     // las columnas que cuentan en un bloque: las consultadas y las agregadas ANTES de esta (cada una con su letra de Excel); sin las de referencia ni las de comentarios
     const editAt = editing && allCols.some((c) => c.key === `a_${editing.id}`) ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length;
-    const cols = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), group: c.group, kind: c.kind })).filter((c, i) => c.group !== 'reference' && c.kind !== 'comment' && i < editAt);
+    const cols = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), group: c.group, kind: c.kind })).filter((c, i) => c.group !== 'reference' && c.kind !== 'comment' && c.kind !== 'select' && i < editAt);
     const newLetter = columnLetter(editing ? editAt : allCols.length);
     const draft = editing
         ? { name: editing.name, cls: editing.cls || '', decimals: editing.decimals, fn: editing.fn, cond: editing.cond ? { op: editing.cond.op, value: String(editing.cond.value) } : { op: 'neq', value: '' }, blocks: editing.blocks.map((b) => ({ from: b.from, to: b.to })) }
@@ -1388,7 +1405,7 @@ function openCriterionDialog(editId) {
     const editing = editId ? added.find((a) => a.id === editId) : null;
     // las columnas que se pueden revisar: todas las del archivo y las agregadas ANTES de esta (cada una con su letra de Excel)
     const editAt = editing && allCols.some((c) => c.key === `a_${editing.id}`) ? allCols.findIndex((c) => c.key === `a_${editing.id}`) : allCols.length; // una columna agregada que aún no se arma (cambio sin aplicar) puede usar todas las que ya están
-    const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), kind: c.kind, group: c.group })).filter((c, i) => c.kind !== 'comment' && i < editAt);
+    const pickable = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), kind: c.kind, group: c.group })).filter((c, i) => c.kind !== 'comment' && c.kind !== 'select' && i < editAt);
     const blockCols = pickable.filter((c) => c.group !== 'reference'); // las que cuentan en un bloque
     const newLetter = columnLetter(editing ? editAt : allCols.length);
     const blankRes = (type) => ({ type, text: '', value: '', col: pickable[0] ? pickable[0].key : '' });
@@ -1699,7 +1716,7 @@ function buildAnalysisXlsx({ columns, trs }) {
     idx.forEach((i, pos) => { if (defs[i].kind === 'comment') commentCols.push({ at: pos, col: defs[i].id }); });
     const commentExtra = commentCols.length ? { commentCols, rowKeys: trs.map((tr) => (st.data.keys || [])[Number(tr.dataset.r)] || ''), v: st.extraction && !st.extraction.live ? st.extraction.id : 0, tz: new Date().getTimezoneOffset() } : {};
     const labelOf = (c) => c.label || (c.dim ? t(`main.regDim_${c.dim}`) : c.key);
-    return { url: `${API}/${st.id}/export-xlsx`, body: { ...lookDecBody(), columns: idx.map((i) => ({ label: labelOf(defs[i]), ff: defs[i].ff || null, fmt: defs[i].fmt || '', style: defs[i].style || null, decimals: Number.isInteger(defs[i].decimals) ? defs[i].decimals : null })), rows, ...commentExtra } };
+    return { url: `${API}/${st.id}/export-xlsx`, body: { ...lookDecBody(), columns: idx.map((i) => ({ label: labelOf(defs[i]), ff: defs[i].ff || null, fmt: defs[i].fmt || '', style: defs[i].style || null, decimals: Number.isInteger(defs[i].decimals) ? defs[i].decimals : null, opts: defs[i].options || null })), rows, ...commentExtra } };
 }
 function ensureEmpty(tableId, span, key) {
     const tbody = tableOf(tableId).tBodies[0];
@@ -1719,7 +1736,7 @@ function fileCellPlan(cols) {
     return cols.map((c, i) => {
         const key = esc(colKeyOf(c.key));
         let cls = 'an-ref'; let fmt = (v) => v;
-        if (c.group === 'added') { cls = c.kind === 'criterion' || c.kind === 'comment' ? `an-added${c.kind === 'comment' ? ' an-cm' : ''}` : 'an-added col-num'; fmt = (v) => (v === null ? '' : fmtCell(v, c.decimals)); }
+        if (c.group === 'added') { cls = c.kind === 'criterion' || c.kind === 'comment' || c.kind === 'select' ? `an-added${c.kind === 'comment' ? ' an-cm' : (c.kind === 'select' ? ' an-sel' : '')}` : 'an-added col-num'; fmt = (v) => (v === null ? '' : fmtCell(v, c.decimals)); }
         else if (c.group !== 'reference') { cls = 'an-cons col-num'; fmt = (v) => (v === null ? '' : window.AnalysisKit.fmtValue(v, c.fmt, c.pat)); }
         const look = c.group === 'consulted' && c.style ? window.AnalysisKit.lookCss(c.style).cell : null; // el aspecto va en cada celda: los renglones que se dibujan después también lo traen
         let style = look && Object.keys(look).length ? ` style="${esc(Object.entries(look).map(([k, v]) => `${k}:${v}`).join(';'))}"` : '';
@@ -1733,7 +1750,7 @@ function fileCellPlan(cols) {
             const css = FF.cellCss(ff);
             if (css) style = ` style="${esc(`${look && Object.keys(look).length ? `${Object.entries(look).map(([k, v]) => `${k}:${v}`).join(';')};` : ''}${css}`)}"`;
         }
-        return { i, key, cls, fmt, style, ff: !!ff, numeric, comment: c.group === 'added' && c.kind === 'comment', dataKey: c.key };
+        return { i, key, cls, fmt, style, ff: !!ff, numeric, comment: c.group === 'added' && c.kind === 'comment', select: c.group === 'added' && c.kind === 'select', options: c.options || null, dataKey: c.key };
     });
 }
 function fileRowsHtml(from, to) {
@@ -1744,6 +1761,7 @@ function fileRowsHtml(from, to) {
         for (let k = 0; k < plan.length; k += 1) {
             const p = plan[k]; const raw = row[p.i]; const v = p.fmt(raw);
             if (p.comment) { tr += commentCellHtml(p, at, raw); continue; } // la columna de comentarios: el último comentario y cuántos hay
+            if (p.select) { tr += selectCellHtml(p, raw); continue; } // la columna de selección: la opción elegida, con su color
             // el número tal cual (data-v) para poder volver a darle formato sin recargar; con formato, también para ordenar por el número y no por el texto
             const extra = typeof raw === 'number' ? ` data-v="${raw}"${p.ff ? ` data-sort-value="${raw}"` : ''}` : '';
             tr += `<td data-col="${p.key}" class="${p.cls}"${p.style}${extra}>${v === null || v === undefined || v === '' ? '—' : esc(String(v))}</td>`;
@@ -1858,6 +1876,112 @@ const canWriteComments = () => !!(st.canComment && st.extraction && st.extractio
 function commentInner(n, last) {
     if (n) return `<span class="an-cm-last">${esc(String(last === null || last === undefined ? '' : last))}</span><span class="an-cm-n" title="${esc(t('main.anCmCount', { n }))}">${n}</span>`;
     return canWriteComments() ? `<span class="an-cm-add">＋ ${esc(t('main.anCmAdd'))}</span>` : '—';
+}
+// ---- columna «Selección» (Daniel, 2026-11-28): una opción por renglón, con su color; elige quien tenga el permiso de comentar, solo en el En vivo ----
+const SELECT_HEX = { gris: '#6b7280', azul: '#2f6fb0', verde: '#2b8456', ambar: '#b57a05', rojo: '#c4473a', morado: '#9a3cc2' };
+const selectPill = (options, text) => { const o = (options || []).find((x) => x.t === text); return o ? `<span class="an-pill" style="--pc:${SELECT_HEX[o.c] || SELECT_HEX.gris}">${esc(o.t)}</span>` : ''; };
+function selectInner(options, text) {
+    if (text !== null && text !== undefined && text !== '') return selectPill(options, text) || esc(String(text));
+    return canWriteComments() ? `<span class="an-sel-add">▾ ${esc(t('main.anSelPick'))}</span>` : '—';
+}
+function selectCellHtml(p, raw) { return `<td data-col="${p.key}" class="${p.cls}" tabindex="0">${selectInner(p.options, raw)}</td>`; }
+let selectMenu = null;
+function closeSelectMenu() {
+    if (!selectMenu) return;
+    document.removeEventListener('mousedown', selectMenu.onDoc, true);
+    document.removeEventListener('keydown', selectMenu.onKey, true);
+    selectMenu.el.remove();
+    selectMenu = null;
+}
+function openSelectMenu(td) {
+    closeSelectMenu();
+    if (!canWriteComments()) return;
+    const tr = td.closest('tr'); const r = Number(tr && tr.dataset.r);
+    if (!st.data || !Number.isInteger(r)) return;
+    const dataKey = String(td.dataset.col || '').replace(/^an_/, '');
+    const colAt = st.data.columns.findIndex((c) => c.key === dataKey);
+    const colDef = st.data.columns[colAt];
+    const key = rowKeyAt(r);
+    if (!colDef || colDef.kind !== 'select' || !key) return;
+    const current = st.data.rows[r][colAt];
+    const el = document.createElement('div');
+    el.className = 'an-selmenu';
+    el.setAttribute('role', 'listbox');
+    el.innerHTML = (colDef.options || []).map((o) => `<button type="button" role="option" aria-selected="${o.t === current}" data-opt="${esc(o.id)}"><span class="an-pill" style="--pc:${SELECT_HEX[o.c] || SELECT_HEX.gris}">${esc(o.t)}</span></button>`).join('') + `<div class="an-selsep"></div><button type="button" data-opt="">${esc(t('main.anSelClear'))}</button>`;
+    document.body.appendChild(el);
+    const rect = td.getBoundingClientRect();
+    el.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - el.offsetWidth - 8))}px`;
+    el.style.top = `${Math.max(8, Math.min(rect.bottom + 2, window.innerHeight - el.offsetHeight - 8))}px`;
+    const choose = async (optionId) => {
+        try {
+            const res = await fetch(`${API}/${st.id}/selection`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ col: dataKey.slice(2), key, option: optionId || null }) });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw Object.assign(new Error('failed'), { body });
+            st.data.rows[r][colAt] = body.text;
+            td.innerHTML = selectInner(colDef.options, body.text);
+            closeSelectMenu();
+        } catch (err) { Dashboard.showToast(errorText(err.body), 'error'); }
+    };
+    el.addEventListener('click', (event) => { const b = event.target.closest('[data-opt]'); if (b) choose(b.dataset.opt); });
+    const onDoc = (event) => { if (!el.contains(event.target)) closeSelectMenu(); };
+    const onKey = (event) => { if (event.key === 'Escape') closeSelectMenu(); };
+    document.addEventListener('mousedown', onDoc, true);
+    document.addEventListener('keydown', onKey, true);
+    selectMenu = { el, onDoc, onKey };
+    const first = el.querySelector('button'); if (first) first.focus();
+}
+// La ventana de una columna de selección: nombre, clasificación y sus opciones (de 1 a 12, cada una con su color). Lo que se elige en cada renglón no va aquí.
+function openSelectColumnDialog(editId) {
+    const added = (st.design.added || []);
+    const editing = editId ? added.find((a) => a.id === editId) : null;
+    const COLORS = ['gris', 'azul', 'verde', 'ambar', 'rojo', 'morado'];
+    const draft = { name: editing ? editing.name : '', cls: editing ? (editing.cls || '') : '', options: (editing ? editing.options : []).map((o) => ({ ...o })) };
+    const html = `<h3>${esc(t(editing ? 'main.anSelEditTitle' : 'main.anSelTitle'))}</h3>
+        <div class="an-f2">
+            <div><label for="an-sl-name">${esc(t('main.anColLabel'))}</label><input type="text" id="an-sl-name" maxlength="80" autocomplete="off" value="${esc(draft.name)}"></div>
+            <div><label for="an-sl-cls">${esc(t('main.anAddedClass'))}</label><input type="text" id="an-sl-cls" maxlength="40" autocomplete="off" list="an-sl-cls-list" placeholder="${esc(t('main.anAddedClassNone'))}" value="${esc(draft.cls)}"><datalist id="an-sl-cls-list">${classKnown().map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
+        </div>
+        <div class="an-sl-opts-box"><label>${esc(t('main.anSelOptions'))}</label><div class="an-sl-opts" id="an-sl-opts"></div>
+            <div class="an-sl-add"><input type="text" id="an-sl-new" maxlength="30" autocomplete="off" placeholder="${esc(t('main.anSelOptionPh'))}" aria-label="${esc(t('main.anSelOptionPh'))}"><button type="button" class="btn btn-secondary an-sm" id="an-sl-addb">${esc(t('main.anSelAdd'))}</button></div></div>
+        <p class="admin-error" id="an-sl-error" role="alert" hidden></p>
+        <div class="admin-form-actions"><button type="button" class="btn" data-an-go>${esc(t(editing ? 'main.anAddedSave' : 'main.anAddedGo'))}</button><button type="button" class="btn btn-secondary" data-an-close>${esc(t('main.regCancel'))}</button></div>`;
+    modal(html, (overlay, close) => {
+        const $ = (sel) => overlay.querySelector(sel);
+        const err = (text) => { const el = $('#an-sl-error'); el.textContent = text; el.hidden = !text; };
+        const draw = () => {
+            $('#an-sl-opts').innerHTML = draft.options.map((o, i) => `<div class="an-sl-opt"><button type="button" class="an-sl-dot" data-sl-color="${i}" style="background:${SELECT_HEX[o.c] || SELECT_HEX.gris}" title="${esc(t('main.anSelColor'))}" aria-label="${esc(t('main.anSelColor'))}"></button><input type="text" data-sl-text="${i}" maxlength="30" value="${esc(o.t)}" aria-label="${esc(t('main.anSelOptionN', { n: i + 1 }))}"><button type="button" class="an-sl-x" data-sl-del="${i}" aria-label="${esc(t('main.anSelRemove'))}" title="${esc(t('main.anSelRemove'))}">×</button></div>`).join('');
+        };
+        const addOption = () => {
+            const input = $('#an-sl-new'); const text = input.value.trim();
+            if (!text) return;
+            if (draft.options.length >= 12) return err(t('main.anErr_ADDED_OPTIONS'));
+            if (draft.options.some((o) => o.t.toLowerCase() === text.toLowerCase())) return err(t('main.anSelDup'));
+            let id; do { id = `o${Math.random().toString(36).slice(2, 7)}`; } while (draft.options.some((o) => o.id === id));
+            draft.options.push({ id, t: text, c: COLORS[draft.options.length % COLORS.length] });
+            input.value = ''; err(''); draw(); input.focus();
+        };
+        overlay.addEventListener('click', (event) => {
+            const dot = event.target.closest('[data-sl-color]'); const del = event.target.closest('[data-sl-del]');
+            if (dot) { const o = draft.options[Number(dot.dataset.slColor)]; o.c = COLORS[(COLORS.indexOf(o.c) + 1) % COLORS.length]; draw(); }
+            else if (del) { draft.options.splice(Number(del.dataset.slDel), 1); draw(); }
+        });
+        overlay.addEventListener('input', (event) => { const i = event.target.dataset && event.target.dataset.slText; if (i !== undefined && draft.options[Number(i)]) draft.options[Number(i)].t = event.target.value; });
+        $('#an-sl-addb').addEventListener('click', addOption);
+        $('#an-sl-new').addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); addOption(); } });
+        draw();
+        setTimeout(() => $('#an-sl-name').focus(), 0);
+        $('[data-an-go]').addEventListener('click', async () => {
+            const name = $('#an-sl-name').value.trim(); const cls = $('#an-sl-cls').value.trim();
+            if (!name) return err(t('main.anErr_ADDED_NAME'));
+            if (!editing && added.length >= 40) return err(t('main.anErr_ADDED_TOO_MANY'));
+            const options = draft.options.map((o) => ({ id: o.id, t: o.t.trim(), c: o.c })).filter((o) => o.t);
+            if (!options.length) return err(t('main.anErr_ADDED_OPTIONS'));
+            if (new Set(options.map((o) => o.t.toLowerCase())).size !== options.length) return err(t('main.anSelDup'));
+            const def = { id: editing ? editing.id : `a${Date.now().toString(36)}`, kind: 'select', name, cls, color: cls ? colorOfClass(cls, editing) : null, decimals: null, options };
+            const next = editing ? added.map((a) => (a.id === editing.id ? def : a)) : [...added, def];
+            try { await saveAdded(next); close(); } catch (e) { err(errorText(e.body)); }
+        });
+    });
 }
 function commentCellHtml(p, at, raw) {
     const n = ((st.data.cm || {})[p.dataKey] || { n: [] }).n[at] || 0;
@@ -2022,7 +2146,7 @@ async function loadFile() {
                     let groupTable;
                     if (c.cls) { groupTable = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(groupTable, c.cls, window.AnalysisKit.classColor(c.color)); }
                     // el tipo de la columna ya no va como una letra pegada al nombre: sube a la franja de arriba con su palabra (Daniel, 2026-11-27, «la A»)
-                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: c.label, typeBand: `main.anBand${c.kind === 'criterion' ? 'Criterion' : (c.kind === 'comment' ? 'Comment' : (c.kind === 'block' ? 'Block' : 'Fx'))}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
+                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: c.label, typeBand: `main.anBand${c.kind === 'criterion' ? 'Criterion' : (c.kind === 'comment' ? 'Comment' : (c.kind === 'select' ? 'Select' : (c.kind === 'block' ? 'Block' : 'Fx')))}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
                 }
                 // una columna consultada con clasificación va bajo su propia banda (nombre y color de la persona); sin clasificación, bajo «Consultadas» como siempre
                 let consBand;

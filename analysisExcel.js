@@ -80,6 +80,8 @@ async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHE
     const head0 = preset && preset.header ? preset.header : null; // el encabezado de la personalización (sin ella, el de siempre)
     const titleRows = preset && preset.title ? 1 : 0;
     const dateAt = fmts.map(isDateFormat);
+    // «Selección»: la celda de cada renglón lleva el color de la opción elegida (relleno suave y letra del color)
+    const selCols = columns.map((c, i) => (c.opts && c.opts.length ? { i, byText: new Map(c.opts.map((o) => [o.t, SELECT_HEX[o.c]])) } : null)).filter(Boolean);
     const sheetColumns = columns.map((c, i) => {
         let max = String(c.label).length + 3;
         for (let r = 0; r < rows.length && r < 60; r += 1) { const v = rows[r][i]; if (v !== null && v !== undefined) max = Math.max(max, String(typeof v === 'number' ? v.toFixed(2) : v).length + 1); }
@@ -113,6 +115,7 @@ async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHE
         const to = Math.min(rows.length, from + sheetRows);
         for (let n = from; n < to; n += 1) {
             const row = sheet.addRow(rows[n].map((v, i) => (dateAt[i] && typeof v === 'string' ? toDate(v) || v : v)));
+            selCols.forEach(({ i, byText }) => { const hex = byText.get(rows[n][i]); if (hex) { const cell = row.getCell(i + 1); cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(soft(hex)) } }; cell.font = { bold: true, color: { argb: argb(hex) } }; } });
             if (grid) for (let i = 0; i < columns.length; i += 1) { const bd = DL.excelBorder(grid.cell(n - from + 1, i)); if (bd) row.getCell(i + 1).border = bd; }
             row.commit();
             if (n % 1000 === 999) await nextTurn(); // cada tanda deja atender a los demás usuarios (un análisis grande son muchos renglones)
@@ -123,9 +126,12 @@ async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHE
 }
 const MAX_COLUMNS = 1000; // sin tope de renglones: solo se cuidan las columnas por seguridad (un análisis trae muchas menos)
 const MAX_TEXT = 2000;
+// Las opciones de una columna de «Selección» (texto y color) para pintar la celda de cada renglón en el Excel
+const cleanOpts = (raw) => (Array.isArray(raw) ? raw.slice(0, 12).map((o) => ({ t: String(o && o.t || '').slice(0, 30), c: ['gris', 'azul', 'verde', 'ambar', 'rojo', 'morado'].includes(o && o.c) ? o.c : 'gris' })).filter((o) => o.t) : null);
+const SELECT_HEX = { gris: '#6b7280', azul: '#2f6fb0', verde: '#2b8456', ambar: '#b57a05', rojo: '#c4473a', morado: '#9a3cc2' };
 const cleanColumn = (c) => {
     const x = c && typeof c === 'object' ? c : {};
-    return { label: String(x.label == null ? '' : x.label).slice(0, 120), ff: x.ff && typeof x.ff === 'object' ? x.ff : null, fmt: typeof x.fmt === 'string' ? x.fmt.slice(0, 12) : '', style: x.style && typeof x.style === 'object' ? x.style : null, decimals: Number.isInteger(x.decimals) ? x.decimals : null };
+    return { label: String(x.label == null ? '' : x.label).slice(0, 120), ff: x.ff && typeof x.ff === 'object' ? x.ff : null, fmt: typeof x.fmt === 'string' ? x.fmt.slice(0, 12) : '', style: x.style && typeof x.style === 'object' ? x.style : null, decimals: Number.isInteger(x.decimals) ? x.decimals : null, opts: cleanOpts(x.opts || x.options) };
 };
 // Lo que manda la pantalla, revisado: { columns, rows, title } o { error }.
 function cleanPayload(body) {

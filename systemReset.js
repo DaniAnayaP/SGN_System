@@ -63,6 +63,8 @@ const TABLES = {
     manual_analysis_rows: { action: WIPE, group: 'captures' },
     analysis_comments: { action: WIPE, group: 'captures' },
     analysis_comment_versions: { action: WIPE, group: 'captures' },
+    analysis_selections: { action: WIPE, group: 'captures' }, // Análisis › columna «Selección»: la opción elegida de cada renglón
+    analysis_selection_versions: { action: WIPE, group: 'captures' }, // y la copia de cada versión extraída
     job_positions: { action: WIPE, group: 'organization' },
     job_position_grants: { action: WIPE, group: 'organization' },
     job_position_alt_supervisors: { action: WIPE, group: 'organization' },
