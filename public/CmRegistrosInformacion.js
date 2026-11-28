@@ -426,8 +426,7 @@ function drawData() {
     drawRows(FIRST_ROWS);
     ensureEmpty(DATA_TABLE, flex ? body.columns.length : DIM_COLUMNS.length + body.periods.length);
     if (first && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 0);
-    // la banda con la clasificación que puso la persona (nombre y color) va ARRIBA y la del tipo de columna (Llave, Dato, Columna nueva) debajo
-    if (first && flex && table.tHead) { const mine = table.tHead.querySelector('tr.data-table-group-band-table'); const type = table.tHead.querySelector('tr.data-table-group-band-classification'); if (mine && type) table.tHead.insertBefore(mine, type); }
+    // el tipo de columna (Llave, Dato, Columna nueva) va ARRIBA y la clasificación que puso la persona (nombre y color) debajo, pegada al encabezado (Daniel, 2026-11-28; antes era al revés): es el orden natural de las dos bandas del motor de tablas
     if (first && Dashboard.registerServerFilteredTable) Dashboard.registerServerFilteredTable(DATA_TABLE, { onChange: (spec) => { st.cf = spec; refreshData(); }, getValues: fetchColumnValues });
     if (first && Dashboard.registerPartialTable) Dashboard.registerPartialTable(DATA_TABLE, { isComplete: () => !st.data || st.drawn >= st.data.rows.length, loadAll: drawAllRows });
     // la fila de totales (Daniel, 2026-11-27): el servidor suma y cuenta TODOS los renglones que pasan el texto y el filtro, no solo los dibujados
