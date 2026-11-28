@@ -2219,6 +2219,19 @@
     "pinMenuUnpinAll": "Unpin all",
     "widthMinBtn": "Collapse columns to the minimum",
     "widthFitBtn": "Fit columns to the header",
+    "lookBtn": "Headers and cells",
+    "lookTitles": "Headers",
+    "lookCells": "Cells",
+    "lookReset": "Back to default",
+    "lookTop": "Align top",
+    "lookMiddle": "Align middle",
+    "lookBottom": "Align bottom",
+    "lookWrap": "Wrap text",
+    "lookLeft": "Align left",
+    "lookCenter": "Center",
+    "lookRight": "Align right",
+    "lookAutoTitles": "Like the data: numbers on the right, text on the left",
+    "lookAutoCells": "Automatic: numbers on the right, text on the left",
     "visPreviewLabel": "Preview — it fills up with whatever you mark Visible or Pinned",
     "filterPanelNoColumns": "There are no columns to filter yet. They show up as soon as the table has them.",
     "visibilityModeHidden": "Hidden",
@@ -10757,6 +10770,22 @@
       "example": "You paste into the template what your register gives you: the receipt number, the date and time, the center code (PARQU-COC), the item, the quantity and the price with VAT."
     },
     "venTable": {
+    "widthMinBtn": {
+      "what": "Sets all columns (except the pinned ones) to the narrowest width, to see many at once. Each full name shows when you hover. Another click brings back the table's previous widths.",
+      "example": "Collapse a 30-column table to see almost all of it"
+    },
+    "widthFitBtn": {
+      "what": "Gives each column (except the pinned ones) the width needed to read its whole header on one line. The data below is shortened as usual. Another click brings back the table's previous widths.",
+      "example": "Fit to read “AVERAGE MONTHLY CONSUMPTION” without cutting it"
+    },
+    "lookBtn": {
+      "what": "Choose how the column headers and the data of the whole table look: align top, middle or bottom, “Wrap text” (the text splits into lines instead of being cut with “…”) and align left, center, right or like the data. It is just for you; “Back to default” leaves it as usual.",
+      "example": "Centered headers with wrapped text"
+    },
+    "lookMenu": {
+      "what": "The buttons are the ones from Excel's “Alignment” ribbon, once for the headers and once for the cells. What you set in a column's format panel wins over this for that column.",
+      "example": "Cells › Wrap text"
+    },
       "what": "The loaded receipts, one per receipt number, from the most recent to the oldest. The subtotal, the VAT and the total are calculated by the system from the prices (which include VAT). Each receipt's history says who loaded it and from which file.",
       "example": "Receipt 000482 of Table 12: 5 items, subtotal 512.93, VAT 82.07 and total 595.00."
     },

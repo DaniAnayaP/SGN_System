@@ -2218,6 +2218,19 @@
     "pinMenuUnpinAll": "Soltar todas las fijas",
     "widthMinBtn": "Contraer columnas al mínimo",
     "widthFitBtn": "Ajustar columnas al encabezado",
+    "lookBtn": "Encabezados y celdas",
+    "lookTitles": "Títulos",
+    "lookCells": "Celdas",
+    "lookReset": "Como estaba",
+    "lookTop": "Alinear arriba",
+    "lookMiddle": "Alinear en el medio",
+    "lookBottom": "Alinear abajo",
+    "lookWrap": "Ajustar texto",
+    "lookLeft": "Alinear a la izquierda",
+    "lookCenter": "Centrar",
+    "lookRight": "Alinear a la derecha",
+    "lookAutoTitles": "Como los datos: números a la derecha, texto a la izquierda",
+    "lookAutoCells": "Automática: números a la derecha, texto a la izquierda",
     "visPreviewLabel": "Vista previa — se va llenando con lo que marques Visible o Fija",
     "filterPanelNoColumns": "Todavía no hay columnas para filtrar. Aparecen en cuanto la tabla las tenga.",
     "visibilityModeHidden": "Oculta",
@@ -10756,6 +10769,22 @@
       "example": "Pegas en la plantilla lo que te da tu caja: el folio del ticket, la fecha y hora, el código del centro (PARQU-COC), el concepto, la cantidad y el precio con IVA."
     },
     "venTable": {
+    "widthMinBtn": {
+      "what": "Deja todas las columnas (menos las fijas) en el ancho más angosto, para ver muchas a la vez. El nombre completo de cada una sale al sobreponer el ratón. Otro clic regresa los anchos que tenía la tabla.",
+      "example": "Contraer una tabla de 30 columnas para verla casi completa"
+    },
+    "widthFitBtn": {
+      "what": "Da a cada columna (menos las fijas) el ancho justo para leer su encabezado completo, en un renglón. Los datos de abajo se abrevian como siempre. Otro clic regresa los anchos que tenía la tabla.",
+      "example": "Ajustar para leer «CONSUMO PROMEDIO MENSUAL» sin cortarse"
+    },
+    "lookBtn": {
+      "what": "Elige cómo se ven los títulos de las columnas y los datos de toda la tabla: alinear arriba, en medio o abajo, «Ajustar texto» (el texto se parte en renglones en vez de cortarse con «…») y alinear a la izquierda, al centro, a la derecha o como los datos. Es solo para ti; «Como estaba» lo deja como siempre.",
+      "example": "Títulos centrados y con el texto ajustado"
+    },
+    "lookMenu": {
+      "what": "Los botones son los de la cinta «Alineación» de Excel, una vez para los títulos y otra para las celdas. Lo que pongas en el panel de formato de una columna manda sobre esto para esa columna.",
+      "example": "Celdas › Ajustar texto"
+    },
       "what": "Los tickets cargados, uno por folio, del más reciente al más antiguo. El subtotal, el IVA y el total los calcula el sistema con los precios (que van con IVA incluido). El historial de cada ticket dice quién lo cargó y de qué archivo.",
       "example": "El ticket 000482 de la Mesa 12: 5 artículos, subtotal 512.93, IVA 82.07 y total 595.00."
     },

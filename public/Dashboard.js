@@ -2211,7 +2211,7 @@ function scheduleDataTableAbbreviation(tableId) {
     // setTimeout y no requestAnimationFrame: una pestaña en segundo plano no dibuja cuadros y la revisión se quedaría esperando
     setTimeout(() => {
         dataTableAbbrQueued.delete(tableId);
-        try { abbreviateDataTableTexts(tableId); } catch (err) { console.warn('Abreviar tabla:', err); }
+        try { abbreviateDataTableTexts(tableId); refreshHeaderAutoAlign(tableId); } catch (err) { console.warn('Abreviar tabla:', err); }
     }, 40);
 }
 function scheduleAllDataTableAbbreviations() {
@@ -4003,6 +4003,7 @@ function resetDataTableColumnLayout(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
     clearWidthMode(tableId);
+    resetDataTableLook(tableId);
     if (returnToOriginalLayout(tableId)) return; // con acomodo original, «Limpiar» regresa a él (no al orden de los datos)
     state.config = {
         order: state.columnKeys.slice(),
@@ -4276,7 +4277,7 @@ function clearWidthMode(tableId) {
     refreshWidthButtons(tableId);
 }
 // El ancho para leer el encabezado completo: el texto (con su letra y espaciado), el relleno de la celda (donde viven el embudo y la flecha de orden) y lo que lleve en su línea (el ⋮ del formato).
-function headerFitWidth(th) {
+function headerFitWidth(th, wrap = false) {
     const cs = getComputedStyle(th);
     const full = th.dataset.abbrFull || Array.from(th.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
     const spec = { font: `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`, spacing: parseFloat(cs.letterSpacing) || 0, upper: cs.textTransform === 'uppercase' };
@@ -4286,7 +4287,17 @@ function headerFitWidth(th) {
         if (p.position === 'absolute' || p.position === 'fixed' || p.display === 'none') return;
         reserved += c.offsetWidth + (parseFloat(p.marginLeft) || 0) + (parseFloat(p.marginRight) || 0);
     });
-    return Math.ceil(tableAbbrWidth(spec, full) + (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) + reserved + 4);
+    let textWidth = tableAbbrWidth(spec, full);
+    if (wrap) {
+        // con «Ajustar texto» en los títulos: el ancho mínimo para partirlo en dos renglones (la mejor división de sus palabras en dos líneas)
+        const words = full.split(/\s+/).filter(Boolean);
+        if (words.length > 1) {
+            let best = textWidth;
+            for (let i = 1; i < words.length; i += 1) best = Math.min(best, Math.max(tableAbbrWidth(spec, words.slice(0, i).join(' ')), tableAbbrWidth(spec, words.slice(i).join(' '))));
+            textWidth = best;
+        }
+    }
+    return Math.ceil(textWidth + (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) + reserved + 4);
 }
 function setDataTableWidthMode(tableId, mode) {
     const state = dataTableColumnState.get(tableId);
@@ -4303,7 +4314,7 @@ function setDataTableWidthMode(tableId, mode) {
         state.columnKeys.forEach((key) => {
             if (pinned.has(key) || hidden.has(key)) return;
             const th = Array.from(headerRow.cells).find((c) => c.dataset.col === key);
-            state.config.widths[key] = mode === 'min' ? DATA_TABLE_COL_MIN_WIDTH : Math.max(DATA_TABLE_COL_MIN_WIDTH, th ? headerFitWidth(th) : DATA_TABLE_COL_MIN_WIDTH);
+            state.config.widths[key] = mode === 'min' ? DATA_TABLE_COL_MIN_WIDTH : Math.max(DATA_TABLE_COL_MIN_WIDTH, th ? headerFitWidth(th, !!(state.look && state.look.hwrap)) : DATA_TABLE_COL_MIN_WIDTH);
         });
         state.widthMode = mode; state.noStretch = true;
     }
@@ -4311,6 +4322,182 @@ function setDataTableWidthMode(tableId, mode) {
     saveWidthMode(tableId, state.widthMode, state.widthsBefore);
     applyDataTableColumnLayout(tableId);
     refreshWidthButtons(tableId);
+}
+
+// --- Encabezados y celdas (Daniel, 2026-11-27): cómo se ven los títulos y los datos de toda la tabla, con los botones de la cinta «Alineación» de Excel. Para Títulos (hv, hwrap, hal) y Celdas (cv, cwrap, cal):
+// vertical (t arriba, m en medio, b abajo), «Ajustar texto» (el texto se parte en renglones) y horizontal (l izquierda, c centro, r derecha, a «como los datos»: números a la derecha, texto a la izquierda). Solo se guarda lo que no es el valor de siempre
+// (localStorage por tabla, como los anchos); los estilos viven en Admin.css con los atributos data-look-* del contenedor. Lo que una columna tenga en su panel de formato manda sobre esto.
+const LOOK_DEFAULTS = { hv: 'm', hwrap: 0, hal: 'l', cv: 'm', cwrap: 0, cal: 'a' };
+const LOOK_VALUES = { hv: ['t', 'm', 'b'], cv: ['t', 'm', 'b'], hal: ['l', 'c', 'r', 'a'], cal: ['l', 'c', 'r', 'a'] };
+const lookKey = (tableId) => `dataTableLook:${layoutKeyOf(tableId)}`;
+function readLook(tableId) {
+    try {
+        const v = JSON.parse(localStorage.getItem(lookKey(tableId)) || 'null');
+        if (!v || typeof v !== 'object') return null;
+        const out = {};
+        Object.keys(LOOK_VALUES).forEach((k) => { if (LOOK_VALUES[k].includes(v[k]) && v[k] !== LOOK_DEFAULTS[k]) out[k] = v[k]; });
+        ['hwrap', 'cwrap'].forEach((k) => { if (v[k]) out[k] = 1; });
+        return Object.keys(out).length ? out : null;
+    } catch { return null; }
+}
+function saveLook(tableId, look) {
+    try {
+        if (look && Object.keys(look).length) localStorage.setItem(lookKey(tableId), JSON.stringify(look));
+        else localStorage.removeItem(lookKey(tableId));
+    } catch { /* sin almacenamiento */ }
+}
+const lookValue = (state, k) => (state.look && state.look[k] !== undefined ? state.look[k] : LOOK_DEFAULTS[k]);
+// «Como los datos» en los títulos: cada título toma la alineación de su columna (números a la derecha, texto a la izquierda), leída de la primera celda de datos.
+function refreshHeaderAutoAlign(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || !state.table.isConnected) return;
+    const auto = lookValue(state, 'hal') === 'a';
+    const headerRow = getHeaderRow(state.table);
+    if (!headerRow) return;
+    Array.from(headerRow.cells).forEach((th) => {
+        if (!th.dataset.col) return;
+        if (!auto) { if (th.style.textAlign) th.style.textAlign = ''; return; }
+        const td = state.table.querySelector(`tbody td[data-col="${CSS.escape(th.dataset.col)}"]`);
+        const align = td ? getComputedStyle(td).textAlign : '';
+        th.style.textAlign = align === 'right' || align === 'end' ? 'right' : (align === 'center' ? 'center' : '');
+    });
+}
+function applyDataTableLook(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const w = state.wrapper;
+    const set = (name, key) => { const v = lookValue(state, key); if (v === LOOK_DEFAULTS[key]) delete w.dataset[name]; else w.dataset[name] = String(v); };
+    set('lookHv', 'hv'); set('lookHwrap', 'hwrap'); set('lookHal', 'hal'); set('lookCv', 'cv'); set('lookCwrap', 'cwrap'); set('lookCal', 'cal');
+    refreshHeaderAutoAlign(tableId);
+    scheduleDataTableAbbreviation(tableId);
+    refreshLookButtons(tableId);
+}
+function resetDataTableLook(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || !state.look) return;
+    state.look = null;
+    saveLook(tableId, null);
+    applyDataTableLook(tableId);
+}
+function refreshLookButtons(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    const bar = state && state.wrapper.previousElementSibling;
+    if (!bar || !bar.querySelector) return;
+    const b = bar.querySelector('[data-col-action="look"]');
+    if (b) { const on = !!state.look; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+}
+// Los iconos son de líneas, como los de Excel.
+const lookSvg = (inner) => `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+const LOOK_ICONS = {
+    v: { t: lookSvg('<path d="M2 2h12M5 5.5h6M5 9h6"/>'), m: lookSvg('<path d="M2 8h12M5 4.5h6M5 11.5h6"/>'), b: lookSvg('<path d="M2 14h12M5 7h6M5 10.5h6"/>') },
+    wrap: lookSvg('<path d="M2 3.5h12M2 7.5h8.5a2.5 2.5 0 0 1 0 5H7.5"/><path d="M9 10.5l-1.6 2 1.6 2"/>'),
+    al: { l: lookSvg('<path d="M2 3h12M2 6.5h8M2 10h12M2 13.5h8"/>'), c: lookSvg('<path d="M2 3h12M4 6.5h8M2 10h12M4 13.5h8"/>'), r: lookSvg('<path d="M2 3h12M6 6.5h8M2 10h12M6 13.5h8"/>'), a: lookSvg('<path d="M2 4h7M7 8h7M2 12h5"/>') },
+};
+let lookMenuEl = null;
+let lookMenuOff = null;
+function closeLookMenu() {
+    if (lookMenuOff) { lookMenuOff(); lookMenuOff = null; }
+    if (lookMenuEl) { lookMenuEl.remove(); lookMenuEl = null; }
+}
+function openDataTableLookMenu(tableId, anchor) {
+    const reopening = lookMenuEl && lookMenuEl.dataset.tableId === tableId;
+    closeLookMenu();
+    if (reopening) return; // tocar el icono otra vez cierra el menú
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const menu = document.createElement('div');
+    menu.className = 'data-table-look-menu';
+    menu.setAttribute('role', 'dialog');
+    menu.setAttribute('aria-label', t('main.lookBtn'));
+    menu.dataset.tableId = tableId;
+    menu.dataset.helpKey = 'lookMenu';
+    const head = document.createElement('div');
+    head.className = 'data-table-look-head';
+    const title = document.createElement('b');
+    title.textContent = t('main.lookBtn');
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'data-table-look-reset';
+    reset.textContent = t('main.lookReset');
+    head.append(title, reset);
+    menu.appendChild(head);
+    const mk = (key, value, icon, label) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'data-table-look-btn';
+        b.dataset.look = key;
+        b.dataset.value = String(value);
+        b.title = label;
+        b.setAttribute('aria-label', label);
+        b.innerHTML = icon;
+        return b;
+    };
+    const section = (p, titleKey, autoKey) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'data-table-look-section';
+        const label = document.createElement('div');
+        label.className = 'data-table-look-label';
+        label.textContent = t(titleKey);
+        const rowV = document.createElement('div');
+        rowV.className = 'data-table-look-row';
+        rowV.append(mk(`${p}v`, 't', LOOK_ICONS.v.t, t('main.lookTop')), mk(`${p}v`, 'm', LOOK_ICONS.v.m, t('main.lookMiddle')), mk(`${p}v`, 'b', LOOK_ICONS.v.b, t('main.lookBottom')));
+        const sep = document.createElement('span');
+        sep.className = 'data-table-look-sep';
+        rowV.append(sep, mk(`${p}wrap`, 1, LOOK_ICONS.wrap, t('main.lookWrap')));
+        const rowH = document.createElement('div');
+        rowH.className = 'data-table-look-row';
+        rowH.append(mk(`${p}al`, 'l', LOOK_ICONS.al.l, t('main.lookLeft')), mk(`${p}al`, 'c', LOOK_ICONS.al.c, t('main.lookCenter')), mk(`${p}al`, 'r', LOOK_ICONS.al.r, t('main.lookRight')), mk(`${p}al`, 'a', LOOK_ICONS.al.a, t(autoKey)));
+        wrap.append(label, rowV, rowH);
+        return wrap;
+    };
+    menu.append(section('h', 'main.lookTitles', 'main.lookAutoTitles'), section('c', 'main.lookCells', 'main.lookAutoCells'));
+    const paint = () => {
+        menu.querySelectorAll('.data-table-look-btn').forEach((b) => {
+            const k = b.dataset.look;
+            const on = k.endsWith('wrap') ? !!lookValue(state, k) : String(lookValue(state, k)) === b.dataset.value;
+            b.classList.toggle('on', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+    };
+    menu.addEventListener('click', (event) => {
+        const b = event.target.closest('.data-table-look-btn');
+        if (!b) return;
+        const k = b.dataset.look;
+        const look = { ...(state.look || {}) };
+        if (k.endsWith('wrap')) { if (look[k]) delete look[k]; else look[k] = 1; }
+        else if (b.dataset.value === LOOK_DEFAULTS[k]) delete look[k];
+        else look[k] = b.dataset.value;
+        state.look = Object.keys(look).length ? look : null;
+        saveLook(tableId, state.look);
+        applyDataTableLook(tableId);
+        // con «Ajustar al encabezado» puesto, el ancho sigue al título en uno o en dos renglones
+        if (k === 'hwrap' && state.widthMode === 'fit') {
+            const headerRow = getHeaderRow(state.table);
+            const pinned = new Set(state.config.pinned);
+            const hidden = new Set(state.config.hidden);
+            state.columnKeys.forEach((key) => {
+                if (pinned.has(key) || hidden.has(key)) return;
+                const th = Array.from(headerRow.cells).find((c) => c.dataset.col === key);
+                if (th) state.config.widths[key] = Math.max(DATA_TABLE_COL_MIN_WIDTH, headerFitWidth(th, !!(state.look && state.look.hwrap)));
+            });
+            saveDataTableConfig(tableId, state.config);
+            applyDataTableColumnLayout(tableId);
+        }
+        paint();
+    });
+    reset.addEventListener('click', () => { resetDataTableLook(tableId); paint(); });
+    paint();
+    document.body.appendChild(menu);
+    const r = anchor.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(r.bottom + 6, window.innerHeight - menu.offsetHeight - 8))}px`;
+    lookMenuEl = menu;
+    const onDown = (event) => { if (!menu.contains(event.target) && !anchor.contains(event.target)) closeLookMenu(); };
+    const onKey = (event) => { if (event.key === 'Escape') closeLookMenu(); };
+    document.addEventListener('mousedown', onDown, true);
+    document.addEventListener('touchstart', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    lookMenuOff = () => { document.removeEventListener('mousedown', onDown, true); document.removeEventListener('touchstart', onDown, true); document.removeEventListener('keydown', onKey, true); };
 }
 
 // Fijar desde el encabezado (Daniel, 2026-11-27, «Fijar hasta aquí», como «Inmovilizar paneles» de Excel): clic derecho (o mantener el dedo medio segundo) sobre el título de una columna abre un menú
@@ -6044,12 +6231,14 @@ function initDataTableColumns(wrapper, index) {
     dataTableColumnState.set(tableId, {
         table, wrapper, colgroup, columnKeys, labels, config, groupKeys, groupTableKeys, naturalWidths,
         widthMode: savedWidthMode ? savedWidthMode.mode : null, widthsBefore: savedWidthMode ? savedWidthMode.before : null, noStretch: !!savedWidthMode,
+        look: readLook(tableId),
         sortKey: null, sortDir: null, originalRowOrder: null,
         columnFilters: new Map(),
         columnRules: new Map(),
     });
     applyDataTableColumnLayout(tableId);
     refreshWidthButtons(tableId);
+    applyDataTableLook(tableId);
     if (original) setActiveSavedLayout(tableId, { id: ORIGINAL_LAYOUT_ID, name: t('main.layoutOriginalName') });
     // Una tabla cambia de ancho por más que la ventana (el menú lateral, la
     // escala de la interfaz, una barra de scroll, un panel que se abre): cada
@@ -10030,7 +10219,17 @@ function renderDataTableColumnControls() {
                     b.addEventListener('click', () => setDataTableWidthMode(getTableId(wrapper, index), mode));
                     return b;
                 };
-                toAppend.push(widthBtn('width-min', 'bx-collapse-horizontal', 'main.widthMinBtn', 'min'), widthBtn('width-fit', 'bx-expand-horizontal', 'main.widthFitBtn', 'fit'));
+                const lookBtn = document.createElement('button');
+                lookBtn.type = 'button';
+                lookBtn.className = 'data-table-zoom-btn';
+                lookBtn.dataset.colAction = 'look';
+                lookBtn.dataset.helpKey = 'lookBtn';
+                lookBtn.setAttribute('aria-label', t('main.lookBtn'));
+                lookBtn.title = t('main.lookBtn');
+                lookBtn.innerHTML = '<i class="bx bx-font" aria-hidden="true"></i>';
+                { const current = dataTableColumnState.get(tableKey); const on = !!(current && current.look); lookBtn.classList.toggle('active', on); lookBtn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+                lookBtn.addEventListener('click', () => openDataTableLookMenu(getTableId(wrapper, index), lookBtn));
+                toAppend.push(widthBtn('width-min', 'bx-collapse-horizontal', 'main.widthMinBtn', 'min'), widthBtn('width-fit', 'bx-expand-horizontal', 'main.widthFitBtn', 'fit'), lookBtn);
                 const columnsBtn = document.createElement('button');
                 columnsBtn.type = 'button';
                 columnsBtn.className = 'data-table-zoom-btn';
