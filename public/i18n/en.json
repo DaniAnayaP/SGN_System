@@ -10691,7 +10691,7 @@
       "example": "Site GAE + Code 100013 in three rows: without duplicates one appears, with duplicates three."
     },
     "anView": {
-      "what": "“Live” calculates the Analysis with today’s data without saving anything; versions are dated copies that do not change. “Extract analysis” saves a new version.",
+      "what": "“Live” calculates the Analysis with today’s data without saving anything; its “Last update” (top right) is when the most recent load of the files it reads arrived. Versions are dated copies that do not change: they show the version’s date. “Extract analysis” saves a new version.",
       "example": "Live, v1, v2."
     },
     "anFdFile": {

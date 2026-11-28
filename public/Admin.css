@@ -10965,6 +10965,10 @@ td.an-cons, th.an-cons{ background: color-mix(in srgb, #f7d9f5 45%, transparent)
 .exp-panel > label{ display: block; margin: 0.55rem 0 0.2rem; font-size: 0.78rem; font-weight: 600; }
 .exp-panel > select, .exp-panel > input[type="text"], .exp-panel > textarea{ width: 100%; }
 .an-file-info{ flex-basis: 100%; margin-left: 0; }
+/* «En vivo»: su «Última actualización» en la fila del título, al lado derecho y en una línea, solo con la hora local (como en Registros Información) */
+.an-file-info.an-file-info-live{ flex: 0 0 auto; margin-left: auto; white-space: nowrap; opacity: 1; color: var(--color-text-secondary); }
+.an-file-info-live .time-local{ display: inline; }
+.an-file-info-live .time-utc{ display: none; }
 /* Registros agregados por el cliente: tarjeta de «Agregar nuevo registro», registro desactivado y la fila de cambiar nombre / desactivar */
 .reg-manage{ display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0 0 0.8rem; }
 .reg-manage-btn{ display: inline-flex; gap: 0.35rem; align-items: center; padding-block: 0.3rem; font-size: 0.8rem; }

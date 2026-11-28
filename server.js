@@ -7913,7 +7913,11 @@ app.get('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);
     if (!analysis) return;
     res.set('Cache-Control', 'no-store');
-    res.json({ analysis: anOut(analysis, req), registries: anRegistriesInfo(req), extractions: listExtractions(analysis.id), ...anAbilities(req) });
+    const shown = anOut(analysis, req);
+    // «Última actualización» de En vivo (Daniel, 2026-11-27): cuándo llegó la carga más reciente de los archivos que lee el análisis (UTC, como las demás fechas)
+    const { clientId, isTestAccount } = req.user;
+    const loadedAt = ((shown && shown.design && shown.design.registries) || []).map((key) => registryLastLoad(clientId, isTestAccount, key)).filter(Boolean).map((l) => l.createdAt).sort();
+    res.json({ analysis: shown, registries: anRegistriesInfo(req), extractions: listExtractions(analysis.id), dataUpdatedAt: loadedAt.length ? loadedAt[loadedAt.length - 1] : null, ...anAbilities(req) });
 });
 app.patch('/api/business/manual-analyses/:id', requireAuth, (req, res) => {
     const analysis = anLoad(req, res);

@@ -60,7 +60,7 @@ async function load() {
     if (res.status === 404) { location.replace('CmAnalisisLista.html'); return; }
     if (!res.ok) throw new Error('load failed');
     const body = await res.json();
-    st.analysis = body.analysis; st.registries = body.registries || []; st.extractions = body.extractions || [];
+    st.analysis = body.analysis; st.registries = body.registries || []; st.extractions = body.extractions || []; st.dataUpdatedAt = body.dataUpdatedAt || '';
     st.canCreate = !!body.canCreate; st.canExtract = !!body.canExtract; st.canAnnul = !!body.canAnnul; st.canComment = !!body.canComment; st.canTotals = !!body.canTotals;
     st.design = JSON.parse(JSON.stringify(st.analysis.design));
     restoreWork(); // los cambios de columnas que quedaron sin aplicar en esta pestaña
@@ -84,7 +84,18 @@ function renderFileInfo() {
     if (!el) return;
     const e = st.extraction;
     if (!e || st.tab !== 'file') { el.textContent = ''; return; }
-    if (e.live) { el.textContent = ''; return; } // «En vivo» no lleva texto explicativo en pantalla: está en el Modo ayuda (anView)
+    el.classList.toggle('an-file-info-live', !!e.live); // «En vivo»: una sola línea a la derecha del título; una versión lleva más texto y va en su propio renglón
+    if (e.live) {
+        // «En vivo»: su «Última actualización» (la carga más reciente de los archivos que lee), como en Registros Información; la explicación va en el Modo ayuda (anView)
+        el.textContent = '';
+        if (!st.dataUpdatedAt) return;
+        const label = document.createElement('b');
+        label.textContent = `${t('main.regUpdated')} `;
+        const when = document.createElement('span');
+        Dashboard.renderTimeStamp(when, st.dataUpdatedAt);
+        el.append(label, when);
+        return;
+    }
     const used = Object.entries((e.notes && e.notes.periods) || {}).filter(([, list]) => list.length).map(([k, list]) => `${regName(registryByKey(k)) || k}: ${periodsText(list)}`).join(' · ');
     el.textContent = '';
     const when = document.createElement('span');

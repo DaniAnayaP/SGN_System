@@ -10690,7 +10690,7 @@
       "example": "Sitio GAE + Código 100013 en tres renglones: sin duplicados sale uno, con duplicados salen tres."
     },
     "anView": {
-      "what": "«En vivo» calcula el Análisis con los datos de hoy sin guardar nada; las versiones son copias con fecha que no cambian. «Extraer análisis» guarda una versión nueva.",
+      "what": "«En vivo» calcula el Análisis con los datos de hoy sin guardar nada; su «Última actualización» (arriba a la derecha) es cuándo llegó la carga más reciente de los archivos que lee. Las versiones son copias con fecha que no cambian: en ellas se ve la fecha de la versión. «Extraer análisis» guarda una versión nueva.",
       "example": "En vivo, v1, v2."
     },
     "anFdFile": {
