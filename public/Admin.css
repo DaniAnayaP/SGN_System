@@ -10979,6 +10979,21 @@ td.an-cons, th.an-cons{ background: color-mix(in srgb, #f7d9f5 45%, transparent)
 body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom[hidden]{ display: none; }
 /* Análisis: la barra de iconos de la pestaña Extracciones (oculta) se veía abajo de la tabla del Archivo porque el display ganaba al hidden (Daniel, 2026-11-27, «¿esta parte de acá abajo qué es?») */
 body[data-active-page="cat-analisis-manuales-lista"] .data-table-zoom[hidden]{ display: none; }
+/* Registros Información: la barra de iconos de la tabla va en la MISMA fila que las pestañas y los botones «Cargar registro» y «Columnas del registro», pegada arriba de la tabla y sin la línea que la separaba (Daniel, 2026-11-27, «Como en Análisis»).
+   La página es una fila que envuelve y la fila de pestañas y botones (.reg-row) deja de ser una caja (display: contents) para que sus piezas compartan el renglón con los iconos; todo lo demás ocupa su propio renglón en su orden de siempre. Solo en pantalla ancha: en el celular queda el diseño de arriba. */
+@media (min-width: 601px){
+    body[data-active-page="cat-cargas-manuales-registros"] .page-content{ display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.6rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .page-content > *{ flex: 0 0 100%; min-width: 0; order: 10; }
+    body[data-active-page="cat-cargas-manuales-registros"] .page-content > .reg-manage{ order: 1; }
+    body[data-active-page="cat-cargas-manuales-registros"] .page-content > .reg-row{ display: contents; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-row > .reg-tabs{ order: 2; flex: 0 0 auto; margin: 0 0 0.7rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-row > .reg-updated{ order: 2; flex: 1 1 8rem; margin: 0 0 0.7rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-row > .reg-actions{ order: 3; flex: 0 0 auto; margin: 0 0 0.7rem auto; }
+    body[data-active-page="cat-cargas-manuales-registros"] .page-content > .data-table-zoom{ order: 4; flex: 0 0 auto; border-bottom: 0; padding-bottom: 0; margin: 0 0 0.7rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .page-content > .filter-bar{ order: 5; }
+    body[data-active-page="cat-cargas-manuales-registros"] .page-content > .data-table-wrapper{ order: 6; }
+    body[data-active-page="cat-cargas-manuales-registros"] .page-content > [hidden]{ display: none; }
+}
 @media (max-width: 600px){
     body.sgn-scroll-shell[data-active-page="cat-cargas-manuales-registros"] > main > .page-scroll{ margin-right: -0.75rem; padding-right: 0.75rem; }
     body[data-active-page="cat-cargas-manuales-registros"] > main{ padding-left: 0.75rem; padding-right: 0.75rem; }
