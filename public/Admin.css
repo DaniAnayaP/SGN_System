@@ -10918,6 +10918,15 @@ td.an-added, th.an-added{ background: color-mix(in srgb, var(--color-accent) 7%,
 /* «Varias columnas (bloque)» y la regla de bloque de «Criterio» (Daniel, 2026-11-27): desde–hasta + «Marcar en la tabla» */
 .an-seg{ display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.2rem 0 0.5rem; }
 .an-seg .btn.an-on{ background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+/* Operación: las pestañas «Paso a paso» / «Fórmula» y la fórmula escrita (Daniel, 2026-11-27) */
+.an-ad-tabs{ margin: 0.5rem 0 0.7rem; }
+.an-fx{ display: block; width: 100%; box-sizing: border-box; font-family: ui-monospace, Consolas, monospace; font-size: 0.95rem; padding: 0.5rem 0.7rem; border-radius: 0.6rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); color: inherit; }
+.an-fx.an-fx-bad{ border-style: solid; border-color: #b3261e; }
+.an-fx-err{ min-height: 1.2rem; margin: 0.3rem 0 0.4rem; font-size: 0.82rem; color: #b3261e; }
+body.dark-mode .an-fx-err{ color: #ff8a80; }
+body.dark-mode .an-fx.an-fx-bad{ border-color: #ff8a80; }
+.an-fx-ins{ display: flex; flex-wrap: wrap; gap: 0.4rem 0.5rem; margin: 0 0 0.6rem; }
+.an-fx-ins select{ border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); border-radius: 0.5rem; padding: 0.25rem 0.5rem; font: inherit; min-width: 0; max-width: 100%; }
 /* Bloque: los cálculos agrupados por tipo (Contar, Estadística) y la condición opcional («Solo las que…») */
 .an-fn-groups{ display: flex; flex-direction: column; gap: 0.2rem; }
 .an-fn-title{ font-size: 0.66rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-accent); }

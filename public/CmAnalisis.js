@@ -410,6 +410,9 @@ document.addEventListener('change', (event) => {
 // ---- columnas agregadas en el Archivo (Daniel, 2026-11-26): se agregan sobre el archivo ya extraído; pieza 1 = «Operación paso a paso» ---------------------------------------------------------
 const CLASS_COLORS = ['#3f78ad', '#b23fb8', '#2b8456', '#b57a05', '#4f58c2', '#c4473a'];
 const OPS = ['add', 'sub', 'mul', 'div', 'pow', 'min', 'max', 'logbase', 'round', 'sqrt', 'ln', 'log10', 'exp', 'abs'];
+// Las acciones agrupadas por tipo, como la Biblioteca de funciones de Excel (Daniel, 2026-11-27, «la A»): un título de tipo antes de cada grupo (<optgroup>); la lista es la misma de siempre
+const OP_GROUPS = [['basic', ['add', 'sub', 'mul', 'div']], ['pow', ['pow', 'sqrt', 'ln', 'log10', 'logbase', 'exp']], ['round', ['round', 'abs']], ['minmax', ['min', 'max']]];
+const groupedOptions = (groups, groupKey, itemKey, selected) => groups.map(([g, list]) => `<optgroup label="${esc(t(`main.${groupKey}_${g}`))}">${list.map((o) => `<option value="${o}"${selected === o ? ' selected' : ''}>${esc(t(`main.${itemKey}_${o}`))}</option>`).join('')}</optgroup>`).join('');
 const OPS_NO_ARG = new Set(['sqrt', 'ln', 'log10', 'exp', 'abs']);
 const OPS_VALUE_ONLY = new Set(['logbase', 'round']);
 const foldCls = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
@@ -856,6 +859,98 @@ async function bulkRemove() {
     st.sel.clear(); st.bulkOpen = false; renderAddedBar();
     Dashboard.showToast(t('main.anBulkRemoved', { n: keys.length }), 'info');
 }
+// ---- «Fórmula» en la ventana de Operación (Daniel, 2026-11-27, «la A»): escribir =H*I en vez de armar los pasos. La fórmula se convierte en los MISMOS pasos de siempre (de izquierda a derecha, cada uno con una columna o un número), así que lo guardado,
+// la fórmula de Excel que se muestra y el cálculo del servidor no cambian. Las funciones llevan su nombre de Excel en español (el mismo que escribe formulaOfSteps en el servidor). ----
+const FX_FUNCS = { ABS: ['abs', 1], RAIZ: ['sqrt', 1], LN: ['ln', 1], LOG10: ['log10', 1], EXP: ['exp', 1], REDONDEAR: ['round', 2], POTENCIA: ['pow', 2], MIN: ['min', 2], MAX: ['max', 2], LOG: ['logbase', 2] };
+const FX_NAME_OF = Object.fromEntries(Object.entries(FX_FUNCS).map(([name, [op]]) => [op, name]));
+// letters: Map letra de Excel → llave de la columna. Devuelve { steps } (pasos como los guarda el análisis) o { err: [código, dato, número] }.
+function parseFormula(text, letters) {
+    const src = String(text || '').trim();
+    if (src[0] !== '=') return { err: ['START'] };
+    const body = src.slice(1);
+    if (!body.trim()) return { err: ['EMPTY'] };
+    const toks = [];
+    const re = /\s*(?:(\d+(?:[.,]\d+)?)|([A-Za-zÑñ]+\d*)|([-+*/^();]))/y;
+    let pos = 0;
+    while (pos < body.length) {
+        if (!body.slice(pos).trim()) break;
+        re.lastIndex = pos;
+        const m = re.exec(body);
+        if (!m) return { err: ['CHAR', body.slice(pos).trim()[0]] };
+        toks.push(m[1] !== undefined ? { k: 'num', v: m[1] } : (m[2] !== undefined ? { k: 'id', v: m[2] } : { k: 'op', v: m[3] }));
+        pos = re.lastIndex;
+    }
+    let i = 0;
+    const peekIs = (v) => !!toks[i] && toks[i].k === 'op' && toks[i].v === v;
+    const fail = (code, x, n) => { throw { code, x, n }; };
+    const expr = () => {
+        let left = term();
+        while (peekIs('+') || peekIs('-')) { const op = toks[i].v === '+' ? 'add' : 'sub'; i += 1; left = { t: 'bin', op, l: left, r: term() }; }
+        return left;
+    };
+    const term = () => {
+        let left = power();
+        while (peekIs('*') || peekIs('/')) { const op = toks[i].v === '*' ? 'mul' : 'div'; i += 1; left = { t: 'bin', op, l: left, r: power() }; }
+        return left;
+    };
+    const power = () => {
+        let left = unary();
+        while (peekIs('^')) { i += 1; left = { t: 'bin', op: 'pow', l: left, r: unary() }; }
+        return left;
+    };
+    const unary = () => {
+        if (peekIs('-')) { i += 1; const x = unary(); return x.t === 'num' ? { t: 'num', v: -x.v } : { t: 'bin', op: 'mul', l: x, r: { t: 'num', v: -1 } }; }
+        if (peekIs('+')) { i += 1; return unary(); }
+        return primary();
+    };
+    const primary = () => {
+        const tk = toks[i]; i += 1;
+        if (!tk) fail('SYNTAX');
+        if (tk.k === 'num') return { t: 'num', v: Number(tk.v.replace(',', '.')) };
+        if (tk.k === 'op' && tk.v === '(') { const e = expr(); if (!peekIs(')')) fail('SYNTAX'); i += 1; return e; }
+        if (tk.k === 'id') {
+            const id = tk.v.toUpperCase();
+            if (peekIs('(')) {
+                const def = FX_FUNCS[id];
+                if (!def) fail('FN', id);
+                i += 1;
+                if (peekIs(')')) fail('ARGS', id, def[1]);
+                const args = [expr()];
+                while (peekIs(';')) { i += 1; args.push(expr()); }
+                if (!peekIs(')')) fail('SYNTAX');
+                i += 1;
+                if (args.length !== def[1]) fail('ARGS', id, def[1]);
+                return { t: 'fn', op: def[0], name: id, args };
+            }
+            const m = /^([A-Z]{1,3})(\d*)$/.exec(id);
+            if (!m) fail('COL', id);
+            if (m[2] && m[2] !== '2') fail('ROW');
+            const key = letters.get(m[1]);
+            if (!key) fail('COL', m[1]);
+            return { t: 'col', key };
+        }
+        return fail('SYNTAX');
+    };
+    const atomArg = (n) => (n.t === 'col' ? { col: n.key } : (n.t === 'num' ? { value: n.v } : null));
+    const stepsOf = (n) => {
+        if (n.t === 'col' || n.t === 'num') return [{ op: 'start', arg: atomArg(n) }];
+        if (n.t === 'bin') { const a = atomArg(n.r); if (!a) fail('NOSTEPS'); return [...stepsOf(n.l), { op: n.op, arg: a }]; }
+        const base = stepsOf(n.args[0]);
+        if (n.args.length === 1) return [...base, { op: n.op }];
+        const a = atomArg(n.args[1]);
+        if (!a) fail('NOSTEPS');
+        if (OPS_VALUE_ONLY.has(n.op) && a.value === undefined) fail('VALUEONLY', n.name);
+        return [...base, { op: n.op, arg: a }];
+    };
+    try {
+        const tree = expr();
+        if (i < toks.length) fail('SYNTAX');
+        return { steps: stepsOf(tree) };
+    } catch (e) {
+        if (e && e.code) return { err: [e.code, e.x, e.n] };
+        throw e;
+    }
+}
 function openAddedDialog(editId) {
     const allCols = (st.data && st.data.columns) || [];
     const added = (st.design.added || []);
@@ -881,9 +976,23 @@ function openAddedDialog(editId) {
             <div><label for="an-ad-cls">${esc(t('main.anAddedClass'))}</label><input type="text" id="an-ad-cls" maxlength="40" autocomplete="off" list="an-ad-cls-list" placeholder="${esc(t('main.anAddedClassNone'))}" value="${esc(draft.cls)}"><datalist id="an-ad-cls-list">${classKnown().map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
             <div><label for="an-ad-dec">${esc(t('main.anAddedFormat'))}</label><select id="an-ad-dec"><option value="">${esc(t('main.anFmtAuto'))}</option>${[0, 1, 2, 3, 4].map((n) => `<option value="${n}">${esc(t('main.anFmtDecimals', { n }))}</option>`).join('')}</select></div>
         </div>
-        <p class="reg-field-label">${esc(t('main.anAddedSteps'))}</p>
-        <div class="an-steps" id="an-ad-steps"></div>
-        <p><button type="button" class="btn btn-secondary" data-an-addstep><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddStep'))}</button></p>
+        <div class="reg-tabs an-ad-tabs" role="tablist" aria-label="${esc(t('main.anAdModeLabel'))}" data-help-key="anFormulaTab">
+            <button type="button" class="reg-tab reg-tab-on" role="tab" id="an-ad-tab-steps" data-an-adtab="steps" aria-selected="true" aria-controls="an-ad-pane-steps">${esc(t('main.anAdTabSteps'))}</button>
+            <button type="button" class="reg-tab" role="tab" id="an-ad-tab-fx" data-an-adtab="fx" aria-selected="false" aria-controls="an-ad-pane-fx">${esc(t('main.anAdTabFx'))}</button>
+        </div>
+        <div id="an-ad-pane-steps" role="tabpanel" aria-labelledby="an-ad-tab-steps">
+            <p class="reg-field-label">${esc(t('main.anAddedSteps'))}</p>
+            <div class="an-steps" id="an-ad-steps"></div>
+            <p><button type="button" class="btn btn-secondary" data-an-addstep><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddStep'))}</button></p>
+        </div>
+        <div id="an-ad-pane-fx" role="tabpanel" aria-labelledby="an-ad-tab-fx" hidden>
+            <input type="text" id="an-ad-fx" class="an-fx" spellcheck="false" autocomplete="off" placeholder="=H*I" aria-label="${esc(t('main.anAdTabFx'))}" aria-describedby="an-ad-fx-err">
+            <p class="an-fx-err" id="an-ad-fx-err" role="status"></p>
+            <div class="an-fx-ins">
+                <select id="an-ad-fx-col" aria-label="${esc(t('main.anFxInsertCol'))}"><option value="">${esc(t('main.anFxInsertCol'))}</option>${pickable.map((c) => `<option value="${esc(c.letter)}">${esc(c.letter)} · ${esc(c.title)}</option>`).join('')}</select>
+                <select id="an-ad-fx-fn" aria-label="${esc(t('main.anFxInsertFn'))}"><option value="">${esc(t('main.anFxInsertFn'))}</option>${OP_GROUPS.map(([g, list]) => { const fns = list.filter((o) => FX_NAME_OF[o]); return fns.length ? `<optgroup label="${esc(t(`main.anOpGroup_${g}`))}">${fns.map((o) => `<option value="${FX_NAME_OF[o]}">${FX_NAME_OF[o]} · ${esc(t(`main.anOp_${o}`))}</option>`).join('')}</optgroup>` : ''; }).join('')}</select>
+            </div>
+        </div>
         <p class="reg-field-label">${esc(t('main.anFormulaExcel'))}</p>
         <div class="an-formula" id="an-ad-formula">—</div>
         <div id="an-ad-preview"></div>
@@ -892,13 +1001,52 @@ function openAddedDialog(editId) {
     modal(html, (overlay, close) => {
         const $ = (sel) => overlay.querySelector(sel);
         $('#an-ad-dec').value = draft.decimals === null || draft.decimals === undefined ? '' : String(draft.decimals);
+        let mode = 'steps'; let fxError = ''; // «Paso a paso» o «Fórmula»: la pestaña que está puesta es la que manda; fxError = lo que no se entendió de la fórmula escrita
+        const letterKeys = new Map(pickable.map((c) => [c.letter, c.key]));
+        const keyLetters = new Map(pickable.map((c) => [c.key, c.letter]));
+        // los pasos de hoy como fórmula de Excel (el mismo texto que arma el servidor) para llenar la pestaña «Fórmula» al abrirla; null si algún paso aún está incompleto
+        const sumOutside = (expr) => { let depth = 0; for (let k = 0; k < expr.length; k += 1) { const ch = expr[k]; if (ch === '(') depth += 1; else if (ch === ')') depth -= 1; else if (depth === 0 && k > 0 && (ch === '+' || ch === '-')) return true; } return false; };
+        const wrapSum = (expr) => (sumOutside(expr) ? `(${expr})` : expr);
+        const draftFormula = (steps) => {
+            let expr = '';
+            for (const s of steps) {
+                let a = '';
+                if (s.op === 'start' || !OPS_NO_ARG.has(s.op)) {
+                    if (s.kind === 'col' && !OPS_VALUE_ONLY.has(s.op)) { const l = keyLetters.get(s.col); if (!l) return null; a = `${l}2`; } else { const n = Number(String(s.value).replace(',', '.')); if (String(s.value).trim() === '' || !Number.isFinite(n)) return null; a = String(n); }
+                }
+                if (s.op === 'start') expr = a;
+                else if (s.op === 'add') expr = `${expr}+${a}`;
+                else if (s.op === 'sub') expr = `${expr}-${a}`;
+                else if (s.op === 'mul') expr = `${wrapSum(expr)}*${a}`;
+                else if (s.op === 'div') expr = `${wrapSum(expr)}/${a}`;
+                else if (OPS_NO_ARG.has(s.op)) expr = `${FX_NAME_OF[s.op]}(${expr})`;
+                else expr = `${FX_NAME_OF[s.op]}(${expr};${a})`;
+            }
+            return `=${expr}`;
+        };
+        const fxErrorText = ([code, x, n]) => t(`main.anFxErr_${code}`, { x: x || '', n: n || '' });
+        const applyFx = (text) => {
+            const box = $('#an-ad-fx'); const msg = $('#an-ad-fx-err');
+            const r = parseFormula(text, letterKeys);
+            if (r.err) { fxError = fxErrorText(r.err); msg.textContent = fxError; box.classList.add('an-fx-bad'); box.setAttribute('aria-invalid', 'true'); return; }
+            fxError = ''; msg.textContent = ''; box.classList.remove('an-fx-bad'); box.removeAttribute('aria-invalid');
+            draft.steps = r.steps.map(toDraftStep);
+        };
+        const setMode = (next) => {
+            if (next === mode) return;
+            if (next === 'fx') { const box = $('#an-ad-fx'); box.value = draftFormula(draft.steps) || '='; mode = 'fx'; applyFx(box.value); } else { mode = 'steps'; fxError = ''; drawSteps(); }
+            $('#an-ad-pane-steps').hidden = mode !== 'steps'; $('#an-ad-pane-fx').hidden = mode !== 'fx';
+            overlay.querySelectorAll('[data-an-adtab]').forEach((b) => { const on = b.dataset.anAdtab === mode; b.classList.toggle('reg-tab-on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+            preview();
+            if (mode === 'fx') $('#an-ad-fx').focus();
+        };
         const colSelect = (value, field, stepIndex, withValue) => `<select data-st="${stepIndex}" data-f="${field}">${pickable.map((c) => `<option value="${esc(c.key)}"${value === c.key ? ' selected' : ''}>${esc(c.letter)} · ${esc(c.title)}</option>`).join('')}${withValue ? `<option value="__value"${value === '__value' ? ' selected' : ''}>${esc(t('main.anArgValue'))}</option>` : ''}</select>`;
         const drawSteps = () => {
             $('#an-ad-steps').innerHTML = draft.steps.map((s, i) => {
                 if (i === 0) {
                     return `<div class="an-step"><b>1</b><span>${esc(t('main.anStepStart'))}</span>${colSelect(s.kind === 'col' ? s.col : '__value', 'pick', 0, true)}${s.kind === 'value' ? `<input type="text" inputmode="decimal" data-st="0" data-f="value" value="${esc(s.value)}" placeholder="${esc(t('main.anArgValuePh'))}" aria-label="${esc(t('main.anArgValuePh'))}">` : ''}</div>`;
                 }
-                const opSel = `<select data-st="${i}" data-f="op">${OPS.map((o) => `<option value="${o}"${s.op === o ? ' selected' : ''}>${esc(t(`main.anOp_${o}`))}</option>`).join('')}</select>`;
+                const opSel = `<select data-st="${i}" data-f="op">${groupedOptions(OP_GROUPS, 'anOpGroup', 'anOp', s.op)}</select>`;
                 let arg = '';
                 if (!OPS_NO_ARG.has(s.op)) {
                     const valueOnly = OPS_VALUE_ONLY.has(s.op);
@@ -909,6 +1057,7 @@ function openAddedDialog(editId) {
         };
         const colorFor = (cls) => colorOfClass(cls, editing); // el mismo nombre de clasificación lleva el mismo color en las columnas consultadas y en las agregadas
         const toDef = () => {
+            if (mode === 'fx' && fxError) return null; // la fórmula escrita no se entiende: no hay nada que calcular ni guardar
             const steps = [];
             for (const s of draft.steps) {
                 if (s.op === 'start') {
@@ -942,12 +1091,21 @@ function openAddedDialog(editId) {
             const el = event.target;
             if (el.id === 'an-ad-name') { draft.name = el.value; touchedName = true; return; }
             if (el.id === 'an-ad-cls') { draft.cls = el.value; return; }
+            if (el.id === 'an-ad-fx') { applyFx(el.value); preview(); return; }
             if (el.dataset && el.dataset.f === 'value') { draft.steps[Number(el.dataset.st)].value = el.value; preview(); }
         });
         overlay.addEventListener('change', (event) => {
             const el = event.target;
             if (el.id === 'an-ad-dec') { draft.decimals = el.value === '' ? null : Number(el.value); return; }
             if (el.id === 'an-ad-cls') { draft.cls = el.value; return; }
+            if (el.id === 'an-ad-fx-col' || el.id === 'an-ad-fx-fn') { // «Insertar columna / función»: se escribe en la fórmula donde está el cursor
+                const box = $('#an-ad-fx'); const text = el.id === 'an-ad-fx-fn' ? `${el.value}(` : el.value; el.value = '';
+                if (!text || text === '(') return;
+                const from = box.selectionStart == null ? box.value.length : box.selectionStart; const to = box.selectionEnd == null ? from : box.selectionEnd;
+                box.value = box.value.slice(0, from) + text + box.value.slice(to);
+                const at = from + text.length; box.focus(); try { box.setSelectionRange(at, at); } catch { /* sin cursor */ }
+                applyFx(box.value); preview(); return;
+            }
             if (!el.dataset || el.dataset.st === undefined) return;
             const s = draft.steps[Number(el.dataset.st)];
             if (el.dataset.f === 'op') { s.op = el.value; if (OPS_VALUE_ONLY.has(s.op)) s.kind = 'value'; }
@@ -956,6 +1114,8 @@ function openAddedDialog(editId) {
         });
         overlay.addEventListener('click', (event) => {
             const del = event.target.closest('[data-an-delstep]');
+            const tab = event.target.closest('[data-an-adtab]');
+            if (tab) { setMode(tab.dataset.anAdtab); return; }
             if (event.target.closest('[data-an-addstep]')) { draft.steps.push({ op: 'add', kind: 'value', col: '', value: '' }); drawSteps(); preview(); return; }
             if (del) { draft.steps.splice(Number(del.dataset.anDelstep), 1); drawSteps(); preview(); }
         });
@@ -963,7 +1123,7 @@ function openAddedDialog(editId) {
             const err = (text) => { const el = $('#an-ad-error'); el.textContent = text; el.hidden = !text; };
             const def = toDef();
             if (!draft.name.trim()) return err(t('main.anErr_ADDED_NAME'));
-            if (!def) return err(t('main.anErr_ADDED_STEPS'));
+            if (!def) return err(mode === 'fx' && fxError ? fxError : t('main.anErr_ADDED_STEPS'));
             if (!editing && added.length >= 40) return err(t('main.anErr_ADDED_TOO_MANY'));
             const next = editing ? added.map((a) => (a.id === editing.id ? def : a)) : [...added, { ...def, id: `a${Date.now().toString(36)}` }];
             try { await saveAdded(next); close(); } catch (e) { err(errorText(e.body)); }
@@ -1057,7 +1217,7 @@ function openBlockDialog(editId) {
         <div class="an-fn-groups" id="an-bk-fns"></div>
         <div class="an-cond an-bk-cond" id="an-bk-cond" hidden>
             <span class="an-lead" id="an-bk-condlead"></span>
-            <select id="an-bk-condop" aria-label="${esc(t('main.anBlockCondLead'))}">${BLOCK_CONDS.map((o) => `<option value="${o}">${esc(t(`main.anCond_${o}`))}</option>`).join('')}</select>
+            <select id="an-bk-condop" aria-label="${esc(t('main.anBlockCondLead'))}">${groupedOptions(COND_GROUPS.map(([g, list]) => [g, list.filter((o) => BLOCK_CONDS.includes(o))]).filter(([, list]) => list.length), 'anCondGroup', 'anCond', '')}</select>
             <input type="text" id="an-bk-condval" inputmode="decimal" autocomplete="off" placeholder="${esc(t('main.anBlockCondValue'))}" aria-label="${esc(t('main.anBlockCondValue'))}">
         </div>
         <p class="reg-field-label">${esc(t('main.anBlockCols'))}</p>
@@ -1152,6 +1312,7 @@ function openBlockDialog(editId) {
 
 // ---- «Criterio» (pieza 2): reglas «si… entonces…», de arriba abajo; gana la primera que se cumple ----------------------------------------------------------------------------------------
 const COND_OPS = ['lt', 'lte', 'gt', 'gte', 'between', 'eq', 'neq', 'contains', 'empty', 'notEmpty', 'blankZero'];
+const COND_GROUPS = [['eq', ['eq', 'neq']], ['num', ['lt', 'lte', 'gt', 'gte', 'between']], ['text', ['contains']], ['empty', ['empty', 'notEmpty', 'blankZero']]]; // las condiciones por tipo (Igualdad, Números, Texto, Vacíos), igual que las acciones
 const NUMERIC_COND_OPS = new Set(['lt', 'lte', 'gt', 'gte', 'between']);
 const NO_VALUE_COND_OPS = new Set(['empty', 'notEmpty', 'blankZero']);
 const RESULT_TYPES = ['text', 'value', 'col', 'empty'];
@@ -1220,7 +1381,7 @@ function openCriterionDialog(editId) {
             return `<div class="an-rule an-rule-scan"><div class="an-rulehead"><b>${esc(t('main.anScanTitle', { n: i + 1 }))}</b>${delBtn}</div>
                 <div class="an-cond"><span class="an-lead">${esc(t('main.anScanReview'))}</span><span>${esc(t('main.anBlockFrom'))}</span>${blockSelect(blockCols, attrs('sfrom'), rule.from)}<span>${esc(t('main.anBlockTo'))}</span>${blockSelect(blockCols, attrs('sto'), rule.to)}<button type="button" class="btn btn-secondary an-sm" data-an-markblock data-cr-scan="${i}">⌖ ${esc(t('main.anBlockMark'))}</button><span class="an-cnt">${esc(blockCountText(blockCount(blockCols, rule.from, rule.to)))}</span></div>
                 <div class="an-cond"><span class="an-lead">${esc(t('main.anScanDir'))}</span><select ${attrs('sdir')}><option value="asc"${rule.dir === 'asc' ? ' selected' : ''}>${esc(t('main.anScanDir_asc'))}</option><option value="desc"${rule.dir === 'desc' ? ' selected' : ''}>${esc(t('main.anScanDir_desc'))}</option></select></div>
-                <div class="an-cond"><span class="an-lead">${esc(t('main.anScanWhere'))}</span><select ${attrs('sop')}>${COND_OPS.map((o) => `<option value="${o}"${c.op === o ? ' selected' : ''}>${esc(t(`main.anCond_${o}`))}</option>`).join('')}</select>${vals}</div>
+                <div class="an-cond"><span class="an-lead">${esc(t('main.anScanWhere'))}</span><select ${attrs('sop')}>${groupedOptions(COND_GROUPS, 'anCondGroup', 'anCond', c.op)}</select>${vals}</div>
                 <div class="an-cond"><span class="an-lead">${esc(t('main.anThen'))}</span>${resultEditor(rule.res, `r${i}`, SCAN_RESULT_TYPES)}</div></div>`;
         };
         const draw = () => {
@@ -1234,7 +1395,7 @@ function openCriterionDialog(editId) {
                         vals = `<input type="text" ${NUMERIC_COND_OPS.has(c.op) ? 'inputmode="decimal"' : ''} ${attrs('value')} value="${esc(c.value)}" placeholder="${esc(t('main.anArgValuePh'))}" aria-label="${esc(t('main.anArgValuePh'))}">`;
                         if (c.op === 'between') vals += `<span>${esc(t('main.anBetweenAnd'))}</span><input type="text" inputmode="decimal" ${attrs('value2')} value="${esc(c.value2)}" placeholder="${esc(t('main.anArgValuePh'))}" aria-label="${esc(t('main.anArgValuePh'))}">`;
                     }
-                    return `<div class="an-cond"><span class="an-lead">${esc(lead)}</span>${colSel(c.col, attrs('col'))}<select ${attrs('op')}>${COND_OPS.map((o) => `<option value="${o}"${c.op === o ? ' selected' : ''}>${esc(t(`main.anCond_${o}`))}</option>`).join('')}</select>${vals}${rule.conds.length > 1 ? `<button type="button" class="admin-icon-btn" data-an-delcond="${i}:${j}" aria-label="${esc(t('main.anRemoveCond'))}" title="${esc(t('main.anRemoveCond'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</div>`;
+                    return `<div class="an-cond"><span class="an-lead">${esc(lead)}</span>${colSel(c.col, attrs('col'))}<select ${attrs('op')}>${groupedOptions(COND_GROUPS, 'anCondGroup', 'anCond', c.op)}</select>${vals}${rule.conds.length > 1 ? `<button type="button" class="admin-icon-btn" data-an-delcond="${i}:${j}" aria-label="${esc(t('main.anRemoveCond'))}" title="${esc(t('main.anRemoveCond'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</div>`;
                 }).join('');
                 const join = rule.conds.length > 1 ? `<div class="an-cond"><span class="an-lead">${esc(t('main.anJoinLabel'))}</span><select data-cr="r${i}" data-f="join"><option value="and"${rule.join === 'and' ? ' selected' : ''}>${esc(t('main.anJoinAnd'))}</option><option value="or"${rule.join === 'or' ? ' selected' : ''}>${esc(t('main.anJoinOr'))}</option></select></div>` : '';
                 return `<div class="an-rule"><div class="an-rulehead"><b>${esc(t('main.anRuleN', { n: i + 1 }))}</b>${draft.rules.length > 1 ? `<button type="button" class="admin-icon-btn" data-an-delrule="${i}" aria-label="${esc(t('main.anRemoveRule'))}" title="${esc(t('main.anRemoveRule'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</div>${conds}${rule.conds.length < 5 ? `<div><button type="button" class="btn btn-secondary" data-an-addcond="${i}"><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anAddCond'))}</button></div>` : ''}${join}<div class="an-cond"><span class="an-lead">${esc(t('main.anThen'))}</span>${resultEditor(rule.res, `r${i}`)}</div></div>`;
