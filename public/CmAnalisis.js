@@ -30,6 +30,36 @@ const colKeyOf = (key) => `an_${key}`;
 const params = new URLSearchParams(location.search);
 const st = { id: Number(params.get('id')) || 0, analysis: null, registries: [], extractions: [], canCreate: false, canExtract: false, canAnnul: false, design: null, picked: new Set(), dirty: false, sources: [], tab: params.get('tab') || '', extraction: null, data: null, text: '', selMode: false, sel: new Set(), bulkOpen: false, lastPick: -1, entries: [], leaving: false, refreshing: false, view: null, sortSpec: null, cf: null, canComment: false, canTotals: false, numCols: new Set() };
 const wrapperOf = (id) => document.querySelector(`[data-table-id="${id}"]`);
+// El panel de «Columnas consultadas» y «Columnas agregadas» se puede ocultar con un icono de la barra de la tabla (Daniel, 2026-11-28, «ya solo trabajo en la tabla y me ocupa espacio»): se recuerda por persona. Con el panel oculto,
+// «Seleccionar» lo muestra mientras dura la selección.
+const PANEL_KEY = 'anColsPanelHidden';
+const readPanelHidden = () => { try { return localStorage.getItem(PANEL_KEY) === '1'; } catch { return false; } };
+const savePanelHidden = (on) => { try { if (on) localStorage.setItem(PANEL_KEY, '1'); else localStorage.removeItem(PANEL_KEY); } catch { /* sin almacenamiento */ } };
+function syncPanelToggle() {
+    const btn = document.querySelector('[data-col-action="an-panel"]');
+    if (!btn) return;
+    const hidden = !!st.panelHidden;
+    const label = t(hidden ? 'main.anPanelShow' : 'main.anPanelHide');
+    btn.setAttribute('aria-label', label); btn.title = label;
+    btn.classList.toggle('active', hidden); btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+}
+function ensurePanelToggle() {
+    if (st.panelHidden === undefined) st.panelHidden = readPanelHidden(); // lo que la persona dejó la última vez, aunque la barra de la tabla todavía no esté
+    const wrapper = wrapperOf(FILE_TABLE);
+    const bar = wrapper && wrapper.previousElementSibling;
+    if (!bar || !bar.classList.contains('data-table-zoom')) return;
+    if (bar.querySelector('[data-col-action="an-panel"]')) { syncPanelToggle(); return; }
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-zoom-btn';
+    btn.dataset.colAction = 'an-panel';
+    btn.dataset.helpKey = 'anPanelToggle';
+    btn.innerHTML = '<i class="bx bx-collapse-vertical" aria-hidden="true"></i>';
+    btn.addEventListener('click', () => { st.panelHidden = !st.panelHidden; savePanelHidden(st.panelHidden); syncPanelToggle(); renderAddedBar(); });
+    bar.appendChild(btn);
+    if (Dashboard.groupDataTableToolbar) Dashboard.groupDataTableToolbar(bar);
+    syncPanelToggle();
+}
 const tableOf = (id) => wrapperOf(id)?.querySelector('table.data-table');
 const registryByKey = (k) => st.registries.find((r) => r.key === k) || (st.sources || []).find((r) => r.key === k);
 
@@ -833,7 +863,8 @@ function renderAddedBar() {
     tools.innerHTML = `${addMenu}${selBtn}${ghost}<span class="an-tools-sp"></span>${refreshBtn}${extractBtn}`;
     bar.innerHTML = `${renderConsultedPanel(entries.filter((e) => e.kind === 'f'), chip, pick)}${renderAddedPanel(entries.filter((e) => e.kind === 'a'), chip)}`;
     tools.hidden = false;
-    bar.hidden = false;
+    ensurePanelToggle();
+    bar.hidden = !!st.panelHidden && !pick; // oculto con el icono de la barra de la tabla (salvo mientras se selecciona)
     renderSelBar();
     renderPendingBar();
 }

@@ -2341,6 +2341,10 @@
     "bandsRowType": "Fill type",
     "bandsRowOrigin": "Origin",
     "bandsRowClass": "Classification",
+    "anPanelHide": "Hide the queried and added columns",
+    "anPanelShow": "Show the queried and added columns",
+    "bandsSelectAll": "Select all",
+    "bandsUnselectAll": "Clear all",
     "anBandAuto": "Automatic",
     "anBandCaptured": "Captured",
     "anBandCatalog": "From catalog",
@@ -10988,6 +10992,10 @@
     "anTypeBand": {
       "what": "The top band says how each column is filled. In Analysis: From the record (the base record’s), Queried (pulled from another record or file), Formula (calculated with an operation), Criterion (yes or no depending on a condition), Block (calculates over a group of columns: the combined one) or Comments (you type them). In other tables: Automatic (filled in by the system, like the Internal Control columns), Captured (typed or chosen by a person), From catalog (chosen from a list) or Calculated (the system calculates it). Neighboring columns of the same type are merged into one cell with their count.",
       "example": "From the record · 6 | Queried · 2 | Formula | Criterion | Block | Comments"
+    },
+    "anPanelToggle": {
+      "what": "Hides or shows the panel above the table with the queried columns (by file and classification) and the added columns, to gain space when you only work on the table. It is remembered per person. When you tap “Select” the panel shows while you choose and then hides again.",
+      "example": "Hide the panel → the table moves up and takes that space"
     },
     "bandsToggle": {
       "what": "Hides or shows the bands above the header (fill type, origin and classification), one by one. It is remembered per person and table. Hiding a band does not change the order, filters, totals or the download.",

@@ -7130,6 +7130,9 @@ function openBandsMenu(tableId, anchor) {
     title.textContent = t('main.bandsMenuTitle');
     el.appendChild(title);
     const hidden = state.hiddenBands || (state.hiddenBands = readHiddenBands(tableId));
+    const boxes = [];
+    const all = document.createElement('button'); // «Seleccionar todo» / «Deseleccionar todo»: muestra o esconde todas las franjas de un golpe
+    const syncAll = () => { all.textContent = t(boxes.every((b) => b.box.checked) ? 'main.bandsUnselectAll' : 'main.bandsSelectAll'); };
     BAND_ROWS.forEach(([kind, selector]) => {
         const row = state.table.tHead.querySelector(selector);
         if (!row) return;
@@ -7138,10 +7141,12 @@ function openBandsMenu(tableId, anchor) {
         const box = document.createElement('input');
         box.type = 'checkbox';
         box.checked = !hidden.has(kind);
+        boxes.push({ kind, box });
         box.addEventListener('change', () => {
             if (box.checked) hidden.delete(kind); else hidden.add(kind);
             saveHiddenBands(tableId, hidden);
             applyBandsVisibility(tableId);
+            syncAll();
         });
         const sw = document.createElement('span');
         sw.className = `data-table-bands-swatch data-table-bands-swatch-${kind}`;
@@ -7150,6 +7155,17 @@ function openBandsMenu(tableId, anchor) {
         label.append(box, sw, text);
         el.appendChild(label);
     });
+    all.type = 'button';
+    all.className = 'data-table-hidden-show data-table-hidden-all';
+    all.addEventListener('click', () => {
+        const allOn = boxes.every((b) => b.box.checked);
+        boxes.forEach((b) => { b.box.checked = !allOn; if (allOn) hidden.add(b.kind); else hidden.delete(b.kind); });
+        saveHiddenBands(tableId, hidden);
+        applyBandsVisibility(tableId);
+        syncAll();
+    });
+    syncAll();
+    el.appendChild(all);
     document.body.appendChild(el);
     const r = anchor.getBoundingClientRect();
     el.style.left = String(Math.max(8, Math.min(r.left, window.innerWidth - el.offsetWidth - 8))) + 'px';
@@ -10897,7 +10913,7 @@ function buildLegendIconRow(iconHtml, name, desc) {
 // así que un icono nuevo se da de alta aquí y aparece en los dos lados (todo lo que no es texto lleva su explicación en la Simbología). El orden de las claves es el orden dentro del grupo.
 const TOOLBAR_GROUPS = ['design', 'search', 'general'];
 const TOOLBAR_ICONS = {
-    'zoom-out': ['design', 'zoomOut'], 'zoom-in': ['design', 'zoomIn'], 'width-min': ['design', 'widthMinBtn'], 'width-fit': ['design', 'widthFitBtn'], look: ['design', 'lookBtn'], columns: ['design', 'columnsEditor'], 'saved-layout': ['design', 'savedLayout'], bands: ['design', 'bandsToggle'],
+    'zoom-out': ['design', 'zoomOut'], 'zoom-in': ['design', 'zoomIn'], 'width-min': ['design', 'widthMinBtn'], 'width-fit': ['design', 'widthFitBtn'], look: ['design', 'lookBtn'], columns: ['design', 'columnsEditor'], 'saved-layout': ['design', 'savedLayout'], bands: ['design', 'bandsToggle'], 'an-panel': ['design', 'anPanelToggle'],
     filter: ['search', 'filterToggle'], 'filter-clear': ['search', 'filterClear'], 'saved-search': ['search', 'savedSearch'],
     history: ['general', 'changeHistory'], legend: ['general', 'columnLegend'], 'field-rules': ['general', 'fieldRules'], download: ['general', 'download'], 'download-preset': ['general', 'downloadPreset'],
 };
@@ -18087,6 +18103,7 @@ window.Dashboard = {
     initDataTableColumns,
     getVisibleTableSnapshot,
     getDataTableLook,
+    groupDataTableToolbar,
     collapseColumn,
     getTableSnapshotSample,
     attachTableDownloadButton,
