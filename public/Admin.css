@@ -5747,6 +5747,12 @@ th.data-table-group-band-draggable:active{ cursor: grabbing; }
 .data-table-wrapper[data-look-cal="a"] .data-table tbody td.col-num:not([data-col="actions"]){ text-align: right !important; }
 .data-table-wrapper[data-look-hwrap="1"] .data-table thead th[data-col]{ white-space: normal !important; overflow-wrap: anywhere !important; text-overflow: clip !important; line-height: 1.25 !important; }
 .data-table-wrapper[data-look-cwrap="1"] .data-table tbody td:not([data-col="actions"]){ white-space: normal !important; overflow-wrap: anywhere !important; text-overflow: clip !important; line-height: 1.3 !important; }
+/* «Abreviar» + «Ajustar texto» a la vez (Daniel, 2026-11-28, «si asigné abreviado y ajuste de texto lo debe aplicar»): la abreviatura se dibuja encima del título (Inicio-en.css, data-abbr en ::before) en una sola línea; con el ajuste de texto puesto también se parte en renglones */
+.data-table-wrapper[data-look-hwrap="1"] .data-table th[data-abbr]::before{ white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+.data-table-wrapper[data-look-cwrap="1"] .data-table td[data-abbr]::after{ white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
+/* y la abreviatura respeta la alineación del título (centrado o a la derecha, elegida para todos o propia de la columna): el recuadro es flex y no hereda el text-align por sí solo */
+.data-table th[data-abbr][style*="text-align: center"]::before, .data-table-wrapper[data-look-hal="c"] .data-table th[data-abbr]::before{ justify-content: center; text-align: center; }
+.data-table th[data-abbr][style*="text-align: right"]::before, .data-table-wrapper[data-look-hal="r"] .data-table th[data-abbr]::before{ justify-content: flex-end; text-align: right; }
 .data-table-look-menu{
     position: fixed;
     z-index: 150;
