@@ -10980,18 +10980,30 @@ body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom[hidden]{
 /* Análisis: la barra de iconos de la pestaña Extracciones (oculta) se veía abajo de la tabla del Archivo porque el display ganaba al hidden (Daniel, 2026-11-27, «¿esta parte de acá abajo qué es?») */
 body[data-active-page="cat-analisis-manuales-lista"] .data-table-zoom[hidden]{ display: none; }
 /* La barra de iconos de toda tabla en tres grupos (Diseño | Búsqueda | Generales), separados por una línea fina (Daniel, 2026-11-27; ver Dashboard.js: groupDataTableToolbar) y los mismos grupos en la Simbología */
-.data-table-zoom-sep{ flex: none; align-self: center; width: 1px; height: 1.5rem; margin: 0 0.25rem; background: var(--color-border); }
+.data-table-zoom-word{ position: relative; flex: none; display: inline-flex; align-items: center; gap: 0.3rem; height: 1.7rem; padding: 0 0.6rem 0 0.75rem; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+.data-table-zoom-word:hover, .data-table-zoom-word:focus-visible{ background: var(--color-bg); color: var(--color-text-primary); }
+.data-table-zoom-word .bx{ font-size: 0.95rem; opacity: 0.7; }
+.data-table-zoom-word.has-active::after{ content: ""; position: absolute; top: -0.1rem; right: 0.15rem; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--color-accent, #d96ecf); border: 2px solid var(--color-surface); box-sizing: content-box; }
+.data-table-zoom-back{ flex: none; display: flex; align-items: center; justify-content: center; width: 1.7rem; height: 1.7rem; padding: 0; border: 1px dashed var(--color-border); border-radius: 50%; background: color-mix(in srgb, var(--color-accent, #d96ecf) 8%, var(--color-surface)); color: var(--color-text-secondary); font-size: 0.95rem; cursor: pointer; }
+.data-table-zoom-back:hover, .data-table-zoom-back:focus-visible{ border-style: solid; color: var(--color-text-primary); }
+.data-table-zoom-word[hidden], .data-table-zoom-back[hidden]{ display: none; }
+.data-table-zoom > .data-table-zoom-folded{ display: none !important; } /* los iconos de un grupo cerrado siguen en la barra (la Simbología y el resto del código los ven), solo no se dibujan */
 .data-table-legend-group td{ padding-top: 0.7rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-secondary); background: color-mix(in srgb, var(--color-accent, #6d3fc0) 8%, var(--color-surface, #fff)); }
 /* Registros Información: la barra de iconos de la tabla va en la MISMA fila que las pestañas y los botones «Cargar registro» y «Columnas del registro», pegada arriba de la tabla y sin la línea que la separaba (Daniel, 2026-11-27, «Como en Análisis»).
    La página es una fila que envuelve y la fila de pestañas y botones (.reg-row) deja de ser una caja (display: contents) para que sus piezas compartan el renglón con los iconos; todo lo demás ocupa su propio renglón en su orden de siempre. Solo en pantalla ancha: en el celular queda el diseño de arriba. */
 @media (min-width: 601px){
     body[data-active-page="cat-cargas-manuales-registros"] .page-content{ display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.6rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .page-content > *{ flex: 0 0 100%; min-width: 0; order: 10; }
-    body[data-active-page="cat-cargas-manuales-registros"] .page-content > .reg-manage{ order: 1; flex: 1 1 auto; }
+    body[data-active-page="cat-cargas-manuales-registros"] .page-content > .reg-manage{ order: 1; } /* la fila del título (nombre y botones de manejo) siempre ocupa su renglón: las pestañas y los botones de carga van debajo */
     body[data-active-page="cat-cargas-manuales-registros"] .page-content > .reg-row{ display: contents; }
     body[data-active-page="cat-cargas-manuales-registros"] .reg-row > .reg-tabs{ order: 2; flex: 0 0 auto; margin: 0 0 0.7rem; }
     /* «Última actualización» va en la fila del título del registro, hasta el lado derecho (Daniel, 2026-11-27); si no cabe junto al título y sus botones, baja a su renglón pegada a la derecha */
     body[data-active-page="cat-cargas-manuales-registros"] .reg-row > .reg-updated{ order: 1; flex: 0 0 auto; margin: 0 0 0.8rem auto; white-space: nowrap; }
+    /* en pantalla ancha cabe en la misma fila del título, pegada al lado derecho; en una más angosta baja a su renglón (arriba) para no encimarse con los botones de manejo */
+    @media (min-width: 1400px){
+        body[data-active-page="cat-cargas-manuales-registros"] .page-content{ position: relative; }
+        body[data-active-page="cat-cargas-manuales-registros"] .reg-row > .reg-updated{ position: absolute; top: 0.8rem; right: 1.5rem; margin: 0; } /* 1.5rem = el relleno de la página: queda alineada con el borde de la tabla */
+    }
     body[data-active-page="cat-cargas-manuales-registros"] .reg-row > .reg-actions{ order: 3; flex: 0 0 auto; margin: 0 0 0.7rem auto; }
     body[data-active-page="cat-cargas-manuales-registros"] .page-content > .data-table-zoom{ order: 4; flex: 0 0 auto; border-bottom: 0; padding-bottom: 0; margin: 0 0 0.7rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .page-content > .filter-bar{ order: 5; }
@@ -11013,7 +11025,9 @@ body[data-active-page="cat-analisis-manuales-lista"] .data-table-zoom[hidden]{ d
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom{ display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.5rem 0.35rem; justify-content: stretch; justify-items: center; align-items: center; }
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom > .data-table-new-record-btn{ grid-column: span 3; justify-self: stretch; width: 100%; justify-content: center; min-height: 2.6rem; height: auto; line-height: 1.2; text-align: center; padding-inline: 0.5rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-zoom-btn{ width: 2.6rem; height: 2.6rem; font-size: 1.15rem; }
-    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom-sep{ display: none; } /* en la cuadrícula del celular las líneas no van */
+    /* en la cuadrícula del celular: las tres palabras en un renglón (dos columnas cada una) y la flecha de un grupo abierto como un icono más */
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom-word{ grid-column: span 2; justify-self: stretch; justify-content: center; height: 2.6rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom-back{ width: 2.6rem; height: 2.6rem; font-size: 1.15rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-search-pill,
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-layout-pill{ height: 2.6rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-search-pill.open,

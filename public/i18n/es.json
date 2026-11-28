@@ -2311,6 +2311,9 @@
     "toolbarGroup_design": "Diseño",
     "toolbarGroup_search": "Búsqueda",
     "toolbarGroup_general": "Generales",
+    "toolbarGroupClose": "Cerrar {name}",
+    "toolbarDotName": "Punto en un grupo de la barra",
+    "toolbarDotDesc": "Hay algo puesto dentro de ese grupo: un filtro, un acomodo o una búsqueda guardada, o un ancho contraído.",
     "columnLegendIcon": "Icono",
     "columnLegendIconName": "Nombre",
     "columnLegendIconWhat": "Qué hace",
@@ -10981,6 +10984,10 @@
     "filterColumn": {
       "what": "Te deja elegir solo las filas que tengan cierto valor en esta columna, en vez de verlas todas. Si la columna tiene miles de valores distintos, la lista no se muestra completa: escribe lo que buscas y aparecen los que coinciden (hasta 300) para marcarlos.",
       "example": "en la columna \"Estatus\" filtras para ver solo los registros \"Activos\"."
+    },
+    "toolbarGroup": {
+      "what": "Los iconos de la tabla están en tres grupos: Diseño (cómo se ve), Búsqueda (qué filas ves) y Generales (historial, simbología y descarga). Toca el nombre de un grupo para abrir sus iconos; la flecha de la izquierda los vuelve a cerrar. Se abre un solo grupo a la vez y la tabla recuerda cuál dejaste. Un puntito en el nombre avisa que hay algo puesto dentro.",
+      "example": "Toca «Búsqueda» para ver el filtro, quitar los filtros y tus búsquedas guardadas."
     },
     "zoomOut": {
       "what": "Hace el texto y las filas de la tabla más pequeños, para ver más información de un vistazo.",

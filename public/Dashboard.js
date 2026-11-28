@@ -10267,7 +10267,22 @@ const TOOLBAR_ICONS = {
     filter: ['search', 'filterToggle'], 'filter-clear': ['search', 'filterClear'], 'saved-search': ['search', 'savedSearch'],
     history: ['general', 'changeHistory'], legend: ['general', 'columnLegend'], 'field-rules': ['general', 'fieldRules'], download: ['general', 'download'],
 };
-const TOOLBAR_SEP_CLASS = 'data-table-zoom-sep';
+const TOOLBAR_WORD_CLASS = 'data-table-zoom-word';
+const TOOLBAR_BACK_CLASS = 'data-table-zoom-back';
+const TOOLBAR_FOLD_CLASS = 'data-table-zoom-folded';
+// Qué grupo dejó abierto cada persona en cada tabla (localStorage, como los anchos): la primera vez, todos cerrados.
+const toolbarStateKey = (tableId) => `dataTableBarOpen:${layoutKeyOf(tableId)}`;
+function readToolbarOpen(tableId) {
+    try { const v = localStorage.getItem(toolbarStateKey(tableId)); return TOOLBAR_GROUPS.includes(v) ? v : ''; } catch { return ''; }
+}
+function saveToolbarOpen(tableId, group) {
+    try { if (group) localStorage.setItem(toolbarStateKey(tableId), group); else localStorage.removeItem(toolbarStateKey(tableId)); } catch { /* sin almacenamiento */ }
+}
+function toolbarTableIdOf(zoom) {
+    const wrapper = zoom.nextElementSibling;
+    if (!wrapper?.classList?.contains('data-table-wrapper')) return null;
+    return getTableId(wrapper, Array.from(document.querySelectorAll('.data-table-wrapper')).indexOf(wrapper));
+}
 // Qué icono es un elemento de la barra: un botón suelto, una píldora con su botón dentro (búsquedas y acomodos guardados) o el de descarga.
 function toolbarButtonOf(node) { return node?.matches?.('button') ? node : node?.querySelector?.('button') || null; }
 function toolbarActionOf(node) {
@@ -10277,11 +10292,12 @@ function toolbarActionOf(node) {
     if (btn.dataset.downloadBtn) return 'download';
     return btn.dataset.colAction || null;
 }
-// Acomoda la barra: lo propio de cada pantalla (como «+ Nuevo») se queda al principio, luego Diseño, Búsqueda y Generales, con una línea entre grupos (un grupo sin iconos no deja línea y nunca hay línea al principio ni al final).
-// Se puede llamar las veces que haga falta (quita sus líneas y vuelve a acomodar): también cuando una pantalla agrega después su botón de descarga.
+// Acomoda la barra PLEGABLE (Daniel, 2026-11-27, «con un clic en Diseño se abran las opciones… algo para regresarlo»): lo propio de cada pantalla (como «+ Nuevo») se queda al principio y luego van Diseño, Búsqueda y Generales.
+// Cada grupo es una PALABRA; un clic en ella la cambia por sus iconos (y una flecha «‹» al inicio la vuelve a cerrar). Se abre un solo grupo a la vez y se recuerda cuál dejó cada persona en cada tabla. Los iconos siguen en la barra
+// (solo se pliegan con CSS), así el resto del código y la Simbología los ven igual. Una barra con un solo grupo no se pliega. Se puede llamar las veces que haga falta (vuelve a acomodar), también cuando una pantalla agrega su botón de descarga.
 function groupDataTableToolbar(zoom) {
     if (!zoom?.classList?.contains('data-table-zoom')) return;
-    zoom.querySelectorAll(`:scope > .${TOOLBAR_SEP_CLASS}`).forEach((sep) => sep.remove());
+    zoom.querySelectorAll(`:scope > .${TOOLBAR_WORD_CLASS}, :scope > .${TOOLBAR_BACK_CLASS}`).forEach((node) => node.remove());
     const order = Object.keys(TOOLBAR_ICONS);
     const buckets = { rest: [], design: [], search: [], general: [] };
     Array.from(zoom.children).forEach((node) => {
@@ -10289,16 +10305,105 @@ function groupDataTableToolbar(zoom) {
         buckets[meta ? meta[0] : 'rest'].push(node);
     });
     TOOLBAR_GROUPS.forEach((g) => buckets[g].sort((a, b) => order.indexOf(toolbarActionOf(a)) - order.indexOf(toolbarActionOf(b))));
+    const folding = TOOLBAR_GROUPS.filter((g) => buckets[g].length).length >= 2;
     const frag = document.createDocumentFragment();
-    buckets.rest.forEach((node) => frag.appendChild(node));
-    let placed = false;
+    buckets.rest.forEach((node) => { delete node.dataset.toolbarGroup; node.classList.remove(TOOLBAR_FOLD_CLASS); frag.appendChild(node); });
     TOOLBAR_GROUPS.forEach((g) => {
         if (!buckets[g].length) return;
-        if (placed) { const sep = document.createElement('span'); sep.className = TOOLBAR_SEP_CLASS; sep.setAttribute('aria-hidden', 'true'); frag.appendChild(sep); }
-        buckets[g].forEach((node) => frag.appendChild(node));
-        placed = true;
+        if (folding) {
+            const name = t(`main.toolbarGroup_${g}`);
+            const word = document.createElement('button');
+            word.type = 'button';
+            word.className = TOOLBAR_WORD_CLASS;
+            word.dataset.group = g;
+            word.dataset.helpKey = 'toolbarGroup';
+            word.setAttribute('aria-expanded', 'false');
+            const label = document.createElement('span');
+            label.textContent = name;
+            const chev = document.createElement('i');
+            chev.className = 'bx bx-chevron-down';
+            chev.setAttribute('aria-hidden', 'true');
+            word.append(label, chev);
+            word.addEventListener('click', () => setToolbarOpen(zoom, g));
+            const back = document.createElement('button');
+            back.type = 'button';
+            back.className = TOOLBAR_BACK_CLASS;
+            back.dataset.group = g;
+            back.dataset.helpKey = 'toolbarGroup';
+            back.setAttribute('aria-label', t('main.toolbarGroupClose', { name }));
+            back.title = t('main.toolbarGroupClose', { name });
+            back.innerHTML = '<i class="bx bx-chevron-left" aria-hidden="true"></i>';
+            back.addEventListener('click', () => setToolbarOpen(zoom, ''));
+            frag.append(word, back);
+        }
+        buckets[g].forEach((node) => { node.dataset.toolbarGroup = g; frag.appendChild(node); });
     });
     zoom.appendChild(frag);
+    if (!folding) {
+        zoom.querySelectorAll(`:scope > .${TOOLBAR_FOLD_CLASS}`).forEach((node) => node.classList.remove(TOOLBAR_FOLD_CLASS));
+        return;
+    }
+    if (zoom.dataset.openGroup === undefined) zoom.dataset.openGroup = readToolbarOpen(toolbarTableIdOf(zoom) || '');
+    if (!zoom.dataset.escWired) {
+        zoom.dataset.escWired = '1';
+        zoom.addEventListener('keydown', (event) => { if (event.key === 'Escape' && zoom.dataset.openGroup) setToolbarOpen(zoom, ''); });
+    }
+    applyToolbarFold(zoom);
+    watchToolbarDots();
+    refreshToolbarDots(zoom);
+}
+// Abre un grupo (o los cierra todos con ''): el anterior se cierra solo; se recuerda por tabla y por persona.
+function setToolbarOpen(zoom, group) {
+    const previous = zoom.dataset.openGroup || '';
+    zoom.dataset.openGroup = group;
+    applyToolbarFold(zoom);
+    const tableId = toolbarTableIdOf(zoom);
+    if (tableId) saveToolbarOpen(tableId, group);
+    // el teclado no se pierde: al abrir el foco pasa a la flecha del grupo y al cerrar vuelve a su palabra
+    if (group) zoom.querySelector(`.${TOOLBAR_BACK_CLASS}[data-group="${group}"]`)?.focus();
+    else if (previous) zoom.querySelector(`.${TOOLBAR_WORD_CLASS}[data-group="${previous}"]`)?.focus();
+}
+function applyToolbarFold(zoom) {
+    const open = zoom.dataset.openGroup || '';
+    Array.from(zoom.children).forEach((node) => {
+        if (node.classList.contains(TOOLBAR_WORD_CLASS)) node.hidden = node.dataset.group === open;
+        else if (node.classList.contains(TOOLBAR_BACK_CLASS)) node.hidden = node.dataset.group !== open;
+        else if (node.dataset.toolbarGroup) node.classList.toggle(TOOLBAR_FOLD_CLASS, node.dataset.toolbarGroup !== open);
+    });
+}
+// ¿Hay algo puesto dentro de un grupo? Un icono prendido (ancho contraído, aspecto), un acomodo o una búsqueda guardada aplicada, el panel de filtros abierto o un filtro de columna.
+function toolbarGroupActive(zoom, group) {
+    const on = Array.from(zoom.children).some((node) => {
+        if (node.dataset.toolbarGroup !== group) return false;
+        const btn = toolbarButtonOf(node);
+        return !!btn && (btn.classList.contains('active') || btn.getAttribute('aria-pressed') === 'true' || btn.getAttribute('aria-expanded') === 'true' || !!node.querySelector?.('.data-table-layout-pill-name:not([hidden])'));
+    });
+    return on || (group === 'search' && !!zoom.nextElementSibling?.querySelector?.('thead th.data-table-col-filter-active'));
+}
+function refreshToolbarDots(zoom) {
+    zoom.querySelectorAll(`:scope > .${TOOLBAR_WORD_CLASS}`).forEach((word) => {
+        const on = toolbarGroupActive(zoom, word.dataset.group);
+        if (word.classList.contains('has-active') !== on) word.classList.toggle('has-active', on);
+    });
+}
+// Un solo vigilante para todas las tablas: cuando cambia un icono de una barra o el encabezado de una tabla (un filtro de columna), se vuelve a ver qué grupos llevan su puntito.
+let toolbarDotObserver = null;
+function watchToolbarDots() {
+    if (toolbarDotObserver) return;
+    const queued = new Set();
+    toolbarDotObserver = new MutationObserver((records) => {
+        records.forEach((record) => {
+            const target = record.target;
+            if (!(target instanceof Element)) return;
+            if (target.classList.contains(TOOLBAR_WORD_CLASS) || target.classList.contains(TOOLBAR_BACK_CLASS)) return; // lo que cambia la propia barra no cuenta
+            const wrapper = target.tagName === 'TH' ? target.closest('.data-table-wrapper') : null;
+            const zoom = wrapper ? wrapper.previousElementSibling : target.closest('.data-table-zoom');
+            if (zoom?.classList?.contains('data-table-zoom')) queued.add(zoom);
+        });
+        if (!queued.size) return;
+        requestAnimationFrame(() => { queued.forEach((zoom) => { if (zoom.isConnected) refreshToolbarDots(zoom); }); queued.clear(); });
+    });
+    toolbarDotObserver.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'aria-pressed', 'aria-expanded', 'hidden'] });
 }
 function collectLegendIcons(tableId) {
     const state = dataTableColumnState.get(tableId);
@@ -10327,6 +10432,11 @@ function openColumnLegend(tableId) {
     columnLegendList.innerHTML = '';
     columnLegendList.appendChild(buildLegendRow('#2c8f4a', t('main.rowEditableName'), t('main.rowEditableLegend')));
     const state = dataTableColumnState.get(tableId);
+    // el puntito de las palabras de la barra (solo si esa tabla tiene su barra plegable)
+    {
+        const legendWrapper = state?.wrapper || document.querySelector(`.data-table-wrapper[data-table-id="${CSS.escape(tableId)}"]`);
+        if (legendWrapper?.previousElementSibling?.querySelector?.(`:scope > .${TOOLBAR_WORD_CLASS}`)) columnLegendList.appendChild(buildLegendRow('var(--color-accent, #d96ecf)', t('main.toolbarDotName'), t('main.toolbarDotDesc')));
+    }
     const seenGroups = new Set();
     // Every classification actually present on this table, not just the 3
     // hardcoded in COLUMN_GROUP_META (Control Interno, the 2 report-column
