@@ -11,6 +11,7 @@
 // ---------------------------------------------------------------------------
 const ExcelJS = require('exceljs');
 const manual = require('./manualRegistries.js');
+const DL = require('./public/DownloadLines.js');
 
 const FONTS = ['Aptos Narrow', 'Calibri', 'Arial', 'Cambria', 'Times New Roman', 'Verdana', 'Courier New', 'Consolas'];
 const NUMBER_FORMATS = ['general', 'numero', 'moneda', 'contabilidad', 'fcorta', 'flarga', 'hora', 'porcentaje', 'fraccion', 'cientifica'];
@@ -279,6 +280,8 @@ async function writeWorkbook({ stream, batches, columns, format, meta, decOverri
     const dataName = tt.data;
     let frozenCols = fmt.freeze.cols;
     if (frozenCols === 'auto') { frozenCols = 0; while (frozenCols < columns.length && columns[frozenCols].group === 'key') frozenCols += 1; }
+    // las líneas (bordes) de la personalización: la descarga es una cuadrícula (renglón 0 = encabezado); las columnas se buscan por el nombre que se ve o por el de la columna
+    const grid = fmt.lines && fmt.lines.length ? DL.createGrid(fmt.lines, { rows: rowCount, cols: columns.length, colIndex: (name) => { const f = fold(name); return columns.findIndex((c) => fold(c.label) === f || fold(c.name) === f); } }) : null;
     const sheet = wb.addWorksheet(dataName, { views: [{ state: 'frozen', xSplit: Math.min(frozenCols, columns.length), ySplit: fmt.freeze.header ? headerRow : 0 }] });
     // anchos: lo más largo del título y de los primeros renglones
     const approxLen = (c, e, v) => {
@@ -317,12 +320,16 @@ async function writeWorkbook({ stream, batches, columns, format, meta, decOverri
         const mine = eff[i].f; // el encabezado de esta columna (si la persona le puso uno) manda sobre el de todo el registro
         head.getCell(i + 1).style = { font: { bold: mine.hb === true || fmt.header.bold, color: { argb: argb(mine.hink || fmt.header.ink) } }, ...((mine.hfill || fmt.header.fill) ? { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(mine.hfill || fmt.header.fill) } } } : {}), alignment: headerAlignment(mine, c.group === 'value' ? 'center' : 'left') };
     });
+    if (grid) columns.forEach((c, i) => { const bd = DL.excelBorder(grid.cell(0, i)); if (bd) head.getCell(i + 1).border = bd; });
     head.commit();
     if (fmt.header.filter) sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: headerRow, column: columns.length } };
+    let gridRow = 0;
     for (const b of batches) {
         for (const r of b) {
             const values = r.map((v, i) => (eff[i].isDate && typeof v === 'string' ? toDate(v) || v : v));
-            sheet.addRow(values).commit();
+            const row = sheet.addRow(values);
+            if (grid) { gridRow += 1; for (let i = 0; i < columns.length; i += 1) { const bd = DL.excelBorder(grid.cell(gridRow, i)); if (bd) row.getCell(i + 1).border = bd; } }
+            row.commit();
         }
     }
     sheet.commit();

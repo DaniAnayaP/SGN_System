@@ -7,6 +7,7 @@
 // ---------------------------------------------------------------------------
 const ExcelJS = require('exceljs');
 const flexExcel = require('./flexExcel');
+const DL = require('./public/DownloadLines.js');
 
 const PALETTE = ['#3f78ad', '#b23fb8', '#2b8456', '#b57a05', '#4f58c2', '#c4473a']; // la misma de AnalysisKit.js
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -87,6 +88,10 @@ async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHE
     const parts = Math.max(1, Math.ceil(rows.length / sheetRows));
     for (let p = 0; p < parts; p += 1) {
         const suffix = p === 0 ? '' : ` ${p + 1}`;
+        // las líneas (bordes) de la personalización de esta hoja: renglón 0 = encabezado; las columnas se buscan por el nombre que se ve
+        const gridFrom = p * sheetRows;
+        const gridTo = Math.min(rows.length, gridFrom + sheetRows);
+        const grid = preset && preset.lines && preset.lines.length ? DL.createGrid(preset.lines, { rows: gridTo - gridFrom, cols: columns.length, colIndex: (name) => columns.findIndex((c) => DL.fold(c.label) === DL.fold(name)) }) : null;
         const sheet = wb.addWorksheet(`${name.slice(0, 31 - suffix.length)}${suffix}`, { views: [{ state: 'frozen', ySplit: preset && preset.freezeHeader === false ? 0 : 1 + titleRows }] });
         sheet.columns = sheetColumns.map((c) => ({ ...c }));
         if (titleRows) { const tr = sheet.addRow([preset.title]); tr.getCell(1).font = { bold: true, size: 14 }; tr.commit(); } // el título de la personalización, arriba del encabezado
@@ -101,12 +106,15 @@ async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHE
                 alignment: flexExcel.headerAlignment(f),
             };
         });
+        if (grid) columns.forEach((c, i) => { const bd = DL.excelBorder(grid.cell(0, i)); if (bd) head.getCell(i + 1).border = bd; });
         head.commit();
         if (columns.length && (!head0 || head0.filter)) sheet.autoFilter = { from: { row: 1 + titleRows, column: 1 }, to: { row: 1 + titleRows, column: columns.length } };
         const from = p * sheetRows;
         const to = Math.min(rows.length, from + sheetRows);
         for (let n = from; n < to; n += 1) {
-            sheet.addRow(rows[n].map((v, i) => (dateAt[i] && typeof v === 'string' ? toDate(v) || v : v))).commit();
+            const row = sheet.addRow(rows[n].map((v, i) => (dateAt[i] && typeof v === 'string' ? toDate(v) || v : v)));
+            if (grid) for (let i = 0; i < columns.length; i += 1) { const bd = DL.excelBorder(grid.cell(n - from + 1, i)); if (bd) row.getCell(i + 1).border = bd; }
+            row.commit();
             if (n % 1000 === 999) await nextTurn(); // cada tanda deja atender a los demás usuarios (un análisis grande son muchos renglones)
         }
         sheet.commit();

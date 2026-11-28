@@ -7279,6 +7279,7 @@ function regForbidden(res) { res.status(403).json({ code: 'REG_FORBIDDEN', messa
 // Mi personalización de Descarga (Daniel, 2026-11-28): las personalizaciones de cada persona y la del registro; `resolve` dice cuál se aplica a una descarga (ver downloadPresetsApi.js).
 const dlApi = require('./downloadPresetsApi')({ regAbilities, regForbidden, regRegistry, changedByLabel, logTableChange, REG_TABLE });
 const downloadPresets = require('./downloadPresets');
+const DownloadLines = require('./public/DownloadLines.js');
 const flexApi = require('./flexRegistryApi')({ regAbilities, regForbidden, hasCompleteCostCenter, changedByLabel, logTableChange, notifyButtonAction, buildContentDisposition, REG_TABLE, REG_LOADS_TABLE, regLoading, REG_MESSAGES, resolveDownloadPreset: dlApi.resolve });
 app.get('/api/business/manual-registries', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
@@ -7604,10 +7605,23 @@ app.get('/api/business/manual-registries/:key/export', requireAuth, async (req, 
                 });
                 if (picked.filter) sheet.autoFilter = { from: { row: picked.title ? 2 : 1, column: 1 }, to: { row: picked.title ? 2 : 1, column: headers.length } };
             }
+            // las líneas (bordes) de la personalización: hace falta saber cuántos renglones son (una pasada de cuenta antes de escribir)
+            let lineGrid = null;
+            if (picked && picked.lines && picked.lines.length) {
+                let total = 0;
+                for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters, 2000, parsedCf.filter)) { total += batch.length; await yieldToOthers(); }
+                lineGrid = DownloadLines.createGrid(picked.lines, { rows: total, cols: headers.length, colIndex: (name) => headers.findIndex((h) => DownloadLines.fold(h) === DownloadLines.fold(name)) });
+                headers.forEach((h, i) => { const bd = DownloadLines.excelBorder(lineGrid.cell(0, i)); if (bd) headRow.getCell(i + 1).border = bd; });
+            }
             headRow.commit();
+            let lineRow = 0;
             for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters, 2000, parsedCf.filter)) {
                 if (res.destroyed) return;
-                batch.forEach((row) => sheet.addRow(cells(row)).commit());
+                batch.forEach((row) => {
+                    const added = sheet.addRow(cells(row));
+                    if (lineGrid) { lineRow += 1; for (let i = 0; i < headers.length; i += 1) { const bd = DownloadLines.excelBorder(lineGrid.cell(lineRow, i)); if (bd) added.getCell(i + 1).border = bd; } }
+                    added.commit();
+                });
                 await yieldToOthers();
             }
             sheet.commit();
@@ -9302,9 +9316,10 @@ function fillXlsxSheet(workbook, sheet, { header, columns, rows, brand, groupFir
         // Mi personalización de Descarga: título arriba, encabezado con su relleno, letra y negritas, filtro y encabezado fijo (las celdas siguen siendo texto)
         const hasTitle = !!preset.title;
         sheet.columns = columns.map((col) => ({ width: Math.max(12, String(col?.label ?? '').length + 4) }));
-        if (hasTitle) { const tr = sheet.addRow([preset.title]); tr.getCell(1).font = { bold: true, size: 14 }; tr.height = 22; }
-        const headNo = hasTitle ? 2 : 1;
+        if (brand) addXlsxBrand(workbook, sheet, brand, columns.length); // el logo y el nombre de la compañía arriba (con el título del documento)
+        else if (hasTitle) { const tr = sheet.addRow([preset.title]); tr.getCell(1).font = { bold: true, size: 14 }; tr.height = 22; }
         const head = sheet.addRow(columns.map((col) => String(col?.label ?? '')));
+        const headNo = head.number;
         const argbOf = (hex) => `FF${String(hex).slice(1).toUpperCase()}`;
         head.eachCell((c) => {
             c.font = { bold: preset.bold, color: { argb: argbOf(preset.ink) } };
@@ -9313,6 +9328,14 @@ function fillXlsxSheet(workbook, sheet, { header, columns, rows, brand, groupFir
         rows.forEach((row) => { sheet.addRow(Array.isArray(row) ? row.map(cellText) : []); });
         if (preset.filter && columns.length) sheet.autoFilter = { from: { row: headNo, column: 1 }, to: { row: headNo, column: columns.length } };
         if (preset.frozenHeader) sheet.views = [{ state: 'frozen', ySplit: headNo }];
+        // las líneas (bordes): renglón 0 = encabezado
+        if (preset.lines && preset.lines.length) {
+            const grid = DownloadLines.createGrid(preset.lines, { rows: rows.length, cols: columns.length, colIndex: (name) => columns.findIndex((c) => DownloadLines.fold(c && c.label) === DownloadLines.fold(name)) });
+            for (let r = 0; r <= rows.length; r += 1) {
+                const sheetRow = sheet.getRow(headNo + r);
+                for (let c = 0; c < columns.length; c += 1) { const bd = DownloadLines.excelBorder(grid.cell(r, c)); if (bd) sheetRow.getCell(c + 1).border = bd; }
+            }
+        }
         columns.forEach((col, i) => {
             const widest = rows.reduce((m, row) => Math.max(m, cellText(Array.isArray(row) ? row[i] : '').length), String(col?.label ?? '').length);
             sheet.getColumn(i + 1).width = Math.min(60, Math.max(12, widest + 3));
@@ -9394,7 +9417,9 @@ app.post('/api/business/export/xlsx', requireAuth, async (req, res) => {
     const header = exportHeaderPairs(req.body.header); // datos que van ARRIBA de la tabla (por ejemplo, los del pedido): [[etiqueta, valor], ...]
     // Mi personalización de Descarga: solo si la descarga la manda (?p= o ?preset=): las demás pantallas que bajan por aquí no cambian solas
     const chosen = dlApi.resolve(req, { explicitOnly: true }).preset;
-    await sendXlsxExport(res, { title, fileBase, header, columns, rows, brand: exportBrandFromRequest(req), sections, preset: chosen });
+    // el logo de la compañía arriba solo si la personalización lo pide (brand) y la cuenta es de una compañía
+    const logoBrand = chosen && chosen.brand && req.user && req.user.clientId ? exportBrandFor(req.user.clientId, { kind: 'Reporte', docTitle: chosen.title || title }) : null;
+    await sendXlsxExport(res, { title, fileBase, header, columns, rows, brand: logoBrand || exportBrandFromRequest(req), sections, preset: chosen });
 });
 
 // pdfkit has no built-in table widget -- draws a simple even-width grid by
@@ -9402,7 +9427,25 @@ app.post('/api/business/export/xlsx', requireAuth, async (req, res) => {
 // a row would run past the bottom margin. Long cell text is clipped with
 // an ellipsis rather than wrapped, so every row stays the same height and
 // the grid lines stay simple to draw.
+// Una línea (borde) del PDF: grosor según el estilo; la doble son dos finas, la punteada va con guiones.
+function pdfEdge(doc, x1, y1, x2, y2, spec) {
+    const width = { fina: 0.6, media: 1.4, gruesa: 2.4, punteada: 0.9, doble: 0.6 }[spec.st] || 0.6;
+    doc.save();
+    doc.strokeColor(spec.co).lineWidth(width);
+    if (spec.st === 'doble') {
+        const horizontal = y1 === y2;
+        const off = 0.9;
+        doc.moveTo(horizontal ? x1 : x1 - off, horizontal ? y1 - off : y1).lineTo(horizontal ? x2 : x2 - off, horizontal ? y2 - off : y2).stroke();
+        doc.moveTo(horizontal ? x1 : x1 + off, horizontal ? y1 + off : y1).lineTo(horizontal ? x2 : x2 + off, horizontal ? y2 + off : y2).stroke();
+    } else {
+        if (spec.st === 'punteada') doc.dash(1, { space: 2 });
+        doc.moveTo(x1, y1).lineTo(x2, y2).stroke();
+    }
+    doc.restore();
+}
 function drawPdfTable(doc, columns, rows, style = null) {
+    const grid = style && style.lines && style.lines.length ? DownloadLines.createGrid(style.lines, { rows: rows.length, cols: columns.length, colIndex: (name) => columns.findIndex((c) => DownloadLines.fold(c && c.label) === DownloadLines.fold(name)) }) : null;
+    let gridRow = 0;
     const startX = doc.page.margins.left;
     const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const colWidth = pageWidth / columns.length;
@@ -9414,6 +9457,7 @@ function drawPdfTable(doc, columns, rows, style = null) {
             doc.addPage();
             y = doc.page.margins.top;
         }
+        const thisRow = isHeader ? 0 : (gridRow += 1);
         let x = startX;
         doc.font(isHeader && (!style || style.bold) ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
         values.forEach((val) => {
@@ -9422,6 +9466,14 @@ function drawPdfTable(doc, columns, rows, style = null) {
             doc.fillColor(isHeader && style ? style.ink : '#000000').text(String(val ?? ''), x + 3, y + 5, {
                 width: colWidth - 6, height: rowHeight - 6, ellipsis: true, lineBreak: false,
             });
+            if (grid) {
+                const ci = Math.round((x - startX) / colWidth);
+                const e = grid.cell(thisRow, ci);
+                if (e.top) pdfEdge(doc, x, y, x + colWidth, y, e.top);
+                if (e.bottom) pdfEdge(doc, x, y + rowHeight, x + colWidth, y + rowHeight, e.bottom);
+                if (e.left) pdfEdge(doc, x, y, x, y + rowHeight, e.left);
+                if (e.right) pdfEdge(doc, x + colWidth, y, x + colWidth, y + rowHeight, e.right);
+            }
             x += colWidth;
         });
         y += rowHeight;
@@ -9534,7 +9586,7 @@ function sendPdfExport(res, { title, fileBase, header, columns, rows, wrap, widt
     const widest = parts ? Math.max(...parts.map((p) => p.columns.length)) : columns.length;
     // Mi personalización de Descarga: hoja (vertical u horizontal, papel), título, encabezado y pie con fecha y número de página
     const pdfOpt = preset ? downloadPresets.pdfOptions(preset) : null;
-    const headStyle = pdfOpt ? { fill: preset.fill, ink: preset.ink, bold: preset.bold } : null;
+    const headStyle = pdfOpt ? { fill: preset.fill, ink: preset.ink, bold: preset.bold, lines: preset.lines } : null;
     const doc = new PDFDocument({ margin: 30, size: pdfOpt ? pdfOpt.size : 'A4', layout: pdfOpt ? pdfOpt.layout : (widest > 5 ? 'landscape' : 'portrait'), bufferPages: !!(pdfOpt && pdfOpt.footer) });
     doc.pipe(res);
     if (brand) drawPdfBrand(doc, brand);
@@ -9591,7 +9643,8 @@ app.post('/api/business/export/pdf', requireAuth, (req, res) => {
     const sections = exportSectionsFrom(req.body.sections);
     if (sections === false) return res.status(400).json({ message: 'sections are not valid.' });
     const chosen = dlApi.resolve(req, { explicitOnly: true }).preset; // Mi personalización de Descarga: solo si la descarga la manda
-    sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: !!req.body.wrap, widths: Array.isArray(req.body.widths) ? req.body.widths : null, brand: exportBrandFromRequest(req), sections, preset: chosen });
+    const logoBrand = chosen && chosen.brand && req.user && req.user.clientId ? exportBrandFor(req.user.clientId, { kind: 'Reporte', docTitle: chosen.title || title }) : null; // el logo de la compañía arriba
+    sendPdfExport(res, { title, fileBase, header, columns, rows, wrap: !!req.body.wrap, widths: Array.isArray(req.body.widths) ? req.body.widths : null, brand: logoBrand || exportBrandFromRequest(req), sections, preset: chosen });
 });
 
 app.post('/api/business/intelligent-reports', requireAuth, (req, res) => {

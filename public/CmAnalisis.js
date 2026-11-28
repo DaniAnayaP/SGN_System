@@ -1986,17 +1986,17 @@ async function loadFile() {
         const cols = st.data.columns;
         const columns = [
             ...cols.map((c) => {
-                if (c.group === 'reference') return c.label ? { col: colKeyOf(c.key), group: 'main.anGroupRef', label: c.label, cls: c.isKey ? 'an-ref an-ref-key' : 'an-ref' } : { col: colKeyOf(c.key), group: 'main.anGroupRef', labelKey: `main.regDim_${c.dim}`, cls: 'an-ref' };
+                if (c.group === 'reference') return c.label ? { col: colKeyOf(c.key), group: 'main.anGroupRef', typeBand: 'main.anBandBase', label: c.label, cls: c.isKey ? 'an-ref an-ref-key' : 'an-ref' } : { col: colKeyOf(c.key), group: 'main.anGroupRef', typeBand: 'main.anBandBase', labelKey: `main.regDim_${c.dim}`, cls: 'an-ref' };
                 if (c.group === 'added') {
                     let groupTable;
                     if (c.cls) { groupTable = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(groupTable, c.cls, window.AnalysisKit.classColor(c.color)); }
                     // el tipo de la columna ya no va como una letra pegada al nombre: sube a la franja de arriba con su palabra (Daniel, 2026-11-27, «la A»)
-                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: c.label, typeBand: `main.anType${c.kind === 'criterion' ? 'Criterion' : (c.kind === 'comment' ? 'Comment' : (c.kind === 'block' ? 'Block' : 'Op'))}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
+                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: c.label, typeBand: `main.anBand${c.kind === 'criterion' ? 'Criterion' : (c.kind === 'comment' ? 'Comment' : (c.kind === 'block' ? 'Block' : 'Fx'))}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
                 }
                 // una columna consultada con clasificación va bajo su propia banda (nombre y color de la persona); sin clasificación, bajo «Consultadas» como siempre
                 let consBand;
                 if (c.cls) { consBand = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(consBand, c.cls, window.AnalysisKit.classColor(c.color)); }
-                return { col: colKeyOf(c.key), group: 'main.anGroupCons', groupTable: consBand, label: c.label, cls: 'an-cons col-num', title: c.liveTitle ? t('main.an2LiveToday', { label: c.liveTitle }) : '' };
+                return { col: colKeyOf(c.key), group: 'main.anGroupCons', groupTable: consBand, typeBand: 'main.anBandCons', label: c.label, cls: 'an-cons col-num', title: c.liveTitle ? t('main.an2LiveToday', { label: c.liveTitle }) : '' };
             }),
         ];
         const first = buildHeader(FILE_TABLE, columns);

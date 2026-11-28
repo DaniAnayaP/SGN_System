@@ -5,7 +5,7 @@
 // baja el sistema, sin cambiar nada) y cómo se vuelve el formato del Excel de un registro de tabla libre.
 //
 // Una personalización vale para CUALQUIER tabla (lo que una tabla no tiene, por ejemplo la fila de apoyo, no se usa). Es plana:
-//   título y portada · title, date, logo, general (datos generales), kpis (indicadores)
+//   título y portada · title, date, general (datos generales), kpis (indicadores), brand (el logo y el nombre de la compañía arriba: Excel y PDF genéricos; `logo` ya no se usa)
 //   encabezado ·········· fill (#hex o null = sin relleno), ink, bold, filter (filtro automático)
 //   columnas y paneles ·· keyFill (la llave con relleno lila), freeze (fijar hasta la llave), frozenHeader
 //   números ············· dec ('screen' = como los veo, o 0 a 6), miles (null = como siempre, true = con coma, false = sin coma), neg ('normal' | 'rojo' | 'par')
@@ -34,7 +34,7 @@ const PAPERS = ['carta', 'a4', 'legal'];
 // La de fábrica «Como siempre»: lo que hoy baja el sistema. Con esta, nada cambia.
 const FACTORY = Object.freeze({
     v: 1,
-    title: '', date: true, logo: true, general: true, kpis: true,
+    title: '', date: true, logo: true, brand: false, general: true, kpis: true,
     fill: '#9a3cc2', ink: '#ffffff', bold: true, filter: true,
     keyFill: true, freeze: true, frozenHeader: true,
     dec: 'screen', miles: null, neg: 'normal', // miles: null = como siempre (cada tabla con lo suyo: unas ya traen coma de miles y otras no), true = con coma, false = sin coma
@@ -83,7 +83,7 @@ function cleanPreset(raw) {
     const r = isObj(raw) ? raw : {};
     const out = clone(FACTORY);
     out.title = text(r.title, MAX_TITLE);
-    ['date', 'logo', 'general', 'kpis', 'bold', 'filter', 'keyFill', 'freeze', 'frozenHeader', 'csvTitle', 'foot'].forEach((k) => { out[k] = bool(r[k], FACTORY[k]); });
+    ['date', 'logo', 'brand', 'general', 'kpis', 'bold', 'filter', 'keyFill', 'freeze', 'frozenHeader', 'csvTitle', 'foot'].forEach((k) => { out[k] = bool(r[k], FACTORY[k]); });
     out.miles = r.miles === true ? true : r.miles === false ? false : null;
     if (r.fill === null || r.fill === 'sin') out.fill = null;
     else out.fill = FILL_NAMES[r.fill] || pickHex(r.fill) || FACTORY.fill;

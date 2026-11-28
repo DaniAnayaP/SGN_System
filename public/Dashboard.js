@@ -6598,10 +6598,10 @@ function initDataTableColumns(wrapper, index) {
             table.tHead.insertBefore(band, headerRow);
         }
         if (wantsTypeBand) {
-            // la franja del tipo va pegada al encabezado, debajo de las otras dos
+            // la franja del tipo de llenado va hasta ARRIBA, encima de las otras dos (Daniel, 2026-11-28)
             const band = document.createElement('tr');
             band.className = 'data-table-group-band data-table-group-band-type';
-            table.tHead.insertBefore(band, headerRow);
+            table.tHead.insertBefore(band, table.tHead.firstElementChild);
         }
     }
     const colgroup = buildOrGetColgroup(table);
@@ -6829,11 +6829,14 @@ function loadDownloadDialog() {
     if (window.DownloadDialog) return Promise.resolve(window.DownloadDialog);
     if (!downloadDialogPromise) {
         downloadDialogPromise = new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = 'DownloadDialog.js';
-            script.onload = () => resolve(window.DownloadDialog);
-            script.onerror = () => { downloadDialogPromise = null; reject(new Error('DownloadDialog')); };
-            document.head.appendChild(script);
+            const load = (src, next) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = next;
+                script.onerror = () => { downloadDialogPromise = null; reject(new Error(src)); };
+                document.head.appendChild(script);
+            };
+            load('DownloadLines.js', () => load('DownloadDialog.js', () => resolve(window.DownloadDialog))); // las líneas (bordes) se calculan igual en el servidor y en la vista previa
         });
     }
     return downloadDialogPromise;
@@ -6979,7 +6982,7 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownlo
     presetBtn.dataset.helpKey = 'downloadPreset';
     presetBtn.setAttribute('aria-label', t('main.dlIconTitle'));
     presetBtn.title = t('main.dlIconTitle');
-    presetBtn.innerHTML = '<i class="bx bx-slider-alt" aria-hidden="true"></i><span class="data-table-dl-pill" hidden></span>';
+    presetBtn.innerHTML = '<i class="bx bx-cog" aria-hidden="true"></i><span class="data-table-dl-pill" hidden></span>';
     const pill = presetBtn.querySelector('.data-table-dl-pill');
     const refreshPill = async () => {
         try {
@@ -7024,6 +7027,8 @@ function renderColumnGroupBand(tableId) {
     if (classBandRow) fillBandRow(classBandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending', state, true, tableId, 'g');
     const typeBandRow = state.table.tHead.querySelector('tr.data-table-group-band-type');
     if (typeBandRow) fillTypeBandRow(typeBandRow, visualOrder, state.typeKeys || new Map(), state);
+    ensureBandsButton(tableId);
+    applyBandsVisibility(tableId);
 }
 // La franja del tipo de columna: UNA celda por columna (no se juntan las vecinas del mismo tipo), con la palabra de su tipo (clave de idioma en data-type-band del encabezado); las que no traen tipo quedan vacías.
 // Las columnas fijas llevan su celda fija también, igual que el encabezado de abajo.
@@ -7031,17 +7036,133 @@ function fillTypeBandRow(bandRow, visualOrder, typeMap, state) {
     bandRow.innerHTML = '';
     const pinnedSet = new Set(state?.visiblePinned || []);
     const lastPinnedKey = pinnedSet.size ? state.visiblePinned[state.visiblePinned.length - 1] : null;
-    visualOrder.forEach((key) => {
+    const hiddenSet = new Set(state?.config?.hidden || []);
+    // las columnas vecinas del mismo tipo se juntan en una sola celda con su cuenta («Del registro · 6»); se corta en el límite de las columnas fijas (una celda no puede ser «medio fija»)
+    let i = 0;
+    while (i < visualOrder.length) {
+        const labelKey = typeMap.get(visualOrder[i]) || null;
+        const pinned = pinnedSet.has(visualOrder[i]);
+        let span = 1;
+        while (i + span < visualOrder.length && (typeMap.get(visualOrder[i + span]) || null) === labelKey && pinnedSet.has(visualOrder[i + span]) === pinned) span += 1;
+        const keys = visualOrder.slice(i, i + span);
         const th = document.createElement('th');
-        const labelKey = typeMap.get(key);
-        if (labelKey) { th.textContent = t(labelKey); th.className = 'data-table-group-band-cell data-table-type-cell'; th.dataset.helpKey = 'anTypeBand'; } else th.className = 'data-table-group-band-cell-empty';
-        if (pinnedSet.has(key)) {
+        th.colSpan = span;
+        if (labelKey) {
+            const shown = keys.filter((k) => !hiddenSet.has(k)).length;
+            th.textContent = t(labelKey) + (shown > 1 ? ` · ${shown}` : '');
+            th.className = 'data-table-group-band-cell data-table-type-cell';
+            th.title = t(labelKey); // el nombre completo, por si la celda es angosta (una sola columna fija)
+            th.dataset.helpKey = 'anTypeBand';
+            th.dataset.type = labelKey.replace(/^main\.anBand/, '').toLowerCase();
+        } else th.className = 'data-table-group-band-cell-empty';
+        if (pinned) {
             th.classList.add('data-table-col-pinned');
-            if (key === lastPinnedKey) th.classList.add('data-table-col-pinned-edge');
-            th.style.left = `${state.pinnedLeft[key]}px`;
+            if (keys[keys.length - 1] === lastPinnedKey) th.classList.add('data-table-col-pinned-edge');
+            th.style.left = `${state.pinnedLeft[keys[0]]}px`;
         }
         bandRow.appendChild(th);
+        i += span;
+    }
+}
+// ---- «Mostrar franjas» (Daniel, 2026-11-28: «Me encantó esto», «aplica para todas las tablas»): un icono en Diseño, en toda tabla que traiga franjas arriba del encabezado, con una casilla por franja (tipo de llenado, origen, clasificación)
+// para ocultar solo la que estorba. Se recuerda por persona y tabla; ocultar una franja no cambia el orden, los filtros, los totales ni la descarga.
+const BAND_ROWS = [['type', 'tr.data-table-group-band-type'], ['origin', 'tr.data-table-group-band-classification'], ['class', 'tr.data-table-group-band-table']];
+const bandsKey = (tableId) => `dataTableBands:${layoutKeyOf(tableId)}`;
+function readHiddenBands(tableId) {
+    try { const v = JSON.parse(localStorage.getItem(bandsKey(tableId)) || 'null'); return new Set(Array.isArray(v) ? v.filter((x) => BAND_ROWS.some((b) => b[0] === x)) : []); } catch { return new Set(); }
+}
+function saveHiddenBands(tableId, set) {
+    try { if (set.size) localStorage.setItem(bandsKey(tableId), JSON.stringify([...set])); else localStorage.removeItem(bandsKey(tableId)); } catch { /* sin almacenamiento */ }
+}
+// el nombre de cada franja en el menú, con ejemplos de lo que dice en esta tabla («Origen (Referencia, Consultadas, Agregadas)»)
+function bandRowLabel(state, kind, row) {
+    const hasOrigin = !!state.table.tHead.querySelector('tr.data-table-group-band-table') || state.wrapper.dataset.bandsOrigin === '1'; // Análisis: la franja de arriba siempre es el origen (Referencia, Consultadas, Agregadas)
+    const base = t(kind === 'type' ? 'main.bandsRowType' : (kind === 'origin' && hasOrigin ? 'main.bandsRowOrigin' : 'main.bandsRowClass'));
+    const seen = [];
+    Array.from(row.cells).forEach((th) => { const text = th.textContent.replace(/[−+·\d]/g, '').trim(); if (text && !seen.includes(text) && !th.classList.contains('data-table-group-band-cell-empty')) seen.push(text); });
+    return seen.length ? `${base} (${seen.slice(0, 3).join(', ')}${seen.length > 3 ? '…' : ''})` : base;
+}
+function applyBandsVisibility(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || state.external) return;
+    const hidden = state.hiddenBands || (state.hiddenBands = readHiddenBands(tableId));
+    BAND_ROWS.forEach(([kind, selector]) => { const row = state.table.tHead.querySelector(selector); if (row) row.hidden = hidden.has(kind); });
+    const btn = state.wrapper.previousElementSibling?.querySelector?.('[data-col-action="bands"]');
+    if (btn) { btn.classList.toggle('active', hidden.size > 0); btn.setAttribute('aria-pressed', hidden.size > 0 ? 'true' : 'false'); }
+}
+let bandsMenu = null;
+function closeBandsMenu() {
+    if (!bandsMenu) return;
+    document.removeEventListener('click', bandsMenu.onDoc, true);
+    document.removeEventListener('keydown', bandsMenu.onKey, true);
+    bandsMenu.el.remove();
+    bandsMenu = null;
+}
+function openBandsMenu(tableId, anchor) {
+    const reopening = bandsMenu && bandsMenu.tableId === tableId;
+    closeBandsMenu();
+    if (reopening) return;
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const el = document.createElement('div');
+    el.className = 'data-table-hidden-menu data-table-bands-menu';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', t('main.bandsMenuTitle'));
+    const title = document.createElement('b');
+    title.textContent = t('main.bandsMenuTitle');
+    el.appendChild(title);
+    const hidden = state.hiddenBands || (state.hiddenBands = readHiddenBands(tableId));
+    BAND_ROWS.forEach(([kind, selector]) => {
+        const row = state.table.tHead.querySelector(selector);
+        if (!row) return;
+        const label = document.createElement('label');
+        label.className = 'data-table-bands-row';
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = !hidden.has(kind);
+        box.addEventListener('change', () => {
+            if (box.checked) hidden.delete(kind); else hidden.add(kind);
+            saveHiddenBands(tableId, hidden);
+            applyBandsVisibility(tableId);
+        });
+        const sw = document.createElement('span');
+        sw.className = `data-table-bands-swatch data-table-bands-swatch-${kind}`;
+        const text = document.createElement('span');
+        text.textContent = bandRowLabel(state, kind, row);
+        label.append(box, sw, text);
+        el.appendChild(label);
     });
+    document.body.appendChild(el);
+    const r = anchor.getBoundingClientRect();
+    el.style.left = String(Math.max(8, Math.min(r.left, window.innerWidth - el.offsetWidth - 8))) + 'px';
+    el.style.top = String(Math.max(8, Math.min(r.bottom + 6, window.innerHeight - el.offsetHeight - 8))) + 'px';
+    const onDoc = (event) => { if (!el.contains(event.target) && !anchor.contains(event.target)) closeBandsMenu(); };
+    const onKey = (event) => { if (event.key === 'Escape') closeBandsMenu(); };
+    document.addEventListener('click', onDoc, true);
+    document.addEventListener('keydown', onKey, true);
+    bandsMenu = { el, tableId, onDoc, onKey };
+}
+// El icono aparece solo si la tabla trae al menos una franja; se pone junto a los demás de Diseño.
+function ensureBandsButton(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || state.external) return;
+    const zoom = state.wrapper.previousElementSibling;
+    if (!zoom?.classList?.contains('data-table-zoom')) return;
+    const hasBands = BAND_ROWS.some(([, selector]) => state.table.tHead.querySelector(selector));
+    let btn = zoom.querySelector(':scope > [data-col-action="bands"]');
+    if (!hasBands) { if (btn) { btn.remove(); groupDataTableToolbar(zoom); } return; }
+    if (btn) return;
+    btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-table-zoom-btn';
+    btn.dataset.colAction = 'bands';
+    btn.dataset.helpKey = 'bandsToggle';
+    btn.setAttribute('aria-label', t('main.bandsBtn'));
+    btn.title = t('main.bandsBtn');
+    btn.innerHTML = '<i class="bx bx-hide" aria-hidden="true"></i>';
+    btn.addEventListener('click', (event) => { event.stopPropagation(); openBandsMenu(tableId, btn); });
+    zoom.appendChild(btn);
+    groupDataTableToolbar(zoom);
 }
 
 function wireModalDismiss(overlay, onClose) {
@@ -10758,7 +10879,7 @@ function buildLegendIconRow(iconHtml, name, desc) {
 // así que un icono nuevo se da de alta aquí y aparece en los dos lados (todo lo que no es texto lleva su explicación en la Simbología). El orden de las claves es el orden dentro del grupo.
 const TOOLBAR_GROUPS = ['design', 'search', 'general'];
 const TOOLBAR_ICONS = {
-    'zoom-out': ['design', 'zoomOut'], 'zoom-in': ['design', 'zoomIn'], 'width-min': ['design', 'widthMinBtn'], 'width-fit': ['design', 'widthFitBtn'], look: ['design', 'lookBtn'], columns: ['design', 'columnsEditor'], 'saved-layout': ['design', 'savedLayout'],
+    'zoom-out': ['design', 'zoomOut'], 'zoom-in': ['design', 'zoomIn'], 'width-min': ['design', 'widthMinBtn'], 'width-fit': ['design', 'widthFitBtn'], look: ['design', 'lookBtn'], columns: ['design', 'columnsEditor'], 'saved-layout': ['design', 'savedLayout'], bands: ['design', 'bandsToggle'],
     filter: ['search', 'filterToggle'], 'filter-clear': ['search', 'filterClear'], 'saved-search': ['search', 'savedSearch'],
     history: ['general', 'changeHistory'], legend: ['general', 'columnLegend'], 'field-rules': ['general', 'fieldRules'], download: ['general', 'download'], 'download-preset': ['general', 'downloadPreset'],
 };
@@ -10944,6 +11065,12 @@ function openColumnLegend(tableId) {
         const desc = COLUMN_GROUP_META[groupKey] ? t(COLUMN_GROUP_META[groupKey].descKey) : '';
         columnLegendList.appendChild(buildLegendRow(columnGroupColor(groupKey), resolveGroupLabel(groupKey), desc));
     });
+    // los tipos de llenado de la franja de arriba (Análisis): cómo se llena cada columna (Daniel, 2026-11-28, «esto va en simbologías»)
+    if (state?.typeKeys && state.typeKeys.size) {
+        [['Base', '#6b7280'], ['Cons', '#2f6fb0'], ['Fx', '#9a3cc2'], ['Criterion', '#b57a05'], ['Block', '#2b8456'], ['Comment', '#8a8a8a']].forEach(([key, color]) => {
+            columnLegendList.appendChild(buildLegendRow(color, `${t('main.bandsRowType')}: ${t(`main.anBand${key}`)}`, t(`main.anBandDesc${key}`)));
+        });
+    }
     columnLegendIconList.innerHTML = '';
     // los iconos de la barra, en los mismos tres grupos que la barra (Diseño, Búsqueda y Generales)
     const iconRows = collectLegendIcons(tableId);

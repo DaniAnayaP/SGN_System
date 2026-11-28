@@ -7,7 +7,7 @@
     const LAST_KEY = 'sgn_dl_last';
     // La de fábrica «Como siempre» (la misma de downloadPresets.js)
     const FACTORY = {
-        v: 1, title: '', date: true, logo: true, general: true, kpis: true, fill: '#9a3cc2', ink: '#ffffff', bold: true, filter: true, keyFill: true, freeze: true, frozenHeader: true,
+        v: 1, title: '', date: true, logo: true, brand: false, general: true, kpis: true, fill: '#9a3cc2', ink: '#ffffff', bold: true, filter: true, keyFill: true, freeze: true, frozenHeader: true,
         dec: 'screen', miles: null, neg: 'normal', sep: ',', enc: 'bom', csvTitle: false, orient: 'v', paper: 'carta', foot: false, lines: [],
     };
     const FILLS = [['#9a3cc2', 'dlFillPurple'], ['#2f6fb0', 'dlFillBlue'], ['#2b8456', 'dlFillGreen'], ['#6b7280', 'dlFillGray'], [null, 'dlFillNone']];
@@ -66,6 +66,8 @@
         const numeric = kind === 'flex' || kind === 'fixed' || kind === 'analysis';
         switch (field) {
             case 'title': return true;
+            case 'brand': return (format === 'xlsx' && kind === 'generic') || format === 'pdf'; // el logo de la compañía: solo donde el Excel no va en flujo
+            case 'lines': return format === 'xlsx' || format === 'pdf';
             case 'date': case 'general': case 'kpis': case 'keyFill': case 'freeze': return format === 'xlsx' && kind === 'flex';
             case 'fill': case 'ink': case 'bold': return format === 'xlsx' || format === 'pdf';
             case 'filter': case 'frozenHeader': return format === 'xlsx';
@@ -80,10 +82,25 @@
         { id: 't', name: 'dlSecTitle', fields: ['title', 'date', 'general', 'kpis'] },
         { id: 'h', name: 'dlSecHeader', fields: ['fill', 'ink', 'bold', 'filter'] },
         { id: 'c', name: 'dlSecColumns', fields: ['keyFill', 'freeze', 'frozenHeader'] },
+        { id: 'l', name: 'dlSecLines', fields: ['lines'] },
         { id: 'n', name: 'dlSecNumbers', fields: ['dec', 'miles', 'neg'] },
         { id: 'a', name: 'dlSecFile', fields: ['sep', 'enc', 'csvTitle'] },
         { id: 'p', name: 'dlSecSheet', fields: ['orient', 'paper', 'foot'] },
     ];
+
+    // ---- Líneas (bordes): los patrones del menú de Bordes de Excel, los estilos y los colores ------------------------------------------------------------------------------------------------
+    const PATS = ['inferior', 'superior', 'izq', 'der', 'sin', 'todos', 'externos', 'ext_grueso', 'doble_inf', 'inf_grueso', 'sup_inf', 'sup_inf_grueso', 'sup_inf_doble'];
+    const FORCED = { ext_grueso: 'gruesa', inf_grueso: 'gruesa', sup_inf_grueso: 'gruesa', doble_inf: 'doble', sup_inf_doble: 'doble' };
+    const STYLES = ['fina', 'media', 'gruesa', 'punteada', 'doble'];
+    const CSS_LINE = { fina: '1px solid', media: '2px solid', gruesa: '3px solid', punteada: '1px dotted', doble: '3px double' };
+    const LCOL = { gris: '#6b7280', negro: '#111111', morado: '#9a3cc2', azul: '#2f6fb0', rojo: '#c00000' };
+    const BIG = 16384; // «hasta la última columna»: el servidor lo recorta a las columnas que se bajan
+    function patIcon(p) {
+        const grid = '<path d="M2 2h12M2 8h12M2 14h12M2 2v12M8 2v12M14 2v12" stroke-dasharray="1 1.6" stroke-width=".9" opacity=".45"/>';
+        const seg = { inferior: 'M2 14h12', superior: 'M2 2h12', izq: 'M2 2v12', der: 'M14 2v12', sin: '', todos: 'M2 2h12M2 8h12M2 14h12M2 2v12M8 2v12M14 2v12', externos: 'M2 2h12v12H2z', ext_grueso: 'M2 2h12v12H2z', doble_inf: 'M2 13h12M2 15h12', inf_grueso: 'M2 14h12', sup_inf: 'M2 2h12M2 14h12', sup_inf_grueso: 'M2 2h12M2 14h12', sup_inf_doble: 'M2 1h12M2 3h12M2 13h12M2 15h12' }[p];
+        const w = /grueso/.test(p) ? 3 : 1.6;
+        return `<svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-linecap="square" aria-hidden="true">${grid}${seg ? `<path d="${seg}" stroke-width="${w}"/>` : '<path d="M3 3l10 10M13 3L3 13" stroke-width="1.2" opacity=".5"/>'}</svg>`;
+    }
 
     // ---- «Así queda»: la vista previa con los primeros renglones de la tabla --------------------------------------------------------------------------------------
     function numberOf(text) { const t = String(text == null ? '' : text).trim().replace(/,/g, ''); return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : null; }
@@ -99,11 +116,13 @@
         if (negative && P.neg === 'par') return { text: `(${body})`, neg: false };
         return { text: (negative ? '-' : '') + body, neg: negative && P.neg === 'rojo' };
     }
-    function previewHtml(P, format, kind, snap) {
+    // ui: { consecutive (columnas seguidas: así las posiciones de las celdas marcadas son las de la tabla), picking (se marcan celdas aquí), sel(r, c) }
+    function previewHtml(P, format, kind, snap, ui) {
+        ui = ui || {};
         // hasta 5 columnas: las primeras y, si la tabla trae columnas de números más allá, las dos primeras de ellas (para que los decimales se vean)
         const numIdx = snap.columns.map((c, i) => (c.num ? i : -1)).filter((i) => i >= 0);
         let idx = snap.columns.map((c, i) => i).slice(0, 5);
-        if (numIdx.length && !idx.some((i) => numIdx.includes(i))) idx = [...idx.slice(0, 3), ...numIdx.slice(0, 2)];
+        if (!ui.consecutive && numIdx.length && !idx.some((i) => numIdx.includes(i))) idx = [...idx.slice(0, 3), ...numIdx.slice(0, 2)];
         const cols = idx.map((i) => snap.columns[i]);
         const rows = snap.rows.slice(0, 4).map((r) => idx.map((i) => r[i]));
         const title = P.title || '';
@@ -116,18 +135,22 @@
             rows.slice(0, 3).forEach((r) => lines.push(line(r.slice(0, cols.length))));
             return `<pre class="dl-csv">${lines.join('\n')}</pre><span class="dl-chip">${esc(P.enc === 'bom' ? T('dlEncBom') : T('dlEncPlain'))}</span>`;
         }
-        const head = cols.map((c, i) => `<th style="${P.fill ? `background:${P.fill};` : ''}color:${P.ink};font-weight:${P.bold ? 700 : 400}">${esc(c.label)}${format === 'xlsx' && P.filter ? '<b>▾</b>' : ''}</th>`).join('');
-        const keyCls = (i) => (format === 'xlsx' && kind === 'flex' && P.keyFill && i === 0 ? ' class="dl-key"' : '');
-        const body = rows.map((r) => `<tr>${cols.map((c, i) => { const v = cols[i].num ? numberView(r[i], P) : { text: String(r[i] == null ? '' : r[i]), neg: false }; return `<td${keyCls(i)}${v.neg ? ' style="color:#c00000"' : ''}>${esc(v.text)}</td>`; }).join('')}</tr>`).join('');
+        // las líneas (bordes) de la personalización, sobre la misma cuadrícula que usa el servidor (renglón 0 = encabezado)
+        const lib = window.DownloadLines;
+        const grid = lib && (format === 'xlsx' || format === 'pdf') && P.lines && P.lines.length ? lib.createGrid(P.lines.map((l) => Object.assign({}, l, { co: LCOL[l.co] || l.co })), { rows: rows.length, cols: snap.columns.length, colIndex: (name) => snap.columns.findIndex((c) => fold(c.label) === fold(name)) }) : null;
+        const edgeCss = (r, k) => { if (!grid) return ''; const e = grid.cell(r, idx[k]); let o = ''; ['top', 'right', 'bottom', 'left'].forEach((s) => { if (e[s]) o += `border-${s}:${CSS_LINE[e[s].st]} ${e[s].co};`; }); return o; };
+        const selCls = (r, k) => (ui.sel && ui.sel(r, idx[k]) ? 'dl-sel' : '');
+        const head = cols.map((c, i) => `<th data-r="0" data-c="${idx[i]}" class="${selCls(0, i)}" style="${P.fill ? `background:${P.fill};` : ''}color:${P.ink};font-weight:${P.bold ? 700 : 400};${edgeCss(0, i)}">${esc(c.label)}${format === 'xlsx' && P.filter ? '<b>▾</b>' : ''}</th>`).join('');
+        const body = rows.map((r, ri) => `<tr>${cols.map((c, i) => { const v = cols[i].num ? numberView(r[i], P) : { text: String(r[i] == null ? '' : r[i]), neg: false }; const cls = [format === 'xlsx' && kind === 'flex' && P.keyFill && i === 0 ? 'dl-key' : '', selCls(ri + 1, i)].filter(Boolean).join(' '); return `<td data-r="${ri + 1}" data-c="${idx[i]}"${cls ? ` class="${cls}"` : ''} style="${v.neg ? 'color:#c00000;' : ''}${edgeCss(ri + 1, i)}">${esc(v.text)}</td>`; }).join('')}</tr>`).join('');
         const titleRow = title ? `<tr><td class="dl-ttl" colspan="${cols.length || 1}">${esc(title)}</td></tr>` : '';
         if (format === 'pdf') {
             const ratio = P.orient === 'h' ? 'landscape' : 'portrait';
             const paper = { carta: T('dlPaperLetter'), a4: 'A4', legal: T('dlPaperLegal') }[P.paper] || '';
             const foot = P.foot ? `<div class="dl-foot"><span>${esc(new Date().toISOString().slice(0, 10))}</span><span>1 / 1</span></div>` : '';
-            return `<div class="dl-page ${ratio}">${title ? `<div class="dl-pt">${esc(title)}</div>` : ''}<table class="dl-xl"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>${foot}</div><span class="dl-chip">${esc(paper)} · ${esc(P.orient === 'h' ? T('dlOrientH') : T('dlOrientV'))}</span>`;
+            return `<div class="dl-page ${ratio}">${title ? `<div class="dl-pt">${esc(title)}</div>` : ''}<table class="dl-xl${ui.picking ? ' dl-pick' : ''}"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>${foot}</div><span class="dl-chip">${esc(paper)} · ${esc(P.orient === 'h' ? T('dlOrientH') : T('dlOrientV'))}</span>`;
         }
         const cover = kind === 'flex' ? `<div class="dl-cover">${[[P.date, 'dlDate'], [P.general, 'dlGeneral'], [P.kpis, 'dlKpis']].filter((x) => x[0]).map((x) => `<span class="dl-chip">${esc(T(x[1]))}</span>`).join('')}</div>` : '';
-        return `<div class="dl-scr"><table class="dl-xl"><thead>${titleRow}<tr>${head}</tr></thead><tbody>${body}</tbody></table></div>${cover}`;
+        return `<div class="dl-scr"><table class="dl-xl${ui.picking ? ' dl-pick' : ''}"><thead>${titleRow}<tr>${head}</tr></thead><tbody>${body}</tbody></table></div>${cover}`;
     }
 
     // ---- el cuadro de Descargar -------------------------------------------------------------------------------------------------------------------------------------
@@ -194,8 +217,62 @@
             foot: () => '',
         };
         // los casilleros van juntos en una sola fila por sección
-        const CHECKS = { t: [['date', 'dlDate'], ['general', 'dlGeneral'], ['kpis', 'dlKpis']], h: [['bold', 'dlBold'], ['filter', 'dlFilter']], c: [['keyFill', 'dlKeyFill'], ['freeze', 'dlFreeze'], ['frozenHeader', 'dlFrozenHeader']], a: [['csvTitle', 'dlCsvTitle']], p: [['foot', 'dlFoot']] };
+        const CHECKS = { t: [['brand', 'dlBrand'], ['date', 'dlDate'], ['general', 'dlGeneral'], ['kpis', 'dlKpis']], h: [['bold', 'dlBold'], ['filter', 'dlFilter']], c: [['keyFill', 'dlKeyFill'], ['freeze', 'dlFreeze'], ['frozenHeader', 'dlFrozenHeader']], a: [['csvTitle', 'dlCsvTitle']], p: [['foot', 'dlFoot']] };
         let openSec = 'h';
+        // Líneas: lo que la persona va armando (dónde, patrón, estilo y color); las capas ya aplicadas viven en P.lines
+        const L = { scope: 'all', cols: {}, rect: null, anchor: null, pat: 'todos', st: 'fina', co: 'negro', more: false, mt: { t: true, b: true, l: true, r: true, ih: false, iv: false } };
+        const inSel = (r, c) => {
+            if (L.scope === 'col') return !!L.cols[c];
+            if (L.scope === 'cell' && L.rect) { const x = L.rect; return r >= x.r1 && (x.r2 === null || r <= x.r2) && c >= x.c1 && c <= x.c2; }
+            return false;
+        };
+        const layerName = (l) => {
+            const w = l.where || {};
+            const where = w.scope === 'all' ? T('dlLnAll') : w.scope === 'col' ? T('dlLnLayerCol', { name: w.col }) : T('dlLnLayerCells', { rows: w.r1 === w.r2 ? (w.r1 === 0 ? T('dlLnHeader') : w.r1) : `${w.r1 === 0 ? T('dlLnHeader') : w.r1}–${w.r2 === null ? '…' : w.r2}`, cols: w.c1 === w.c2 ? w.c1 + 1 : `${w.c1 + 1}–${w.c2 >= BIG ? '…' : w.c2 + 1}` });
+            const pat = l.pat === 'custom' ? T('dlLnMore') : T(`dlPat_${l.pat}`);
+            return `${where} · ${pat}${l.pat === 'sin' ? '' : ` · ${T(`dlSt_${FORCED[l.pat] || l.st}`).toLowerCase()} ${T(`dlCo_${typeof l.co === 'string' && LCOL[l.co] ? l.co : Object.keys(LCOL).find((k) => LCOL[k] === l.co) || 'negro'}`).toLowerCase()}`}`;
+        };
+        const buildLines = (box) => {
+            const chip = (ln, label, on, extra) => `<button type="button" class="dl-ch" data-ln="${ln}" aria-pressed="${!!on}"${extra ? ` data-v="${esc(extra)}"` : ''}>${esc(label)}</button>`;
+            const dot = (ln, label, on, hex, extra) => `<button type="button" class="dl-ch" data-ln="${ln}" aria-pressed="${!!on}" data-v="${esc(extra)}"><i class="dl-dot" style="background:${hex}"></i>${esc(label)}</button>`;
+            const row = (label, inner) => `<div class="dl-row"><span class="dl-l">${esc(label)}</span><div class="dl-c">${inner}</div></div>`;
+            let h = row(T('dlLnWhere'), ['all', 'col', 'cell'].map((s) => chip('scope', T(`dlLn_${s}`), L.scope === s, s)).join(''));
+            if (L.scope === 'col') h += row(T('dlLnCols'), snap.columns.slice(0, 40).map((c, i) => chip('col', c.label, !!L.cols[i], String(i))).join(''));
+            if (L.scope === 'cell') h += row(T('dlLnMark'), [['dlLnHeader', 0, 0, 0, BIG], ['dlLnData', 1, null, 0, BIG], ['dlLnFirstCol', 0, null, 0, 0]].map(([k, r1, r2, c1, c2]) => chip('quick', T(k), false, JSON.stringify({ r1, r2, c1, c2 }))).join(''));
+            h += `<div class="dl-bgrid" role="group" aria-label="${esc(T('dlLnPatterns'))}">${PATS.map((p) => `<button type="button" class="dl-bpat" data-ln="pat" data-v="${p}" aria-pressed="${!L.more && L.pat === p}">${patIcon(p)}<span>${esc(T(`dlPat_${p}`))}</span></button>`).join('')}</div>`;
+            const forced = !L.more && FORCED[L.pat];
+            h += row(T('dlLnStyle'), STYLES.map((s) => chip('st', T(`dlSt_${s}`), (forced || L.st) === s, s)).join(''));
+            h += row(T('dlLnColor'), Object.keys(LCOL).map((k) => dot('co', T(`dlCo_${k}`), L.co === k, LCOL[k], k)).join(''));
+            h += row('', chip('more', T('dlLnMore'), L.more, ''));
+            if (L.more) h += `<div class="dl-more">${[['t', 'dlLnTop'], ['b', 'dlLnBottom'], ['l', 'dlLnLeft'], ['r', 'dlLnRight'], ['ih', 'dlLnInnerH'], ['iv', 'dlLnInnerV']].map(([k, label]) => chip('mt', T(label), L.mt[k], k)).join('')}</div>`;
+            h += row('', `<button type="button" class="btn dl-apply" data-ln="apply">${esc(T('dlLnApply'))}</button>${P.lines.length ? `<button type="button" class="btn btn-secondary" data-ln="clear">${esc(T('dlLnClear'))}</button>` : ''}`);
+            h += P.lines.map((l, i) => `<div class="dl-layer"><span>${esc(layerName(l))}</span><button type="button" data-ln="del" data-v="${i}" aria-label="${esc(T('dlLnRemove'))}">✕</button></div>`).join('');
+            box.innerHTML = h;
+        };
+        const redrawLines = () => { const box = overlay.querySelector('.dl-lines'); if (box) buildLines(box); drawPreview(); };
+        const linesClick = (b) => {
+            const k = b.dataset.ln; const v = b.dataset.v;
+            if (k === 'scope') { L.scope = v; L.rect = null; L.anchor = null; }
+            else if (k === 'col') L.cols[Number(v)] = !L.cols[Number(v)];
+            else if (k === 'quick') L.rect = JSON.parse(v);
+            else if (k === 'pat') { L.pat = v; L.more = false; }
+            else if (k === 'st') L.st = v;
+            else if (k === 'co') L.co = v;
+            else if (k === 'more') L.more = !L.more;
+            else if (k === 'mt') L.mt[v] = !L.mt[v];
+            else if (k === 'del') P.lines.splice(Number(v), 1);
+            else if (k === 'clear') P.lines = [];
+            else if (k === 'apply') {
+                const wheres = [];
+                if (L.scope === 'all') wheres.push({ scope: 'all' });
+                else if (L.scope === 'col') Object.keys(L.cols).filter((i) => L.cols[i]).forEach((i) => { if (snap.columns[i]) wheres.push({ scope: 'col', col: snap.columns[i].label }); });
+                else if (L.rect) wheres.push({ scope: 'cells', r1: L.rect.r1, c1: L.rect.c1, r2: L.rect.r2, c2: L.rect.c2 });
+                if (!wheres.length) { say(T(L.scope === 'col' ? 'dlLnPickCols' : 'dlLnPickCells'), true); return; }
+                wheres.forEach((w) => P.lines.push({ where: w, pat: L.more ? 'custom' : L.pat, mt: L.more ? clone(L.mt) : null, st: L.st, co: L.co, label: '' }));
+                L.rect = null; L.anchor = null; L.cols = {}; say('');
+            }
+            redrawLines();
+        };
         const drawSections = () => {
             const box = $('#dl-secs');
             box.innerHTML = '';
@@ -205,15 +282,26 @@
                 const d = document.createElement('details');
                 d.dataset.id = s.id;
                 d.open = s.id === openSec;
+                if (s.id === 'l') {
+                    d.innerHTML = `<summary data-help-key="downloadLines"><b>${esc(T(s.name))}</b></summary><div class="dl-fields dl-lines"></div>`;
+                    d.addEventListener('toggle', () => { if (d.open) { openSec = s.id; drawPreview(); } });
+                    box.appendChild(d);
+                    buildLines(d.querySelector('.dl-lines'));
+                    return;
+                }
                 const rowsHtml = fields.map((f) => FIELD_HTML[f]()).join('');
                 const checks = (CHECKS[s.id] || []).filter(([f]) => allowed(f, format, kind));
                 d.innerHTML = `<summary><b>${esc(T(s.name))}</b></summary><div class="dl-fields">${rowsHtml}${checks.length ? field(`${s.id}-chk`, T('dlOptions'), `<span class="dl-checks">${checks.map(([f, label]) => chk(f, T(label))).join('')}</span>`) : ''}</div>`;
-                d.addEventListener('toggle', () => { if (d.open) openSec = s.id; });
+                d.addEventListener('toggle', () => { if (d.open) { openSec = s.id; drawPreview(); } });
                 box.appendChild(d);
             });
         };
         const dirty = () => !same(P, base);
-        const drawPreview = () => { $('#dl-prev').innerHTML = previewHtml(P, format, kind, snap); $('#dl-mod').hidden = !dirty(); };
+        const drawPreview = () => {
+            const working = openSec === 'l' && allowed('lines', format, kind);
+            $('#dl-prev').innerHTML = previewHtml(P, format, kind, snap, { consecutive: working, picking: working && L.scope !== 'all', sel: working ? inSel : null });
+            $('#dl-mod').hidden = !dirty();
+        };
         const drawTabs = () => overlay.querySelectorAll('.dl-fmts [data-f]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.f === format)));
         const redraw = () => { drawTabs(); drawSelect(); drawSections(); drawPreview(); };
         const loadSel = (value) => {
@@ -243,6 +331,18 @@
         };
         const remember = () => { try { localStorage.setItem(LAST_KEY, JSON.stringify(P)); } catch (e) { /* sin almacenamiento */ } };
         overlay.addEventListener('click', async (e) => {
+            const ln = e.target.closest('[data-ln]');
+            if (ln) { linesClick(ln); return; }
+            // marcar en «Así queda»: una columna (tocando su encabezado) o un grupo de celdas (una y luego otra, como en Excel)
+            const cellEl = e.target.closest('#dl-prev [data-r]');
+            if (cellEl && openSec === 'l' && L.scope !== 'all') {
+                const r = Number(cellEl.dataset.r); const c = Number(cellEl.dataset.c);
+                if (L.scope === 'col') L.cols[c] = !L.cols[c];
+                else if (!L.anchor) { L.anchor = { r, c }; L.rect = { r1: r, c1: c, r2: r, c2: c }; }
+                else { L.rect = { r1: Math.min(L.anchor.r, r), c1: Math.min(L.anchor.c, c), r2: Math.max(L.anchor.r, r), c2: Math.max(L.anchor.c, c) }; L.anchor = null; }
+                redrawLines();
+                return;
+            }
             const tab = e.target.closest('.dl-fmts [data-f]');
             if (tab) { format = tab.dataset.f; kind = kindFor(format); redraw(); return; }
             const pick = e.target.closest('button[data-k]');

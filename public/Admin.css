@@ -11011,6 +11011,35 @@ table.dl-xl td.dl-key{ background: #ead0f0; }
 .dl-page.landscape{ width: 22rem; aspect-ratio: 11 / 8.5; }
 .dl-page .dl-pt{ font-weight: 700; font-size: 0.8rem; text-align: center; }
 .dl-page .dl-foot{ position: absolute; left: 0.7rem; right: 0.7rem; bottom: 0.4rem; display: flex; justify-content: space-between; font-size: 0.6rem; color: #666; }
+.dl-sel{ outline: 2px dashed var(--color-accent, #d96ecf); outline-offset: -2px; }
+table.dl-pick td, table.dl-pick th{ cursor: cell; }
+.dl-ch{ font: inherit; font-size: 0.76rem; font-weight: 600; border: 1px solid var(--color-border); background: var(--color-bg); color: inherit; border-radius: 999px; padding: 0.12rem 0.65rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; }
+.dl-ch[aria-pressed="true"]{ border-color: var(--color-accent, #6d3fc0); background: color-mix(in srgb, var(--color-accent, #6d3fc0) 16%, var(--color-surface)); color: var(--color-accent, #6d3fc0); }
+.dl-dot{ width: 0.7rem; height: 0.7rem; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.3); display: inline-block; }
+.dl-bgrid{ display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: 0.3rem; }
+.dl-bpat{ font: inherit; font-size: 0.72rem; font-weight: 600; display: flex; align-items: center; gap: 0.4rem; text-align: left; border: 1px solid var(--color-border); background: var(--color-bg); color: inherit; border-radius: 0.6rem; padding: 0.25rem 0.45rem; cursor: pointer; }
+.dl-bpat[aria-pressed="true"]{ border-color: var(--color-accent, #6d3fc0); background: color-mix(in srgb, var(--color-accent, #6d3fc0) 14%, var(--color-surface)); color: var(--color-accent, #6d3fc0); }
+.dl-bpat svg{ flex: none; }
+.dl-more{ display: flex; flex-wrap: wrap; gap: 0.3rem; border: 1px dashed var(--color-border); border-radius: 0.7rem; padding: 0.4rem 0.5rem; background: color-mix(in srgb, var(--color-accent, #6d3fc0) 6%, var(--color-surface)); }
+.dl-layer{ display: flex; align-items: center; gap: 0.5rem; font-size: 0.76rem; border: 1px dashed var(--color-border); border-radius: 0.6rem; padding: 0.15rem 0.55rem; background: var(--color-surface); }
+.dl-layer span{ flex: 1; min-width: 0; }
+.dl-layer button{ border: 0; background: transparent; color: var(--color-accent, #6d3fc0); font-weight: 700; cursor: pointer; }
+.dl-apply{ padding: 0.25rem 0.9rem; }
+/* Franja del tipo de llenado (Dashboard.js: fillTypeBandRow) y «Mostrar franjas» (Dashboard.js: openBandsMenu) — Daniel, 2026-11-28 */
+.data-table-group-band-type th.data-table-type-cell{ background-color: color-mix(in srgb, var(--tc, var(--color-accent)) 15%, var(--color-surface)); color: var(--tc, var(--color-accent)); font-weight: 700; }
+.data-table-group-band-type th.data-table-type-cell[data-type="base"]{ --tc: #6b7280; }
+.data-table-group-band-type th.data-table-type-cell[data-type="cons"]{ --tc: #2f6fb0; }
+.data-table-group-band-type th.data-table-type-cell[data-type="fx"]{ --tc: #9a3cc2; }
+.data-table-group-band-type th.data-table-type-cell[data-type="criterion"]{ --tc: #b57a05; }
+.data-table-group-band-type th.data-table-type-cell[data-type="block"]{ --tc: #2b8456; }
+.data-table-group-band-type th.data-table-type-cell[data-type="comment"]{ --tc: #8a8a8a; }
+tr.data-table-group-band[hidden]{ display: none; }
+.data-table-bands-menu{ min-width: 17rem; }
+.data-table-bands-row{ display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.15rem 0; font-size: 0.82rem; }
+.data-table-bands-swatch{ width: 0.8rem; height: 0.8rem; border-radius: 0.25rem; border: 1px solid var(--color-border); flex: none; }
+.data-table-bands-swatch-type{ background: #f1dcf3; }
+.data-table-bands-swatch-origin{ background: #dde7ee; }
+.data-table-bands-swatch-class{ background: #dcefde; }
 .dl-list{ display: flex; flex-direction: column; gap: 0.4rem; }
 .dl-item{ display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; border: 1px solid var(--color-border); border-radius: 0.8rem; background: var(--color-surface); padding: 0.45rem 0.7rem; }
 .dl-nm{ font-weight: 600; flex: 1 1 8rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
