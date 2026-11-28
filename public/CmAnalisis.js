@@ -974,7 +974,11 @@ function openAddedDialog(editId) {
 
 // ---- «Varias columnas (bloque)» (Daniel, 2026-11-27, «Sí a las recomendadas»): una función sobre un grupo de columnas, como el rango de Excel (F2:AM2) ------------------------------------------------------
 // El bloque se guarda por sus dos puntas (Desde–hasta): lo que quede entre ellas, en el orden del archivo, entra solo. Se escoge con las listas o con «Marcar en la tabla» (clic en la primera columna y clic en la última, o Mayús + clic).
-const BLOCK_FNS = ['blank', 'filled', 'zero', 'sum', 'avg', 'min', 'max'];
+const BLOCK_FNS = ['blank', 'filled', 'zero', 'meet', 'sum', 'avg', 'min', 'max', 'median'];
+// los cálculos por tipo, como la Biblioteca de funciones de Excel (Daniel, 2026-11-27): Contar y Estadística. «Cuántas cumplen…» lleva su condición; la suma, el promedio, el menor y el mayor la aceptan opcional («Solo las que…»)
+const BLOCK_FN_GROUPS = [['count', ['filled', 'blank', 'zero', 'meet']], ['stat', ['sum', 'avg', 'min', 'max', 'median']]];
+const BLOCK_COND_FNS = new Set(['meet', 'sum', 'avg', 'min', 'max']);
+const BLOCK_CONDS = ['eq', 'neq', 'lt', 'lte', 'gt', 'gte'];
 const blockCountText = (n) => (n === 1 ? t('main.anBlockCount1') : t('main.anBlockCount', { n }));
 // cuántas columnas hay entre dos puntas; cols = solo las que cuentan en un bloque (sin las de referencia ni las de comentarios), en el orden del archivo
 function blockCount(cols, from, to) {
@@ -1040,8 +1044,8 @@ function openBlockDialog(editId) {
     const cols = allCols.map((c, i) => ({ key: c.key, title: columnTitle(c), letter: columnLetter(i), group: c.group, kind: c.kind })).filter((c, i) => c.group !== 'reference' && c.kind !== 'comment' && i < editAt);
     const newLetter = columnLetter(editing ? editAt : allCols.length);
     const draft = editing
-        ? { name: editing.name, cls: editing.cls || '', decimals: editing.decimals, fn: editing.fn, blocks: editing.blocks.map((b) => ({ from: b.from, to: b.to })) }
-        : { name: t('main.anBlockName_blank'), cls: '', decimals: null, fn: 'blank', blocks: [defaultBlockEnds(cols)] };
+        ? { name: editing.name, cls: editing.cls || '', decimals: editing.decimals, fn: editing.fn, cond: editing.cond ? { op: editing.cond.op, value: String(editing.cond.value) } : { op: 'neq', value: '' }, blocks: editing.blocks.map((b) => ({ from: b.from, to: b.to })) }
+        : { name: t('main.anBlockName_blank'), cls: '', decimals: null, fn: 'blank', cond: { op: 'neq', value: '' }, blocks: [defaultBlockEnds(cols)] };
     let touchedName = !!editing;
     const html = `<h3>${esc(t(editing ? 'main.anBlockEditTitle' : 'main.anBlockTitle'))}</h3>
         <div class="an-f2">
@@ -1050,7 +1054,12 @@ function openBlockDialog(editId) {
             <div><label for="an-bk-dec">${esc(t('main.anAddedFormat'))}</label><select id="an-bk-dec"><option value="">${esc(t('main.anFmtAuto'))}</option>${[0, 1, 2, 3, 4].map((n) => `<option value="${n}">${esc(t('main.anFmtDecimals', { n }))}</option>`).join('')}</select></div>
         </div>
         <p class="reg-field-label">${esc(t('main.anBlockWhat'))}</p>
-        <div class="an-seg" id="an-bk-fns"></div>
+        <div class="an-fn-groups" id="an-bk-fns"></div>
+        <div class="an-cond an-bk-cond" id="an-bk-cond" hidden>
+            <span class="an-lead" id="an-bk-condlead"></span>
+            <select id="an-bk-condop" aria-label="${esc(t('main.anBlockCondLead'))}">${BLOCK_CONDS.map((o) => `<option value="${o}">${esc(t(`main.anCond_${o}`))}</option>`).join('')}</select>
+            <input type="text" id="an-bk-condval" inputmode="decimal" autocomplete="off" placeholder="${esc(t('main.anBlockCondValue'))}" aria-label="${esc(t('main.anBlockCondValue'))}">
+        </div>
         <p class="reg-field-label">${esc(t('main.anBlockCols'))}</p>
         <div class="an-blocks" id="an-bk-blocks"></div>
         <p><button type="button" class="btn btn-secondary an-sm" data-an-addblock><i class="bx bx-plus" aria-hidden="true"></i> ${esc(t('main.anBlockAdd'))}</button></p>
@@ -1062,14 +1071,26 @@ function openBlockDialog(editId) {
     modal(html, (overlay, close) => {
         const $ = (sel) => overlay.querySelector(sel);
         $('#an-bk-dec').value = draft.decimals === null || draft.decimals === undefined ? '' : String(draft.decimals);
-        const drawFns = () => { $('#an-bk-fns').innerHTML = BLOCK_FNS.map((f) => `<button type="button" class="btn btn-secondary an-sm${draft.fn === f ? ' an-on' : ''}" data-an-fn="${f}" aria-pressed="${draft.fn === f ? 'true' : 'false'}">${esc(t(`main.anBlockFn_${f}`))}</button>`).join(''); };
+        const drawFns = () => {
+            const button = (f) => `<button type="button" class="btn btn-secondary an-sm${draft.fn === f ? ' an-on' : ''}" data-an-fn="${f}" aria-pressed="${draft.fn === f ? 'true' : 'false'}">${esc(t(`main.anBlockFn_${f}`))}</button>`;
+            $('#an-bk-fns').innerHTML = BLOCK_FN_GROUPS.map(([g, list]) => `<div class="an-fn-group"><span class="an-fn-title">${esc(t(`main.anBlockGroup_${g}`))}</span><div class="an-seg">${list.map(button).join('')}</div></div>`).join('');
+            // la condición: obligatoria en «Cuántas cumplen…», opcional (vacía = sin condición) en la suma, el promedio, el menor y el mayor; las demás no la llevan
+            const row = $('#an-bk-cond'); row.hidden = !BLOCK_COND_FNS.has(draft.fn);
+            $('#an-bk-condlead').textContent = t(draft.fn === 'meet' ? 'main.anBlockCondLeadMeet' : 'main.anBlockCondLead');
+            $('#an-bk-condop').value = draft.cond.op; $('#an-bk-condval').value = draft.cond.value;
+        };
         const drawBlocks = () => {
             $('#an-bk-blocks').innerHTML = draft.blocks.map((b, i) => `<div class="an-range"><span class="an-lead">${esc(t('main.anBlockFrom'))}</span>${blockSelect(cols, `data-bi="${i}" data-f="from"`, b.from)}<span>${esc(t('main.anBlockTo'))}</span>${blockSelect(cols, `data-bi="${i}" data-f="to"`, b.to)}<button type="button" class="btn btn-secondary an-sm" data-an-markblock data-bi="${i}">⌖ ${esc(t('main.anBlockMark'))}</button><span class="an-cnt">${esc(blockCountText(blockCount(cols, b.from, b.to)))}</span>${draft.blocks.length > 1 ? `<button type="button" class="admin-icon-btn" data-an-delblock="${i}" aria-label="${esc(t('main.anBlockRemove'))}" title="${esc(t('main.anBlockRemove'))}"><i class="bx bx-x" aria-hidden="true"></i></button>` : ''}</div>`).join('');
         };
         const colorFor = (cls) => colorOfClass(cls, editing);
         const toDef = () => {
             if (!draft.blocks.length || draft.blocks.some((b) => !cols.some((c) => c.key === b.from) || !cols.some((c) => c.key === b.to))) return null;
-            return { id: editing ? editing.id : undefined, kind: 'block', name: draft.name.trim(), cls: draft.cls.trim(), color: colorFor(draft.cls.trim()), decimals: draft.decimals, fn: draft.fn, blocks: draft.blocks.map((b) => ({ from: b.from, to: b.to })) };
+            let cond = null;
+            if (BLOCK_COND_FNS.has(draft.fn)) {
+                const raw = String(draft.cond.value).trim();
+                if (raw !== '') { const n = Number(raw.replace(',', '.')); if (!Number.isFinite(n)) return null; cond = { op: draft.cond.op, value: n }; } else if (draft.fn === 'meet') return null; // sin número no hay condición: en «cuántas cumplen» es obligatoria, en los demás se calcula con todas
+            }
+            return { id: editing ? editing.id : undefined, kind: 'block', name: draft.name.trim(), cls: draft.cls.trim(), color: colorFor(draft.cls.trim()), decimals: draft.decimals, fn: draft.fn, ...(cond ? { cond } : {}), blocks: draft.blocks.map((b) => ({ from: b.from, to: b.to })) };
         };
         let timer = null; let seq = 0;
         const preview = () => {
@@ -1094,11 +1115,13 @@ function openBlockDialog(editId) {
             const el = event.target;
             if (el.id === 'an-bk-name') { draft.name = el.value; touchedName = true; return; }
             if (el.id === 'an-bk-cls') draft.cls = el.value;
+            if (el.id === 'an-bk-condval') { draft.cond.value = el.value; preview(); }
         });
         overlay.addEventListener('change', (event) => {
             const el = event.target;
             if (el.id === 'an-bk-dec') { draft.decimals = el.value === '' ? null : Number(el.value); preview(); return; }
             if (el.id === 'an-bk-cls') { draft.cls = el.value; return; }
+            if (el.id === 'an-bk-condop') { draft.cond.op = el.value; preview(); return; }
             if (el.dataset && el.dataset.bi !== undefined && el.tagName === 'SELECT') { draft.blocks[Number(el.dataset.bi)][el.dataset.f] = el.value; drawBlocks(); preview(); }
         });
         overlay.addEventListener('click', (event) => {

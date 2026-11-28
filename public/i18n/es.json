@@ -5733,6 +5733,15 @@
     "anBlockName_avg": "Promedio del bloque",
     "anBlockName_min": "Menor del bloque",
     "anBlockName_max": "Mayor del bloque",
+    "anBlockFn_meet": "Cuántas cumplen…",
+    "anBlockFn_median": "La mediana",
+    "anBlockName_meet": "Celdas que cumplen",
+    "anBlockName_median": "Mediana del bloque",
+    "anBlockGroup_count": "Contar",
+    "anBlockGroup_stat": "Estadística",
+    "anBlockCondLeadMeet": "Cuentan las que",
+    "anBlockCondLead": "Solo las que",
+    "anBlockCondValue": "Número",
     "anBlockFrom": "Desde",
     "anBlockTo": "hasta",
     "anBlockMark": "Marcar en la tabla",
@@ -5788,7 +5797,7 @@
     "anCond_notEmpty": "no está vacío",
     "anCond_blankZero": "no tiene valor (vacío o 0)",
     "anErr_ADDED_RULES": "Revisa las reglas: cada una necesita su condición y su resultado.",
-    "anErr_ADDED_BLOCK": "Revisa el bloque: elige qué calcular y las columnas de inicio y fin.",
+    "anErr_ADDED_BLOCK": "Revisa el bloque: elige qué calcular, las columnas de inicio y fin y, en «Cuántas cumplen…», el número de la condición.",
     "anAddColumnFile": "Agregar columna",
     "anAddedTitle": "Agregar columna › Operación",
     "anAddedEditTitle": "Editar columna agregada",
@@ -10762,7 +10771,7 @@
       "example": "Daniel deja EXISTENCIA junto al consumo y lo marca como original → Luis abre el análisis y lo ve así"
     },
     "anBloque": {
-      "what": "Una columna que calcula con un grupo de columnas a la vez, como el rango de Excel (F2:AM2): cuántas están vacías, cuántas tienen dato, cuántas valen cero, la suma, el promedio, el menor o el mayor. Eliges las columnas con «Desde–hasta» o con «Marcar en la tabla» (clic en la primera y clic en la última); lo que quede entre las dos puntas entra solo, así que si agregas una columna en medio, cuenta. «Otro bloque o columna» suma más. Una celda vacía no es cero: «cuántas valen cero» va aparte.",
+      "what": "Una columna que calcula con un grupo de columnas a la vez, como el rango de Excel (F2:AM2): cuántas están vacías, cuántas tienen dato, cuántas valen cero, cuántas cumplen una condición (por ejemplo distintas de 5), la suma, el promedio, el menor, el mayor o la mediana. En cuántas cumplen es obligatoria y en la suma, el promedio, el menor y el mayor es opcional («Solo las que…»): una celda vacía nunca cumple. Eliges las columnas con «Desde–hasta» o con «Marcar en la tabla» (clic en la primera y clic en la última); lo que quede entre las dos puntas entra solo, así que si agregas una columna en medio, cuenta. «Otro bloque o columna» suma más. Una celda vacía no es cero: «cuántas valen cero» va aparte.",
       "example": "Meses sin consumo = cuántas vacías de ene-24 a oct-26 → =CONTAR.BLANCO(F2:AM2)"
     },
     "anReglaBloque": {

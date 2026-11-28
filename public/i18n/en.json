@@ -5734,6 +5734,15 @@
     "anBlockName_avg": "Block average",
     "anBlockName_min": "Block minimum",
     "anBlockName_max": "Block maximum",
+    "anBlockFn_meet": "How many meet…",
+    "anBlockFn_median": "The median",
+    "anBlockName_meet": "Cells that meet",
+    "anBlockName_median": "Block median",
+    "anBlockGroup_count": "Count",
+    "anBlockGroup_stat": "Statistics",
+    "anBlockCondLeadMeet": "Count the ones that",
+    "anBlockCondLead": "Only the ones that",
+    "anBlockCondValue": "Number",
     "anBlockFrom": "From",
     "anBlockTo": "to",
     "anBlockMark": "Mark on the table",
@@ -5789,7 +5798,7 @@
     "anCond_notEmpty": "is not empty",
     "anCond_blankZero": "has no value (empty or 0)",
     "anErr_ADDED_RULES": "Check the rules: each one needs its condition and its result.",
-    "anErr_ADDED_BLOCK": "Check the block: choose what to calculate and the first and last columns.",
+    "anErr_ADDED_BLOCK": "Check the block: choose what to calculate, the first and last columns and, for “How many meet…”, the number of the condition.",
     "anAddColumnFile": "Add column",
     "anAddedTitle": "Add column › Operation",
     "anAddedEditTitle": "Edit added column",
@@ -10763,7 +10772,7 @@
       "example": "Daniel puts STOCK next to consumption and marks it as the original → Luis opens the analysis and sees it that way"
     },
     "anBloque": {
-      "what": "A column that calculates with a group of columns at once, like an Excel range (F2:AM2): how many are empty, how many have data, how many are zero, the sum, the average, the smallest or the largest. You choose the columns with “From–to” or with “Mark on the table” (click the first and then the last); whatever lies between the two ends is included automatically, so a column you add in the middle counts. “Another block or column” adds more. An empty cell is not zero: “how many are zero” is separate.",
+      "what": "A column that calculates with a group of columns at once, like an Excel range (F2:AM2): how many are empty, how many have data, how many are zero, how many meet a condition (for example different from 5), the sum, the average, the smallest, the largest or the median. For how many meet the condition is required and for the sum, average, smallest and largest it is optional (“Only the ones that…”): an empty cell never meets it. You choose the columns with “From–to” or with “Mark on the table” (click the first and then the last); whatever lies between the two ends is included automatically, so a column you add in the middle counts. “Another block or column” adds more. An empty cell is not zero: “how many are zero” is separate.",
       "example": "Months without consumption = how many are empty from Jan-24 to Oct-26 → =CONTAR.BLANCO(F2:AM2)"
     },
     "anReglaBloque": {

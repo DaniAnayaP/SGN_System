@@ -10918,6 +10918,13 @@ td.an-added, th.an-added{ background: color-mix(in srgb, var(--color-accent) 7%,
 /* «Varias columnas (bloque)» y la regla de bloque de «Criterio» (Daniel, 2026-11-27): desde–hasta + «Marcar en la tabla» */
 .an-seg{ display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.2rem 0 0.5rem; }
 .an-seg .btn.an-on{ background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+/* Bloque: los cálculos agrupados por tipo (Contar, Estadística) y la condición opcional («Solo las que…») */
+.an-fn-groups{ display: flex; flex-direction: column; gap: 0.2rem; }
+.an-fn-title{ font-size: 0.66rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-accent); }
+.an-bk-cond{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.5rem; margin: 0 0 0.5rem; }
+.an-bk-cond[hidden]{ display: none; }
+.an-bk-cond select, .an-bk-cond input{ border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); border-radius: 0.5rem; padding: 0.25rem 0.5rem; font: inherit; min-width: 0; }
+.an-bk-cond input{ width: 6rem; }
 .an-blocks{ display: flex; flex-direction: column; gap: 0.5rem; margin: 0.2rem 0 0.4rem; }
 .an-range{ display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.5rem; padding: 0.5rem 0.7rem; border-radius: 0.8rem; border: 1px solid var(--color-border); background: color-mix(in srgb, var(--color-accent) 6%, var(--color-surface)); font-size: 0.85rem; }
 .an-range select{ border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); border-radius: 0.5rem; padding: 0.25rem 0.5rem; font: inherit; min-width: 0; max-width: 100%; }

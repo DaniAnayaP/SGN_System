@@ -35,7 +35,10 @@ const MAX_RULES = 20;
 const MAX_CONDS = 5;
 const MAX_TEXT = 80;
 const COND_OPS = new Set(['lt', 'lte', 'gt', 'gte', 'between', 'eq', 'neq', 'contains', 'empty', 'notEmpty', 'blankZero']);
-const BLOCK_FNS = new Set(['blank', 'filled', 'zero', 'sum', 'avg', 'min', 'max']);
+const BLOCK_FNS = new Set(['blank', 'filled', 'zero', 'meet', 'sum', 'avg', 'min', 'max', 'median']);
+// «Cuántas cumplen…» necesita su condición; la suma, el promedio, el menor y el mayor la aceptan opcional («solo las que…»); el resto no la lleva (Daniel, 2026-11-27)
+const BLOCK_COND_FNS = new Set(['meet', 'sum', 'avg', 'min', 'max']);
+const BLOCK_COND_OPS = new Set(['eq', 'neq', 'lt', 'lte', 'gt', 'gte']);
 const MAX_BLOCKS = 10;
 const NUMERIC_COND_OPS = new Set(['lt', 'lte', 'gt', 'gte']);
 
@@ -142,6 +145,13 @@ function normalizeBlocks(raw) {
     }
     return out;
 }
+// la condición de un bloque: { op, value } con un número; null si no sirve
+function normalizeBlockCond(raw) {
+    if (!raw || typeof raw !== 'object' || !BLOCK_COND_OPS.has(raw.op)) return null;
+    const value = typeof raw.value === 'number' ? raw.value : Number(String(raw.value == null ? '' : raw.value).replace(',', '.'));
+    if (String(raw.value == null ? '' : raw.value).trim() === '' || !Number.isFinite(value)) return null;
+    return { op: raw.op, value };
+}
 // Devuelve { added } o { error }. Los ids no se repiten; el color es el de la paleta de clasificaciones (0 a 5) o vacío.
 function normalizeAdded(raw) {
     const list = Array.isArray(raw) ? raw : [];
@@ -162,7 +172,10 @@ function normalizeAdded(raw) {
         } else if (c.kind === 'block') {
             const blocks = normalizeBlocks(c.blocks);
             if (!blocks || !BLOCK_FNS.has(c.fn)) return { error: 'ADDED_BLOCK' };
-            body = { fn: c.fn, blocks };
+            let cond = null;
+            if (c.cond !== undefined && c.cond !== null) { cond = BLOCK_COND_FNS.has(c.fn) ? normalizeBlockCond(c.cond) : null; if (!cond) return { error: 'ADDED_BLOCK' }; }
+            if (c.fn === 'meet' && !cond) return { error: 'ADDED_BLOCK' };
+            body = cond ? { fn: c.fn, blocks, cond } : { fn: c.fn, blocks };
         } else {
             const rules = normalizeRules(c.rules);
             if (!rules) return { error: 'ADDED_RULES' };
@@ -322,12 +335,28 @@ function rangeFormulaOf(ctx, limit, from, to) {
     const a = columnLetter(r.lo); const b = columnLetter(r.hi);
     return { row: r.lo === r.hi ? `${a}2` : `${a}2:${b}2`, head: r.lo === r.hi ? `$${a}$1` : `$${a}$1:$${b}$1` };
 }
-const BLOCK_FORMULA = { blank: 'CONTAR.BLANCO', filled: 'CONTARA', zero: 'CONTAR.SI', sum: 'SUMA', avg: 'PROMEDIO', min: 'MIN', max: 'MAX' };
+const BLOCK_FORMULA = { blank: 'CONTAR.BLANCO', filled: 'CONTARA', zero: 'CONTAR.SI', sum: 'SUMA', avg: 'PROMEDIO', min: 'MIN', max: 'MAX', median: 'MEDIANA' };
+const CRIT_SYMBOL = { eq: '', neq: '<>', lt: '<', lte: '<=', gt: '>', gte: '>=' };
+// el criterio como lo escribe Excel: el número solo si es «igual a»; si no, entre comillas con su signo
+const critText = (cond) => (cond.op === 'eq' ? numText(cond.value) : `"${CRIT_SYMBOL[cond.op]}${numText(cond.value)}"`);
 function formulaOfBlock(def, ctx, limit) {
     const parts = def.blocks.map((b) => { const rg = rangeFormulaOf(ctx, limit, b.from, b.to); return rg ? rg.row : '#REF!'; });
     // CONTAR.BLANCO y CONTAR.SI reciben un solo rango: varios bloques se suman
     if (def.fn === 'blank') return `=${parts.map((p) => `CONTAR.BLANCO(${p})`).join('+')}`;
     if (def.fn === 'zero') return `=${parts.map((p) => `CONTAR.SI(${p};0)`).join('+')}`;
+    if (def.fn === 'meet') {
+        // «distinto de» cuenta solo las celdas con dato (CONTAR.SI con «<>» contaría también las vacías)
+        const one = (p) => (def.cond.op === 'neq' ? `CONTARA(${p})-CONTAR.SI(${p};${numText(def.cond.value)})` : `CONTAR.SI(${p};${critText(def.cond)})`);
+        return `=${parts.map(one).join('+')}`;
+    }
+    if (def.cond) {
+        const c = critText(def.cond);
+        if (def.fn === 'sum') return `=${parts.map((p) => `SUMAR.SI(${p};${c})`).join('+')}`;
+        if (def.fn === 'avg') return parts.length === 1 ? `=PROMEDIO.SI(${parts[0]};${c})` : `=(${parts.map((p) => `SUMAR.SI(${p};${c})`).join('+')})/(${parts.map((p) => `CONTAR.SI(${p};${c})`).join('+')})`;
+        const fn = def.fn === 'min' ? 'MIN' : 'MAX';
+        const each = parts.map((p) => `${fn}.SI.CONJUNTO(${p};${p};${c})`);
+        return each.length === 1 ? `=${each[0]}` : `=${fn}(${each.join(';')})`;
+    }
     return `=${BLOCK_FORMULA[def.fn]}(${parts.join(';')})`;
 }
 
@@ -430,8 +459,17 @@ function runBlock(def, get, ctx, limit) {
     if (def.fn === 'blank') return blanks;
     if (def.fn === 'filled') return cells.length - blanks;
     if (def.fn === 'zero') return cells.filter((v) => !isBlank(v) && toNumber(v) === 0).length;
-    const nums = cells.map(toNumber).filter((n) => n !== null);
+    // la condición opcional (solo las que…): una celda con dato que no es número solo cumple «distinto de»; una vacía nunca cumple
+    const meets = (v) => {
+        if (isBlank(v)) return false;
+        const n = toNumber(v);
+        if (n === null) return def.cond.op === 'neq';
+        switch (def.cond.op) { case 'eq': return n === def.cond.value; case 'neq': return n !== def.cond.value; case 'lt': return n < def.cond.value; case 'lte': return n <= def.cond.value; case 'gt': return n > def.cond.value; default: return n >= def.cond.value; }
+    };
+    if (def.fn === 'meet') return cells.filter(meets).length;
+    const nums = (def.cond ? cells.filter(meets) : cells).map(toNumber).filter((n) => n !== null);
     if (!nums.length) return null;
+    if (def.fn === 'median') { const sorted = nums.slice().sort((a, b) => a - b); const mid = sorted.length >> 1; return sorted.length % 2 ? sorted[mid] : round6((sorted[mid - 1] + sorted[mid]) / 2); }
     if (def.fn === 'sum') return round6(nums.reduce((a, b) => a + b, 0));
     if (def.fn === 'avg') return round6(nums.reduce((a, b) => a + b, 0) / nums.length);
     return def.fn === 'min' ? Math.min(...nums) : Math.max(...nums);
