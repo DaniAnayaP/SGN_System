@@ -7391,6 +7391,13 @@ app.get('/api/business/manual-registries/:key/values', requireAuth, (req, res) =
     const lang = req.query.lang === 'en' ? 'en' : 'es';
     const info = manualRegistries.columnInfo(String(req.query.col || ''));
     if (!info) return res.status(400).json({ code: 'BAD_COLUMN', message: 'Esa columna no existe.' });
+    const typed = String(req.query.q || '').slice(0, 200);
+    if (typed) { // lo escrito en el buscador del filtro: se busca entre TODOS los valores de la columna, sin el tope de la lista completa
+        const all = registryColumnValues(clientId, isTestAccount, registry.key, info, Number.MAX_SAFE_INTEGER).raw;
+        const names = new Set(all.map((v) => (info.period ? manualRegistries.shownPeriod(v, lang) : manualRegistries.shownDim(v))));
+        res.set('Cache-Control', 'no-store');
+        return res.json({ col: info.key, ...require('./flexRegistries').searchValues(names, String(req.query.mode || ''), typed, lang), query: true });
+    }
     const { raw, complete } = registryColumnValues(clientId, isTestAccount, registry.key, info);
     const shown = [...new Set(raw.map((v) => (info.period ? manualRegistries.shownPeriod(v, lang) : manualRegistries.shownDim(v))))];
     shown.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
@@ -8069,6 +8076,8 @@ app.get('/api/business/manual-analyses/:id/column-values', requireAuth, (req, re
     if (at < 0) return anFail(res, 'BAD_COLUMN');
     const rows = at >= head.baseColumns ? anPresent(src.analysis, src.columns, src.rows, src.opts).rows : src.rows;
     res.set('Cache-Control', 'no-store');
+    const typed = String(req.query.q || '').slice(0, 200);
+    if (typed) return res.json({ col: head.columns[at].key, ...analysisQuery.search(rows, at, String(req.query.mode || ''), typed, q.lang), query: true }); // lo escrito en el buscador del filtro: entre TODOS los valores
     res.json({ col: head.columns[at].key, ...analysisQuery.distinct(rows, at, q.lang) });
 });
 // La fila de totales del pie (public/TotalsCalc.js) sobre TODOS los renglones que pasan el filtro y la búsqueda. Del botón «Totales de la tabla» (colAnTotalesAuth).

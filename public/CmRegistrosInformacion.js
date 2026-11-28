@@ -666,8 +666,9 @@ async function fetchTotals(specs) {
     if (!res.ok) throw new Error('totals failed');
     return res.json();
 }
-async function fetchColumnValues(col) {
-    const res = await fetch(`${API}/${encodeURIComponent(st.key)}/values?col=${encodeURIComponent(col)}&lang=${lang()}&tz=${tzOffset()}`, { credentials: 'include' });
+async function fetchColumnValues(col, opts) {
+    const typed = opts && opts.q ? `&q=${encodeURIComponent(opts.q)}&mode=${encodeURIComponent(opts.mode || 'contains')}` : ''; // lo escrito en el buscador del filtro: los valores que coinciden de TODO el registro
+    const res = await fetch(`${API}/${encodeURIComponent(st.key)}/values?col=${encodeURIComponent(col)}&lang=${lang()}&tz=${tzOffset()}${typed}`, { credentials: 'include' });
     if (!res.ok) throw new Error('values failed');
     return res.json();
 }

@@ -2082,6 +2082,14 @@
     "filterRuleCount": "{count} of {total} rows",
     "filterOthersHidden": "The other {count} values are left out of the list",
     "filterOthersHiddenOne": "The other value is left out of the list",
+    "filterSearchPlaceholderMany": "Type to see the values...",
+    "filterFoundNone": "No value matches what you typed",
+    "filterFoundMore": "Showing {shown} of {total} matching values: type more to narrow them down",
+    "filterFoundError": "The search failed. Try again",
+    "filterPickedOne": "1 value picked",
+    "filterPickedMany": "{count} values picked",
+    "filterPickedClear": "Clear",
+    "filterTooMany": "Too many boxes at once (at most 400 checked or 400 unchecked). Type what you are looking for to narrow the list.",
     "ruleTermsOr": "or",
     "ruleTermRemove": "Remove {term}",
     "panelEmptyCategory": "No screens yet in this category for this area.",
@@ -10910,7 +10918,7 @@
       "example": "if you saved it at 3pm, this shows something like \"15:04:22\"."
     },
     "filterColumn": {
-      "what": "Lets you show only the rows that have a certain value in this column, instead of all of them.",
+      "what": "Lets you show only the rows that have a certain value in this column, instead of all of them. If the column has thousands of different values the list is not shown in full: type what you are looking for and the matching ones appear (up to 300) so you can check them.",
       "example": "in the \"Status\" column, you filter to see only the \"Active\" records."
     },
     "zoomOut": {

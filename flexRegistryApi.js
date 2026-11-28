@@ -138,6 +138,13 @@ module.exports = function createFlexApi(deps) {
         const idx = ctx.columns.findIndex((c) => c.key === String(req.query.col || ''));
         if (idx < 0) return fail(res, 400, 'BAD_COLUMN');
         const seen = new Set();
+        // con q (lo escrito en el buscador del filtro) se buscan entre TODOS los valores de la columna, sin el tope de la lista completa
+        const typed = String(req.query.q || '').slice(0, 200);
+        if (typed) {
+            scan(ctx, (get) => { seen.add(flex.shownOf(get(idx))); return true; });
+            res.set('Cache-Control', 'no-store');
+            return res.json({ col: ctx.columns[idx].key, ...flex.searchValues(seen, String(req.query.mode || ''), typed, ctx.lang), query: true });
+        }
         scan(ctx, (get) => { const v = get(idx); seen.add(flex.shownOf(v)); return seen.size <= DISTINCT_LIMIT; });
         const all = [...seen].sort(compareText);
         res.set('Cache-Control', 'no-store');

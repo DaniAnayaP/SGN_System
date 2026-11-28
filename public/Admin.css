@@ -5272,6 +5272,11 @@ th.data-table-group-band-draggable:active{ cursor: grabbing; }
     color: var(--color-success, #0f8a6b);
     font-size: 1rem;
 }
+/* Filtro de una columna con demasiados valores: lo elegido (con «Quitar») y la lista de lo que coincide mientras se busca */
+.data-table-col-filter-picked{ display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin: 0.3rem 0 0 0.3rem; font-size: 0.72rem; font-weight: 600; }
+.data-table-col-filter-picked[hidden]{ display: none; }
+.data-table-col-filter-picked button{ border: 0; background: none; color: var(--color-accent, #6d3fc0); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; padding: 0 0.3rem; }
+.data-table-col-filter-list.is-loading{ opacity: 0.55; }
 .data-table-search-rule[hidden],
 .data-table-term-chips[hidden]{
     display: none;

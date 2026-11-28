@@ -490,7 +490,9 @@ function parseColumnFilter(raw, lang = 'es') {
     if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return { error: 'BAD_FILTER' };
     const sets = spec.f && typeof spec.f === 'object' && !Array.isArray(spec.f) ? spec.f : {};
     const rules = spec.r && typeof spec.r === 'object' && !Array.isArray(spec.r) ? spec.r : {};
-    const keys = [...new Set([...Object.keys(sets), ...Object.keys(rules)])];
+    // x = «todos menos estos»: una selección grande (más de 400 casillas marcadas) se manda como lo que NO se quiere
+    const excl = spec.x && typeof spec.x === 'object' && !Array.isArray(spec.x) ? spec.x : {};
+    const keys = [...new Set([...Object.keys(sets), ...Object.keys(rules), ...Object.keys(excl)])];
     if (keys.length > MAX_FILTER_COLUMNS) return { error: 'BAD_FILTER' };
     const conditions = [];
     for (const key of keys) {
@@ -500,6 +502,10 @@ function parseColumnFilter(raw, lang = 'es') {
         if (Array.isArray(sets[key])) {
             if (sets[key].length > MAX_FILTER_VALUES) return { error: 'BAD_FILTER' };
             cond.set = new Set(sets[key].map((v) => String(v).slice(0, MAX_FILTER_TEXT)));
+        }
+        if (Array.isArray(excl[key])) {
+            if (excl[key].length > MAX_FILTER_VALUES) return { error: 'BAD_FILTER' };
+            cond.not = new Set(excl[key].map((v) => String(v).slice(0, MAX_FILTER_TEXT)));
         }
         const rule = rules[key];
         if (rule && typeof rule === 'object') {
@@ -512,7 +518,7 @@ function parseColumnFilter(raw, lang = 'es') {
                 if (lo !== null || hi !== null) cond.range = { lo, hi };
             }
         }
-        if (cond.set || cond.test || cond.range) conditions.push(cond);
+        if (cond.set || cond.not || cond.test || cond.range) conditions.push(cond);
     }
     if (!conditions.length) return { filter: null };
     const periods = [...new Set(conditions.filter((c) => c.period).map((c) => c.period))];
@@ -522,6 +528,7 @@ function parseColumnFilter(raw, lang = 'es') {
             let raw;
             if (c.column) { raw = row[c.column]; shown = shownDim(raw); } else { raw = (periodValues[c.period] || new Map()).get(row.id); shown = shownPeriod(raw, lang); }
             if (c.set && !c.set.has(shown)) return false;
+            if (c.not && c.not.has(shown)) return false;
             if (c.test && !c.test(shown)) return false;
             if (c.range) {
                 if (raw === undefined || raw === null) return false; // sin valor en ese periodo no entra a un rango

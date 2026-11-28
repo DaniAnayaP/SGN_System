@@ -5404,17 +5404,27 @@ function countRuleRows(tableId, key, rule, selected) {
 // fuera casi todo. La pantalla se registra con registerServerFilteredTable(tableId, { onChange(spec | null), getValues(key) → Promise<{ values, complete }> }). Cada cambio de filtro llega a onChange (con una pausa al escribir)
 // y la pantalla pide los renglones de nuevo; el motor no esconde filas por su cuenta. La lista de casillas de cada columna sale del servidor (todos los valores del registro); si una columna tiene demasiados (complete: false)
 // no se ofrece la lista y solo se puede escribir lo buscado.
+// Las casillas que el filtro puede mandar al servidor por columna (flexRegistries.parseFilter, MAX_FILTER_VALUES): hasta 400 marcadas o, si son más, «todos menos estos» (x) con hasta 400 sin marcar. El menú no deja armar una selección
+// que no se pueda mandar (con la lista de hasta 5,000 valores, marcar casi todos reventaba la petición).
+const SERVER_FILTER_MAX_VALUES = 400;
 function serverFilterSpec(state) {
     const f = {};
-    state.columnFilters.forEach((set, key) => { f[key] = [...set]; });
+    const x = {};
+    state.columnFilters.forEach((set, key) => {
+        if (set.size <= SERVER_FILTER_MAX_VALUES) { f[key] = [...set]; return; }
+        const all = state.serverFilter?.values.get(key);
+        const excluded = all && all.complete !== false ? all.values.filter((v) => !set.has(v)) : state.serverFilter?.excl.get(key);
+        if (excluded && excluded.length <= SERVER_FILTER_MAX_VALUES) x[key] = excluded;
+        else f[key] = [...set]; // sin forma de mandarla corta: el servidor la rechaza (no se manda solo una parte)
+    });
     const r = {};
     state.columnRules.forEach((rule, key) => { if (isColumnRuleActive(rule)) r[key] = rule; });
-    return { f, r };
+    return Object.keys(x).length ? { f, r, x } : { f, r };
 }
 function registerServerFilteredTable(tableId, opts) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
-    state.serverFilter = { onChange: opts.onChange, getValues: opts.getValues, lastKey: JSON.stringify(serverFilterSpec(state)), values: new Map(), pending: new Set(), timer: null };
+    state.serverFilter = { onChange: opts.onChange, getValues: opts.getValues, lastKey: JSON.stringify(serverFilterSpec(state)), values: new Map(), excl: new Map(), pending: new Set(), timer: null };
 }
 // Las listas de valores guardadas ya no valen (llegaron datos nuevos): la próxima vez que se abra un filtro se vuelven a pedir.
 // Pide al servidor la lista de valores de una columna (todos los renglones) y la guarda; si falla se guarda «sin lista» para no pedirla en bucle (se vuelve a pedir cuando lleguen datos nuevos).
@@ -5439,7 +5449,7 @@ function applyServerColumnFilters(tableId, state) {
     const key = JSON.stringify(spec);
     if (key !== sf.lastKey) {
         sf.lastKey = key;
-        const empty = !Object.keys(spec.f).length && !Object.keys(spec.r).length;
+        const empty = !Object.keys(spec.f).length && !Object.keys(spec.r).length && !spec.x;
         clearTimeout(sf.timer);
         sf.timer = setTimeout(() => sf.onChange(empty ? null : spec), empty ? 0 : 300); // quitar los filtros es de un toque; al escribir se espera a que termine
     }
@@ -5741,6 +5751,10 @@ function openColumnFilterMenu(th, tableId, key) {
         return new Set(rule ? base.filter((v) => columnRuleMatches(rule, v)) : base);
     };
     const selected = currentSelection();
+    // Las casillas elegidas de una columna con demasiados valores (listHidden) y lo que el servidor acepta mandar (ver SERVER_FILTER_MAX_VALUES)
+    const picks = () => state.columnFilters.get(key) || new Set();
+    const canSendSelection = (set) => set.size <= SERVER_FILTER_MAX_VALUES || distinctValues.length - set.size <= SERVER_FILTER_MAX_VALUES;
+    const rememberExcluded = (set) => { if (!sf) return; if (set.size > SERVER_FILTER_MAX_VALUES) sf.excl.set(key, distinctValues.filter((v) => !set.has(v))); else sf.excl.delete(key); };
 
     const menu = document.createElement('div');
     menu.className = 'data-table-col-filter-menu';
@@ -5795,7 +5809,7 @@ function openColumnFilterMenu(th, tableId, key) {
     const searchInput = document.createElement('input');
     searchInput.type = 'search';
     searchInput.className = 'data-table-col-filter-search';
-    searchInput.placeholder = t('main.filterSearchPlaceholder');
+    searchInput.placeholder = t(listHidden ? 'main.filterSearchPlaceholderMany' : 'main.filterSearchPlaceholder');
     if (appliedText) searchInput.value = appliedText.text || '';
     searchInput.addEventListener('click', (event) => event.stopPropagation());
     searchRow.appendChild(searchInput);
@@ -5903,7 +5917,8 @@ function openColumnFilterMenu(th, tableId, key) {
         allCheckbox.indeterminate = current.size > 0 && current.size < pool;
     }
 
-    distinctValues.forEach((value) => {
+    // con demasiados valores (listHidden) los que llegaron son solo una parte (sirven para saber si es una columna de números): no se dibujan como casillas, la lista sale de lo que se busca
+    (listHidden ? [] : distinctValues).forEach((value) => {
         const row = document.createElement('label');
         row.className = 'data-table-col-filter-option';
         row.dataset.searchValue = (value || '').toLowerCase();
@@ -5913,9 +5928,10 @@ function openColumnFilterMenu(th, tableId, key) {
         cb.addEventListener('change', () => {
             const current = currentSelection();
             if (cb.checked) current.add(value); else current.delete(value);
+            if (sf && !canSendSelection(current)) { cb.checked = !cb.checked; showToast(t('main.filterTooMany'), 'error'); return; } // una selección que el servidor no acepta no se arma
             state.columnRules.delete(key);
-            if (current.size === distinctValues.length) state.columnFilters.delete(key);
-            else state.columnFilters.set(key, current);
+            if (current.size === distinctValues.length) { state.columnFilters.delete(key); sf?.excl.delete(key); }
+            else { state.columnFilters.set(key, current); rememberExcluded(current); }
             applyColumnValueFilters(tableId);
             updateColumnFilterIndicator(th, state.columnFilters.has(key));
             syncAllCheckbox();
@@ -5934,6 +5950,98 @@ function openColumnFilterMenu(th, tableId, key) {
     hiddenNote.hidden = true;
     menu.appendChild(hiddenNote);
 
+    // Una columna con demasiados valores distintos para ofrecer toda la lista (listHidden): al escribir se piden al servidor los valores que coinciden (hasta 300, entre TODOS los del registro) y se eligen con casillas.
+    // Lo elegido manda sobre lo escrito (el texto solo busca); sin elegidos, lo escrito filtra la tabla como siempre.
+    const candNote = document.createElement('div');
+    candNote.className = 'data-table-col-filter-hidden-note';
+    candNote.hidden = true;
+    menu.appendChild(candNote);
+    const pickedRow = document.createElement('div');
+    pickedRow.className = 'data-table-col-filter-picked';
+    pickedRow.hidden = true;
+    const pickedText = document.createElement('span');
+    const pickedClear = document.createElement('button');
+    pickedClear.type = 'button';
+    pickedClear.textContent = t('main.filterPickedClear');
+    pickedRow.append(pickedText, pickedClear);
+    menu.appendChild(pickedRow);
+    function refreshPicked() {
+        const n = picks().size;
+        pickedRow.hidden = !listHidden || n === 0;
+        if (!pickedRow.hidden) pickedText.textContent = n === 1 ? t('main.filterPickedOne') : t('main.filterPickedMany', { count: String(n) });
+    }
+    function renderCandidates(info, typed, failed) {
+        if (searchMode === 'range') return;
+        list.textContent = '';
+        const values = Array.isArray(info?.values) ? info.values : [];
+        const chosen = picks();
+        values.forEach((value) => {
+            const row = document.createElement('label');
+            row.className = 'data-table-col-filter-option';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = chosen.has(value);
+            cb.addEventListener('change', () => {
+                const next = new Set(picks());
+                if (cb.checked) next.add(value); else next.delete(value);
+                if (next.size > SERVER_FILTER_MAX_VALUES) { cb.checked = false; showToast(t('main.filterTooMany'), 'error'); return; }
+                if (next.size) {
+                    if (state.columnRules.get(key)?.kind === 'text') state.columnRules.delete(key); // lo elegido manda; lo escrito solo sigue buscando
+                    state.columnFilters.set(key, next);
+                    applyColumnValueFilters(tableId);
+                    updateColumnFilterIndicator(th, true);
+                } else {
+                    state.columnFilters.delete(key);
+                    applyTextRule(); // sin elegidos, lo escrito vuelve a filtrar la tabla
+                }
+                sf.excl.delete(key);
+                refreshPicked();
+                refreshTextInfo();
+            });
+            const span = document.createElement('span');
+            row.append(cb, span);
+            row._value = value;
+            setRuleHighlightedText(span, value, searchMode, typed);
+            list.appendChild(row);
+        });
+        list.hidden = !values.length;
+        candNote.hidden = !typed;
+        if (typed) {
+            if (failed) candNote.textContent = t('main.filterFoundError');
+            else if (!values.length) candNote.textContent = t('main.filterFoundNone');
+            else if (info.more) candNote.textContent = t('main.filterFoundMore', { shown: String(values.length), total: String(info.total ?? values.length) });
+            else candNote.hidden = true;
+        }
+    }
+    let candSeq = 0;
+    let candTimer = null;
+    function scheduleCandidates(delay) {
+        if (!listHidden || !sf) return;
+        clearTimeout(candTimer);
+        const typed = searchMode === 'range' ? '' : searchInput.value;
+        if (!splitRuleTerms(typed).length) { candSeq += 1; list.classList.remove('is-loading'); renderCandidates(null, ''); return; }
+        const mine = candSeq += 1;
+        candTimer = setTimeout(async () => {
+            list.classList.add('is-loading');
+            try {
+                const info = await sf.getValues(key, { q: typed.trim(), mode: searchMode });
+                if (mine === candSeq && menu.isConnected) renderCandidates(info, typed);
+            } catch {
+                if (mine === candSeq && menu.isConnected) renderCandidates(null, typed, true);
+            } finally {
+                if (mine === candSeq) list.classList.remove('is-loading');
+            }
+        }, delay);
+    }
+    pickedClear.addEventListener('click', () => {
+        state.columnFilters.delete(key);
+        sf.excl.delete(key);
+        list.querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.checked = false; });
+        applyTextRule();
+        refreshPicked();
+        refreshTextInfo();
+    });
+
     // Qué se ve según el modo: buscador + lista con casillas, o los dos campos
     // de Desde–Hasta (que no usan la lista).
     function showMode() {
@@ -5942,7 +6050,8 @@ function openColumnFilterMenu(th, tableId, key) {
         searchInput.hidden = isRange;
         rangeBox.hidden = !isRange;
         allRow.hidden = isRange || listHidden;
-        list.hidden = isRange || listHidden;
+        list.hidden = isRange || (listHidden && !list.childElementCount); // con demasiados valores la lista solo se ve con lo que coincide con lo escrito
+        if (listHidden) candNote.hidden = isRange || !candNote.textContent;
     }
     // Aplica en el momento lo escrito en Desde–Hasta como regla de rango de la
     // columna; la regla reemplaza a las casillas. Sin nada escrito, se quita.
@@ -5978,7 +6087,7 @@ function openColumnFilterMenu(th, tableId, key) {
     // escrito la regla se quita y todo vuelve a como estaba.
     function applyTextRule() {
         const text = searchInput.value;
-        const active = searchMode !== 'range' && splitRuleTerms(text).length > 0;
+        const active = searchMode !== 'range' && splitRuleTerms(text).length > 0 && !(listHidden && picks().size); // con casillas elegidas en una columna de demasiados valores, lo escrito solo busca
         if (active) state.columnRules.set(key, { kind: 'text', mode: searchMode, text: text.trim() });
         else if (state.columnRules.get(key)?.kind === 'text') state.columnRules.delete(key);
         applyColumnValueFilters(tableId);
@@ -6019,11 +6128,12 @@ function openColumnFilterMenu(th, tableId, key) {
     // only defined here, once `list`'s rows actually exist.
     function searchInputChanged() {
         let hiddenCount = 0;
-        list.querySelectorAll('.data-table-col-filter-option').forEach((row) => {
+        if (!listHidden) list.querySelectorAll('.data-table-col-filter-option').forEach((row) => {
             row.hidden = !applyRowSearch(row);
             if (row.hidden) hiddenCount += 1;
             else setRuleHighlightedText(row.lastElementChild, row._value, searchMode, searchInput.value);
         });
+        scheduleCandidates(250); // columna con demasiados valores: busca los que coinciden en todo el registro
         const searching = searchMode !== 'range' && splitRuleTerms(searchInput.value).length > 0;
         hiddenNote.hidden = !searching || hiddenCount === 0 || listHidden;
         if (!hiddenNote.hidden) {
@@ -6041,6 +6151,7 @@ function openColumnFilterMenu(th, tableId, key) {
             checkboxes.forEach((cb) => { cb.checked = allCheckbox.checked; });
             state.columnRules.delete(key);
         }
+        sf?.excl.delete(key);
         if (allCheckbox.checked) state.columnFilters.delete(key);
         else state.columnFilters.set(key, new Set());
         applyColumnValueFilters(tableId);
@@ -6053,6 +6164,8 @@ function openColumnFilterMenu(th, tableId, key) {
     syncAllCheckbox();
     refreshTextInfo();
     searchInputChanged();
+    refreshPicked();
+    scheduleCandidates(0); // si ya había algo escrito, la lista de lo que coincide sale de inmediato
 
     document.body.appendChild(menu);
     menu.classList.add('has-resize-grip'); // su relleno de abajo (la esquina de ampliar) cuenta para saber si cabe

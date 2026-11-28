@@ -52,4 +52,10 @@ function distinct(rows, at, lang) {
     const collator = new Intl.Collator(lang === 'en' ? 'en' : 'es', { sensitivity: 'base', numeric: true });
     return { values: [...seen].sort((a, b) => collator.compare(a, b)), complete: true };
 }
-module.exports = { parse, touched, select, distinct, MAX_VALUES };
+// La búsqueda en la lista de valores de una columna con demasiados valores distintos para ofrecer toda la lista: los que cumplen lo escrito (ver flexRegistries.searchValues).
+function search(rows, at, mode, text, lang) {
+    const seen = new Set();
+    for (let i = 0; i < rows.length; i += 1) seen.add(flex.shownOf(rows[i][at]));
+    return flex.searchValues(seen, mode, text, lang);
+}
+module.exports = { parse, touched, select, distinct, search, MAX_VALUES };

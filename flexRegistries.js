@@ -599,6 +599,19 @@ const MAX_FILTER_TEXT = 200;
 const MAX_FILTER_JSON = 60000;
 const ruleNumber = (value) => { const s = String(value ?? '').trim().replace(/[$,\s%]/g, ''); return s === '' || !/^-?\d+(\.\d+)?$/.test(s) ? null : Number(s); };
 const shownOf = (v) => (v === null || v === undefined || v === '' ? '—' : String(v));
+// La búsqueda en la lista de valores de una columna (Daniel, 2026-11-27): de los valores distintos (como los muestra el filtro) devuelve los que cumplen lo escrito, con la misma regla del filtro (Contiene / Inicia con / Igual que, con
+// las mismas reglas de escritura), ordenados, hasta `cap`. { values, more (hay más que no se mandan), total (cuántos cumplen) }.
+const SEARCH_VALUES_CAP = 300;
+function searchValues(shownValues, mode, text, lang = 'es', cap = SEARCH_VALUES_CAP) {
+    const typed = String(text || '').slice(0, MAX_FILTER_TEXT);
+    if (!SearchSyntax.split(typed).length) return { values: [], more: false, total: 0 };
+    const test = SearchSyntax.compile(['startsWith', 'equals'].includes(mode) ? mode : 'contains', typed);
+    const found = [];
+    for (const v of shownValues) if (test(v)) found.push(v);
+    const collator = new Intl.Collator(lang === 'en' ? 'en' : 'es', { sensitivity: 'base', numeric: true });
+    found.sort((a, b) => collator.compare(a, b));
+    return { values: found.slice(0, cap), more: found.length > cap, total: found.length };
+}
 // matches(get): get(índice de columna) da lo que trae el renglón en esa columna (texto, número o null)
 function parseFilter(raw, columns) {
     if (raw === undefined || raw === null || raw === '') return { filter: null };
@@ -608,7 +621,9 @@ function parseFilter(raw, columns) {
     if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return { error: 'BAD_FILTER' };
     const sets = spec.f && typeof spec.f === 'object' && !Array.isArray(spec.f) ? spec.f : {};
     const rules = spec.r && typeof spec.r === 'object' && !Array.isArray(spec.r) ? spec.r : {};
-    const keys = [...new Set([...Object.keys(sets), ...Object.keys(rules)])];
+    // x = «todos menos estos»: una selección grande (más de 400 casillas marcadas) se manda como lo que NO se quiere
+    const excl = spec.x && typeof spec.x === 'object' && !Array.isArray(spec.x) ? spec.x : {};
+    const keys = [...new Set([...Object.keys(sets), ...Object.keys(rules), ...Object.keys(excl)])];
     if (keys.length > 80) return { error: 'BAD_FILTER' };
     const indexOf = new Map(columns.map((c, i) => [c.key, i]));
     const conds = [];
@@ -619,6 +634,10 @@ function parseFilter(raw, columns) {
         if (Array.isArray(sets[key])) {
             if (sets[key].length > MAX_FILTER_VALUES) return { error: 'BAD_FILTER' };
             cond.set = new Set(sets[key].map((v) => String(v).slice(0, MAX_FILTER_TEXT)));
+        }
+        if (Array.isArray(excl[key])) {
+            if (excl[key].length > MAX_FILTER_VALUES) return { error: 'BAD_FILTER' };
+            cond.not = new Set(excl[key].map((v) => String(v).slice(0, MAX_FILTER_TEXT)));
         }
         const rule = rules[key];
         if (rule && typeof rule === 'object') {
@@ -631,13 +650,14 @@ function parseFilter(raw, columns) {
                 if (lo !== null || hi !== null) cond.range = { lo, hi };
             }
         }
-        if (cond.set || cond.test || cond.range) conds.push(cond);
+        if (cond.set || cond.not || cond.test || cond.range) conds.push(cond);
     }
     if (!conds.length) return { filter: null };
     const matches = (get) => {
         for (const c of conds) {
             const shown = shownOf(get(c.idx));
             if (c.set && !c.set.has(shown)) return false;
+            if (c.not && c.not.has(shown)) return false;
             if (c.test && !c.test(shown)) return false;
             if (c.range) {
                 const n = ruleNumber(shown);
@@ -651,4 +671,4 @@ function parseFilter(raw, columns) {
 }
 
 const foldName = (name) => foldText(name);
-module.exports = { nameHasDate, suggestLinks, nameScore, packValues, unpackValues, unpackSlot, valueSlotKeys, prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, stableColumnId, registryColumns, planColumnChanges, stripNameDate, parseFilter, shownOf, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };
+module.exports = { nameHasDate, suggestLinks, nameScore, packValues, unpackValues, unpackSlot, valueSlotKeys, prefillHeaders, MAX_CLASS, CLASS_COLORS, inspect, parseConfig, run, readRows, displayCell, textOf, periodNameKey, keyTextOf, foldName, stampLabel, buildColumns, stableColumnId, registryColumns, planColumnChanges, stripNameDate, parseFilter, shownOf, searchValues, SEARCH_VALUES_CAP, MAX_COLUMNS, MAX_NAME, MAX_ISSUES };

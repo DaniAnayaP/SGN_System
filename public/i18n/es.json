@@ -2081,6 +2081,14 @@
     "filterRuleCount": "{count} de {total} filas",
     "filterOthersHidden": "Los otros {count} valores quedan fuera de la lista",
     "filterOthersHiddenOne": "El otro valor queda fuera de la lista",
+    "filterSearchPlaceholderMany": "Escribe para ver los valores...",
+    "filterFoundNone": "Ningún valor coincide con lo escrito",
+    "filterFoundMore": "Se muestran {shown} de {total} valores que coinciden: escribe más para acotar",
+    "filterFoundError": "No se pudo buscar. Intenta de nuevo",
+    "filterPickedOne": "1 valor elegido",
+    "filterPickedMany": "{count} valores elegidos",
+    "filterPickedClear": "Quitar",
+    "filterTooMany": "Son demasiadas casillas a la vez (máximo 400 marcadas o 400 sin marcar). Escribe lo buscado para acotar la lista.",
     "ruleTermsOr": "o",
     "ruleTermRemove": "Quitar {term}",
     "panelEmptyCategory": "Aún no hay pantallas en esta categoría para esta área.",
@@ -10909,7 +10917,7 @@
       "example": "si lo guardaste a las 3 de la tarde, aquí dice algo como \"15:04:22\"."
     },
     "filterColumn": {
-      "what": "Te deja elegir solo las filas que tengan cierto valor en esta columna, en vez de verlas todas.",
+      "what": "Te deja elegir solo las filas que tengan cierto valor en esta columna, en vez de verlas todas. Si la columna tiene miles de valores distintos, la lista no se muestra completa: escribe lo que buscas y aparecen los que coinciden (hasta 300) para marcarlos.",
       "example": "en la columna \"Estatus\" filtras para ver solo los registros \"Activos\"."
     },
     "zoomOut": {

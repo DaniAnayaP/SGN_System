@@ -1508,7 +1508,7 @@ const dataKeyOf = (colKey) => String(colKey || '').replace(/^an_/, ''); // la ll
 function serverCf(spec) {
     if (!spec) return null;
     const out = {};
-    ['f', 'r'].forEach((part) => {
+    ['f', 'r', 'x'].forEach((part) => { // x = «todos menos estos» (una selección grande de casillas)
         if (!spec[part]) return;
         const o = {};
         Object.keys(spec[part]).forEach((k) => { o[dataKeyOf(k)] = spec[part][k]; });
@@ -1582,8 +1582,9 @@ async function computeFileTotals(specs) {
     return { rows: body.rows, values };
 }
 // La lista de casillas del filtro de una columna: los valores distintos de TODOS los renglones (los pide al servidor).
-async function fileColumnValues(key) {
+async function fileColumnValues(key, opts) {
     const p = new URLSearchParams({ col: dataKeyOf(key), lang: lang() });
+    if (opts && opts.q) { p.set('q', opts.q); p.set('mode', opts.mode || 'contains'); } // lo escrito en el buscador del filtro: los valores que coinciden de TODO el análisis
     if (st.text) p.set('text', st.text);
     if (fileVersion()) p.set('v', String(fileVersion()));
     const res = await fetch(`${API}/${st.id}/column-values?${p}`, { credentials: 'include' });
