@@ -2216,6 +2216,8 @@
     "pinMenuFull": "Ya hay {max} fijas: suelta una",
     "pinMenuUnpin": "Soltar esta",
     "pinMenuUnpinAll": "Soltar todas las fijas",
+    "widthMinBtn": "Contraer columnas al mínimo",
+    "widthFitBtn": "Ajustar columnas al encabezado",
     "visPreviewLabel": "Vista previa — se va llenando con lo que marques Visible o Fija",
     "filterPanelNoColumns": "Todavía no hay columnas para filtrar. Aparecen en cuanto la tabla las tenga.",
     "visibilityModeHidden": "Oculta",
@@ -10434,8 +10436,8 @@
       "example": "Consumos mensuales: se carga una columna por mes, igual que Cargos por sitio mensuales."
     },
     "regNewDialog": {
-      "what": "Nombre del registro, cada cuánto se carga (un mes por columna, o un día por columna) y el nombre de lo que mide. Ese nombre queda como encabezado de la columna de valores en la plantilla y en los análisis.",
-      "example": "Nombre: Consumos mensuales · Mensual · Mide: Consumo."
+      "what": "Solo el nombre del registro. No hay nada más que decidir: el tipo de datos (meses, días o columnas libres) se define al cargar cada archivo, columna por columna, con su papel, su nombre y su clasificación. Un mismo registro puede mezclar todo.",
+      "example": "Nombre: Previsiones."
     },
     "regShowMore": {
       "what": "Dibuja más renglones de la tabla: «Mostrar más» agrega 200 y «Mostrar todos» dibuja todos los que llegaron (la tabla se dibuja por partes para abrir rápido). Al bajar con el scroll también se agregan solos.",

@@ -144,22 +144,16 @@ async function sendRegistry(method, url, body) {
 function openCreateRegistry(afterClose) {
     openModal(`<h3>${esc(t('main.regNewTitle'))}</h3>
         <label for="reg-n-name">${esc(t('main.regNewName'))}</label><input type="text" id="reg-n-name" maxlength="80" autocomplete="off">
-        <p class="reg-field-label">${esc(t('main.regNewKind'))}</p>
-        <div class="an-checks"><label><input type="radio" name="reg-n-kind" value="month" checked> <span>${esc(t('main.regKindMonth'))}</span></label>
-        <label><input type="radio" name="reg-n-kind" value="day"> <span>${esc(t('main.regKindDay'))}</span></label>
-        <label><input type="radio" name="reg-n-kind" value="tabla"> <span>${esc(t('main.regKindTabla'))}</span></label></div>
-        <div id="reg-n-value-wrap"><label for="reg-n-value">${esc(t('main.regNewValue'))}</label><input type="text" id="reg-n-value" maxlength="40" autocomplete="off" placeholder="${esc(t('main.regNewValueDefault'))}"></div>
         <p class="admin-error" id="reg-n-error" role="alert" hidden></p>
         <div class="admin-form-actions"><button type="button" class="btn" data-reg-go>${esc(t('main.regNewCreate'))}</button><button type="button" class="btn btn-secondary" data-reg-close>${esc(t('main.regCancel'))}</button></div>`, 'regNewDialog', (overlay) => {
         overlay.querySelector('#reg-n-name').focus();
-        // una tabla libre no mide un solo valor: lo que mide lo decides al cargar cada archivo
-        overlay.addEventListener('change', (event) => { if (event.target.name === 'reg-n-kind') overlay.querySelector('#reg-n-value-wrap').hidden = event.target.value === 'tabla'; });
+        overlay.querySelector('#reg-n-name').addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); overlay.querySelector('[data-reg-go]').click(); } });
         overlay.querySelector('[data-reg-go]').addEventListener('click', async (event) => {
             const btn = event.currentTarget;
             const el = overlay.querySelector('#reg-n-error');
             btn.disabled = true; el.hidden = true;
             try {
-                const out = await sendRegistry('POST', API, { name: overlay.querySelector('#reg-n-name').value, kind: overlay.querySelector('input[name="reg-n-kind"]:checked').value, valueName: overlay.querySelector('#reg-n-value').value });
+                const out = await sendRegistry('POST', API, { name: overlay.querySelector('#reg-n-name').value });
                 sessionStorage.setItem('regCurrent', out.registry.key);
                 location.href = `CmRegistrosInformacion.html?registry=${encodeURIComponent(out.registry.key)}`; // el menú ya la trae como pantalla nueva
             } catch (e) { btn.disabled = false; el.textContent = regErrorText(e.body); el.hidden = false; }

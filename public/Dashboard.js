@@ -3859,7 +3859,7 @@ function distributeDataTableColumnWidths(tableId) {
     visible.forEach((k) => { widths[k] = baseOf(k); });
     // Un exceso de hasta 3px es ruido de redondeo, no "ya no caben": se
     // ajusta en vez de abrir un scroll horizontal de 1px.
-    if (normals.length && wrapper.clientWidth > 0 && normalSum < room + 3) {
+    if (normals.length && wrapper.clientWidth > 0 && !state.noStretch && normalSum < room + 3) { // noStretch: «Contraer al mínimo» / «Ajustar al encabezado» dejan las columnas como se pidieron
         let used = 0;
         normals.forEach((k, i) => {
             const w = i === normals.length - 1 ? room - used : Math.floor((baseOf(k) * room) / normalSum);
@@ -4002,6 +4002,7 @@ window.addEventListener('resize', resizeAllDataTables);
 function resetDataTableColumnLayout(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
+    clearWidthMode(tableId);
     if (returnToOriginalLayout(tableId)) return; // con acomodo original, «Limpiar» regresa a él (no al orden de los datos)
     state.config = {
         order: state.columnKeys.slice(),
@@ -4033,6 +4034,7 @@ const DATA_TABLE_WIDTH_SAMPLE_ROWS = 80;
 function refreshDataTableColumnWidths(tableId) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
+    if (state.widthMode) return; // «Contraer al mínimo» / «Ajustar al encabezado»: los anchos son los que se pidieron, no los de una columna aún sin medir
     let changed = false;
     const sampleRows = state.table.tBodies[0] ? Array.from(state.table.tBodies[0].rows).slice(0, DATA_TABLE_WIDTH_SAMPLE_ROWS) : [];
     // Cada lectura de scrollWidth obliga al navegador a calcular el diseño de toda la tabla. Una tabla que se llena por tandas (ver renderTableRowsInChunks) avisaba aquí en cada tanda, y las columnas
@@ -4237,6 +4239,78 @@ function reorderColumnBlock(tableId, keys, targetKey, before) {
     state.config.order = rest;
     saveDataTableConfig(tableId, state.config);
     applyDataTableColumnLayout(tableId);
+}
+
+// --- Ancho de columnas con un clic (Daniel, 2026-11-27): dos iconos de la barra de toda tabla. «Contraer» deja todas las columnas (menos las fijas) en el ancho mínimo; «Ajustar» da a cada una el ancho justo para leer su
+// encabezado completo en un renglón. Otro clic en el mismo icono devuelve los anchos de antes. Se recuerda por tabla (localStorage) y los anchos entran a config.widths, así que también van en el acomodo guardado.
+const widthModeKey = (tableId) => `dataTableWidthMode:${layoutKeyOf(tableId)}`;
+function readWidthMode(tableId) {
+    try {
+        const v = JSON.parse(localStorage.getItem(widthModeKey(tableId)) || 'null');
+        return v && (v.mode === 'min' || v.mode === 'fit') ? { mode: v.mode, before: v.before && typeof v.before === 'object' ? v.before : null } : null;
+    } catch { return null; }
+}
+function saveWidthMode(tableId, mode, before) {
+    try {
+        if (mode) localStorage.setItem(widthModeKey(tableId), JSON.stringify({ mode, before: before || null }));
+        else localStorage.removeItem(widthModeKey(tableId));
+    } catch { /* sin almacenamiento */ }
+}
+// Los iconos de la barra reflejan el modo que está puesto.
+function refreshWidthButtons(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    const bar = state && state.wrapper.previousElementSibling;
+    if (!bar || !bar.querySelectorAll) return;
+    bar.querySelectorAll('[data-col-action^="width-"]').forEach((b) => {
+        const on = b.dataset.colAction === `width-${state.widthMode}`;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+}
+// Algo más (limpiar, un acomodo, arrastrar un borde) cambió los anchos: el modo ya no vale.
+function clearWidthMode(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || (!state.widthMode && !state.noStretch)) return;
+    state.widthMode = null; state.widthsBefore = null; state.noStretch = false;
+    saveWidthMode(tableId, null);
+    refreshWidthButtons(tableId);
+}
+// El ancho para leer el encabezado completo: el texto (con su letra y espaciado), el relleno de la celda (donde viven el embudo y la flecha de orden) y lo que lleve en su línea (el ⋮ del formato).
+function headerFitWidth(th) {
+    const cs = getComputedStyle(th);
+    const full = th.dataset.abbrFull || Array.from(th.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
+    const spec = { font: `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`, spacing: parseFloat(cs.letterSpacing) || 0, upper: cs.textTransform === 'uppercase' };
+    let reserved = 0;
+    Array.from(th.children).forEach((c) => {
+        const p = getComputedStyle(c);
+        if (p.position === 'absolute' || p.position === 'fixed' || p.display === 'none') return;
+        reserved += c.offsetWidth + (parseFloat(p.marginLeft) || 0) + (parseFloat(p.marginRight) || 0);
+    });
+    return Math.ceil(tableAbbrWidth(spec, full) + (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) + reserved + 4);
+}
+function setDataTableWidthMode(tableId, mode) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    if (state.widthMode === mode) {
+        // otro clic en el mismo icono: vuelven los anchos que tenía la tabla antes
+        if (state.widthsBefore) Object.assign(state.config.widths, state.widthsBefore);
+        state.widthMode = null; state.widthsBefore = null; state.noStretch = false;
+    } else {
+        if (!state.widthMode) state.widthsBefore = { ...state.config.widths };
+        const headerRow = getHeaderRow(state.table);
+        const pinned = new Set(state.config.pinned);
+        const hidden = new Set(state.config.hidden);
+        state.columnKeys.forEach((key) => {
+            if (pinned.has(key) || hidden.has(key)) return;
+            const th = Array.from(headerRow.cells).find((c) => c.dataset.col === key);
+            state.config.widths[key] = mode === 'min' ? DATA_TABLE_COL_MIN_WIDTH : Math.max(DATA_TABLE_COL_MIN_WIDTH, th ? headerFitWidth(th) : DATA_TABLE_COL_MIN_WIDTH);
+        });
+        state.widthMode = mode; state.noStretch = true;
+    }
+    saveDataTableConfig(tableId, state.config);
+    saveWidthMode(tableId, state.widthMode, state.widthsBefore);
+    applyDataTableColumnLayout(tableId);
+    refreshWidthButtons(tableId);
 }
 
 // Fijar desde el encabezado (Daniel, 2026-11-27, «Fijar hasta aquí», como «Inmovilizar paneles» de Excel): clic derecho (o mantener el dedo medio segundo) sobre el título de una columna abre un menú
@@ -4559,6 +4633,7 @@ function attachResizeHandle(th, tableId) {
             handle.classList.remove('data-table-col-resizing');
             if (rafId != null) cancelAnimationFrame(rafId);
             if (!moved) return;
+            clearWidthMode(tableId);
             state.config.widths[key] = pendingWidth;
             saveDataTableConfig(tableId, state.config);
             applyDataTableColumnLayout(tableId);
@@ -5965,13 +6040,16 @@ function initDataTableColumns(wrapper, index) {
     columnKeys.forEach((key) => {
         if (config.widths[key] == null) config.widths[key] = naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
     });
+    const savedWidthMode = readWidthMode(tableId);
     dataTableColumnState.set(tableId, {
         table, wrapper, colgroup, columnKeys, labels, config, groupKeys, groupTableKeys, naturalWidths,
+        widthMode: savedWidthMode ? savedWidthMode.mode : null, widthsBefore: savedWidthMode ? savedWidthMode.before : null, noStretch: !!savedWidthMode,
         sortKey: null, sortDir: null, originalRowOrder: null,
         columnFilters: new Map(),
         columnRules: new Map(),
     });
     applyDataTableColumnLayout(tableId);
+    refreshWidthButtons(tableId);
     if (original) setActiveSavedLayout(tableId, { id: ORIGINAL_LAYOUT_ID, name: t('main.layoutOriginalName') });
     // Una tabla cambia de ancho por más que la ventana (el menú lateral, la
     // escala de la interfaz, una barra de scroll, un panel que se abre): cada
@@ -9566,6 +9644,7 @@ function collectCurrentLayoutSnapshot(tableId) {
 function applyColumnLayoutConfig(tableId, rawLayout) {
     const state = dataTableColumnState.get(tableId);
     if (!state) return;
+    clearWidthMode(tableId);
     state.config = reconcileDataTableConfig(rawLayout, state.columnKeys);
     state.columnKeys.forEach((key) => {
         if (state.config.widths[key] == null) state.config.widths[key] = state.naturalWidths[key] || DATA_TABLE_COL_MIN_WIDTH;
@@ -9935,6 +10014,23 @@ function renderDataTableColumnControls() {
             const canPinColumns = resolveIconGrant(tableKey, 'iconPin');
             const canHideColumns = resolveIconGrant(tableKey, 'iconVisibility');
             if (canPinColumns || canHideColumns) {
+                const widthBtn = (action, icon, labelKey, mode) => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'data-table-zoom-btn';
+                    b.dataset.colAction = action;
+                    b.dataset.helpKey = labelKey.replace('main.', '');
+                    b.setAttribute('aria-label', t(labelKey));
+                    b.title = t(labelKey);
+                    b.innerHTML = `<i class="bx ${icon}" aria-hidden="true"></i>`;
+                    const current = dataTableColumnState.get(tableKey);
+                    const on = !!current && current.widthMode === mode;
+                    b.classList.toggle('active', on);
+                    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+                    b.addEventListener('click', () => setDataTableWidthMode(getTableId(wrapper, index), mode));
+                    return b;
+                };
+                toAppend.push(widthBtn('width-min', 'bx-collapse-horizontal', 'main.widthMinBtn', 'min'), widthBtn('width-fit', 'bx-expand-horizontal', 'main.widthFitBtn', 'fit'));
                 const columnsBtn = document.createElement('button');
                 columnsBtn.type = 'button';
                 columnsBtn.className = 'data-table-zoom-btn';

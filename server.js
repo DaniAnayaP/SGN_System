@@ -7310,14 +7310,15 @@ app.post('/api/business/manual-registries', requireAuth, (req, res) => {
     const body = req.body || {};
     const name = manualAnalyses.cleanText(body.name, 80);
     if (!name) return res.status(400).json({ code: 'REG_NAME_REQUIRED', message: 'Ponle un nombre al registro.' });
-    if (!['month', 'day', 'tabla'].includes(body.kind)) return res.status(400).json({ code: 'REG_KIND', message: 'Elige si es mensual, diario o de tabla libre.' });
+    const kind = body.kind === undefined ? 'tabla' : body.kind; // registro único (2026-11-27): sin tipo al crear, nace como tabla libre
+    if (!['month', 'day', 'tabla'].includes(kind)) return res.status(400).json({ code: 'REG_KIND', message: 'Ese tipo de registro no es válido.' });
     if (regNameTaken(req, name)) return res.status(409).json({ code: 'REG_NAME_TAKEN', message: 'Ya hay un registro con ese nombre.' });
     const valueName = manualAnalyses.cleanText(body.valueName, 40) || 'Valor';
     const taken = new Set(regClientRegistries(clientId, isTestAccount).map((r) => r.key));
     const slug = regFoldName(name).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'registro';
     let key = `c-${slug}`;
     for (let n = 2; taken.has(key); n += 1) key = `c-${slug}-${n}`;
-    const id = createRegistryDef({ clientId, isTestData: isTestAccount, key, name, kind: body.kind, valueName, createdBy: changedByLabel(req), createdByUserId: req.user.sub });
+    const id = createRegistryDef({ clientId, isTestData: isTestAccount, key, name, kind, valueName, createdBy: changedByLabel(req), createdByUserId: req.user.sub });
     logTableChange({ clientId, tableKey: REG_TABLE, recordId: id, recordLabel: name, action: 'create', fieldKey: 'main.regNombre', newValue: name, changedBy: changedByLabel(req) });
     notifyButtonAction(req, REG_TABLE, 'create', name);
     res.status(201).json({ registry: regClientRegistries(clientId, isTestAccount).find((r) => r.key === key) });

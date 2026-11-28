@@ -2217,6 +2217,8 @@
     "pinMenuFull": "{max} are already pinned: unpin one",
     "pinMenuUnpin": "Unpin this one",
     "pinMenuUnpinAll": "Unpin all",
+    "widthMinBtn": "Collapse columns to the minimum",
+    "widthFitBtn": "Fit columns to the header",
     "visPreviewLabel": "Preview — it fills up with whatever you mark Visible or Pinned",
     "filterPanelNoColumns": "There are no columns to filter yet. They show up as soon as the table has them.",
     "visibilityModeHidden": "Hidden",
@@ -10435,8 +10437,8 @@
       "example": "Monthly consumption: one column per month, just like Monthly charges by site."
     },
     "regNewDialog": {
-      "what": "The record set name, how often it is loaded (one month per column, or one day per column) and the name of what it measures. That name becomes the heading of the values column in the template and in analyses.",
-      "example": "Name: Monthly consumption · Monthly · Measures: Consumption."
+      "what": "Just the name of the record set. There is nothing else to decide: the kind of data (months, days or free columns) is defined when each file is loaded, column by column, with its role, its name and its classification. One record set can mix everything.",
+      "example": "Name: Forecasts."
     },
     "regShowMore": {
       "what": "Draws more rows of the table: \"Show more\" adds 200 and \"Show all\" draws every row that arrived (the table is drawn in parts so it opens fast). Scrolling down also adds them by itself.",

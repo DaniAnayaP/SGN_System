@@ -5272,6 +5272,10 @@ th.data-table-group-band-draggable:active{ cursor: grabbing; }
     color: var(--color-success, #0f8a6b);
     font-size: 1rem;
 }
+.data-table-search-rule[hidden],
+.data-table-term-chips[hidden]{
+    display: none;
+}
 .data-table-search-rule-count{
     margin-left: auto;
     font-size: 0.62rem;
@@ -5713,6 +5717,11 @@ th.data-table-group-band-draggable:active{ cursor: grabbing; }
 .data-table-pin-menu-item:focus-visible{
     background: color-mix(in srgb, var(--color-accent, #6d3fc0) 14%, var(--color-surface));
     outline: none;
+}
+.data-table-zoom-btn.active{
+    background-color: color-mix(in srgb, var(--color-accent, #6d3fc0) 16%, var(--color-surface));
+    border-color: var(--color-accent, #6d3fc0);
+    color: var(--color-accent, #6d3fc0);
 }
 .data-table-pin-menu-item[disabled]{
     opacity: 0.55;
