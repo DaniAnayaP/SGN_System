@@ -3863,13 +3863,19 @@ function distributeDataTableColumnWidths(tableId) {
     visible.forEach((k) => { widths[k] = baseOf(k); });
     // Un exceso de hasta 3px es ruido de redondeo, no "ya no caben": se
     // ajusta en vez de abrir un scroll horizontal de 1px.
-    if (normals.length && wrapper.clientWidth > 0 && !state.noStretch && normalSum < room + 3) { // noStretch: «Contraer al mínimo» / «Ajustar al encabezado» dejan las columnas como se pidieron
-        let used = 0;
-        normals.forEach((k, i) => {
-            const w = i === normals.length - 1 ? room - used : Math.floor((baseOf(k) * room) / normalSum);
-            widths[k] = Math.max(DATA_TABLE_COL_MIN_WIDTH, w);
-            used += w;
-        });
+    if (normals.length && wrapper.clientWidth > 0 && normalSum < room + 3) {
+        if (state.noStretch) {
+            // «Contraer al mínimo» / «Ajustar al encabezado» dejan las columnas como se pidieron y SOLO la última se estira para llenar lo que sobra: así no queda un hueco en blanco a la derecha (Daniel, 2026-11-27)
+            const last = normals[normals.length - 1];
+            widths[last] = Math.max(baseOf(last), room - (normalSum - baseOf(last)));
+        } else {
+            let used = 0;
+            normals.forEach((k, i) => {
+                const w = i === normals.length - 1 ? room - used : Math.floor((baseOf(k) * room) / normalSum);
+                widths[k] = Math.max(DATA_TABLE_COL_MIN_WIDTH, w);
+                used += w;
+            });
+        }
     }
     Array.from(colgroup.children).forEach((col) => {
         col.style.width = `${widths[col.dataset.col] ?? baseOf(col.dataset.col)}px`;
@@ -6605,6 +6611,7 @@ function attachTableDownloadButton(tableId, { getTitle, getNotice, getFullDownlo
     document.addEventListener('click', (event) => { if (!menu.hidden && !btn.contains(event.target)) menu.hidden = true; });
     btn.appendChild(menu);
     zoom.appendChild(btn);
+    groupDataTableToolbar(zoom); // la descarga cierra el grupo de Generales
 }
 
 // Rebuilds both cosmetic group-band rows (table-of-origin on top,
@@ -10251,17 +10258,65 @@ function buildLegendIconRow(iconHtml, name, desc) {
 // de su propia barra (.data-table-zoom), que ya se arma con los permisos del
 // árbol, en vez de repetir aquí la lista. El texto es el de Modo ayuda
 // (help.<clave>.what) para que se lea igual en los dos lados.
+// Los iconos de la barra en TRES GRUPOS separados por una línea fina (Daniel, 2026-11-27): Diseño (cómo se ve la tabla), Búsqueda (qué filas veo) y Generales (información y salida).
+// Este es el único lugar que dice a qué grupo pertenece cada icono y qué texto de ayuda lo explica: lo usan el orden de la barra (groupDataTableToolbar) y la Simbología (collectLegendIcons),
+// así que un icono nuevo se da de alta aquí y aparece en los dos lados (todo lo que no es texto lleva su explicación en la Simbología). El orden de las claves es el orden dentro del grupo.
+const TOOLBAR_GROUPS = ['design', 'search', 'general'];
+const TOOLBAR_ICONS = {
+    'zoom-out': ['design', 'zoomOut'], 'zoom-in': ['design', 'zoomIn'], 'width-min': ['design', 'widthMinBtn'], 'width-fit': ['design', 'widthFitBtn'], look: ['design', 'lookBtn'], columns: ['design', 'columnsEditor'], 'saved-layout': ['design', 'savedLayout'],
+    filter: ['search', 'filterToggle'], 'filter-clear': ['search', 'filterClear'], 'saved-search': ['search', 'savedSearch'],
+    history: ['general', 'changeHistory'], legend: ['general', 'columnLegend'], 'field-rules': ['general', 'fieldRules'], download: ['general', 'download'],
+};
+const TOOLBAR_SEP_CLASS = 'data-table-zoom-sep';
+// Qué icono es un elemento de la barra: un botón suelto, una píldora con su botón dentro (búsquedas y acomodos guardados) o el de descarga.
+function toolbarButtonOf(node) { return node?.matches?.('button') ? node : node?.querySelector?.('button') || null; }
+function toolbarActionOf(node) {
+    const btn = toolbarButtonOf(node);
+    if (!btn) return null;
+    if (btn.dataset.zoom) return `zoom-${btn.dataset.zoom}`;
+    if (btn.dataset.downloadBtn) return 'download';
+    return btn.dataset.colAction || null;
+}
+// Acomoda la barra: lo propio de cada pantalla (como «+ Nuevo») se queda al principio, luego Diseño, Búsqueda y Generales, con una línea entre grupos (un grupo sin iconos no deja línea y nunca hay línea al principio ni al final).
+// Se puede llamar las veces que haga falta (quita sus líneas y vuelve a acomodar): también cuando una pantalla agrega después su botón de descarga.
+function groupDataTableToolbar(zoom) {
+    if (!zoom?.classList?.contains('data-table-zoom')) return;
+    zoom.querySelectorAll(`:scope > .${TOOLBAR_SEP_CLASS}`).forEach((sep) => sep.remove());
+    const order = Object.keys(TOOLBAR_ICONS);
+    const buckets = { rest: [], design: [], search: [], general: [] };
+    Array.from(zoom.children).forEach((node) => {
+        const meta = TOOLBAR_ICONS[toolbarActionOf(node)];
+        buckets[meta ? meta[0] : 'rest'].push(node);
+    });
+    TOOLBAR_GROUPS.forEach((g) => buckets[g].sort((a, b) => order.indexOf(toolbarActionOf(a)) - order.indexOf(toolbarActionOf(b))));
+    const frag = document.createDocumentFragment();
+    buckets.rest.forEach((node) => frag.appendChild(node));
+    let placed = false;
+    TOOLBAR_GROUPS.forEach((g) => {
+        if (!buckets[g].length) return;
+        if (placed) { const sep = document.createElement('span'); sep.className = TOOLBAR_SEP_CLASS; sep.setAttribute('aria-hidden', 'true'); frag.appendChild(sep); }
+        buckets[g].forEach((node) => frag.appendChild(node));
+        placed = true;
+    });
+    zoom.appendChild(frag);
+}
 function collectLegendIcons(tableId) {
     const state = dataTableColumnState.get(tableId);
     const wrapper = state?.wrapper || document.querySelector(`.data-table-wrapper[data-table-id="${CSS.escape(tableId)}"]`);
     const zoom = wrapper?.previousElementSibling;
     if (!zoom?.classList?.contains('data-table-zoom')) return [];
     const rows = [];
-    zoom.querySelectorAll('.data-table-zoom-btn').forEach((btn) => {
-        const helpKey = HELP_CONTENT_ZOOM_KEYS[btn.dataset.zoom] || HELP_CONTENT_COL_ACTION_KEYS[btn.dataset.colAction];
+    Array.from(zoom.children).forEach((node) => {
+        const btn = toolbarButtonOf(node);
+        if (!btn || !btn.classList.contains('data-table-zoom-btn')) return; // los botones con texto («+ Nuevo») no necesitan simbología
+        const meta = TOOLBAR_ICONS[toolbarActionOf(node)];
+        const helpKey = meta ? meta[1] : (btn.dataset.helpKey || HELP_CONTENT_ZOOM_KEYS[btn.dataset.zoom] || HELP_CONTENT_COL_ACTION_KEYS[btn.dataset.colAction]);
         const name = btn.getAttribute('aria-label') || btn.title;
-        if (!helpKey || !name) return;
-        rows.push({ iconHtml: btn.innerHTML, name, desc: t(`help.${helpKey}.what`) });
+        if (!name) return;
+        const icon = btn.querySelector(':scope > i');
+        const text = helpKey ? t(`help.${helpKey}.what`) : '';
+        // un icono sin grupo conocido (uno que una pantalla puso a mano) va en Generales, con su nombre y la explicación si la tiene
+        rows.push({ group: meta ? meta[0] : 'general', iconHtml: icon ? icon.outerHTML : btn.innerHTML, name, desc: text && text !== `help.${helpKey}.what` ? text : '' });
     });
     return rows;
 }
@@ -10285,8 +10340,19 @@ function openColumnLegend(tableId) {
         columnLegendList.appendChild(buildLegendRow(columnGroupColor(groupKey), resolveGroupLabel(groupKey), desc));
     });
     columnLegendIconList.innerHTML = '';
-    collectLegendIcons(tableId).forEach(({ iconHtml, name, desc }) => {
-        columnLegendIconList.appendChild(buildLegendIconRow(iconHtml, name, desc));
+    // los iconos de la barra, en los mismos tres grupos que la barra (Diseño, Búsqueda y Generales)
+    const iconRows = collectLegendIcons(tableId);
+    TOOLBAR_GROUPS.forEach((group) => {
+        const inGroup = iconRows.filter((row) => row.group === group);
+        if (!inGroup.length) return;
+        const head = document.createElement('tr');
+        head.className = 'data-table-legend-group';
+        const cell = document.createElement('td');
+        cell.colSpan = 3;
+        cell.textContent = t(`main.toolbarGroup_${group}`);
+        head.appendChild(cell);
+        columnLegendIconList.appendChild(head);
+        inGroup.forEach(({ iconHtml, name, desc }) => columnLegendIconList.appendChild(buildLegendIconRow(iconHtml, name, desc)));
     });
 }
 
@@ -10322,7 +10388,7 @@ function renderDataTableColumnControls() {
             // permisos y deja hacer solo lo que el perfil tenga.
             const canPinColumns = resolveIconGrant(tableKey, 'iconPin');
             const canHideColumns = resolveIconGrant(tableKey, 'iconVisibility');
-            if (canPinColumns || canHideColumns) {
+            { // «Contraer al mínimo», «Ajustar al encabezado» y «Encabezados y celdas» solo cambian cómo ve la tabla cada persona (se guardan en su navegador, como el zoom): van en TODA barra de iconos, sin depender del permiso de «Personalizar columnas» (Daniel, 2026-11-27)
                 const widthBtn = (action, icon, labelKey, mode) => {
                     const b = document.createElement('button');
                     b.type = 'button';
@@ -10350,6 +10416,8 @@ function renderDataTableColumnControls() {
                 { const current = dataTableColumnState.get(tableKey); const on = !!(current && current.look); lookBtn.classList.toggle('active', on); lookBtn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
                 lookBtn.addEventListener('click', () => openDataTableLookMenu(getTableId(wrapper, index), lookBtn));
                 toAppend.push(widthBtn('width-min', 'bx-collapse-horizontal', 'main.widthMinBtn', 'min'), widthBtn('width-fit', 'bx-expand-horizontal', 'main.widthFitBtn', 'fit'), lookBtn);
+            }
+            if (canPinColumns || canHideColumns) {
                 const columnsBtn = document.createElement('button');
                 columnsBtn.type = 'button';
                 columnsBtn.className = 'data-table-zoom-btn';
@@ -10582,6 +10650,7 @@ function renderDataTableColumnControls() {
 
                 addControls(filterToAppend);
             }
+            groupDataTableToolbar(zoom); // Diseño | Búsqueda | Generales
         }
 
         if (wrapper.dataset.colObserverAttached) return;

@@ -10979,6 +10979,9 @@ td.an-cons, th.an-cons{ background: color-mix(in srgb, #f7d9f5 45%, transparent)
 body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom[hidden]{ display: none; }
 /* Análisis: la barra de iconos de la pestaña Extracciones (oculta) se veía abajo de la tabla del Archivo porque el display ganaba al hidden (Daniel, 2026-11-27, «¿esta parte de acá abajo qué es?») */
 body[data-active-page="cat-analisis-manuales-lista"] .data-table-zoom[hidden]{ display: none; }
+/* La barra de iconos de toda tabla en tres grupos (Diseño | Búsqueda | Generales), separados por una línea fina (Daniel, 2026-11-27; ver Dashboard.js: groupDataTableToolbar) y los mismos grupos en la Simbología */
+.data-table-zoom-sep{ flex: none; align-self: center; width: 1px; height: 1.5rem; margin: 0 0.25rem; background: var(--color-border); }
+.data-table-legend-group td{ padding-top: 0.7rem; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-secondary); background: color-mix(in srgb, var(--color-accent, #6d3fc0) 8%, var(--color-surface, #fff)); }
 /* Registros Información: la barra de iconos de la tabla va en la MISMA fila que las pestañas y los botones «Cargar registro» y «Columnas del registro», pegada arriba de la tabla y sin la línea que la separaba (Daniel, 2026-11-27, «Como en Análisis»).
    La página es una fila que envuelve y la fila de pestañas y botones (.reg-row) deja de ser una caja (display: contents) para que sus piezas compartan el renglón con los iconos; todo lo demás ocupa su propio renglón en su orden de siempre. Solo en pantalla ancha: en el celular queda el diseño de arriba. */
 @media (min-width: 601px){
@@ -11010,6 +11013,7 @@ body[data-active-page="cat-analisis-manuales-lista"] .data-table-zoom[hidden]{ d
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom{ display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0.5rem 0.35rem; justify-content: stretch; justify-items: center; align-items: center; }
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom > .data-table-new-record-btn{ grid-column: span 3; justify-self: stretch; width: 100%; justify-content: center; min-height: 2.6rem; height: auto; line-height: 1.2; text-align: center; padding-inline: 0.5rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-zoom-btn{ width: 2.6rem; height: 2.6rem; font-size: 1.15rem; }
+    body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom-sep{ display: none; } /* en la cuadrícula del celular las líneas no van */
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-search-pill,
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-layout-pill{ height: 2.6rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .data-table-zoom .data-table-search-pill.open,
