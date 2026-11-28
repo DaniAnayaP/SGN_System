@@ -2229,6 +2229,14 @@
     "lookBtn": "Encabezados y celdas",
     "lookTitles": "Títulos",
     "lookCells": "Celdas",
+    "lookAbbr": "Abreviar los títulos",
+    "lookDec0": "Sin decimales",
+    "lookDecLess": "Disminuir decimales",
+    "lookDecMore": "Aumentar decimales",
+    "lookDecAsIs": "Como vienen",
+    "lookDecNone": "Sin decimales",
+    "lookDecOne": "1 decimal",
+    "lookDecN": "{n} decimales",
     "lookReset": "Como estaba",
     "lookTop": "Alinear arriba",
     "lookMiddle": "Alinear en el medio",
@@ -10866,8 +10874,8 @@
       "example": "Títulos centrados y con el texto ajustado"
     },
     "lookMenu": {
-      "what": "Los botones son los de la cinta «Alineación» de Excel, una vez para los títulos y otra para las celdas. Lo que elijas aquí vale para TODAS las columnas, aunque alguna traiga su propio formato en su panel; «Como estaba» le devuelve a cada columna lo suyo.",
-      "example": "Celdas › Ajustar texto"
+      "what": "Los botones son los de la cinta «Alineación» de Excel, una vez para los títulos y otra para las celdas. Lo que elijas aquí vale para TODAS las columnas, aunque alguna traiga su propio formato en su panel; «Como estaba» le devuelve a cada columna lo suyo. «Ab.» pone todos los títulos en su forma corta (el nombre completo sale al pasar el ratón); «0», «←.0» y «.00→» quitan o ponen decimales a las cantidades: solo cambia lo que ves y lo que descargas, los datos y las sumas de la fila de totales no cambian.",
+      "example": "Celdas › .00→ (agrega un decimal)"
     },
     "anRefresh": {
       "what": "Vuelve a cargar el análisis con lo que hay hoy: los datos de los registros, las fórmulas y las columnas agregadas. Las columnas ⟳ «La más reciente» pasan a la carga más nueva; las que apuntan a una carga concreta no cambian. Si hay cambios de columnas sin aplicar (agregar, quitar o cambiar), los guarda juntos antes de volver a armar. Las versiones ya extraídas no cambian nunca.",

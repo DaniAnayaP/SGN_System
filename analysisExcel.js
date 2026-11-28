@@ -47,11 +47,21 @@ const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
 // Excel guarda 1,048,576 renglones por hoja (uno es el encabezado): si el análisis trae más, sigue en otra hoja («Análisis», «Análisis 2»…), cada una con su encabezado, su filtro y su formato.
 const MAX_SHEET_ROWS = 1048575;
 // Escribe el libro en `stream` (la respuesta). columns: [{ label, ff?, fmt?, style?, decimals? }]; rows: [[valor]] (números como números, textos, null). sheetRows: renglones de datos por hoja (solo para probar).
-async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHEET_ROWS }) {
+async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHEET_ROWS, dec = null }) {
     const wb = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
     wb.creator = 'SGN';
     const name = String(title || 'Análisis').replace(/[\\/*?:[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31) || 'Análisis';
     const fmts = columns.map(formatOf);
+    // dec (0 a 6): los decimales que la persona ve en pantalla («Encabezados y celdas»): valen para toda columna con números, también las que traen su formato; la descarga baja lo que se ve (Daniel, 2026-11-28)
+    const decAsked = dec === undefined || dec === null || dec === '' ? null : Number(dec);
+    if (Number.isInteger(decAsked) && decAsked >= 0 && decAsked <= 6) {
+        fmts.forEach((f, i) => {
+            if (isDateFormat(f)) return;
+            let seen = 0; let numbers = 0;
+            for (let r = 0; r < rows.length && r < 200; r += 1) { const v = rows[r][i]; if (v === null || v === undefined || v === '') continue; seen += 1; if (typeof v === 'number') numbers += 1; }
+            if (seen > 0 && numbers / seen >= 0.9) { f.dec = decAsked; if (!f.nf) { f.nf = 'numero'; f.miles = true; } }
+        });
+    }
     const dateAt = fmts.map(isDateFormat);
     const sheetColumns = columns.map((c, i) => {
         let max = String(c.label).length + 3;

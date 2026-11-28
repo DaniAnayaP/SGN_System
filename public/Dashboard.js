@@ -2170,15 +2170,17 @@ function abbreviateDataTableTexts(tableId) {
     });
     // 2) decisiones (sin tocar el diseño) y 3) escrituras
     const writes = [];
-    const decide = (el, text, spec, keepWords) => {
-        const { step, clipped } = tableAbbrFor(text, spec, keepWords);
+    const forceShort = !!(state.look && state.look.habr); // «Abreviar» (Títulos): los encabezados van siempre en su forma corta (palabras largas con punto y sin conectores, sin cortar palabras); si ni así caben, sigue la escalera de siempre
+    const decide = (el, text, spec, keepWords, short) => {
+        let { step, clipped } = tableAbbrFor(text, spec, keepWords);
+        if (short && text) { const l = autoAbbrLadder(text, { keepWords: true }); const form = l[l.length - 1]; if (form.length < text.length && (step === null || form.length < step.length)) step = form; }
         const wantTitle = step !== null || clipped;
         const same = step === null
             ? el.dataset.abbr === undefined && (wantTitle ? el.dataset.abbrFull === text : el.dataset.abbrTitle === undefined)
             : el.dataset.abbr === step && el.dataset.abbrFull === text;
         if (!same) writes.push([el, step, text, wantTitle]);
     };
-    heads.forEach((h) => decide(h.el, h.text, h.spec, false));
+    heads.forEach((h) => decide(h.el, h.text, h.spec, false, forceShort));
     bands.forEach((b) => decide(b.el, b.text, b.spec, false));
     rows.forEach((tr) => {
         const fresh = !seen.has(tr) || dirty.has(tr);
@@ -4171,6 +4173,7 @@ function observeTableBody(table, tableId) {
             mutation.addedNodes.forEach((node) => {
                 if (node.nodeType === 1 && node.tagName === 'TR' && !node.querySelector('td.data-table-empty-cell')) {
                     applyRowColumnState(node, tableId);
+                    { const st = dataTableColumnState.get(tableId); if (st && st.look && st.look.dec !== undefined) applyRowDecimals(node, st.look.dec); } // los decimales elegidos valen también para las filas que llegan después
                     addedRealRow = true;
                 }
             });
@@ -4315,7 +4318,7 @@ function clearWidthMode(tableId) {
     refreshWidthButtons(tableId);
 }
 // El ancho para leer el encabezado completo: el texto (con su letra y espaciado), el relleno de la celda (donde viven el embudo y la flecha de orden) y lo que lleve en su línea (el ⋮ del formato).
-function headerFitWidth(th, wrap = false) {
+function headerFitWidth(th, wrap = false, short = false) {
     wrap = wrap || !!th.dataset.fmHwrap; // «Ajustar texto» puesto solo a esta columna (su panel de formato) también la deja en dos renglones
     const cs = getComputedStyle(th);
     const full = th.dataset.abbrFull || Array.from(th.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
@@ -4326,10 +4329,12 @@ function headerFitWidth(th, wrap = false) {
         if (p.position === 'absolute' || p.position === 'fixed' || p.display === 'none') return;
         reserved += c.offsetWidth + (parseFloat(p.marginLeft) || 0) + (parseFloat(p.marginRight) || 0);
     });
-    let textWidth = tableAbbrWidth(spec, full);
+    let shown = full;
+    if (short) { const l = autoAbbrLadder(full, { keepWords: true }); shown = l[l.length - 1]; } // con «Abreviar» las columnas se angostan a lo corto
+    let textWidth = tableAbbrWidth(spec, shown);
     if (wrap) {
         // con «Ajustar texto» en los títulos: el ancho mínimo para partirlo en dos renglones (la mejor división de sus palabras en dos líneas)
-        const words = full.split(/\s+/).filter(Boolean);
+        const words = shown.split(/\s+/).filter(Boolean);
         if (words.length > 1) {
             let best = textWidth;
             for (let i = 1; i < words.length; i += 1) best = Math.min(best, Math.max(tableAbbrWidth(spec, words.slice(0, i).join(' ')), tableAbbrWidth(spec, words.slice(i).join(' '))));
@@ -4353,7 +4358,7 @@ function setDataTableWidthMode(tableId, mode) {
         state.columnKeys.forEach((key) => {
             if (pinned.has(key) || hidden.has(key)) return;
             const th = Array.from(headerRow.cells).find((c) => c.dataset.col === key);
-            state.config.widths[key] = mode === 'min' ? DATA_TABLE_COL_MIN_WIDTH : Math.max(DATA_TABLE_COL_MIN_WIDTH, th ? headerFitWidth(th, !!(state.look && state.look.hwrap)) : DATA_TABLE_COL_MIN_WIDTH);
+            state.config.widths[key] = mode === 'min' ? DATA_TABLE_COL_MIN_WIDTH : Math.max(DATA_TABLE_COL_MIN_WIDTH, th ? headerFitWidth(th, !!(state.look && state.look.hwrap), !!(state.look && state.look.habr)) : DATA_TABLE_COL_MIN_WIDTH);
         });
         state.widthMode = mode; state.noStretch = true;
     }
@@ -4366,7 +4371,7 @@ function setDataTableWidthMode(tableId, mode) {
 // --- Encabezados y celdas (Daniel, 2026-11-27): cómo se ven los títulos y los datos de toda la tabla, con los botones de la cinta «Alineación» de Excel. Para Títulos (hv, hwrap, hal) y Celdas (cv, cwrap, cal):
 // vertical (t arriba, m en medio, b abajo), «Ajustar texto» (el texto se parte en renglones) y horizontal (l izquierda, c centro, r derecha, a «como los datos»: números a la derecha, texto a la izquierda). Solo se guarda lo que no es el valor de siempre
 // (localStorage por tabla, como los anchos); los estilos viven en Admin.css con los atributos data-look-* del contenedor. Lo que una columna tenga en su panel de formato manda sobre esto.
-const LOOK_DEFAULTS = { hv: 'm', hwrap: 0, hal: 'l', cv: 'm', cwrap: 0, cal: 'a' };
+const LOOK_DEFAULTS = { hv: 'm', hwrap: 0, hal: 'l', habr: 0, cv: 'm', cwrap: 0, cal: 'a' }; // habr: «Abreviar» los títulos; dec (decimales de las celdas con números) no tiene valor de siempre: sin elegir son «como vienen»
 const LOOK_VALUES = { hv: ['t', 'm', 'b'], cv: ['t', 'm', 'b'], hal: ['l', 'c', 'r', 'a'], cal: ['l', 'c', 'r', 'a'] };
 const lookKey = (tableId) => `dataTableLook:${layoutKeyOf(tableId)}`;
 function readLook(tableId) {
@@ -4375,7 +4380,8 @@ function readLook(tableId) {
         if (!v || typeof v !== 'object') return null;
         const out = {};
         Object.keys(LOOK_VALUES).forEach((k) => { if (LOOK_VALUES[k].includes(v[k])) out[k] = v[k]; }); // también el valor de siempre: elegirlo es pedirlo para TODAS las columnas (ver applyDataTableLook)
-        ['hwrap', 'cwrap'].forEach((k) => { if (v[k]) out[k] = 1; });
+        ['hwrap', 'cwrap', 'habr'].forEach((k) => { if (v[k]) out[k] = 1; });
+        if (Number.isInteger(v.dec) && v.dec >= 0 && v.dec <= 6) out.dec = v.dec;
         return Object.keys(out).length ? out : null;
     } catch { return null; }
 }
@@ -4410,7 +4416,8 @@ function applyDataTableLook(tableId) {
     // Lo elegido en «Encabezados y celdas» vale para TODAS las columnas, también las que traen su propio formato (Daniel, 2026-11-28, «debe poder aplicar para todo, rompe el acomodo particular»): el atributo se pone con lo que la persona eligió, incluido el valor de siempre;
     // sin elegir nada (o con «Como estaba») no hay atributo y cada columna se ve con lo suyo. Los estilos con !important viven en Admin.css.
     const set = (name, key) => { if (state.look && state.look[key] !== undefined) w.dataset[name] = String(state.look[key]); else delete w.dataset[name]; };
-    set('lookHv', 'hv'); set('lookHwrap', 'hwrap'); set('lookHal', 'hal'); set('lookCv', 'cv'); set('lookCwrap', 'cwrap'); set('lookCal', 'cal');
+    set('lookHv', 'hv'); set('lookHwrap', 'hwrap'); set('lookHal', 'hal'); set('lookHabr', 'habr'); set('lookCv', 'cv'); set('lookCwrap', 'cwrap'); set('lookCal', 'cal');
+    applyDataTableDecimals(tableId);
     refreshHeaderAutoAlign(tableId);
     scheduleDataTableAbbreviation(tableId);
     refreshLookButtons(tableId);
@@ -4431,6 +4438,61 @@ function refreshLookButtons(tableId) {
 }
 // Los iconos son de líneas, como los de Excel.
 const lookSvg = (inner) => `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+// ---- Decimales de las celdas con números (Daniel, 2026-11-28, «la recomendada»): «0», «←.0» y «.00→» de Celdas en «Encabezados y celdas». Solo cambia cómo se VE: las sumas de la fila de totales, los filtros y los datos siguen con todos sus decimales;
+// la descarga baja lo que se ve (el CSV y el PDF leen estas celdas; el Excel de Registros y de Análisis recibe los decimales en la petición). Vale para toda celda con números (td.col-num), también las que traen su formato propio ($, %, miles).
+// Se parte del texto de la celda (prefijo, número, sufijo): «$1,234.50» → «$1,235»; lo que no es una cantidad (fechas, horas, textos, fracciones) no se toca. El texto de antes se guarda en la celda para volver con «Como estaba».
+const DEC_CELL_RE = /^(\(?-?)([^\d\s()\-+,.]{0,4}\s?)(-?)(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(\s?[^\d\s()\-+,.]{0,4})(\)?)$/;
+function reformatDecimals(text, dec) {
+    const m = DEC_CELL_RE.exec(String(text).trim());
+    if (!m) return null;
+    const [, open, prefix, minus, whole, frac, suffix, close] = m;
+    const abs = Number(whole.replace(/,/g, '') + (frac ? '.' + frac : ''));
+    if (!Number.isFinite(abs)) return null;
+    const rounded = Number(Math.round(Number(abs + 'e' + dec)) + 'e-' + dec);
+    let body = (Number.isFinite(rounded) ? rounded : abs).toFixed(dec);
+    if (whole.includes(',')) body = body.replace(/^(\d+)/, (x) => x.replace(/\B(?=(\d{3})+(?!\d))/g, ',')); // los miles que ya traía se conservan
+    const negative = open.includes('-') || minus || close;
+    return { text: open + prefix + minus + body + suffix + close, value: (negative ? '-' : '') + abs };
+}
+function applyCellDecimals(td, dec) {
+    if (td.dataset.lookOut !== undefined && td.textContent !== td.dataset.lookOut) { delete td.dataset.lookOrig; delete td.dataset.lookOut; delete td.dataset.lookDec; } // otro código cambió el texto: ése es ahora el original
+    if (dec === null) {
+        if (td.dataset.lookOrig === undefined) return;
+        td.textContent = td.dataset.lookOrig;
+        delete td.dataset.lookOrig; delete td.dataset.lookOut; delete td.dataset.lookDec;
+        if (td.dataset.lookSv !== undefined) { delete td.dataset.sortValue; delete td.dataset.lookSv; }
+        return;
+    }
+    if (td.dataset.lookDec === String(dec) && td.textContent === td.dataset.lookOut) return;
+    const original = td.dataset.lookOrig !== undefined ? td.dataset.lookOrig : td.textContent;
+    const out = reformatDecimals(original, dec);
+    if (!out) return;
+    if (td.dataset.lookOrig === undefined) {
+        td.dataset.lookOrig = original;
+        if (td.dataset.sortValue === undefined) { td.dataset.sortValue = out.value; td.dataset.lookSv = '1'; } // se ordena por el número de antes, no por el redondeado
+    }
+    td.dataset.lookOut = out.text; td.dataset.lookDec = String(dec);
+    td.textContent = out.text;
+}
+function applyRowDecimals(tr, dec) {
+    Array.from(tr.cells).forEach((td) => {
+        if (!td.classList.contains('col-num') || td.dataset.col === 'actions' || td.childElementCount || td.classList.contains('data-table-empty-cell')) return;
+        applyCellDecimals(td, dec);
+    });
+}
+function applyDataTableDecimals(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state || !state.table.isConnected) return;
+    const dec = state.look && state.look.dec !== undefined ? state.look.dec : null;
+    if (dec === null && !state.decApplied) return; // nada que quitar
+    state.decApplied = dec !== null;
+    Array.from(state.table.tBodies[0]?.rows || []).forEach((tr) => applyRowDecimals(tr, dec));
+}
+// Lo que la persona eligió en «Encabezados y celdas» (para quien arma una descarga del servidor: los decimales que se ven); null si no eligió nada.
+function getDataTableLook(tableId) {
+    const state = dataTableColumnState.get(tableId);
+    return state && state.look ? { ...state.look } : null;
+}
 const LOOK_ICONS = {
     v: { t: lookSvg('<path d="M2 2h12M5 5.5h6M5 9h6"/>'), m: lookSvg('<path d="M2 8h12M5 4.5h6M5 11.5h6"/>'), b: lookSvg('<path d="M2 14h12M5 7h6M5 10.5h6"/>') },
     wrap: lookSvg('<path d="M2 3.5h12M2 7.5h8.5a2.5 2.5 0 0 1 0 5H7.5"/><path d="M9 10.5l-1.6 2 1.6 2"/>'),
@@ -4475,6 +4537,8 @@ function openDataTableLookMenu(tableId, anchor) {
         b.innerHTML = icon;
         return b;
     };
+    // botones de texto (Ab., 0, ←.0, .00→): no llevan icono de líneas
+    const mkText = (key, value, text, label) => { const b = mk(key, value, '', label); b.textContent = text; b.classList.add('data-table-look-btn-text'); return b; };
     const section = (p, titleKey, autoKey) => {
         const wrap = document.createElement('div');
         wrap.className = 'data-table-look-section';
@@ -4487,40 +4551,60 @@ function openDataTableLookMenu(tableId, anchor) {
         const sep = document.createElement('span');
         sep.className = 'data-table-look-sep';
         rowV.append(sep, mk(`${p}wrap`, 1, LOOK_ICONS.wrap, t('main.lookWrap')));
+        if (p === 'h') rowV.append(mkText('habr', 1, 'Ab.', t('main.lookAbbr'))); // «Abreviar»: los títulos siempre en su forma corta
         const rowH = document.createElement('div');
         rowH.className = 'data-table-look-row';
         rowH.append(mk(`${p}al`, 'l', LOOK_ICONS.al.l, t('main.lookLeft')), mk(`${p}al`, 'c', LOOK_ICONS.al.c, t('main.lookCenter')), mk(`${p}al`, 'r', LOOK_ICONS.al.r, t('main.lookRight')), mk(`${p}al`, 'a', LOOK_ICONS.al.a, t(autoKey)));
         wrap.append(label, rowV, rowH);
+        if (p === 'c') { // los decimales de las celdas con números, como en la cinta de Excel
+            const rowD = document.createElement('div');
+            rowD.className = 'data-table-look-row';
+            const readout = document.createElement('span');
+            readout.className = 'data-table-look-readout';
+            readout.setAttribute('aria-live', 'polite');
+            rowD.append(mkText('dec0', 0, '0', t('main.lookDec0')), mkText('decm', -1, '←.0', t('main.lookDecLess')), mkText('decp', 1, '.00→', t('main.lookDecMore')), readout);
+            wrap.append(rowD);
+        }
         return wrap;
     };
     menu.append(section('h', 'main.lookTitles', 'main.lookAutoTitles'), section('c', 'main.lookCells', 'main.lookAutoCells'));
     const paint = () => {
         menu.querySelectorAll('.data-table-look-btn').forEach((b) => {
             const k = b.dataset.look;
-            const on = k.endsWith('wrap') ? !!lookValue(state, k) : String(lookValue(state, k)) === b.dataset.value;
+            let on;
+            if (k === 'habr') on = !!(state.look && state.look.habr);
+            else if (k === 'dec0') on = !!state.look && state.look.dec === 0;
+            else if (k === 'decm' || k === 'decp') on = false; // son acciones: suben o bajan un decimal
+            else on = k.endsWith('wrap') ? !!lookValue(state, k) : String(lookValue(state, k)) === b.dataset.value;
             b.classList.toggle('on', on);
             b.setAttribute('aria-pressed', on ? 'true' : 'false');
         });
+        const readout = menu.querySelector('.data-table-look-readout');
+        if (readout) { const d = state.look && state.look.dec !== undefined ? state.look.dec : null; readout.textContent = d === null ? t('main.lookDecAsIs') : (d === 0 ? t('main.lookDecNone') : t(d === 1 ? 'main.lookDecOne' : 'main.lookDecN', { n: d })); }
     };
     menu.addEventListener('click', (event) => {
         const b = event.target.closest('.data-table-look-btn');
         if (!b) return;
         const k = b.dataset.look;
         const look = { ...(state.look || {}) };
-        if (k.endsWith('wrap')) { if (look[k]) delete look[k]; else look[k] = 1; } // «Ajustar texto»: puesto vale para todas; quitado, cada columna con lo suyo
+        if (k === 'habr') { if (look.habr) delete look.habr; else look.habr = 1; } // «Abreviar»: puesto vale para todos los títulos; quitado, vuelven a abreviarse solo si no caben
+        else if (k === 'dec0') look.dec = 0; // sin decimales
+        else if (k === 'decm') look.dec = look.dec === undefined ? 2 : Math.max(0, look.dec - 1); // la primera vez parte de 2 decimales; después, uno menos cada vez
+        else if (k === 'decp') look.dec = look.dec === undefined ? 2 : Math.min(6, look.dec + 1);
+        else if (k.endsWith('wrap')) { if (look[k]) delete look[k]; else look[k] = 1; } // «Ajustar texto»: puesto vale para todas; quitado, cada columna con lo suyo
         else look[k] = b.dataset.value; // alinear o centrar también si es lo de siempre: se aplica a todas las columnas (con «Como estaba» cada una vuelve a lo suyo)
         state.look = Object.keys(look).length ? look : null;
         saveLook(tableId, state.look);
         applyDataTableLook(tableId);
         // con «Ajustar al encabezado» puesto, el ancho sigue al título en uno o en dos renglones
-        if (k === 'hwrap' && state.widthMode === 'fit') {
+        if ((k === 'hwrap' || k === 'habr') && state.widthMode === 'fit') {
             const headerRow = getHeaderRow(state.table);
             const pinned = new Set(state.config.pinned);
             const hidden = new Set(state.config.hidden);
             state.columnKeys.forEach((key) => {
                 if (pinned.has(key) || hidden.has(key)) return;
                 const th = Array.from(headerRow.cells).find((c) => c.dataset.col === key);
-                if (th) state.config.widths[key] = Math.max(DATA_TABLE_COL_MIN_WIDTH, headerFitWidth(th, !!(state.look && state.look.hwrap)));
+                if (th) state.config.widths[key] = Math.max(DATA_TABLE_COL_MIN_WIDTH, headerFitWidth(th, !!(state.look && state.look.hwrap), !!(state.look && state.look.habr)));
             });
             saveDataTableConfig(tableId, state.config);
             applyDataTableColumnLayout(tableId);
@@ -17507,6 +17591,7 @@ window.Dashboard = {
     // filter. Call this directly once the real columns are in the DOM.
     initDataTableColumns,
     getVisibleTableSnapshot,
+    getDataTableLook,
     attachTableDownloadButton,
     getVisibleColumnKeys,
     showToast,

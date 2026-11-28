@@ -172,8 +172,11 @@ module.exports = function createFlexApi(deps) {
         const asked = String(req.query.cols || '').split(',').map((k) => k.trim()).filter(Boolean);
         const picked = asked.map((k) => ctx.columns.findIndex((c) => c.key === k)).filter((i) => i >= 0);
         const only = asked.length && picked.length ? picked : null;
+        // dec: los decimales que la persona ve en pantalla («Encabezados y celdas»): la descarga baja lo que se ve (Daniel, 2026-11-28)
+        const decAsked = req.query.dec === undefined || req.query.dec === '' ? null : Number(req.query.dec);
+        const decOverride = Number.isInteger(decAsked) && decAsked >= 0 && decAsked <= 6 ? decAsked : null;
         const headers = (only || ctx.columns.map((c, i) => i)).map((i) => ctx.columns[i].label);
-        const exportRow = (get) => { const full = rowArray(ctx, get); return only ? only.map((i) => full[i]) : full; };
+        const exportRow = (get) => { const full = rowArray(ctx, get); const row = only ? only.map((i) => full[i]) : full; return format === 'csv' && decOverride !== null ? row.map((v) => (typeof v === 'number' ? v.toFixed(decOverride) : v)) : row; };
         res.set('Cache-Control', 'no-store');
         res.setHeader('Content-Type', format === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', buildContentDisposition(`${base}.${format}`));
@@ -200,7 +203,7 @@ module.exports = function createFlexApi(deps) {
                 const columnsOut = (only || ctx.columns.map((c, i) => i)).map((i) => ctx.columns[i]);
                 const lastLoad = ctx.loads.length ? ctx.loads[ctx.loads.length - 1] : null;
                 await flexExcel.writeWorkbook({
-                    stream: res, batches, columns: columnsOut, format: flexExcel.mergeFormat(saved && saved.format),
+                    stream: res, batches, columns: columnsOut, format: flexExcel.mergeFormat(saved && saved.format), decOverride,
                     meta: { lang: ctx.lang, tz: ctx.tz, registryName: registry.name || registry.key, by: changedByLabel(req), lastLoad: lastLoad ? { fileName: lastLoad.fileName, loadedBy: lastLoad.loadedBy, createdAt: lastLoad.createdAt } : null, searchText: String(req.query.text || '').trim().slice(0, 100), hasColumnFilters: !!req.query.cf, totalColumns: ctx.columns.length },
                 });
             }

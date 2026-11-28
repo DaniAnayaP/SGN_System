@@ -197,7 +197,8 @@ const toDate = (text) => { const m = ISO_DATE.exec(text); return m ? new Date(Da
 const MONEY_NAME = /(costo|cost|precio|price|importe|monto|amount|valor total)/;
 
 // El formato que de verdad se aplica a cada columna del libro: lo de siempre (llave en lila, montos como Moneda, fechas como Fecha corta, meses a la derecha) y, encima, lo que la persona dejó guardado.
-function effectiveColumns(columns, format, sampleRows) {
+// decOverride (0 a 6): los decimales que la persona eligió en pantalla (`Encabezados y celdas` › Celdas): valen para toda columna con números (también las que traen su formato propio); null = los de cada columna.
+function effectiveColumns(columns, format, sampleRows, decOverride = null) {
     return columns.map((c, i) => {
         const base = {};
         if (format.keyFill && c.group === 'key') base.fill = format.keyFill;
@@ -213,19 +214,24 @@ function effectiveColumns(columns, format, sampleRows) {
         const f = { ...base, ...mine };
         // un formato de número guardado «General» no existe (se borra); si la persona dejó la columna sin tipo se queda lo automático
         const isDate = f.nf === 'fcorta' || f.nf === 'flarga' || f.nf === 'hora';
+        if (Number.isInteger(decOverride) && decOverride >= 0 && decOverride <= 6 && !(isDate && c.group !== 'value')) {
+            let seen = 0; let numbers = 0;
+            for (const r of sampleRows) { const v = r[i]; if (v === null || v === undefined || v === '') continue; seen += 1; if (typeof v === 'number') numbers += 1; }
+            if (c.group === 'value' || (seen > 0 && numbers / seen >= 0.9)) { f.dec = decOverride; if (!f.nf) f.nf = 'numero'; }
+        }
         return { f, isDate: isDate && c.group !== 'value' };
     });
 }
 
 // Arma el libro y lo escribe en `stream`. batches = lotes de renglones ya filtrados y con SOLO las columnas que se bajan, en su orden.
 //   columns: [{ key, label, name, group ('key'|'data'|'value'|'load'), kind }]   meta: { lang, tz, registryName, by, lastLoad: { fileName, loadedBy, createdAt }|null, filtersText, totalColumns }
-async function writeWorkbook({ stream, batches, columns, format, meta }) {
+async function writeWorkbook({ stream, batches, columns, format, meta, decOverride = null }) {
     const lang = meta.lang === 'en' ? 'en' : 'es';
     const tt = T[lang];
     const fmt = format || mergeFormat(null);
     const sample = [];
     for (const b of batches) { for (const r of b) { sample.push(r); if (sample.length >= 500) break; } if (sample.length >= 500) break; }
-    const eff = effectiveColumns(columns, fmt, sample);
+    const eff = effectiveColumns(columns, fmt, sample, decOverride);
 
     // lo que sale en la portada y en la fila de apoyo, de un solo recorrido
     let rowCount = 0;

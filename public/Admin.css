@@ -5814,6 +5814,9 @@ th.data-table-group-band-draggable:active{ cursor: grabbing; }
     cursor: pointer;
 }
 .data-table-look-btn:hover{ border-color: var(--color-accent, #6d3fc0); }
+/* «Ab.» (abreviar) y los decimales: botones con texto en vez de icono */
+.data-table-look-btn-text{ font: inherit; font-size: 0.72rem; font-weight: 700; letter-spacing: 0; }
+.data-table-look-readout{ margin-left: 0.2rem; font-size: 0.68rem; font-weight: 600; white-space: nowrap; color: var(--color-accent, #6d3fc0); }
 .data-table-look-btn.on{
     border-style: solid;
     border-color: var(--color-accent, #6d3fc0);

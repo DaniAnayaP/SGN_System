@@ -7560,7 +7560,10 @@ app.get('/api/business/manual-registries/:key/export', requireAuth, async (req, 
     res.set('Cache-Control', 'no-store');
     res.setHeader('Content-Type', format === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', buildContentDisposition(`${base}.${format}`));
-    const cells = (row) => [row.unidad, row.unidadNombre, row.codigo, row.descripcion, row.categoria, row.udm, ...periods.map((p) => (row.values[p] === undefined ? '' : row.values[p]))];
+    // dec: los decimales que la persona ve en pantalla («Encabezados y celdas»): la descarga baja lo que se ve (Daniel, 2026-11-28)
+    const decAsked = req.query.dec === undefined || req.query.dec === '' ? null : Number(req.query.dec);
+    const decOverride = Number.isInteger(decAsked) && decAsked >= 0 && decAsked <= 6 ? decAsked : null;
+    const cells = (row) => [row.unidad, row.unidadNombre, row.codigo, row.descripcion, row.categoria, row.udm, ...periods.map((p) => { const v = row.values[p]; if (v === undefined) return ''; return decOverride !== null && format === 'csv' && typeof v === 'number' ? v.toFixed(decOverride) : v; })];
     const yieldToOthers = () => new Promise((resolve) => setImmediate(resolve));
     try {
         if (format === 'csv') {
@@ -7574,8 +7577,10 @@ app.get('/api/business/manual-registries/:key/export', requireAuth, async (req, 
             }
             res.end();
         } else {
-            const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: false, useSharedStrings: false });
+            const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: decOverride !== null, useSharedStrings: false });
             const sheet = workbook.addWorksheet(String(registry.name || 'Datos').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Datos', { views: [{ state: 'frozen', ySplit: 1 }] });
+            // con decimales elegidos, las columnas de periodos llevan su formato de número (0, 0.0, 0.00…): se ven igual que en pantalla y el dato sigue completo
+            if (decOverride !== null) sheet.columns = headers.map((h, i) => ({ key: `c${i}`, ...(i >= 6 ? { style: { numFmt: decOverride ? `#,##0.${'0'.repeat(decOverride)}` : '#,##0' } } : {}) }));
             sheet.addRow(headers).commit();
             for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters, 2000, parsedCf.filter)) {
                 if (res.destroyed) return;
@@ -8283,6 +8288,7 @@ app.post('/api/business/manual-analyses/:id/export-xlsx', requireAuth, async (re
     } else {
         payload = analysisExcel.cleanPayload(body);
         if (payload.error) return res.status(400).json({ message: payload.error });
+        payload.dec = body.dec;
         // columnas de comentarios: la pantalla manda cuáles son (commentCols = [{ at, col }]) y la llave de cada renglón (rowKeys); en el Excel va cada comentario completo (fecha, autor y texto)
         const cc = Array.isArray(body.commentCols) ? body.commentCols.slice(0, 20) : [];
         const rowKeys = Array.isArray(body.rowKeys) ? body.rowKeys : [];
@@ -8303,7 +8309,7 @@ app.post('/api/business/manual-analyses/:id/export-xlsx', requireAuth, async (re
         res.set('Cache-Control', 'no-store');
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', buildContentDisposition(`${String(title).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'Analisis'}.xlsx`));
-        await analysisExcel.writeWorkbook(res, { ...payload, title });
+        await analysisExcel.writeWorkbook(res, { ...payload, title, dec: body.dec });
         if (!res.writableEnded) res.end();
     } catch (err) {
         console.error('Análisis: la descarga en Excel falló:', err);

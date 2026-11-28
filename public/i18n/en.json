@@ -2230,6 +2230,14 @@
     "lookBtn": "Headers and cells",
     "lookTitles": "Headers",
     "lookCells": "Cells",
+    "lookAbbr": "Abbreviate titles",
+    "lookDec0": "No decimals",
+    "lookDecLess": "Decrease decimals",
+    "lookDecMore": "Increase decimals",
+    "lookDecAsIs": "As they come",
+    "lookDecNone": "No decimals",
+    "lookDecOne": "1 decimal",
+    "lookDecN": "{n} decimals",
     "lookReset": "Back to default",
     "lookTop": "Align top",
     "lookMiddle": "Align middle",
@@ -10867,8 +10875,8 @@
       "example": "Centered headers with wrapped text"
     },
     "lookMenu": {
-      "what": "The buttons are the ones from Excel's “Alignment” ribbon, once for the headers and once for the cells. What you choose here applies to ALL columns, even those with their own format in their panel; “As it was” gives each column its own back.",
-      "example": "Cells › Wrap text"
+      "what": "The buttons are the ones from Excel's “Alignment” ribbon, once for the headers and once for the cells. What you choose here applies to ALL columns, even those with their own format in their panel; “As it was” gives each column its own back. “Ab.” puts every title in its short form (the full name shows on hover); “0”, “←.0” and “.00→” remove or add decimals to amounts: it only changes what you see and what you download, the data and the totals row sums do not change.",
+      "example": "Cells › .00→ (adds a decimal)"
     },
     "anRefresh": {
       "what": "Reloads the analysis with what exists today: the data of the records, the formulas and the added columns. ⟳ \"The most recent\" columns move to the newest load; the ones pointing to a specific load do not change. If there are pending column changes (adding, removing or changing), it saves them together before rebuilding. Versions already extracted never change.",

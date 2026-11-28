@@ -467,10 +467,15 @@ function drawData() {
     wrapper.setAttribute('data-help-key', flex ? 'regTableLibre' : 'regTable');
     if (Dashboard.attachTableDownloadButton) {
         Dashboard.attachTableDownloadButton(DATA_TABLE, { getTitle: () => `${regName(currentRegistry())}_${todayStamp()}`, getNotice: () => (st.data && st.data.truncated ? t('main.regDownloadTruncated', { shown: st.data.rows.length, total: st.data.total }) : ''),
-            getFullDownload: (format) => (st.data && (st.data.truncated || isFlex(st.data)) ? `${API}/${encodeURIComponent(st.key)}/export?format=${format}&lang=${lang()}&tz=${tzOffset()}&text=${encodeURIComponent(st.text || '')}${st.cf ? `&cf=${encodeURIComponent(JSON.stringify(st.cf))}` : ''}${visibleColsParam()}&file=${encodeURIComponent(`${regName(currentRegistry())}_${todayStamp()}`)}` : null) });
+            getFullDownload: (format) => (st.data && (st.data.truncated || isFlex(st.data)) ? `${API}/${encodeURIComponent(st.key)}/export?format=${format}&lang=${lang()}&tz=${tzOffset()}&text=${encodeURIComponent(st.text || '')}${st.cf ? `&cf=${encodeURIComponent(JSON.stringify(st.cf))}` : ''}${visibleColsParam()}${decParam()}&file=${encodeURIComponent(`${regName(currentRegistry())}_${todayStamp()}`)}` : null) });
     }
     updateNote();
     renderButtons();
+}
+// los decimales que la persona ve («Encabezados y celdas» › Celdas): la descarga completa del servidor baja lo que se ve
+function decParam() {
+    const look = Dashboard.getDataTableLook && Dashboard.getDataTableLook(DATA_TABLE);
+    return look && look.dec !== undefined ? `&dec=${look.dec}` : '';
 }
 // las columnas que la persona dejó visibles (las ocultas o difuminadas no se bajan), para que la descarga completa del servidor traiga las mismas que la pantalla
 function visibleColsParam() {

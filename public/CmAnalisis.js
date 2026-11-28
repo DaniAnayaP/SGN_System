@@ -1649,6 +1649,8 @@ function fullDownloadApplies() {
     const table = tableOf(FILE_TABLE);
     return !!(st.data && st.data.truncated && table); // el servidor aplica el filtro y el orden de la pantalla: se baja TODO lo que pasa el filtro
 }
+// los decimales que la persona ve («Encabezados y celdas» › Celdas): el Excel baja lo que se ve
+const lookDecBody = () => { const look = Dashboard.getDataTableLook && Dashboard.getDataTableLook(FILE_TABLE); return look && look.dec !== undefined ? { dec: look.dec } : {}; };
 function buildAnalysisXlsx({ columns, trs }) {
     if (!st.data || !trs) return null;
     const defs = st.data.columns;
@@ -1658,14 +1660,14 @@ function buildAnalysisXlsx({ columns, trs }) {
     const rows = trs.map((tr) => { const row = st.data.rows[Number(tr.dataset.r)] || []; return idx.map((i) => (row[i] === undefined ? null : row[i])); });
     if (fullDownloadApplies()) {
         Dashboard.showToast(t('main.downloadFullPreparing'), 'info');
-        return { url: `${API}/${st.id}/export-xlsx`, body: { full: true, v: fileVersion(), text: st.text || '', keys: idx.map((i) => defs[i].key), tz: new Date().getTimezoneOffset(), lang: lang(), ...(serverCf(st.cf) ? { cf: JSON.stringify(serverCf(st.cf)) } : {}), ...(st.sortSpec ? { sort: dataKeyOf(st.sortSpec.key), dir: st.sortSpec.dir } : {}) } };
+        return { url: `${API}/${st.id}/export-xlsx`, body: { ...lookDecBody(), full: true, v: fileVersion(), text: st.text || '', keys: idx.map((i) => defs[i].key), tz: new Date().getTimezoneOffset(), lang: lang(), ...(serverCf(st.cf) ? { cf: JSON.stringify(serverCf(st.cf)) } : {}), ...(st.sortSpec ? { sort: dataKeyOf(st.sortSpec.key), dir: st.sortSpec.dir } : {}) } };
     }
     // las columnas de comentarios: el Excel lleva todos los comentarios de cada renglón (el servidor los arma con la llave del renglón)
     const commentCols = [];
     idx.forEach((i, pos) => { if (defs[i].kind === 'comment') commentCols.push({ at: pos, col: defs[i].id }); });
     const commentExtra = commentCols.length ? { commentCols, rowKeys: trs.map((tr) => (st.data.keys || [])[Number(tr.dataset.r)] || ''), v: st.extraction && !st.extraction.live ? st.extraction.id : 0, tz: new Date().getTimezoneOffset() } : {};
     const labelOf = (c) => c.label || (c.dim ? t(`main.regDim_${c.dim}`) : c.key);
-    return { url: `${API}/${st.id}/export-xlsx`, body: { columns: idx.map((i) => ({ label: labelOf(defs[i]), ff: defs[i].ff || null, fmt: defs[i].fmt || '', style: defs[i].style || null, decimals: Number.isInteger(defs[i].decimals) ? defs[i].decimals : null })), rows, ...commentExtra } };
+    return { url: `${API}/${st.id}/export-xlsx`, body: { ...lookDecBody(), columns: idx.map((i) => ({ label: labelOf(defs[i]), ff: defs[i].ff || null, fmt: defs[i].fmt || '', style: defs[i].style || null, decimals: Number.isInteger(defs[i].decimals) ? defs[i].decimals : null })), rows, ...commentExtra } };
 }
 function ensureEmpty(tableId, span, key) {
     const tbody = tableOf(tableId).tBodies[0];
