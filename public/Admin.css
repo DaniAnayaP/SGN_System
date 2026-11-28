@@ -11033,6 +11033,10 @@ table.dl-pick td, table.dl-pick th{ cursor: cell; }
 .data-table-group-band-type th.data-table-type-cell[data-type="criterion"]{ --tc: #b57a05; }
 .data-table-group-band-type th.data-table-type-cell[data-type="block"]{ --tc: #2b8456; }
 .data-table-group-band-type th.data-table-type-cell[data-type="comment"]{ --tc: #8a8a8a; }
+.data-table-group-band-type th.data-table-type-cell[data-type="auto"]{ --tc: #6b7280; }
+.data-table-group-band-type th.data-table-type-cell[data-type="captured"]{ --tc: #c4473a; }
+.data-table-group-band-type th.data-table-type-cell[data-type="catalog"]{ --tc: #0f8b8d; }
+.data-table-group-band-type th.data-table-type-cell[data-type="calc"]{ --tc: #9a3cc2; }
 tr.data-table-group-band[hidden]{ display: none; }
 .data-table-bands-menu{ min-width: 17rem; }
 .data-table-bands-row{ display: flex; align-items: center; gap: 0.5rem; cursor: pointer; padding: 0.15rem 0; font-size: 0.82rem; }

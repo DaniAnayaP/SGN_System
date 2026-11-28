@@ -6565,6 +6565,7 @@ function initDataTableColumns(wrapper, index) {
         if (th.dataset.groupTable) groupTableKeys.set(th.dataset.col, th.dataset.groupTable);
         if (th.dataset.typeBand) typeKeys.set(th.dataset.col, th.dataset.typeBand);
     });
+    if (!typeKeys.size) inferFillTypes(table, typeKeys); // las demás tablas: la franja del tipo de llenado sale sola donde se puede decir con seguridad
     // Up to 2 column-group bands (e.g. "Control Interno" and, on Base de
     // Datos Global, which pantalla a column came from) are purely cosmetic
     // <tr>s inserted above the real header — see getHeaderRow's own comment
@@ -7032,6 +7033,23 @@ function renderColumnGroupBand(tableId) {
 }
 // La franja del tipo de columna: UNA celda por columna (no se juntan las vecinas del mismo tipo), con la palabra de su tipo (clave de idioma en data-type-band del encabezado); las que no traen tipo quedan vacías.
 // Las columnas fijas llevan su celda fija también, igual que el encabezado de abajo.
+// El tipo de llenado de las columnas de una tabla que no lo trae escrito (Daniel, 2026-11-28, «pon la franja del tipo en las demás tablas»): Automática = la pone el sistema (las columnas de Control Interno), Capturada = la escribe o la elige
+// una persona (las demás columnas de la pantalla), y la propia pantalla puede decir `data-fill-type="catalog"` (De catálogo: se elige de una lista) o `"calc"` (Calculada) en el <th> de una columna, o `"auto"` / `"captured"` para corregir
+// la de siempre. Solo sale la franja si hay al menos dos tipos distintos (si todo fuera Capturada no diría nada).
+const FILL_TYPE_KEYS = { auto: 'main.anBandAuto', captured: 'main.anBandCaptured', catalog: 'main.anBandCatalog', calc: 'main.anBandCalc' };
+function inferFillTypes(table, typeKeys) {
+    const cells = Array.from(getHeaderRow(table).cells).filter((th) => th.dataset.col && th.dataset.col !== 'actions');
+    const found = new Map();
+    cells.forEach((th) => {
+        let type = FILL_TYPE_KEYS[th.dataset.fillType] ? th.dataset.fillType : null;
+        if (!type && (th.classList.contains('col-system') || th.dataset.group === 'menu.classControlInterno')) type = 'auto';
+        found.set(th.dataset.col, type);
+    });
+    if (![...found.values()].some(Boolean)) return;
+    cells.forEach((th) => { if (!found.get(th.dataset.col) && th.dataset.group) found.set(th.dataset.col, 'captured'); });
+    if (new Set([...found.values()].filter(Boolean)).size < 2) return;
+    found.forEach((type, col) => { if (type) typeKeys.set(col, FILL_TYPE_KEYS[type]); });
+}
 function fillTypeBandRow(bandRow, visualOrder, typeMap, state) {
     bandRow.innerHTML = '';
     const pinnedSet = new Set(state?.visiblePinned || []);
@@ -11067,7 +11085,9 @@ function openColumnLegend(tableId) {
     });
     // los tipos de llenado de la franja de arriba (Análisis): cómo se llena cada columna (Daniel, 2026-11-28, «esto va en simbologías»)
     if (state?.typeKeys && state.typeKeys.size) {
-        [['Base', '#6b7280'], ['Cons', '#2f6fb0'], ['Fx', '#9a3cc2'], ['Criterion', '#b57a05'], ['Block', '#2b8456'], ['Comment', '#8a8a8a']].forEach(([key, color]) => {
+        const present = new Set(Array.from(state.typeKeys.values()).map((k) => k.replace(/^main\.anBand/, '')));
+        [['Auto', '#6b7280'], ['Captured', '#c4473a'], ['Catalog', '#0f8b8d'], ['Calc', '#9a3cc2'], ['Base', '#6b7280'], ['Cons', '#2f6fb0'], ['Fx', '#9a3cc2'], ['Criterion', '#b57a05'], ['Block', '#2b8456'], ['Comment', '#8a8a8a']].forEach(([key, color]) => {
+            if (!present.has(key)) return;
             columnLegendList.appendChild(buildLegendRow(color, `${t('main.bandsRowType')}: ${t(`main.anBand${key}`)}`, t(`main.anBandDesc${key}`)));
         });
     }

@@ -2340,6 +2340,14 @@
     "bandsRowType": "Tipo de llenado",
     "bandsRowOrigin": "Origen",
     "bandsRowClass": "Clasificación",
+    "anBandAuto": "Automática",
+    "anBandCaptured": "Capturada",
+    "anBandCatalog": "De catálogo",
+    "anBandCalc": "Calculada",
+    "anBandDescAuto": "La pone el sistema (fecha, usuario, módulo, centro de costos, registro único…).",
+    "anBandDescCaptured": "La escribe o la elige una persona al registrar.",
+    "anBandDescCatalog": "Se elige de una lista (un catálogo).",
+    "anBandDescCalc": "El sistema la calcula a partir de otras columnas.",
     "dlSecLines": "Líneas",
     "dlBrand": "Logo de la compañía",
     "dlLnWhere": "Dónde",
@@ -10977,7 +10985,7 @@
       "example": "2 ocultas ▾ → Mostrar IVA"
     },
     "anTypeBand": {
-      "what": "La franja de hasta arriba dice cómo se llena cada columna: Del registro (las del registro base), Consultada (se extrae de otro registro o archivo), Fórmula (se calcula con una operación), Criterio (sí o no según una condición), Bloque (calcula sobre un grupo de columnas: la combinada) o Comentarios (lo escribes tú). Las columnas vecinas del mismo tipo se juntan en una sola celda con su cuenta.",
+      "what": "La franja de hasta arriba dice cómo se llena cada columna. En Análisis: Del registro (las del registro base), Consultada (se extrae de otro registro o archivo), Fórmula (se calcula con una operación), Criterio (sí o no según una condición), Bloque (calcula sobre un grupo de columnas: la combinada) o Comentarios (lo escribes tú). En las demás tablas: Automática (la pone el sistema, como las columnas de Control Interno), Capturada (la escribe o la elige una persona), De catálogo (se elige de una lista) o Calculada (el sistema la calcula). Las columnas vecinas del mismo tipo se juntan en una sola celda con su cuenta.",
       "example": "Del registro · 6 | Consultada · 2 | Fórmula | Criterio | Bloque | Comentarios"
     },
     "bandsToggle": {
