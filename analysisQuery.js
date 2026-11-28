@@ -45,12 +45,14 @@ function select(rows, parsed, lang) {
     }
     return idx;
 }
-// Los valores distintos de una columna (como los muestra el filtro: el texto, o el número tal cual) para la lista de casillas; con más de MAX_VALUES no se manda la lista.
+// Los valores distintos de una columna (como los muestra el filtro: el texto, o el número tal cual) para la lista de casillas; con más de MAX_VALUES no se ofrece la lista completa (complete: false), pero sí llegan los primeros
+// MAX_VALUES: la pantalla no los dibuja, solo los usa para saber de qué tipo es la columna (con números el filtro ofrece «Desde–Hasta»), igual que Registros de tabla libre y Mensual.
 function distinct(rows, at, lang) {
     const seen = new Set();
-    for (let i = 0; i < rows.length; i += 1) { seen.add(flex.shownOf(rows[i][at])); if (seen.size > MAX_VALUES) return { values: [], complete: false }; }
+    let complete = true;
+    for (let i = 0; i < rows.length; i += 1) { seen.add(flex.shownOf(rows[i][at])); if (seen.size > MAX_VALUES) { complete = false; break; } }
     const collator = new Intl.Collator(lang === 'en' ? 'en' : 'es', { sensitivity: 'base', numeric: true });
-    return { values: [...seen].sort((a, b) => collator.compare(a, b)), complete: true };
+    return { values: [...seen].slice(0, MAX_VALUES).sort((a, b) => collator.compare(a, b)), complete };
 }
 // La búsqueda en la lista de valores de una columna con demasiados valores distintos para ofrecer toda la lista: los que cumplen lo escrito (ver flexRegistries.searchValues).
 function search(rows, at, mode, text, lang) {
