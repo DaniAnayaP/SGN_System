@@ -552,7 +552,24 @@ function parseColumnFilter(raw, lang = 'es') {
     return { filter: { conditions, periods, lang, matches } };
 }
 
+// El acomodo ORIGINAL de las columnas de un registro (Daniel, 2026-11-28): { order, hidden, pinned (hasta 4), widths } con las llaves ESTABLES de las columnas (las de siempre: unidad, codigo… y los periodos p_2025_01; en una tabla libre, el id estable de cada columna),
+// no la posición. undefined si no trae ninguna columna.
+const LAYOUT_KEY_RE = /^[A-Za-z0-9_:.-]{1,80}$/;
+const MAX_LAYOUT_COLS = 400;
+function cleanLayout(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+    const keys = (v) => (Array.isArray(v) ? [...new Set(v.filter((k) => typeof k === 'string' && LAYOUT_KEY_RE.test(k)))].slice(0, MAX_LAYOUT_COLS) : []);
+    const order = keys(raw.order);
+    if (!order.length) return undefined;
+    const widths = {};
+    if (raw.widths && typeof raw.widths === 'object' && !Array.isArray(raw.widths)) {
+        Object.entries(raw.widths).slice(0, MAX_LAYOUT_COLS).forEach(([k, w]) => { const n = Number(w); if (LAYOUT_KEY_RE.test(k) && Number.isFinite(n) && n >= 40 && n <= 2000) widths[k] = Math.round(n); });
+    }
+    return { order, hidden: keys(raw.hidden), pinned: keys(raw.pinned).slice(0, 4), widths };
+}
+
 module.exports = {
+    cleanLayout,
     parseColumnFilter, columnInfo, shownDim, shownPeriod,
     REGISTRIES, registryOf, DIMS, KEY_DIMS, MAX_DATA_ROWS, MAX_ISSUES, BATCH_ROWS,
     fold, parsePeriodHeader, parseDayText, periodOfValueName, nextMonth, periodLabel,

@@ -412,9 +412,33 @@ function setupFlexFormat(table, body) {
         th.appendChild(btn);
     });
 }
+// ---- el acomodo ORIGINAL de las columnas (Daniel, 2026-11-28, «sí, hazlo así»): uno por registro, con el que se abre para quien no se haya acomodado nada; lo cambia quien puede cambiar el registro. Se guarda con la llave ESTABLE de cada columna
+// (en una tabla libre, su sid; en los demás, la misma de siempre) porque la llave de la pantalla de una tabla libre es su posición y cambia cuando llegan columnas nuevas. ----
+const layoutKeyMaps = () => {
+    const body = st.data;
+    if (!body || !isFlex(body)) return { toStable: (k) => k, toScreen: (k) => k };
+    const sidOf = new Map(body.columns.map((c) => [c.key, c.sid]));
+    const keyOf = new Map(body.columns.map((c) => [c.sid, c.key]));
+    return { toStable: (k) => sidOf.get(k) || null, toScreen: (k) => keyOf.get(k) || null };
+};
+function mapLayout(layout, convert) {
+    if (!layout) return null;
+    const list = (v) => (Array.isArray(v) ? v.map(convert).filter(Boolean) : []);
+    const widths = {};
+    Object.entries(layout.widths || {}).forEach(([k, w]) => { const key = convert(k); if (key) widths[key] = w; });
+    return { order: list(layout.order), hidden: list(layout.hidden), pinned: list(layout.pinned), widths };
+}
+async function saveOriginalLayout(layout) {
+    const stable = layout ? mapLayout(layout, layoutKeyMaps().toStable) : null;
+    const res = await fetch(`${API}/${encodeURIComponent(st.key)}/layout`, { method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: stable }) });
+    if (!res.ok) throw new Error('layout failed');
+    const out = await res.json();
+    st.layout = out.layout || null;
+}
 function drawData() {
     const body = st.data;
     if (!body) return;
+    st.layout = body.layout || null;
     const wrapper = wrapperOf(DATA_TABLE);
     const flex = isFlex(body);
     st.numCols = new Set(flex ? body.columns.filter((c) => c.num).map((c) => c.key) : body.periods.map(periodKey)); // las columnas con números (los cálculos de suma, promedio… de la fila de totales)
@@ -425,6 +449,11 @@ function drawData() {
     st.drawn = 0;
     drawRows(FIRST_ROWS);
     ensureEmpty(DATA_TABLE, flex ? body.columns.length : DIM_COLUMNS.length + body.periods.length);
+    // el acomodo de columnas es POR REGISTRO (antes todos los registros compartían el mismo) y trae su acomodo ORIGINAL: va antes de iniciar las columnas, que es cuando se aplica
+    if (first) {
+        wrapper.dataset.layoutScope = String(st.key || '');
+        if (Dashboard.registerOriginalLayout) Dashboard.registerOriginalLayout(DATA_TABLE, { get: () => mapLayout(st.layout, layoutKeyMaps().toScreen), canEdit: () => !!st.canCreateRegistry, save: saveOriginalLayout });
+    }
     if (first && Dashboard.initDataTableColumns) Dashboard.initDataTableColumns(wrapper, 0);
     // el tipo de columna (Llave, Dato, Columna nueva) va ARRIBA y la clasificación que puso la persona (nombre y color) debajo, pegada al encabezado (Daniel, 2026-11-28; antes era al revés): es el orden natural de las dos bandas del motor de tablas
     if (first && Dashboard.registerServerFilteredTable) Dashboard.registerServerFilteredTable(DATA_TABLE, { onChange: (spec) => { st.cf = spec; refreshData(); }, getValues: fetchColumnValues });

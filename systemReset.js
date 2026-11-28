@@ -53,6 +53,7 @@ const TABLES = {
     manual_flex_fills: { action: WIPE, group: 'captures' },
     manual_registry_defs: { action: WIPE, group: 'captures' },
     manual_registry_obsolete: { action: WIPE, group: 'captures' },
+    manual_registry_layouts: { action: WIPE, group: 'captures' },
     manual_registry_formats: { action: WIPE, group: 'captures' },
     manual_registry_migrations: { action: WIPE, group: 'captures' },
     manual_analyses: { action: WIPE, group: 'captures' },

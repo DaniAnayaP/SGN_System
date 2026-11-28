@@ -83,7 +83,7 @@ const {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
-    listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete, getRegistryMigration, createRegistryMigration, updateRegistryMigration,
+    listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete, getRegistryLayout, setRegistryLayout, getRegistryMigration, createRegistryMigration, updateRegistryMigration,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources, ANALYSIS_COMMENT_MAX, addAnalysisComment, listAnalysisComments, analysisCommentsMap, snapshotAnalysisComments, extractionCommentsMap, listExtractionComments,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, MR_SCREEN,
@@ -7383,6 +7383,23 @@ function regMigrationNow(clientId, isTestAccount, key) {
     }
     return migration;
 }
+// El acomodo ORIGINAL de las columnas de un registro (Daniel, 2026-11-28): con el que se abre para quien no se haya acomodado nada. Lo cambia quien puede cambiar el registro (el mismo permiso de «Agregar nuevo registro»);
+// { layout: null } lo quita. Vale para los de siempre y para los agregados; el registro lo trae en su /data.
+app.put('/api/business/manual-registries/:key/layout', requireAuth, (req, res) => {
+    const registry = regRegistry(req, res);
+    if (!registry) return;
+    if (!regAbilities(req).canCreateRegistry) return regForbidden(res);
+    const { clientId, isTestAccount } = req.user;
+    const raw = req.body ? req.body.layout : undefined;
+    const clearing = raw === null || raw === undefined;
+    const layout = clearing ? undefined : manualRegistries.cleanLayout(raw);
+    if (!clearing && !layout) return res.status(400).json({ code: 'BAD_LAYOUT', message: 'El acomodo no es válido.' });
+    const had = !!getRegistryLayout(clientId, isTestAccount, registry.key);
+    setRegistryLayout(clientId, isTestAccount, registry.key, layout || null, changedByLabel(req));
+    logTableChange({ clientId, tableKey: REG_TABLE, recordId: registry.defId || 0, recordLabel: registry.name || registry.key, action: 'update', fieldKey: 'main.anAcomodoOriginal', oldValue: had ? 'definido' : '', newValue: layout ? 'definido' : '', changedBy: changedByLabel(req) });
+    res.set('Cache-Control', 'no-store');
+    res.json({ layout: layout || null });
+});
 app.get('/api/business/manual-registries/:key/migration', requireAuth, (req, res) => {
     const registry = regRegistry(req, res);
     if (!registry) return;
@@ -7466,7 +7483,7 @@ app.get('/api/business/manual-registries/:key/data', requireAuth, (req, res) => 
     res.set('Cache-Control', 'no-store');
     res.json({
         registry: { key: registry.key, kind: registry.kind, nameKey: registry.nameKey, name: registry.name, valueName: registry.valueName, custom: registry.custom, status: registry.status }, periods: registryPeriods(clientId, isTestAccount, registry.key), lastLoad: registryLastLoad(clientId, isTestAccount, registry.key),
-        rows, total, truncated: total > rows.length, ...regAbilities(req),
+        rows, total, truncated: total > rows.length, layout: getRegistryLayout(clientId, isTestAccount, registry.key), ...regAbilities(req),
     });
 });
 // Los valores distintos de una columna de la tabla de datos (los de TODO el registro) para la lista de su filtro; con demasiados valores solo se avisa (complete: false) y el filtro ofrece escribir.

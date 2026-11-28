@@ -1276,6 +1276,20 @@ db.exec(`
     );
 `);
 
+// El ACOMODO ORIGINAL de las columnas de un registro (Daniel, 2026-11-28): con el que se abre el registro para quien no se haya acomodado nada. Uno por cliente y registro (los de siempre y los agregados);
+// guarda { order, hidden, pinned, widths } con las llaves estables de las columnas (ver manualRegistries.cleanLayout).
+db.exec(`
+    CREATE TABLE IF NOT EXISTS manual_registry_layouts (
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data INTEGER NOT NULL DEFAULT 0,
+        registry_key TEXT NOT NULL,
+        layout_json  TEXT NOT NULL,
+        updated_by   TEXT NOT NULL DEFAULT '',
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (client_id, is_test_data, registry_key)
+    );
+`);
+
 // Cargas Manuales › Análisis Registros Manuales (Daniel, 2026-11-25): un análisis junta uno o dos registros por unidad + código; «Extraer» saca un ARCHIVO propio (una versión con su fecha) que es una COPIA: no cambia aunque después cambie un registro.
 // Los análisis y las versiones nunca se borran: un análisis se desactiva y una versión se anula.
 db.exec(`
@@ -5613,6 +5627,17 @@ function setRegistryObsolete(clientId, forTestAccount, key, on, byLabel) {
     const lane = forTestAccount ? 1 : 0;
     if (on) db.prepare('INSERT OR REPLACE INTO manual_registry_obsolete (client_id, is_test_data, registry_key, marked_by) VALUES (?, ?, ?, ?)').run(clientId, lane, key, byLabel || '');
     else db.prepare('DELETE FROM manual_registry_obsolete WHERE client_id = ? AND is_test_data = ? AND registry_key = ?').run(clientId, lane, key);
+}
+// El acomodo original de un registro: null si no tiene; layout = null lo quita.
+function getRegistryLayout(clientId, forTestAccount, key) {
+    const row = db.prepare('SELECT layout_json FROM manual_registry_layouts WHERE client_id = ? AND is_test_data = ? AND registry_key = ?').get(clientId, forTestAccount ? 1 : 0, key);
+    if (!row) return null;
+    try { return JSON.parse(row.layout_json); } catch { return null; }
+}
+function setRegistryLayout(clientId, forTestAccount, key, layout, byLabel) {
+    const lane = forTestAccount ? 1 : 0;
+    if (layout) db.prepare("INSERT OR REPLACE INTO manual_registry_layouts (client_id, is_test_data, registry_key, layout_json, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))").run(clientId, lane, key, JSON.stringify(layout), byLabel || '');
+    else db.prepare('DELETE FROM manual_registry_layouts WHERE client_id = ? AND is_test_data = ? AND registry_key = ?').run(clientId, lane, key);
 }
 // ---- pasar un registro al tipo único (ver arriba) ----
 function mapRegistryMigration(row) {
@@ -23488,7 +23513,7 @@ module.exports = {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
-    listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete, getRegistryMigration, createRegistryMigration, updateRegistryMigration,
+    listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete, getRegistryLayout, setRegistryLayout, getRegistryMigration, createRegistryMigration, updateRegistryMigration,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources, ANALYSIS_COMMENT_MAX, addAnalysisComment, listAnalysisComments, analysisCommentsMap, snapshotAnalysisComments, extractionCommentsMap, listExtractionComments,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, reconsiderRegistryLoad, deleteFlexLoadData, flexConfigHistory, diskSpace, getRegistryFormat, setRegistryFormat, clearRegistryFormat, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexConfigLoads, updateFlexConfigs, listAnalysisDesigns, setAnalysisDesignRaw, registrySignature, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,
