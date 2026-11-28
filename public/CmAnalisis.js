@@ -878,7 +878,7 @@ function openAddedDialog(editId) {
     const html = `<h3>${esc(t(editing ? 'main.anAddedEditTitle' : 'main.anAddedTitle'))}</h3>
         <div class="an-f2">
             <div><label for="an-ad-name">${esc(t('main.anColLabel'))}</label><input type="text" id="an-ad-name" maxlength="80" autocomplete="off" value="${esc(draft.name)}"></div>
-            <div><label for="an-ad-cls">${esc(t('main.anAddedClass'))}</label><input type="text" id="an-ad-cls" maxlength="40" autocomplete="off" list="an-ad-cls-list" placeholder="${esc(t('main.anAddedClassNone'))}" value="${esc(draft.cls)}"><datalist id="an-ad-cls-list">${[...new Set(added.map((a) => a.cls).filter(Boolean))].map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
+            <div><label for="an-ad-cls">${esc(t('main.anAddedClass'))}</label><input type="text" id="an-ad-cls" maxlength="40" autocomplete="off" list="an-ad-cls-list" placeholder="${esc(t('main.anAddedClassNone'))}" value="${esc(draft.cls)}"><datalist id="an-ad-cls-list">${classKnown().map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
             <div><label for="an-ad-dec">${esc(t('main.anAddedFormat'))}</label><select id="an-ad-dec"><option value="">${esc(t('main.anFmtAuto'))}</option>${[0, 1, 2, 3, 4].map((n) => `<option value="${n}">${esc(t('main.anFmtDecimals', { n }))}</option>`).join('')}</select></div>
         </div>
         <p class="reg-field-label">${esc(t('main.anAddedSteps'))}</p>
@@ -1046,7 +1046,7 @@ function openBlockDialog(editId) {
     const html = `<h3>${esc(t(editing ? 'main.anBlockEditTitle' : 'main.anBlockTitle'))}</h3>
         <div class="an-f2">
             <div><label for="an-bk-name">${esc(t('main.anColLabel'))}</label><input type="text" id="an-bk-name" maxlength="80" autocomplete="off" value="${esc(draft.name)}"></div>
-            <div><label for="an-bk-cls">${esc(t('main.anAddedClass'))}</label><input type="text" id="an-bk-cls" maxlength="40" autocomplete="off" list="an-bk-cls-list" placeholder="${esc(t('main.anAddedClassNone'))}" value="${esc(draft.cls)}"><datalist id="an-bk-cls-list">${[...new Set(added.map((a) => a.cls).filter(Boolean))].map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
+            <div><label for="an-bk-cls">${esc(t('main.anAddedClass'))}</label><input type="text" id="an-bk-cls" maxlength="40" autocomplete="off" list="an-bk-cls-list" placeholder="${esc(t('main.anAddedClassNone'))}" value="${esc(draft.cls)}"><datalist id="an-bk-cls-list">${classKnown().map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
             <div><label for="an-bk-dec">${esc(t('main.anAddedFormat'))}</label><select id="an-bk-dec"><option value="">${esc(t('main.anFmtAuto'))}</option>${[0, 1, 2, 3, 4].map((n) => `<option value="${n}">${esc(t('main.anFmtDecimals', { n }))}</option>`).join('')}</select></div>
         </div>
         <p class="reg-field-label">${esc(t('main.anBlockWhat'))}</p>
@@ -1162,7 +1162,7 @@ function openCriterionDialog(editId) {
     const html = `<h3>${esc(t(editing ? 'main.anCriterionEditTitle' : 'main.anCriterionTitle'))}</h3>
         <div class="an-f2">
             <div><label for="an-cr-name">${esc(t('main.anColLabel'))}</label><input type="text" id="an-cr-name" maxlength="80" autocomplete="off" value="${esc(draft.name)}"></div>
-            <div><label for="an-cr-cls">${esc(t('main.anAddedClass'))}</label><input type="text" id="an-cr-cls" maxlength="40" autocomplete="off" list="an-cr-cls-list" placeholder="${esc(t('main.anAddedClassNone'))}" value="${esc(draft.cls)}"><datalist id="an-cr-cls-list">${[...new Set(added.map((a) => a.cls).filter(Boolean))].map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
+            <div><label for="an-cr-cls">${esc(t('main.anAddedClass'))}</label><input type="text" id="an-cr-cls" maxlength="40" autocomplete="off" list="an-cr-cls-list" placeholder="${esc(t('main.anAddedClassNone'))}" value="${esc(draft.cls)}"><datalist id="an-cr-cls-list">${classKnown().map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist></div>
             <div><label for="an-cr-dec">${esc(t('main.anAddedFormat'))}</label><select id="an-cr-dec"><option value="">${esc(t('main.anFmtAuto'))}</option>${[0, 1, 2, 3, 4].map((n) => `<option value="${n}">${esc(t('main.anFmtDecimals', { n }))}</option>`).join('')}</select></div>
         </div>
         <p class="reg-field-label">${esc(t('main.anRules'))}</p>
