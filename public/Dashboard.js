@@ -6323,10 +6323,12 @@ function initDataTableColumns(wrapper, index) {
     const labels = {};
     const groupKeys = new Map();
     const groupTableKeys = new Map();
+    const typeKeys = new Map(); // el tipo de cada columna, escrito con palabras en una franja más (Análisis: Operación, Criterio, Bloque, Comentarios; Daniel, 2026-11-27)
     Array.from(getHeaderRow(table).cells).forEach((th) => {
         labels[th.dataset.col] = th.textContent.trim();
         if (th.dataset.group) groupKeys.set(th.dataset.col, th.dataset.group);
         if (th.dataset.groupTable) groupTableKeys.set(th.dataset.col, th.dataset.groupTable);
+        if (th.dataset.typeBand) typeKeys.set(th.dataset.col, th.dataset.typeBand);
     });
     // Up to 2 column-group bands (e.g. "Control Interno" and, on Base de
     // Datos Global, which pantalla a column came from) are purely cosmetic
@@ -6346,7 +6348,8 @@ function initDataTableColumns(wrapper, index) {
     // to render into once it does.
     const wantsClassificationBand = groupKeys.size > 0 || wrapper.dataset.forceClassificationBand === '1' || !!TABLE_GRANT_PATHS[tableId];
     const wantsTableBand = groupTableKeys.size > 0;
-    if (wantsClassificationBand || wantsTableBand) {
+    const wantsTypeBand = typeKeys.size > 0;
+    if (wantsClassificationBand || wantsTableBand || wantsTypeBand) {
         const headerRow = getHeaderRow(table);
         headerRow.classList.add('data-table-header-row');
         if (wantsClassificationBand) {
@@ -6357,6 +6360,12 @@ function initDataTableColumns(wrapper, index) {
         if (wantsTableBand) {
             const band = document.createElement('tr');
             band.className = 'data-table-group-band data-table-group-band-table';
+            table.tHead.insertBefore(band, headerRow);
+        }
+        if (wantsTypeBand) {
+            // la franja del tipo va pegada al encabezado, debajo de las otras dos
+            const band = document.createElement('tr');
+            band.className = 'data-table-group-band data-table-group-band-type';
             table.tHead.insertBefore(band, headerRow);
         }
     }
@@ -6384,7 +6393,7 @@ function initDataTableColumns(wrapper, index) {
     });
     const savedWidthMode = readWidthMode(tableId);
     dataTableColumnState.set(tableId, {
-        table, wrapper, colgroup, columnKeys, labels, config, groupKeys, groupTableKeys, naturalWidths,
+        table, wrapper, colgroup, columnKeys, labels, config, groupKeys, groupTableKeys, typeKeys, naturalWidths,
         widthMode: savedWidthMode ? savedWidthMode.mode : null, widthsBefore: savedWidthMode ? savedWidthMode.before : null, noStretch: !!savedWidthMode,
         sized: !hadNoStoredLayout && readSized(tableId), // sin acomodo guardado ya no hay anchos «a mano» que respetar
         look: readLook(tableId),
@@ -6666,6 +6675,26 @@ function renderColumnGroupBand(tableId) {
     if (tableBandRow) fillBandRow(tableBandRow, visualOrder, state.groupTableKeys || new Map(), null, state, true, tableId); // el color propio solo lo trae una clasificación registrada (setColumnClassMeta); las demás bandas de tabla siguen igual
     const classBandRow = state.table.tHead.querySelector('tr.data-table-group-band-classification');
     if (classBandRow) fillBandRow(classBandRow, visualOrder, state.groupKeys || new Map(), 'main.columnClassPending', state, true, tableId);
+    const typeBandRow = state.table.tHead.querySelector('tr.data-table-group-band-type');
+    if (typeBandRow) fillTypeBandRow(typeBandRow, visualOrder, state.typeKeys || new Map(), state);
+}
+// La franja del tipo de columna: UNA celda por columna (no se juntan las vecinas del mismo tipo), con la palabra de su tipo (clave de idioma en data-type-band del encabezado); las que no traen tipo quedan vacías.
+// Las columnas fijas llevan su celda fija también, igual que el encabezado de abajo.
+function fillTypeBandRow(bandRow, visualOrder, typeMap, state) {
+    bandRow.innerHTML = '';
+    const pinnedSet = new Set(state?.visiblePinned || []);
+    const lastPinnedKey = pinnedSet.size ? state.visiblePinned[state.visiblePinned.length - 1] : null;
+    visualOrder.forEach((key) => {
+        const th = document.createElement('th');
+        const labelKey = typeMap.get(key);
+        if (labelKey) { th.textContent = t(labelKey); th.className = 'data-table-group-band-cell data-table-type-cell'; th.dataset.helpKey = 'anTypeBand'; } else th.className = 'data-table-group-band-cell-empty';
+        if (pinnedSet.has(key)) {
+            th.classList.add('data-table-col-pinned');
+            if (key === lastPinnedKey) th.classList.add('data-table-col-pinned-edge');
+            th.style.left = `${state.pinnedLeft[key]}px`;
+        }
+        bandRow.appendChild(th);
+    });
 }
 
 function wireModalDismiss(overlay, onClose) {

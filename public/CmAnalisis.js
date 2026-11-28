@@ -1371,6 +1371,7 @@ function buildHeader(tableId, columns) {
         th.dataset.col = c.col;
         if (c.group) th.dataset.group = c.group;
         if (c.groupTable) th.dataset.groupTable = c.groupTable; // la clasificación de una columna agregada (banda de arriba, con su color)
+        if (c.typeBand) th.dataset.typeBand = c.typeBand; // el tipo de una columna agregada (Operación, Criterio, Bloque, Comentarios), una palabra por columna en la franja pegada al encabezado
         if (c.labelKey) { th.dataset.i18n = c.labelKey; th.textContent = t(c.labelKey); } else th.textContent = c.label;
         if (c.title) th.title = c.title; // en una columna «la más reciente»: de qué carga son los números de hoy
         if (c.cls) th.className = c.cls;
@@ -1770,7 +1771,8 @@ async function loadFile() {
                 if (c.group === 'added') {
                     let groupTable;
                     if (c.cls) { groupTable = `ancls:${foldCls(c.cls).replace(/\s+/g, '-')}`; if (Dashboard.setColumnClassMeta) Dashboard.setColumnClassMeta(groupTable, c.cls, window.AnalysisKit.classColor(c.color)); }
-                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: `${c.kind === 'criterion' ? '?' : (c.kind === 'comment' ? '✎' : (c.kind === 'block' ? 'Σ' : 'ƒ'))} ${c.label}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
+                    // el tipo de la columna ya no va como una letra pegada al nombre: sube a la franja de arriba con su palabra (Daniel, 2026-11-27, «la A»)
+                    return { col: colKeyOf(c.key), group: 'main.anGroupAdded', groupTable, label: c.label, typeBand: `main.anType${c.kind === 'criterion' ? 'Criterion' : (c.kind === 'comment' ? 'Comment' : (c.kind === 'block' ? 'Block' : 'Op'))}`, cls: c.kind === 'criterion' ? 'an-added' : 'an-added col-num' };
                 }
                 // una columna consultada con clasificación va bajo su propia banda (nombre y color de la persona); sin clasificación, bajo «Consultadas» como siempre
                 let consBand;

@@ -3278,6 +3278,16 @@
         text-transform: none;
         letter-spacing: 0;
     }
+    /* Franja del tipo de columna (Dashboard.js: fillTypeBandRow; Análisis: Operación, Criterio, Bloque, Comentarios): una celda por columna con su palabra, pegada al encabezado. */
+    .data-table-group-band-type th.data-table-type-cell{
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        letter-spacing: 0.05em;
+        background-color: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface));
+        color: color-mix(in srgb, var(--color-accent) 75%, var(--color-text-primary));
+    }
     /* The 13 "Control Interno" system columns (and future classifications)
        get a tenue tint in both their header and body cells, distinguishing
        them from a table's own pre-existing columns at a glance. */

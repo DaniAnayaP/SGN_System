@@ -5824,6 +5824,10 @@
     "anAddedRemove": "Remove this column",
     "anAddedRemoveConfirm": "Remove the column “{name}”? The data in the records does not change.",
     "anGroupAdded": "Added",
+    "anTypeOp": "Operation",
+    "anTypeCriterion": "Criterion",
+    "anTypeBlock": "Block",
+    "anTypeComment": "Comments",
     "anErr_ADDED_NAME": "Give the column a name.",
     "anErr_ADDED_STEPS": "Check the steps: each one needs its column or its value.",
     "anErr_ADDED_KIND": "That kind of column cannot be added yet.",
@@ -10737,6 +10741,10 @@
     "dataTableTotals": {
       "what": "The strip at the bottom adds up or counts what the filter left, even if not all of it is on screen. Click a column's cell and the figure shows right away (sum on number columns, count on text ones); hover the figure to see which calculation it is and how many rows it covers. For another calculation, click the figure (or right-click an empty cell): sum, average, minimum or maximum (number columns) or count (with data, empty, without repeats, the ones that appear only once, or only the ones that match what you type, for example the ones that start with \"A\"). At the end of the menu there are shortcuts: sum all number columns and remove all calculations. When you change the filter, the numbers are recalculated. What you pick is kept in your browser.",
       "example": "Filter Sub inventory = FAR → in the Exist column I tap \"Sum\" and see the total stock of FAR."
+    },
+    "anTypeBand": {
+      "what": "The strip above the name says what kind of column each added column is: Operation (step-by-step math), Criterion (if… then…), Block (several columns together) or Comments (you write them). Columns that come from the files do not have it: the strip above already says where they come from.",
+      "example": "“Total Inventory Value” is an Operation: cost × stock."
     },
     "anSelect": {
       "what": "Check several columns to remove or edit them together: classification and format (number, cells, header) apply right away; how to combine values and removing wait for “Refresh”. Shift + click checks a range at once.",
