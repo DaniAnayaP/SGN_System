@@ -68,7 +68,9 @@ const NOT_KEY_WORDS = /(type|tipo|desc|name|nombre|date|fecha|expir|period)/;
 const VALUE_WORDS = /(qty|cantidad|existencia|stock|on hand|importe|costo|cost|monto|total)/;
 function suggestRole(text, rawValue, sampleValues) {
     if (rawValue instanceof Date || manual.parsePeriodHeader(rawValue)) return { role: 'value', agg: 'sum', stampName: false };
-    const stampName = !nameHasDate(text); // si el título ya trae su fecha, no se le agrega la de la carga
+    // «Con día y hora en el nombre» viene APAGADA (Daniel, 2026-11-27, «apágala por omisión»): la columna se llama como la persona la nombró; quien quiere una columna nueva por cada carga (existencias del día) marca la casilla,
+    // y de ahí en adelante el registro la recuerda (una columna que ya tuvo carga toma lo que se eligió entonces: ver prefillHeaders).
+    const stampName = false;
     const f = foldText(text);
     const filled = sampleValues.filter((v) => v !== null && v !== undefined);
     const numeric = filled.length > 0 && filled.filter((v) => typeof v === 'number').length / filled.length >= 0.6; // casi todos números (un «n/a» suelto no la desacomoda)

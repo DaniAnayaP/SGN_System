@@ -1239,7 +1239,7 @@ function openFlexLoadModal() {
             const p = h.prefill;
             if (p && p.cls && Number.isInteger(p.color) && s.classColors[foldCls(p.cls)] === undefined) s.classColors[foldCls(p.cls)] = p.color;
             const c = { i: h.index, text: h.text, example: s.info.sample[0] ? s.info.sample[0].values[k] : '', st: 'new', link: '', sug: '', sugState: '', isNew: !!s.info.prevMode,
-                role: p && prevRoles ? p.role : (prevRoles && h.suggest.role === 'key' ? 'data' : h.suggest.role), agg: p && prevRoles && p.agg ? p.agg : h.suggest.agg, stampName: p && prevRoles ? p.stampName !== false : h.suggest.stampName !== false,
+                role: p && prevRoles ? p.role : (prevRoles && h.suggest.role === 'key' ? 'data' : h.suggest.role), agg: p && prevRoles && p.agg ? p.agg : h.suggest.agg, stampName: p && prevRoles ? p.stampName !== false : h.suggest.stampName === true,
                 name: (p && p.name) || h.text, cls: (p && p.cls) || '', wasKey: !!(prevRoles && p && p.role === 'key') };
             if (prevRoles && p && p.role === 'skip') { c.st = 'skip'; c.isNew = false; c.role = h.suggest.role; c.name = h.text; }
             else if (prevRoles && p && known.has(p.name)) { c.st = 'exist'; c.link = p.name; c.isNew = false; }

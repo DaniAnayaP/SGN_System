@@ -10984,10 +10984,11 @@ body[data-active-page="cat-analisis-manuales-lista"] .data-table-zoom[hidden]{ d
 @media (min-width: 601px){
     body[data-active-page="cat-cargas-manuales-registros"] .page-content{ display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.6rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .page-content > *{ flex: 0 0 100%; min-width: 0; order: 10; }
-    body[data-active-page="cat-cargas-manuales-registros"] .page-content > .reg-manage{ order: 1; }
+    body[data-active-page="cat-cargas-manuales-registros"] .page-content > .reg-manage{ order: 1; flex: 1 1 auto; }
     body[data-active-page="cat-cargas-manuales-registros"] .page-content > .reg-row{ display: contents; }
     body[data-active-page="cat-cargas-manuales-registros"] .reg-row > .reg-tabs{ order: 2; flex: 0 0 auto; margin: 0 0 0.7rem; }
-    body[data-active-page="cat-cargas-manuales-registros"] .reg-row > .reg-updated{ order: 2; flex: 1 1 8rem; margin: 0 0 0.7rem; }
+    /* «Última actualización» va en la fila del título del registro, hasta el lado derecho (Daniel, 2026-11-27); si no cabe junto al título y sus botones, baja a su renglón pegada a la derecha */
+    body[data-active-page="cat-cargas-manuales-registros"] .reg-row > .reg-updated{ order: 1; flex: 0 0 auto; margin: 0 0 0.8rem auto; white-space: nowrap; }
     body[data-active-page="cat-cargas-manuales-registros"] .reg-row > .reg-actions{ order: 3; flex: 0 0 auto; margin: 0 0 0.7rem auto; }
     body[data-active-page="cat-cargas-manuales-registros"] .page-content > .data-table-zoom{ order: 4; flex: 0 0 auto; border-bottom: 0; padding-bottom: 0; margin: 0 0 0.7rem; }
     body[data-active-page="cat-cargas-manuales-registros"] .page-content > .filter-bar{ order: 5; }
