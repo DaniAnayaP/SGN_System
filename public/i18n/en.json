@@ -2189,6 +2189,34 @@
     "visClearConfirm": "Leave every column unmarked? Pinned ones are removed too.",
     "visCounts": "Visible {visible} · Pinned {pinned} of {max}",
     "visCountsNoPin": "Visible {visible}",
+    "dualAvailLabel": "Available columns in:",
+    "dualTableLabel": "Table columns",
+    "dualAllClasses": "All classifications",
+    "dualClassOption": "{name} ({n})",
+    "dualAdd": "Add »",
+    "dualRemove": "« Remove",
+    "dualPin": "Pin",
+    "dualUnpin": "Unpin",
+    "dualUp": "Move up",
+    "dualDown": "Move down",
+    "dualGroupPinned": "Pinned",
+    "dualGroupScroll": "Scroll",
+    "dualPinnedCount": "{n} of {max}",
+    "dualFreeSlots": "Drag here or tap “Pin” · {n} left",
+    "dualAvailEmpty": "No columns left to add.",
+    "dualNoMatch": "No column matches.",
+    "dualTableEmpty": "No columns in the table yet: add them from the left.",
+    "dualLimit": "{max} columns are already pinned: unpin one to pin another.",
+    "pinMenuTitle": "Column · {name}",
+    "pinMenuUpTo": "Pin up to here",
+    "pinMenuUpToNote": "Pins this one and those to its left ({n} of {max})",
+    "pinMenuTooMany": "Up to here are {n} columns and only {max} fit",
+    "pinMenuOnly": "Pin only this one",
+    "pinMenuOnlyNote": "Adds to the ones already pinned",
+    "pinMenuAlready": "Already pinned",
+    "pinMenuFull": "{max} are already pinned: unpin one",
+    "pinMenuUnpin": "Unpin this one",
+    "pinMenuUnpinAll": "Unpin all",
     "visPreviewLabel": "Preview — it fills up with whatever you mark Visible or Pinned",
     "filterPanelNoColumns": "There are no columns to filter yet. They show up as soon as the table has them.",
     "visibilityModeHidden": "Hidden",
@@ -2234,7 +2262,7 @@
     "arrangeNameLabel": "Name this layout",
     "arrangeClassHint": "Classification — swipe for more",
     "arrangePreviewLabel": "Preview — fills in as you mark Normal or Pinned",
-    "arrangePreviewCaption": "Drag to reorder right here from the header (⠿) — the list above only decides what is included and what is pinned.",
+    "arrangePreviewCaption": "You can also drag to reorder right here from the header (⠿).",
     "savedSearchAudienceSummaryEmptySaas": "Pick at least one Equipo SaaS member.",
     "fieldRulesBtn": "Fill Order Rules",
     "fieldRulesTitle": "Fill Order Rules",
@@ -3661,12 +3689,12 @@
     "increaseFontSize": "Increase font size",
     "pinColumns": "Pin columns",
     "columnsBtn": "Customize columns",
-    "columnsEditorHint": "Search a column or filter by classification. Mark each one as hidden, visible or pinned (up to 4 pinned); pinned ones can be dragged to reorder.",
-    "pinColumnsHint": "Choose up to 4 columns to pin to the left. Drag to reorder them.",
+    "columnsEditorHint": "Pick columns on the left and move them into the table; pin up to 4 and move them up or down to order them.",
+    "pinColumnsHint": "Choose up to 4 columns and move them to “Pinned” to keep them on the left.",
     "pinColumnsLimitReached": "You can pin up to 4 columns.",
     "pinColumnsOther": "Other columns",
     "columnVisibility": "Show/hide columns",
-    "columnVisibilityHint": "Search a column or filter by classification.",
+    "columnVisibilityHint": "Pick columns on the left to move them into the table, or remove them from it.",
     "columnSearchPlaceholder": "Search column…",
     "columnFilterAll": "All classifications",
     "columnFilterCount": "{count} of {total} columns · {scope}",
@@ -10657,6 +10685,42 @@
     "groupBandDrag": {
       "what": "Drag the name of a classification (the colored strip above the headers) and drop it before or after another column or another classification: all its columns move together, in the order they have. It is the same as dragging a column, but in one go. Pinned columns do not move.",
       "example": "Drag “CHARGES YEAR 2025” before “CHARGES YEAR 2024”"
+    },
+    "dualAvailClass": {
+      "what": "Choose which classification to see the columns that are not in the table yet. The number in parentheses is how many are left in each.",
+      "example": "“Queried from records (42)”"
+    },
+    "dualAvailList": {
+      "what": "The columns that are not in the table (hidden or unmarked). Tap one to pick it; with Ctrl or Shift you pick several. Double-click, Enter or “Add »” moves it into the table; you can also drag it to the list on the right.",
+      "example": "Pick EXISTENCE ADA and EXISTENCE ALM with Ctrl and tap “Add »”"
+    },
+    "dualTableList": {
+      "what": "The columns shown in the table, split into “Pinned” (they stay on the left when you scroll; up to 4 fit) and “Scroll”. Pick one or several and use the buttons, or drag them: to “Pinned”, between others to order them, or to the list on the left to remove them.",
+      "example": "Drag CODE to the “Pinned” group"
+    },
+    "dualAdd": {
+      "what": "Moves the columns picked on the left into the table. They keep their place in the table order and stay picked on the right so you can see them.",
+      "example": "Add »"
+    },
+    "dualRemove": {
+      "what": "Removes the columns picked on the right from the table: they are hidden and go back to the list on the left. If one was pinned, it asks first.",
+      "example": "« Remove"
+    },
+    "dualPin": {
+      "what": "Pins the picked columns: they stay on the left when you scroll the table. Up to 4 fit. It works with the ones on the right and also with the ones on the left (it adds and pins them).",
+      "example": "Pick DESCRIPTION and tap “Pin”"
+    },
+    "dualUnpin": {
+      "what": "Unpins the picked pinned columns: they stay in the table but now scroll with it.",
+      "example": "Unpin"
+    },
+    "dualMove": {
+      "what": "Move the picked columns up or down inside their group (pinned among pinned, the rest among the scrolling ones). The preview below updates right away.",
+      "example": "Pick CODE and tap the up arrow"
+    },
+    "headerPinMenu": {
+      "what": "Right-click a column title (on a phone, hold your finger for half a second): “Pin up to here” pins this column and those to its left, like Excel's “Freeze Panes”; “Pin only this one” adds it to the ones already pinned; “Unpin” removes them. Up to 4 can be pinned.",
+      "example": "Right-click CODE › “Pin up to here”"
     },
     "anRefresh": {
       "what": "Reloads the analysis with what exists today: the data of the records, the formulas and the added columns. ⟳ \"The most recent\" columns move to the newest load; the ones pointing to a specific load do not change. If there are pending column changes (adding, removing or changing), it saves them together before rebuilding. Versions already extracted never change.",

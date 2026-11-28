@@ -2188,6 +2188,34 @@
     "visClearConfirm": "¿Dejar todas las columnas sin marcar? También se quitan las fijas.",
     "visCounts": "Visibles {visible} · Fijas {pinned} de {max}",
     "visCountsNoPin": "Visibles {visible}",
+    "dualAvailLabel": "Columnas disponibles en:",
+    "dualTableLabel": "Columnas de la tabla",
+    "dualAllClasses": "Todas las clasificaciones",
+    "dualClassOption": "{name} ({n})",
+    "dualAdd": "Agregar »",
+    "dualRemove": "« Quitar",
+    "dualPin": "Fijar",
+    "dualUnpin": "Soltar",
+    "dualUp": "Subir",
+    "dualDown": "Bajar",
+    "dualGroupPinned": "Fijas",
+    "dualGroupScroll": "Se desplazan",
+    "dualPinnedCount": "{n} de {max}",
+    "dualFreeSlots": "Arrastra aquí o toca «Fijar» · quedan {n}",
+    "dualAvailEmpty": "No hay columnas por agregar.",
+    "dualNoMatch": "Ninguna columna coincide.",
+    "dualTableEmpty": "Aún no hay columnas en la tabla: agrégalas desde la izquierda.",
+    "dualLimit": "Ya hay {max} columnas fijas: suelta una para fijar otra.",
+    "pinMenuTitle": "Columna · {name}",
+    "pinMenuUpTo": "Fijar hasta aquí",
+    "pinMenuUpToNote": "Fija esta y las de su izquierda ({n} de {max})",
+    "pinMenuTooMany": "Hasta aquí son {n} columnas y solo caben {max}",
+    "pinMenuOnly": "Fijar solo esta",
+    "pinMenuOnlyNote": "Se suma a las que ya están fijas",
+    "pinMenuAlready": "Ya está fija",
+    "pinMenuFull": "Ya hay {max} fijas: suelta una",
+    "pinMenuUnpin": "Soltar esta",
+    "pinMenuUnpinAll": "Soltar todas las fijas",
     "visPreviewLabel": "Vista previa — se va llenando con lo que marques Visible o Fija",
     "filterPanelNoColumns": "Todavía no hay columnas para filtrar. Aparecen en cuanto la tabla las tenga.",
     "visibilityModeHidden": "Oculta",
@@ -2233,7 +2261,7 @@
     "arrangeNameLabel": "Elige el nombre del acomodo",
     "arrangeClassHint": "Clasificación — desliza para ver más",
     "arrangePreviewLabel": "Vista previa — se va llenando con lo que marques Normal o Fija",
-    "arrangePreviewCaption": "El orden se arrastra aquí, directo desde el encabezado (⠿) — la lista de arriba solo decide qué se incluye y qué es fija.",
+    "arrangePreviewCaption": "El orden también se arrastra aquí, directo desde el encabezado (⠿).",
     "savedSearchAudienceSummaryEmptySaas": "Elige al menos un integrante de Equipo SaaS.",
     "fieldRulesBtn": "Reglas de Orden de Llenado",
     "fieldRulesTitle": "Reglas de Orden de Llenado",
@@ -3660,12 +3688,12 @@
     "increaseFontSize": "Aumentar tamaño de letra",
     "pinColumns": "Fijar columnas",
     "columnsBtn": "Personalizar columnas",
-    "columnsEditorHint": "Busca una columna o filtra por clasificación. Marca cada una como oculta, visible o fija (hasta 4 fijas); las fijas se arrastran para reordenarlas.",
-    "pinColumnsHint": "Elige hasta 4 columnas para fijarlas del lado izquierdo. Arrástralas para reordenarlas.",
+    "columnsEditorHint": "Elige columnas a la izquierda y pásalas a la tabla; fija hasta 4 y súbelas o bájalas para ordenarlas.",
+    "pinColumnsHint": "Elige hasta 4 columnas y pásalas a «Fijas» para dejarlas del lado izquierdo.",
     "pinColumnsLimitReached": "Puedes fijar hasta 4 columnas.",
     "pinColumnsOther": "Otras columnas",
     "columnVisibility": "Mostrar/ocultar columnas",
-    "columnVisibilityHint": "Busca una columna o filtra por clasificación.",
+    "columnVisibilityHint": "Elige columnas a la izquierda para pasarlas a la tabla, o quítalas de ella.",
     "columnSearchPlaceholder": "Buscar columna…",
     "columnFilterAll": "Todas las clasificaciones",
     "columnFilterCount": "{count} de {total} columnas · {scope}",
@@ -10656,6 +10684,42 @@
     "groupBandDrag": {
       "what": "Arrastra el nombre de una clasificación (la franja de color sobre los encabezados) y suéltalo antes o después de otra columna o de otra clasificación: se mueven juntas todas sus columnas, en el orden que tienen. Es lo mismo que arrastrar una columna, pero de un jalón. Las columnas fijas no se mueven.",
       "example": "Arrastrar «CARGOS AÑO 2025» antes de «CARGOS AÑO 2024»"
+    },
+    "dualAvailClass": {
+      "what": "Elige de qué clasificación quieres ver las columnas que todavía no están en la tabla. Entre paréntesis dice cuántas faltan en cada una.",
+      "example": "«Consultadas de registros (42)»"
+    },
+    "dualAvailList": {
+      "what": "Las columnas que no están en la tabla (ocultas o sin marcar). Toca una para elegirla; con Ctrl o Mayús eliges varias. Doble clic, Enter o «Agregar »» la pasa a la tabla; también puedes arrastrarla a la lista de la derecha.",
+      "example": "Elegir EXISTENCIA ADA y EXISTENCIA ALM con Ctrl y tocar «Agregar »»"
+    },
+    "dualTableList": {
+      "what": "Las columnas que se ven en la tabla, separadas en «Fijas» (se quedan a la izquierda al deslizar; caben hasta 4) y «Se desplazan». Elige una o varias y usa los botones, o arrástralas: a «Fijas», entre otras para ordenarlas, o a la lista de la izquierda para quitarlas.",
+      "example": "Arrastrar CÓDIGO al grupo «Fijas»"
+    },
+    "dualAdd": {
+      "what": "Pasa a la tabla las columnas elegidas en la lista de la izquierda. Quedan en su lugar del orden de la tabla y elegidas a la derecha, para que las veas.",
+      "example": "Agregar »"
+    },
+    "dualRemove": {
+      "what": "Quita de la tabla las columnas elegidas a la derecha: se ocultan y pasan a la lista de la izquierda. Si alguna estaba fija, pregunta antes.",
+      "example": "« Quitar"
+    },
+    "dualPin": {
+      "what": "Deja fijas las columnas elegidas: se quedan a la izquierda cuando deslizas la tabla. Caben hasta 4. Sirve con las de la derecha y también con las de la izquierda (las agrega y las fija).",
+      "example": "Elegir DESCRIPCIÓN y tocar «Fijar»"
+    },
+    "dualUnpin": {
+      "what": "Suelta las columnas fijas elegidas: siguen en la tabla pero ya se desplazan con ella.",
+      "example": "Soltar"
+    },
+    "dualMove": {
+      "what": "Suben o bajan las columnas elegidas dentro de su grupo (las fijas entre las fijas, las demás entre las que se desplazan). La vista previa de abajo se actualiza al instante.",
+      "example": "Elegir CÓDIGO y tocar la flecha hacia arriba"
+    },
+    "headerPinMenu": {
+      "what": "Clic derecho sobre el título de una columna (en el celular, mantén el dedo medio segundo): «Fijar hasta aquí» deja fijas esta columna y las de su izquierda, como «Inmovilizar paneles» de Excel; «Fijar solo esta» la suma a las que ya están fijas; «Soltar» las quita. Caben hasta 4 fijas.",
+      "example": "Clic derecho en CÓDIGO › «Fijar hasta aquí»"
     },
     "anRefresh": {
       "what": "Vuelve a cargar el análisis con lo que hay hoy: los datos de los registros, las fórmulas y las columnas agregadas. Las columnas ⟳ «La más reciente» pasan a la carga más nueva; las que apuntan a una carga concreta no cambian. Si hay cambios de columnas sin aplicar (agregar, quitar o cambiar), los guarda juntos antes de volver a armar. Las versiones ya extraídas no cambian nunca.",

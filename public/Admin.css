@@ -4941,7 +4941,7 @@ body.dark-mode .admin-save-status{
    la vista previa y los botones de abajo nunca queden cortados en una
    pantalla baja -- solo la lista de columnas tiene su propia altura tope. */
 .data-table-arrange-panel{
-    max-width: 38rem;
+    max-width: 46rem;
 }
 .data-table-arrange-panel h3{
     display: flex;
@@ -5509,6 +5509,215 @@ th.data-table-group-band-draggable:active{ cursor: grabbing; }
     gap: 0.25rem;
 }
 .data-table-arrange-legend i{ font-size: 0.85rem; }
+/* Personalizar columnas: dos listas (Dashboard.js: renderColumnArrangeRows). Izquierda lo que no está en la tabla, derecha lo que sí (Fijas y Se desplazan), botones al centro. */
+.data-table-dual{
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.15fr);
+    gap: 0.7rem;
+    align-items: stretch;
+}
+.data-table-dual-side{
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 0;
+}
+.data-table-dual-class{
+    width: 100%;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    font: inherit;
+    font-size: 0.74rem;
+}
+.data-table-dual-list{
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.6rem;
+    padding: 0.25rem;
+    height: 14rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.data-table-dual-right{
+    display: flex;
+    gap: 0.4rem;
+    min-width: 0;
+}
+.data-table-dual-right .data-table-dual-list{ flex: 1 1 0; }
+.data-table-dual-arrows{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.4rem;
+}
+.data-table-dual-mid{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.45rem;
+}
+.data-table-dual-btn{
+    padding: 0.3rem 0.7rem;
+    font-size: 0.74rem;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+}
+.data-table-dual-btn[disabled]{
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+.data-table-dual-row{
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.24rem 0.5rem;
+    border-radius: 0.4rem;
+    font-size: 0.74rem;
+    cursor: pointer;
+    min-width: 0;
+    user-select: none;
+}
+.data-table-dual-row .name{
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.data-table-dual-row small{
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.62rem;
+    color: var(--color-text-secondary);
+}
+.data-table-dual-row:hover{
+    background: color-mix(in srgb, var(--color-accent, #6d3fc0) 7%, transparent);
+}
+.data-table-dual-row.selected{
+    background: color-mix(in srgb, var(--color-accent, #6d3fc0) 18%, var(--color-surface));
+    font-weight: 600;
+}
+.data-table-dual-row:focus-visible{
+    outline: 2px solid var(--color-accent, #6d3fc0);
+    outline-offset: -2px;
+}
+.data-table-dual-row.dragging{ opacity: 0.45; }
+.data-table-dual-row.drop-before{ box-shadow: inset 0 2px 0 var(--color-accent, #6d3fc0); }
+.data-table-dual-row.drop-after{ box-shadow: inset 0 -2px 0 var(--color-accent, #6d3fc0); }
+.data-table-dual-group{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.15rem;
+    padding: 0.24rem 0.5rem;
+    border-radius: 0.4rem;
+    background: var(--color-bg);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+}
+.data-table-dual-group:first-child{ margin-top: 0; }
+.data-table-dual-group-pinned{ color: var(--color-accent, var(--color-text-primary)); }
+.data-table-dual-group i{ margin-right: 0.25rem; }
+.data-table-dual-free{
+    padding: 0.3rem 0.5rem;
+    border: 1px dashed var(--color-border);
+    border-radius: 0.4rem;
+    font-size: 0.64rem;
+    text-align: center;
+    color: var(--color-text-secondary);
+}
+.data-table-dual .drop-zone{
+    outline: 2px dashed var(--color-accent, #6d3fc0);
+    outline-offset: -2px;
+}
+.data-table-dual-note{
+    margin: 0;
+    min-height: 0.9rem;
+    font-size: 0.64rem;
+    color: var(--color-text-secondary);
+}
+@media (max-width: 40rem){
+    .data-table-dual{ grid-template-columns: 1fr; }
+    .data-table-dual-mid{ flex-direction: row; flex-wrap: wrap; justify-content: center; }
+    .data-table-dual-list{ height: 11rem; }
+}
+/* «Fijar hasta aquí»: el menú del clic derecho sobre el título de una columna (Dashboard.js: openHeaderPinMenu). */
+.data-table-pin-menu{
+    position: fixed;
+    z-index: 150;
+    min-width: 15rem;
+    max-width: min(20rem, calc(100vw - 1rem));
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.4rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.7rem;
+    box-shadow: 0 8px 24px var(--shadow-border), 0 0 0 1px var(--color-border);
+}
+.data-table-pin-menu-title{
+    padding: 0.2rem 0.6rem 0.3rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.data-table-pin-menu hr{
+    border: 0;
+    border-top: 1px solid var(--color-border);
+    margin: 0.2rem 0.3rem;
+}
+.data-table-pin-menu-item{
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.05rem;
+    padding: 0.4rem 0.6rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--color-text-primary);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+.data-table-pin-menu-item small{
+    font-weight: 400;
+    font-size: 0.66rem;
+    color: var(--color-text-secondary);
+}
+.data-table-pin-menu-item:hover:not([disabled]),
+.data-table-pin-menu-item:focus-visible{
+    background: color-mix(in srgb, var(--color-accent, #6d3fc0) 14%, var(--color-surface));
+    outline: none;
+}
+.data-table-pin-menu-item[disabled]{
+    opacity: 0.55;
+    cursor: not-allowed;
+}
 /* Cada fila de columna -- nombre + punto de clasificación + control de 3
    vías. "pending" (aún sin tocar en esta sesión de edición) se atenúa
    SOLO aquí, nunca en la banda/tabla real -- ver Dashboard.js. */

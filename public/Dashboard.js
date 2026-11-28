@@ -4239,6 +4239,114 @@ function reorderColumnBlock(tableId, keys, targetKey, before) {
     applyDataTableColumnLayout(tableId);
 }
 
+// Fijar desde el encabezado (Daniel, 2026-11-27, «Fijar hasta aquí», como «Inmovilizar paneles» de Excel): clic derecho (o mantener el dedo medio segundo) sobre el título de una columna abre un menú
+// pequeño, sin entrar a Personalizar columnas. «Fijar hasta aquí» deja fijas esta columna y las visibles a su izquierda. Vale el mismo permiso que el pin de la barra (iconPin) y el mismo tope (DATA_TABLE_PIN_MAX).
+let headerPinMenuEl = null;
+let headerPinMenuOff = null;
+function closeHeaderPinMenu() {
+    if (headerPinMenuOff) { headerPinMenuOff(); headerPinMenuOff = null; }
+    if (headerPinMenuEl) { headerPinMenuEl.remove(); headerPinMenuEl = null; }
+}
+function setPinnedColumns(tableId, pinned) {
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const cfg = state.config;
+    applyColumnLayoutConfig(tableId, { order: [...cfg.order], hidden: [...cfg.hidden], pinned, widths: { ...cfg.widths } });
+}
+function openHeaderPinMenu(tableId, key, x, y) {
+    closeHeaderPinMenu();
+    const state = dataTableColumnState.get(tableId);
+    if (!state) return;
+    const cfg = state.config;
+    const visible = getVisualColumnOrder(cfg).filter((k) => !cfg.hidden.includes(k));
+    const at = visible.indexOf(key);
+    if (at < 0) return;
+    const pinned = cfg.pinned.filter((k) => !cfg.hidden.includes(k));
+    const isPinned = pinned.includes(key);
+    const upTo = visible.slice(0, at + 1); // esta columna y las visibles a su izquierda, tal como se ven
+    const max = String(DATA_TABLE_PIN_MAX);
+    const items = [
+        { label: t('main.pinMenuUpTo'), note: t(upTo.length > DATA_TABLE_PIN_MAX ? 'main.pinMenuTooMany' : 'main.pinMenuUpToNote', { n: String(upTo.length), max }), disabled: upTo.length > DATA_TABLE_PIN_MAX, run: () => setPinnedColumns(tableId, upTo) },
+        { label: t('main.pinMenuOnly'), note: isPinned ? t('main.pinMenuAlready') : t(pinned.length >= DATA_TABLE_PIN_MAX ? 'main.pinMenuFull' : 'main.pinMenuOnlyNote', { max }), disabled: isPinned || pinned.length >= DATA_TABLE_PIN_MAX, run: () => setPinnedColumns(tableId, [...pinned, key]) },
+        { label: t('main.pinMenuUnpin'), disabled: !isPinned, run: () => setPinnedColumns(tableId, pinned.filter((k) => k !== key)), separated: true },
+        { label: t('main.pinMenuUnpinAll'), disabled: !pinned.length, run: () => setPinnedColumns(tableId, []) },
+    ];
+    const menu = document.createElement('div');
+    menu.className = 'data-table-pin-menu';
+    menu.setAttribute('role', 'menu');
+    menu.dataset.helpKey = 'headerPinMenu';
+    const title = document.createElement('div');
+    title.className = 'data-table-pin-menu-title';
+    title.textContent = t('main.pinMenuTitle', { name: state.labels[key] || key });
+    menu.appendChild(title);
+    items.forEach((item) => {
+        if (item.separated) { const hr = document.createElement('hr'); menu.appendChild(hr); }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'data-table-pin-menu-item';
+        btn.setAttribute('role', 'menuitem');
+        btn.disabled = !!item.disabled;
+        const main = document.createElement('span');
+        main.textContent = item.label;
+        btn.appendChild(main);
+        if (item.note) { const small = document.createElement('small'); small.textContent = item.note; btn.appendChild(small); }
+        btn.addEventListener('click', () => { closeHeaderPinMenu(); item.run(); });
+        menu.appendChild(btn);
+    });
+    document.body.appendChild(menu);
+    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`;
+    headerPinMenuEl = menu;
+    const onDown = (event) => { if (!menu.contains(event.target)) closeHeaderPinMenu(); };
+    const onKey = (event) => { if (event.key === 'Escape') closeHeaderPinMenu(); };
+    const onMove = () => closeHeaderPinMenu();
+    document.addEventListener('mousedown', onDown, true);
+    document.addEventListener('touchstart', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
+    headerPinMenuOff = () => {
+        document.removeEventListener('mousedown', onDown, true);
+        document.removeEventListener('touchstart', onDown, true);
+        document.removeEventListener('keydown', onKey, true);
+        window.removeEventListener('scroll', onMove, true);
+        window.removeEventListener('resize', onMove);
+    };
+    menu.querySelector('button:not([disabled])')?.focus();
+}
+function enableHeaderPinMenu(table, tableId) {
+    const headerRow = getHeaderRow(table);
+    if (headerRow.dataset.pinMenuBound) return;
+    headerRow.dataset.pinMenuBound = '1';
+    const canPin = () => resolveIconGrant(tableId, 'iconPin');
+    headerRow.addEventListener('contextmenu', (event) => {
+        const th = event.target.closest('th[data-col]');
+        if (!th || !canPin()) return;
+        event.preventDefault();
+        openHeaderPinMenu(tableId, th.dataset.col, event.clientX, event.clientY);
+    });
+    // en pantallas táctiles (sin clic derecho): mantener el dedo medio segundo sobre el título; al soltar no se ordena la columna
+    let timer = null;
+    let from = null;
+    let suppressClick = false;
+    const stop = () => { clearTimeout(timer); timer = null; };
+    headerRow.addEventListener('pointerdown', (event) => {
+        if (event.pointerType !== 'touch') return;
+        const th = event.target.closest('th[data-col]');
+        if (!th || !canPin()) return;
+        from = { x: event.clientX, y: event.clientY };
+        timer = setTimeout(() => {
+            timer = null;
+            suppressClick = true;
+            setTimeout(() => { suppressClick = false; }, 900);
+            openHeaderPinMenu(tableId, th.dataset.col, from.x, from.y);
+        }, 550);
+    });
+    headerRow.addEventListener('pointermove', (event) => { if (timer && Math.hypot(event.clientX - from.x, event.clientY - from.y) > 10) stop(); });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach((type) => headerRow.addEventListener(type, stop));
+    headerRow.addEventListener('click', (event) => { if (suppressClick) { suppressClick = false; event.stopPropagation(); event.preventDefault(); } }, true);
+}
+
 // Horizontal drag-reorder across the header row. Pinned columns are
 // excluded as both source AND drop target — their order only changes via
 // the pin picker's own (vertical, separate) drag-reorder below, avoiding
@@ -5874,6 +5982,7 @@ function initDataTableColumns(wrapper, index) {
     }).observe(wrapper);
     if (hadNoStoredLayout) maybeApplyDefaultSavedLayout(tableId);
     enableHeaderDragReorder(table, tableId);
+    enableHeaderPinMenu(table, tableId);
     Array.from(getHeaderRow(table).cells).forEach((th) => {
         attachResizeHandle(th, tableId);
         attachSortHandler(th, tableId);
@@ -6153,13 +6262,13 @@ function wireModalDismiss(overlay, onClose) {
 // en vez de desde su propio modal viejo.
 const COLUMN_ARRANGE_UNCLASSIFIED = '__sin_clasificar__';
 let columnArrangeModal = null;
-let columnArrangeState = null; // { tableId, draftConfig, decidedKeys: Set, activeTab, scope, terminarAcomodoDone, terminarAsignacionDone }
+let columnArrangeState = null; // { tableId, draftConfig, decidedKeys: Set, availClass, sel, anchor, scope, terminarAcomodoDone, terminarAsignacionDone }
 
 // Cascarón de fila compartido por la lista de columnas del modal de
 // Acomodo Guardado -- nombre + punto de color de su clasificación real
 // (mismos colores que COLUMN_GROUP_META/columnGroupColor ya le dan a la
 // "Leyenda de columnas" y a la banda de la tabla real, nunca una paleta
-// aparte). El llamador agrega su propio control (buildTriStateControl)
+// aparte). El llamador agrega su propio control
 // después de construir la fila. También la usan Mostrar/ocultar y Fijar
 // columnas (modo "visibilidad" de este mismo editor).
 function buildArrangeRowShell(key, label, { dotColor = undefined, dotTitle = '' } = {}) {
@@ -6220,24 +6329,40 @@ function ensureColumnArrangeModal() {
 
                 <div class="data-table-arrange-colpanel">
                     <span class="data-table-arrange-live" data-role="live-chip" hidden><i class="bx bx-revision" aria-hidden="true"></i> <span data-role="live-text">${t('main.arrangeStartsFromSaved')}</span></span>
-                    <div class="sector-icon-picker-search">
-                        <i class="bx bx-search" aria-hidden="true"></i>
-                        <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
+                    <div class="data-table-dual" data-role="dual">
+                        <div class="data-table-dual-side">
+                            <label class="data-table-arrange-section-label" for="data-table-dual-class">${t('main.dualAvailLabel')}</label>
+                            <select id="data-table-dual-class" class="data-table-dual-class" data-role="avail-class" data-help-key="dualAvailClass"></select>
+                            <div class="sector-icon-picker-search">
+                                <i class="bx bx-search" aria-hidden="true"></i>
+                                <input type="text" class="sector-icon-picker-search-input" data-role="search" placeholder="${t('main.columnSearchPlaceholder')}">
+                            </div>
+                            <div class="data-table-dual-list" data-role="avail-list" role="listbox" aria-multiselectable="true" aria-label="${t('main.dualAvailLabel')}" data-help-key="dualAvailList"></div>
+                            <p class="data-table-dual-note" data-role="avail-note"></p>
+                        </div>
+                        <div class="data-table-dual-mid">
+                            <button type="button" class="btn data-table-dual-btn" data-role="dual-add" data-help-key="dualAdd">${t('main.dualAdd')}</button>
+                            <button type="button" class="btn data-table-dual-btn" data-role="dual-remove" data-help-key="dualRemove">${t('main.dualRemove')}</button>
+                            <button type="button" class="btn data-table-dual-btn" data-role="dual-pin" data-help-key="dualPin"><i class="bx bx-pin" aria-hidden="true"></i> ${t('main.dualPin')}</button>
+                            <button type="button" class="btn data-table-dual-btn" data-role="dual-unpin" data-help-key="dualUnpin">${t('main.dualUnpin')}</button>
+                        </div>
+                        <div class="data-table-dual-side">
+                            <p class="data-table-arrange-section-label">${t('main.dualTableLabel')}</p>
+                            <div class="data-table-dual-right">
+                                <div class="data-table-dual-list" data-role="table-list" role="listbox" aria-multiselectable="true" aria-label="${t('main.dualTableLabel')}" data-help-key="dualTableList"></div>
+                                <div class="data-table-dual-arrows" data-help-key="dualMove">
+                                    <button type="button" class="btn data-table-dual-btn" data-role="dual-up" aria-label="${t('main.dualUp')}" title="${t('main.dualUp')}"><i class="bx bx-chevron-up" aria-hidden="true"></i></button>
+                                    <button type="button" class="btn data-table-dual-btn" data-role="dual-down" aria-label="${t('main.dualDown')}" title="${t('main.dualDown')}"><i class="bx bx-chevron-down" aria-hidden="true"></i></button>
+                                </div>
+                            </div>
+                            <p class="data-table-dual-note" data-role="table-note"></p>
+                        </div>
                     </div>
-                    <p class="data-table-arrange-section-label">${t('main.arrangeClassHint')}</p>
-                    <div class="sector-icon-picker-chips data-table-arrange-tabs" data-role="tabs"></div>
-                    <div class="data-table-arrange-legend">
-                        <span><i class="bx bx-x" aria-hidden="true"></i> <span data-role="legend-x">${t('main.arrangeModeX')}</span></span>
-                        <span><i class="bx bx-check" aria-hidden="true"></i> <span data-role="legend-normal">${t('main.arrangeModeNormal')}</span></span>
-                        <span data-role="legend-pin-wrap"><i class="bx bx-pin" aria-hidden="true"></i> ${t('main.arrangeModeFija')}</span>
-                        <span class="data-table-arrange-limit" data-role="pin-limit" hidden>${t('main.pinColumnsLimitReached')}</span>
-                    </div>
-                    <div class="data-table-vis-tools" data-role="vis-tools" hidden>
+                    <div class="data-table-vis-tools" data-role="vis-tools">
                         <button type="button" class="data-table-vis-tool data-table-vis-tool-add" data-role="vis-add-all"><i class="bx bx-plus" aria-hidden="true"></i><span data-role="vis-add-all-text"></span></button>
                         <button type="button" class="data-table-vis-tool data-table-vis-tool-clear" data-role="vis-clear"><i class="bx bx-trash" aria-hidden="true"></i><span>${t('main.visClear')}</span></button>
                         <span class="data-table-vis-count" data-role="vis-count"></span>
                     </div>
-                    <div class="admin-module-list data-table-arrange-list" data-role="rows"></div>
                 </div>
 
                 <p class="data-table-arrange-section-label" data-role="preview-label">${t('main.arrangePreviewLabel')}</p>
@@ -6294,8 +6419,18 @@ function ensureColumnArrangeModal() {
         previewEmpty: columnArrangeModal.querySelector('[data-role="preview-empty"]'),
         scopeBlock: columnArrangeModal.querySelector('[data-role="scope-block"]'),
         searchInput: columnArrangeModal.querySelector('[data-role="search"]'),
-        tabsEl: columnArrangeModal.querySelector('[data-role="tabs"]'),
-        rowsEl: columnArrangeModal.querySelector('[data-role="rows"]'),
+        dual: columnArrangeModal.querySelector('[data-role="dual"]'),
+        availClass: columnArrangeModal.querySelector('[data-role="avail-class"]'),
+        availList: columnArrangeModal.querySelector('[data-role="avail-list"]'),
+        availNote: columnArrangeModal.querySelector('[data-role="avail-note"]'),
+        tableList: columnArrangeModal.querySelector('[data-role="table-list"]'),
+        tableNote: columnArrangeModal.querySelector('[data-role="table-note"]'),
+        dualAdd: columnArrangeModal.querySelector('[data-role="dual-add"]'),
+        dualRemove: columnArrangeModal.querySelector('[data-role="dual-remove"]'),
+        dualPin: columnArrangeModal.querySelector('[data-role="dual-pin"]'),
+        dualUnpin: columnArrangeModal.querySelector('[data-role="dual-unpin"]'),
+        dualUp: columnArrangeModal.querySelector('[data-role="dual-up"]'),
+        dualDown: columnArrangeModal.querySelector('[data-role="dual-down"]'),
         previewTable: columnArrangeModal.querySelector('[data-role="preview-table"]'),
         terminarAcomodoBtn: columnArrangeModal.querySelector('[data-role="terminar-acomodo"]'),
         terminarAsignacionBtn: columnArrangeModal.querySelector('[data-role="terminar-asignacion"]'),
@@ -6313,10 +6448,6 @@ function ensureColumnArrangeModal() {
         visSave: columnArrangeModal.querySelector('[data-role="vis-save"]'),
         visCancel: columnArrangeModal.querySelector('[data-role="vis-cancel"]'),
         previewLabel: columnArrangeModal.querySelector('[data-role="preview-label"]'),
-        legendX: columnArrangeModal.querySelector('[data-role="legend-x"]'),
-        legendNormal: columnArrangeModal.querySelector('[data-role="legend-normal"]'),
-        legendPinWrap: columnArrangeModal.querySelector('[data-role="legend-pin-wrap"]'),
-        pinLimit: columnArrangeModal.querySelector('[data-role="pin-limit"]'),
     };
     columnArrangeModal._refs = refs;
 
@@ -6370,6 +6501,7 @@ function ensureColumnArrangeModal() {
     refs.visCancel.addEventListener('click', closeColumnArrangeModal);
     refs.visAddAll.addEventListener('click', visibilityAddAllInTab);
     refs.visClear.addEventListener('click', visibilityClearAll);
+    wireDualLists(refs);
 }
 
 // Candado de botones: "Terminar Acomodo" siempre disponible; "Terminar
@@ -6380,10 +6512,8 @@ function updateColumnArrangeGating() {
     const state = columnArrangeState;
     const refs = columnArrangeModal._refs;
     if (!state) return;
-    if (state.mode === 'visibility') {
-        updateVisibilityToolsUi();
-        return;
-    }
+    updateVisibilityToolsUi();
+    if (state.mode === 'visibility') return;
     const needsAssignment = state.scope === 'global';
     const hasChosen = columnArrangeChosenKeys().length > 0;
     const ready = state.terminarAcomodoDone && (!needsAssignment || state.terminarAsignacionDone);
@@ -6399,83 +6529,405 @@ function updateColumnArrangeGating() {
     // instead, same pattern saveSavedLayout's own audience check already uses.
 }
 
-// Pestañas de clasificación real (reemplaza los chips "solo filtran" del
-// selector de visibilidad viejo: aquí siempre hay EXACTAMENTE una pestaña
-// activa, nunca una vista "Todas"). Una columna sin clasificación cae en
-// la pestaña sentinela COLUMN_ARRANGE_UNCLASSIFIED, con la misma etiqueta
-// real "Por clasificar" (menu.classNone) que ya usan los árboles de
-// permisos -- aquí es la primera vez que se conecta a una tabla viva.
-function renderColumnArrangeTabs() {
-    const state = dataTableColumnState.get(columnArrangeState.tableId);
-    if (!state) return;
-    const refs = columnArrangeModal._refs;
-    refs.tabsEl.innerHTML = '';
-    const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
-    const hasUnclassified = state.columnKeys.some((k) => !state.groupKeys.get(k));
-    const tabs = hasUnclassified ? [...presentGroupKeys, COLUMN_ARRANGE_UNCLASSIFIED] : presentGroupKeys;
-    tabs.forEach((groupKey) => {
-        const tab = document.createElement('button');
-        tab.type = 'button';
-        tab.className = 'sector-icon-picker-chip' + (columnArrangeState.activeTab === groupKey ? ' active' : '');
-        if (groupKey !== COLUMN_ARRANGE_UNCLASSIFIED) {
-            const dot = document.createElement('span');
-            dot.className = 'data-table-col-dot data-table-col-dot-chip';
-            dot.style.backgroundColor = columnGroupColor(groupKey);
-            tab.appendChild(dot);
-        }
-        tab.appendChild(document.createTextNode(groupKey === COLUMN_ARRANGE_UNCLASSIFIED ? t('menu.classNone') : resolveGroupLabel(groupKey)));
-        const count = document.createElement('span');
-        count.className = 'data-table-arrange-tab-count';
-        count.textContent = String(state.columnKeys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === groupKey).length);
-        tab.appendChild(count);
-        tab.addEventListener('click', () => {
-            columnArrangeState.activeTab = groupKey;
-            columnArrangeState.query = '';
-            columnArrangeModal._refs.searchInput.value = '';
-            renderColumnArrangeTabs();
-            renderColumnArrangeRows();
-        });
-        refs.tabsEl.appendChild(tab);
+// --- Personalizar columnas: dos listas (Daniel, 2026-11-27, «Sí a las recomendadas, construye A y C»; la idea sale del cuadro «Personalizar cinta de opciones» de Excel) ---------------
+// Izquierda: las columnas que NO están en la tabla (ocultas o sin marcar), con un filtro por clasificación y un buscador. Derecha: las que sí están, separadas en «Fijas» (hasta
+// DATA_TABLE_PIN_MAX, en su orden) y «Se desplazan». Se elige con clic (Ctrl o Mayús para varias) y se pasa con los botones del centro, con doble clic o arrastrando; las flechas ordenan.
+// Es el mismo borrador de siempre (draftConfig + decidedKeys): guardar, Terminar Acomodo y la vista previa de abajo no cambian, solo cambia cómo se elige.
+const DUAL_ALL_CLASSES = '__todas_las_clasificaciones__';
+
+function dualClassOf(state, key) {
+    return state.groupKeys.get(key) || COLUMN_ARRANGE_UNCLASSIFIED;
+}
+function dualClassName(cls) {
+    if (cls === DUAL_ALL_CLASSES) return t('main.dualAllClasses');
+    return cls === COLUMN_ARRANGE_UNCLASSIFIED ? t('menu.classNone') : resolveGroupLabel(cls);
+}
+// Izquierda: lo que no está en la tabla, de la clasificación elegida y que cumpla lo escrito en el buscador (el nombre de la columna o el de su clasificación).
+function dualAvailKeys(state) {
+    const { availClass, query } = columnArrangeState;
+    const chosen = new Set(columnArrangeChosenKeys());
+    const q = query.trim().toLowerCase();
+    return state.columnKeys.filter((k) => {
+        if (chosen.has(k)) return false;
+        if (availClass !== DUAL_ALL_CLASSES && dualClassOf(state, k) !== availClass) return false;
+        return !q || SearchSyntax.matches('contains', q, `${state.labels[k] || k} ${dualClassName(dualClassOf(state, k))}`);
     });
 }
-
-function columnArrangeVisibleKeys(state) {
-    const q = columnArrangeState.query.trim().toLowerCase();
-    if (q) return state.columnKeys.filter((k) => SearchSyntax.matches('contains', q, state.labels[k] || k));
-    return state.columnKeys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === columnArrangeState.activeTab);
+// Derecha: las fijas (en su orden) y las que se desplazan (en el orden de la tabla).
+function dualTableKeys() {
+    const { draftConfig } = columnArrangeState;
+    const chosen = new Set(columnArrangeChosenKeys());
+    const pinned = draftConfig.pinned.filter((k) => chosen.has(k));
+    const pinnedSet = new Set(pinned);
+    return { pinned, scroll: draftConfig.order.filter((k) => chosen.has(k) && !pinnedSet.has(k)) };
+}
+function dualRow(state, key, side) {
+    const cls = dualClassOf(state, key);
+    const label = state.labels[key] || key;
+    const row = document.createElement('div');
+    row.className = 'data-table-dual-row';
+    row.dataset.col = key;
+    row.dataset.side = side;
+    row.setAttribute('role', 'option');
+    row.setAttribute('aria-selected', 'false');
+    row.tabIndex = 0;
+    row.draggable = true;
+    row.title = `${label} · ${dualClassName(cls)}`;
+    const dot = document.createElement('span');
+    dot.className = 'data-table-col-dot';
+    dot.style.backgroundColor = columnGroupColor(state.groupKeys.get(key));
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = label;
+    const small = document.createElement('small');
+    small.textContent = dualClassName(cls);
+    row.append(dot, name, small);
+    return row;
 }
 
-// Las filas SIEMPRE se listan en el orden natural de state.columnKeys,
-// filtradas por pestaña/búsqueda -- nunca se reordenan por tocar x/Normal/
-// Fija, solo cambia su control y su opacidad "pendiente vs ya decidido"
-// (decidedKeys, de solo esta sesión, nunca se guarda ni se pinta en la
-// tabla real).
 function renderColumnArrangeRows() {
     const state = dataTableColumnState.get(columnArrangeState.tableId);
     if (!state) return;
-    const rowsEl = columnArrangeModal._refs.rowsEl;
-    rowsEl.innerHTML = '';
-    columnArrangeVisibleKeys(state).forEach((key) => {
-        const groupKey = state.groupKeys.get(key);
-        const { row } = buildArrangeRowShell(key, state.labels[key] || key, {
-            dotColor: columnGroupColor(groupKey), dotTitle: groupKey ? resolveGroupLabel(groupKey) : t('menu.classNone'),
-        });
-        row.classList.toggle('data-table-row-pending', !columnArrangeState.decidedKeys.has(key));
-        row.appendChild(buildTriStateControl(key, groupKey));
-        rowsEl.appendChild(row);
+    const refs = columnArrangeModal._refs;
+    const st = columnArrangeState;
+    const chosen = new Set(columnArrangeChosenKeys());
+    // el filtro por clasificación: cuántas columnas faltan por agregar en cada una
+    const present = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
+    const classes = state.columnKeys.some((k) => !state.groupKeys.get(k)) ? [...present, COLUMN_ARRANGE_UNCLASSIFIED] : present;
+    if (st.availClass !== DUAL_ALL_CLASSES && !classes.includes(st.availClass)) st.availClass = DUAL_ALL_CLASSES;
+    refs.availClass.textContent = '';
+    [DUAL_ALL_CLASSES, ...classes].forEach((cls) => {
+        const n = state.columnKeys.filter((k) => !chosen.has(k) && (cls === DUAL_ALL_CLASSES || dualClassOf(state, k) === cls)).length;
+        const option = document.createElement('option');
+        option.value = cls;
+        option.textContent = t('main.dualClassOption', { name: dualClassName(cls), n: String(n) });
+        option.selected = cls === st.availClass;
+        refs.availClass.appendChild(option);
     });
-    // Con 4 columnas fijas el 📌 de las demás se apaga: el aviso dice por qué.
-    columnArrangeModal._refs.pinLimit.hidden = columnArrangeState.draftConfig.pinned.length < DATA_TABLE_PIN_MAX;
+
+    const avail = dualAvailKeys(state);
+    const { pinned, scroll } = dualTableKeys();
+    const inTable = new Set([...pinned, ...scroll]);
+    st.sel.avail = new Set([...st.sel.avail].filter((k) => avail.includes(k)));
+    st.sel.table = new Set([...st.sel.table].filter((k) => inTable.has(k)));
+    const availTop = refs.availList.scrollTop;
+    const tableTop = refs.tableList.scrollTop;
+
+    refs.availList.textContent = '';
+    avail.forEach((key) => refs.availList.appendChild(dualRow(state, key, 'avail')));
+    refs.availNote.textContent = avail.length ? '' : t(st.query.trim() ? 'main.dualNoMatch' : 'main.dualAvailEmpty');
+
+    refs.tableList.textContent = '';
+    const group = (zone, labelText, countText, icon) => {
+        const head = document.createElement('div');
+        head.className = `data-table-dual-group data-table-dual-group-${zone}`;
+        head.dataset.zone = zone;
+        const label = document.createElement('span');
+        if (icon) { const i = document.createElement('i'); i.className = `bx ${icon}`; i.setAttribute('aria-hidden', 'true'); label.appendChild(i); }
+        label.appendChild(document.createTextNode(labelText));
+        const count = document.createElement('span');
+        count.textContent = countText;
+        head.append(label, count);
+        return head;
+    };
+    if (st.canPin) {
+        refs.tableList.appendChild(group('pinned', t('main.dualGroupPinned'), t('main.dualPinnedCount', { n: String(pinned.length), max: String(DATA_TABLE_PIN_MAX) }), 'bx-pin'));
+        pinned.forEach((key) => refs.tableList.appendChild(dualRow(state, key, 'table')));
+        if (pinned.length < DATA_TABLE_PIN_MAX) {
+            const free = document.createElement('div');
+            free.className = 'data-table-dual-free';
+            free.dataset.zone = 'pinned';
+            free.textContent = t('main.dualFreeSlots', { n: String(DATA_TABLE_PIN_MAX - pinned.length) });
+            refs.tableList.appendChild(free);
+        }
+        refs.tableList.appendChild(group('scroll', t('main.dualGroupScroll'), String(scroll.length), null));
+    }
+    scroll.forEach((key) => refs.tableList.appendChild(dualRow(state, key, 'table')));
+    refs.tableNote.textContent = !inTable.size ? t('main.dualTableEmpty') : (st.canPin && pinned.length >= DATA_TABLE_PIN_MAX ? t('main.dualLimit', { max: String(DATA_TABLE_PIN_MAX) }) : '');
+    refs.availList.scrollTop = availTop;
+    refs.tableList.scrollTop = tableTop;
+    updateVisibilityToolsUi();
+    dualRefreshSelection();
 }
 
-// null = todavía sin marcar: ningún botón activo y la columna no entra a
-// la vista previa ni al acomodo.
-function columnArrangeMode(key) {
+// Solo vuelve a marcar lo elegido (sin rehacer las listas: no se pierde el desplazamiento ni el foco) y prende o apaga los botones del centro.
+function dualRefreshSelection() {
+    const st = columnArrangeState;
+    const refs = columnArrangeModal._refs;
+    [['avail', refs.availList], ['table', refs.tableList]].forEach(([side, list]) => {
+        list.querySelectorAll('.data-table-dual-row').forEach((row) => {
+            const on = st.sel[side].has(row.dataset.col);
+            row.classList.toggle('selected', on);
+            row.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+    });
+    const { pinned } = dualTableKeys();
+    const tableSel = [...st.sel.table];
+    const availSel = [...st.sel.avail];
+    refs.dualAdd.disabled = availSel.length === 0;
+    refs.dualRemove.hidden = !st.canHide;
+    refs.dualRemove.disabled = tableSel.length === 0;
+    refs.dualPin.hidden = !st.canPin;
+    refs.dualUnpin.hidden = !st.canPin;
+    refs.dualPin.disabled = pinned.length >= DATA_TABLE_PIN_MAX || ![...tableSel.filter((k) => !pinned.includes(k)), ...availSel].length;
+    refs.dualUnpin.disabled = !tableSel.some((k) => pinned.includes(k));
+    refs.dualUp.disabled = tableSel.length === 0;
+    refs.dualDown.disabled = tableSel.length === 0;
+}
+
+// Lo elegido de una lista, en el orden en que se ve.
+function dualOrdered(side) {
+    const st = columnArrangeState;
+    const state = dataTableColumnState.get(st.tableId);
+    const list = side === 'avail' ? dualAvailKeys(state) : (() => { const keys = dualTableKeys(); return [...keys.pinned, ...keys.scroll]; })();
+    return list.filter((k) => st.sel[side].has(k));
+}
+// Lo que se mueve al tocar o arrastrar una fila: toda la selección si la fila está dentro de ella; si no, solo esa.
+function dualPicked(side, key) {
+    return columnArrangeState.sel[side].has(key) ? dualOrdered(side) : [key];
+}
+function dualSelect(side, key, event) {
+    const st = columnArrangeState;
+    const state = dataTableColumnState.get(st.tableId);
+    const list = side === 'avail' ? dualAvailKeys(state) : (() => { const keys = dualTableKeys(); return [...keys.pinned, ...keys.scroll]; })();
+    if (event.shiftKey && st.anchor[side] && list.includes(st.anchor[side])) {
+        const a = list.indexOf(st.anchor[side]);
+        const b = list.indexOf(key);
+        st.sel[side] = new Set(list.slice(Math.min(a, b), Math.max(a, b) + 1));
+    } else if (event.ctrlKey || event.metaKey) {
+        const next = new Set(st.sel[side]);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        st.sel[side] = next;
+        st.anchor[side] = key;
+    } else {
+        st.sel[side] = new Set([key]);
+        st.anchor[side] = key;
+    }
+    dualRefreshSelection();
+}
+// Después de cualquier cambio: lo de «Terminar Acomodo» ya no vale, se vuelven a pintar las listas y la vista previa, y lo que se movió queda elegido y a la vista.
+function dualAfterChange(selectTable, selectAvail) {
+    const st = columnArrangeState;
+    st.terminarAcomodoDone = false;
+    if (selectTable) st.sel.table = new Set(selectTable);
+    if (selectAvail) st.sel.avail = new Set(selectAvail);
+    renderColumnArrangeRows();
+    renderColumnArrangePreview();
+    updateColumnArrangeGating();
+    columnArrangeModal.querySelector('.data-table-dual-row.selected')?.scrollIntoView({ block: 'nearest' });
+}
+
+// Izquierda → tabla: la columna queda visible en su lugar del orden de la tabla (no fija).
+function dualAdd(keys) {
+    const st = columnArrangeState;
+    if (!st || !keys.length) return;
+    const { draftConfig, decidedKeys } = st;
+    keys.forEach((k) => {
+        decidedKeys.add(k);
+        draftConfig.hidden = draftConfig.hidden.filter((x) => x !== k);
+        draftConfig.pinned = draftConfig.pinned.filter((x) => x !== k);
+    });
+    dualAfterChange(keys, []);
+}
+// Tabla → izquierda: la columna se oculta (y deja de estar fija). Pide confirmar si alguna estaba fija, como siempre.
+async function dualRemove(keys) {
+    const st = columnArrangeState;
+    if (!st || !st.canHide || !keys.length) return;
+    if (keys.some((k) => st.draftConfig.pinned.includes(k)) && !(await confirmDialog(t('main.columnHidePinnedConfirm')))) return;
+    if (!columnArrangeState) return;
     const { draftConfig, decidedKeys } = columnArrangeState;
-    if (!decidedKeys.has(key)) return null;
-    if (draftConfig.hidden.includes(key)) return 'none';
-    if (draftConfig.pinned.includes(key)) return 'fija';
-    return 'normal';
+    keys.forEach((k) => {
+        decidedKeys.add(k);
+        if (!draftConfig.hidden.includes(k)) draftConfig.hidden = [...draftConfig.hidden, k];
+        draftConfig.pinned = draftConfig.pinned.filter((x) => x !== k);
+    });
+    dualAfterChange([], keys);
+}
+// Fijar: entran a «Fijas» (al final) las que caben; el tope es DATA_TABLE_PIN_MAX.
+function dualPin(keys) {
+    const st = columnArrangeState;
+    if (!st || !st.canPin) return;
+    const { draftConfig, decidedKeys } = st;
+    const pinnedNow = dualTableKeys().pinned;
+    const take = keys.filter((k) => !pinnedNow.includes(k)).slice(0, Math.max(0, DATA_TABLE_PIN_MAX - pinnedNow.length));
+    if (!take.length) return;
+    take.forEach((k) => {
+        decidedKeys.add(k);
+        draftConfig.hidden = draftConfig.hidden.filter((x) => x !== k);
+    });
+    draftConfig.pinned = [...pinnedNow, ...take];
+    dualAfterChange(take, []);
+}
+function dualUnpin(keys) {
+    const st = columnArrangeState;
+    if (!st || !st.canPin) return;
+    st.draftConfig.pinned = st.draftConfig.pinned.filter((k) => !keys.includes(k));
+    dualAfterChange(keys, []);
+}
+// Arrastrar: soltar junto a una columna de la derecha la deja ahí (en «Fijas» o en «Se desplazan», antes o después de esa columna); desde la izquierda también la agrega.
+function dualPlace(keys, zone, refKey, before) {
+    const st = columnArrangeState;
+    const { draftConfig, decidedKeys } = st;
+    const moving = keys.filter((k, i) => keys.indexOf(k) === i);
+    if (zone === 'pinned') {
+        if (!st.canPin) return;
+        const pinnedNow = dualTableKeys().pinned;
+        const room = DATA_TABLE_PIN_MAX - pinnedNow.filter((k) => !moving.includes(k)).length;
+        const placed = moving.slice(0, Math.max(0, room));
+        if (!placed.length) return;
+        const rest = pinnedNow.filter((k) => !placed.includes(k));
+        const at = rest.indexOf(refKey);
+        rest.splice(at === -1 ? rest.length : (before ? at : at + 1), 0, ...placed);
+        draftConfig.pinned = rest;
+        placed.forEach((k) => {
+            decidedKeys.add(k);
+            draftConfig.hidden = draftConfig.hidden.filter((x) => x !== k);
+        });
+        dualAfterChange(placed, []);
+        return;
+    }
+    if (moving.includes(refKey)) return;
+    moving.forEach((k) => {
+        decidedKeys.add(k);
+        draftConfig.hidden = draftConfig.hidden.filter((x) => x !== k);
+        draftConfig.pinned = draftConfig.pinned.filter((x) => x !== k);
+    });
+    if (refKey && draftConfig.order.includes(refKey)) {
+        const order = draftConfig.order.filter((k) => !moving.includes(k));
+        const at = order.indexOf(refKey);
+        order.splice(before ? at : at + 1, 0, ...moving);
+        draftConfig.order = order;
+    }
+    dualAfterChange(moving, []);
+}
+// Las flechas: suben o bajan lo elegido dentro de su grupo («Fijas» por su lado, las demás en el orden de la tabla).
+function dualMove(dir) {
+    const st = columnArrangeState;
+    const { draftConfig } = st;
+    const sel = st.sel.table;
+    if (!sel.size) return;
+    const moveWithin = (list) => {
+        const a = [...list];
+        if (dir < 0) { for (let i = 1; i < a.length; i += 1) if (sel.has(a[i]) && !sel.has(a[i - 1])) [a[i - 1], a[i]] = [a[i], a[i - 1]]; }
+        else { for (let i = a.length - 2; i >= 0; i -= 1) if (sel.has(a[i]) && !sel.has(a[i + 1])) [a[i], a[i + 1]] = [a[i + 1], a[i]]; }
+        return a;
+    };
+    const { pinned, scroll } = dualTableKeys();
+    draftConfig.pinned = moveWithin(pinned);
+    const slots = [];
+    const scrollSet = new Set(scroll);
+    draftConfig.order.forEach((k, i) => { if (scrollSet.has(k)) slots.push(i); });
+    const order = [...draftConfig.order];
+    moveWithin(scroll).forEach((k, i) => { order[slots[i]] = k; });
+    draftConfig.order = order;
+    dualAfterChange(null, null);
+}
+
+function wireDualLists(refs) {
+    const dual = refs.dual;
+    refs.availClass.addEventListener('change', () => {
+        columnArrangeState.availClass = refs.availClass.value;
+        renderColumnArrangeRows();
+    });
+    refs.dualAdd.addEventListener('click', () => dualAdd(dualOrdered('avail')));
+    refs.dualRemove.addEventListener('click', () => dualRemove(dualOrdered('table')));
+    refs.dualPin.addEventListener('click', () => {
+        const pinned = dualTableKeys().pinned;
+        dualPin([...dualOrdered('table').filter((k) => !pinned.includes(k)), ...dualOrdered('avail')]);
+    });
+    refs.dualUnpin.addEventListener('click', () => {
+        const pinned = dualTableKeys().pinned;
+        dualUnpin(dualOrdered('table').filter((k) => pinned.includes(k)));
+    });
+    refs.dualUp.addEventListener('click', () => dualMove(-1));
+    refs.dualDown.addEventListener('click', () => dualMove(1));
+
+    dual.addEventListener('click', (event) => {
+        const row = event.target.closest('.data-table-dual-row');
+        if (row) dualSelect(row.dataset.side, row.dataset.col, event);
+    });
+    // doble clic en una columna de la izquierda: se agrega
+    dual.addEventListener('dblclick', (event) => {
+        const row = event.target.closest('.data-table-dual-row');
+        if (row && row.dataset.side === 'avail') dualAdd(dualPicked('avail', row.dataset.col));
+    });
+    dual.addEventListener('keydown', (event) => {
+        const row = event.target.closest && event.target.closest('.data-table-dual-row');
+        if (!row) return;
+        const side = row.dataset.side;
+        const key = row.dataset.col;
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const rows = [...row.parentElement.querySelectorAll('.data-table-dual-row')];
+            const next = rows[rows.indexOf(row) + (event.key === 'ArrowDown' ? 1 : -1)];
+            if (next) { next.focus(); dualSelect(side, next.dataset.col, event); }
+        } else if (event.key === 'Enter' && side === 'avail') {
+            event.preventDefault();
+            dualAdd(dualPicked('avail', key));
+        } else if ((event.key === 'Delete' || event.key === 'Backspace') && side === 'table') {
+            event.preventDefault();
+            dualRemove(dualPicked('table', key));
+        } else if (event.key === ' ') {
+            event.preventDefault();
+            dualSelect(side, key, { ctrlKey: true });
+        }
+    });
+
+    // arrastrar: de la izquierda a la derecha agrega; de la derecha a la izquierda quita; dentro de la derecha acomoda o pasa de «Fijas» a «Se desplazan»
+    let drag = null; // { side, keys }
+    const clearDrop = () => dual.querySelectorAll('.drop-before, .drop-after, .drop-zone, .dragging').forEach((el) => el.classList.remove('drop-before', 'drop-after', 'drop-zone', 'dragging'));
+    const dropTarget = (event) => {
+        if (!drag) return null;
+        const st = columnArrangeState;
+        if (event.target.closest('[data-role="avail-list"]')) return drag.side === 'table' && st.canHide ? { kind: 'remove', el: refs.availList } : null;
+        if (!event.target.closest('[data-role="table-list"]')) return null;
+        const row = event.target.closest('.data-table-dual-row');
+        const keys = dualTableKeys();
+        if (row && row.dataset.side === 'table') {
+            const zone = keys.pinned.includes(row.dataset.col) ? 'pinned' : 'scroll';
+            if (zone === 'pinned' && !st.canPin) return null;
+            const rect = row.getBoundingClientRect();
+            return { kind: 'place', zone, ref: row.dataset.col, before: event.clientY < rect.top + rect.height / 2, el: row };
+        }
+        const zoneEl = event.target.closest('[data-zone]');
+        if (zoneEl) {
+            const zone = zoneEl.dataset.zone;
+            if (zone === 'pinned' && !st.canPin) return null;
+            const list = zone === 'pinned' ? keys.pinned : keys.scroll;
+            return { kind: 'place', zone, ref: zoneEl.classList.contains('data-table-dual-group') ? (list[0] || null) : null, before: true, el: zoneEl };
+        }
+        return { kind: 'place', zone: 'scroll', ref: null, before: false, el: refs.tableList };
+    };
+    dual.addEventListener('dragstart', (event) => {
+        const row = event.target.closest && event.target.closest('.data-table-dual-row');
+        if (!row) return;
+        const keys = dualPicked(row.dataset.side, row.dataset.col);
+        if (!columnArrangeState.sel[row.dataset.side].has(row.dataset.col)) { columnArrangeState.sel[row.dataset.side] = new Set(keys); dualRefreshSelection(); }
+        drag = { side: row.dataset.side, keys };
+        event.dataTransfer.effectAllowed = 'move';
+        try { event.dataTransfer.setData('text/plain', keys.join(',')); } catch { /* sin datos */ }
+        keys.forEach((k) => dual.querySelector(`.data-table-dual-row[data-side="${row.dataset.side}"][data-col="${CSS.escape(k)}"]`)?.classList.add('dragging'));
+    });
+    dual.addEventListener('dragover', (event) => {
+        const target = dropTarget(event);
+        dual.querySelectorAll('.drop-before, .drop-after, .drop-zone').forEach((el) => el.classList.remove('drop-before', 'drop-after', 'drop-zone'));
+        if (!target) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        if (target.kind === 'place' && target.ref && target.el.classList.contains('data-table-dual-row')) target.el.classList.add(target.before ? 'drop-before' : 'drop-after');
+        else target.el.classList.add('drop-zone');
+    });
+    dual.addEventListener('drop', (event) => {
+        const target = dropTarget(event);
+        const dragged = drag;
+        drag = null;
+        clearDrop();
+        if (!target || !dragged) return;
+        event.preventDefault();
+        if (target.kind === 'remove') dualRemove(dragged.keys);
+        else dualPlace(dragged.keys, target.zone, target.ref, target.before);
+    });
+    dual.addEventListener('dragend', () => { drag = null; clearDrop(); });
 }
 
 // Las columnas que el acomodo en construcción realmente incluye: solo las
@@ -6498,77 +6950,6 @@ function buildColumnArrangeFinalConfig() {
         pinned: draftConfig.pinned.filter((k) => chosen.has(k)),
         widths: { ...draftConfig.widths },
     };
-}
-
-// Control de 3 vías por columna -- x (no incluida) / Normal (incluida) /
-// Fija (incluida + fijada), sobre los mismos draftConfig.hidden/pinned de
-// siempre. El color de la opción activa es SIEMPRE el real de la
-// clasificación de esa columna (mismo color-mix que fillBandRow ya usa
-// para la banda) -- nunca un morado fijo para "Fija".
-function buildTriStateControl(key, groupKey) {
-    const wrap = document.createElement('div');
-    wrap.className = 'data-table-tri-control';
-    const mode = columnArrangeMode(key);
-    const activeColor = columnGroupColor(groupKey);
-    const hasOwnColor = activeColor && activeColor !== 'var(--color-border)' && !activeColor.startsWith('var(');
-    // Solo íconos (la leyenda de arriba de la lista dice cuál es cuál): así
-    // caben dos columnas por renglón y se ven muchas a la vez.
-    const vis = columnArrangeState.mode === 'visibility';
-    // Con un solo permiso de los dos (ocultar / fijar) solo queda esa opción.
-    const options = [
-        { mode: 'none', icon: 'bx-x', title: t(vis ? 'main.visibilityModeHidden' : 'main.arrangeModeX') },
-        { mode: 'normal', icon: 'bx-check', title: t(vis ? 'main.visibilityModeVisible' : 'main.arrangeModeNormal') },
-        { mode: 'fija', icon: 'bx-pin', title: t('main.arrangeModeFija') },
-    ].filter((opt) => (opt.mode === 'none' ? columnArrangeState.canHide : opt.mode === 'fija' ? columnArrangeState.canPin : true));
-    options.forEach((opt) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.dataset.mode = opt.mode;
-        const icon = document.createElement('i');
-        icon.className = `bx ${opt.icon}`;
-        icon.setAttribute('aria-hidden', 'true');
-        btn.appendChild(icon);
-        btn.title = opt.title;
-        btn.setAttribute('aria-label', opt.title);
-        const isActive = mode === opt.mode;
-        btn.classList.toggle('active', isActive);
-        if (isActive && groupKey) btn.dataset.groupKey = groupKey;
-        if (isActive && hasOwnColor) {
-            btn.style.backgroundColor = `color-mix(in srgb, ${activeColor} 16%, var(--color-surface))`;
-            btn.style.color = activeColor;
-        }
-        if (opt.mode === 'fija') {
-            btn.disabled = columnArrangeState.draftConfig.pinned.length >= DATA_TABLE_PIN_MAX && !columnArrangeState.draftConfig.pinned.includes(key);
-        }
-        btn.addEventListener('click', () => setColumnTriState(key, opt.mode));
-        wrap.appendChild(btn);
-    });
-    return wrap;
-}
-
-async function setColumnTriState(key, mode) {
-    const state = dataTableColumnState.get(columnArrangeState.tableId);
-    if (!state) return;
-    const { draftConfig } = columnArrangeState;
-    if (mode === 'none') {
-        if (draftConfig.pinned.includes(key) && !(await confirmDialog(t('main.columnHidePinnedConfirm')))) return;
-        if (!draftConfig.hidden.includes(key)) draftConfig.hidden = [...draftConfig.hidden, key];
-        draftConfig.pinned = draftConfig.pinned.filter((k) => k !== key);
-    } else if (mode === 'normal') {
-        draftConfig.hidden = draftConfig.hidden.filter((k) => k !== key);
-        draftConfig.pinned = draftConfig.pinned.filter((k) => k !== key);
-    } else if (mode === 'fija') {
-        if (draftConfig.pinned.length >= DATA_TABLE_PIN_MAX && !draftConfig.pinned.includes(key)) return;
-        draftConfig.hidden = draftConfig.hidden.filter((k) => k !== key);
-        if (!draftConfig.pinned.includes(key)) draftConfig.pinned = [...draftConfig.pinned, key];
-    }
-    columnArrangeState.decidedKeys.add(key);
-    // Lo que "Terminar Acomodo" ya aplicó dejó de ser lo que se ve aquí:
-    // hay que volver a terminarlo antes de poder guardar.
-    columnArrangeState.terminarAcomodoDone = false;
-    renderColumnArrangeRows();
-    renderColumnArrangePreview();
-    updateColumnArrangeGating();
 }
 
 // Vista previa en vivo -- NO un motor de tabla paralelo: clona 1-2 filas
@@ -6694,8 +7075,10 @@ function enablePreviewHeaderDragReorder(headRow) {
 // atenuado), no pide nombre ni "asignar a", y Guardar lo aplica a esta tabla
 // para esta cuenta (applyColumnLayoutConfig, igual que Terminar Acomodo). Dos
 // botones más: Agregar todas las de la pestaña, y Limpiar.
+// Las columnas de la clasificación que se eligió a la izquierda (o todas).
 function columnArrangeTabKeys(state) {
-    return state.columnKeys.filter((k) => (state.groupKeys.get(k) || COLUMN_ARRANGE_UNCLASSIFIED) === columnArrangeState.activeTab);
+    const { availClass } = columnArrangeState;
+    return state.columnKeys.filter((k) => availClass === DUAL_ALL_CLASSES || dualClassOf(state, k) === availClass);
 }
 
 function updateVisibilityToolsUi() {
@@ -6709,26 +7092,16 @@ function updateVisibilityToolsUi() {
         : t('main.visCountsNoPin', { visible: String(chosen.length) });
     // Sin ninguna columna marcada no hay tabla que guardar.
     refs.visSave.disabled = chosen.length === 0;
-    const tab = columnArrangeState.activeTab;
-    refs.visAddAllText.textContent = t('main.visAddAll', {
-        name: tab === COLUMN_ARRANGE_UNCLASSIFIED ? t('menu.classNone') : resolveGroupLabel(tab),
-    });
+    refs.visAddAllText.textContent = t('main.visAddAll', { name: dualClassName(columnArrangeState.availClass) });
     refs.visAddAll.disabled = columnArrangeTabKeys(state).every((k) => chosen.includes(k));
 }
 
-// Marca Visible todas las columnas de la pestaña activa; las que ya eran Fija
-// siguen fijas y las de otras pestañas no se tocan.
+// Pasa a la tabla todas las columnas de la clasificación elegida (o todas) que aún no están; las que ya eran fijas siguen fijas.
 function visibilityAddAllInTab() {
     const state = dataTableColumnState.get(columnArrangeState.tableId);
     if (!state) return;
-    const { draftConfig, decidedKeys } = columnArrangeState;
-    columnArrangeTabKeys(state).forEach((key) => {
-        decidedKeys.add(key);
-        draftConfig.hidden = draftConfig.hidden.filter((k) => k !== key);
-    });
-    renderColumnArrangeRows();
-    renderColumnArrangePreview();
-    updateColumnArrangeGating();
+    const chosen = new Set(columnArrangeChosenKeys());
+    dualAdd(columnArrangeTabKeys(state).filter((k) => !chosen.has(k)));
 }
 
 // Deja todas las columnas sin marcar (también las fijas) y la vista previa
@@ -6782,20 +7155,17 @@ function openColumnArrangeEditor(tableId, layout = null, opts = {}) {
         mode: vis ? 'visibility' : 'layout',
         canPin: opts.canPin !== false,
         canHide: opts.canHide !== false,
-        activeTab: null,
+        availClass: DUAL_ALL_CLASSES,
         query: '',
+        sel: { avail: new Set(), table: new Set() },
+        anchor: { avail: null, table: null },
         scope: 'personal',
         terminarAcomodoDone: false,
         terminarAsignacionDone: false,
     };
-    const presentGroupKeys = [...new Set(state.columnKeys.map((k) => state.groupKeys.get(k)).filter(Boolean))];
-    columnArrangeState.activeTab = presentGroupKeys[0] || COLUMN_ARRANGE_UNCLASSIFIED;
-
     const { canPin, canHide } = columnArrangeState;
     refs.titleEl.textContent = t(vis ? 'main.columnsBtn' : (editing ? 'main.arrangeEditTitle' : 'main.arrangeNewTitle'));
     refs.visHint.textContent = t(canPin && canHide ? 'main.columnsEditorHint' : (canPin ? 'main.pinColumnsHint' : 'main.columnVisibilityHint'));
-    refs.legendX.parentElement.hidden = !canHide;
-    refs.legendPinWrap.hidden = !canPin;
     // Limpiar deja todo sin marcar (lo no marcado queda oculto): sin permiso de ocultar no aplica.
     refs.visClear.hidden = vis && !canHide;
     refs.nameLabel.textContent = t(editing ? 'main.arrangeNameLabelEdit' : 'main.arrangeNameLabel');
@@ -6807,10 +7177,8 @@ function openColumnArrangeEditor(tableId, layout = null, opts = {}) {
     refs.saveBlock2.hidden = vis;
     refs.closeActions.hidden = vis;
     refs.visHint.hidden = !vis;
-    refs.visTools.hidden = !vis;
+    refs.visTools.hidden = false; // «Agregar todas», «Limpiar» y los conteos también salen al armar un acomodo nuevo
     refs.visFooter.hidden = !vis;
-    refs.legendX.textContent = t(vis ? 'main.visibilityModeHidden' : 'main.arrangeModeX');
-    refs.legendNormal.textContent = t(vis ? 'main.visibilityModeVisible' : 'main.arrangeModeNormal');
     refs.previewLabel.textContent = t(vis ? 'main.visPreviewLabel' : 'main.arrangePreviewLabel');
     savedLayoutSaveBtn.textContent = t(editing ? 'main.arrangeSaveChanges' : 'admin.save');
     // Editar solo cambia nombre y columnas: alcance, audiencia y "default al
@@ -6826,7 +7194,6 @@ function openColumnArrangeEditor(tableId, layout = null, opts = {}) {
     refs.terminarAsignacionBtn.hidden = true;
     refs.searchInput.value = '';
 
-    renderColumnArrangeTabs();
     renderColumnArrangeRows();
     renderColumnArrangePreview();
     updateColumnArrangeGating();
