@@ -76,6 +76,33 @@ function normalizeSteps(raw) {
     }
     return steps;
 }
+// ---- fórmula libre (Daniel, 2026-11-27, «haz las fórmulas libres»): una operación puede guardarse como un árbol de cuenta en vez de pasos cuando la fórmula escrita no cabe en pasos (=H*(I+J), =H*I+J*K).
+// Nodos: { value } · { col } · { op: add|sub|mul|div, l, r } · { fn: pow|min|max|logbase|round|sqrt|ln|log10|exp|abs, args }. Las columnas van por su llave (no por letra): mover o quitar columnas no la desordena; "col" se escribe así a propósito
+// para que el aviso de «la usan estas fórmulas» (que busca "col":"…") también la encuentre.
+const MAX_EXPR_NODES = 60;
+const MAX_EXPR_DEPTH = 12;
+const EXPR_OPS = new Set(['add', 'sub', 'mul', 'div']);
+const EXPR_FNS = { pow: 2, min: 2, max: 2, logbase: 2, round: 2, sqrt: 1, ln: 1, log10: 1, exp: 1, abs: 1 };
+function normalizeExpr(raw) {
+    let count = 0;
+    const walk = (node, depth) => {
+        count += 1;
+        if (!node || typeof node !== 'object' || count > MAX_EXPR_NODES || depth > MAX_EXPR_DEPTH) return null;
+        if (typeof node.col === 'string') return COLUMN_KEY.test(node.col) ? { col: node.col } : null;
+        if (node.op === undefined && node.fn === undefined) return typeof node.value === 'number' && Number.isFinite(node.value) && Math.abs(node.value) <= 1e12 ? { value: node.value } : null;
+        if (typeof node.op === 'string') {
+            if (!EXPR_OPS.has(node.op)) return null;
+            const l = walk(node.l, depth + 1); const r = walk(node.r, depth + 1);
+            return l && r ? { op: node.op, l, r } : null;
+        }
+        if (typeof node.fn === 'string' && EXPR_FNS[node.fn] !== undefined && Array.isArray(node.args) && node.args.length === EXPR_FNS[node.fn]) {
+            const args = node.args.map((a) => walk(a, depth + 1));
+            return args.every(Boolean) ? { fn: node.fn, args } : null;
+        }
+        return null;
+    };
+    return walk(raw, 0);
+}
 const numericOf = (v) => {
     if (v === null || v === undefined || (typeof v === 'string' && v.trim() === '')) return null;
     const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'));
@@ -166,9 +193,15 @@ function normalizeAdded(raw) {
         let body;
         if (c.kind === 'comment') body = {}; // «Comentarios» (2026-11-27): no se calcula, la persona la escribe renglón por renglón (analysis_comments)
         else if (c.kind === 'op') {
-            const steps = normalizeSteps(c.steps);
-            if (!steps) return { error: 'ADDED_STEPS' };
-            body = { steps };
+            if (c.expr !== undefined && c.expr !== null) {
+                const expr = normalizeExpr(c.expr);
+                if (!expr) return { error: 'ADDED_STEPS' };
+                body = { expr };
+            } else {
+                const steps = normalizeSteps(c.steps);
+                if (!steps) return { error: 'ADDED_STEPS' };
+                body = { steps };
+            }
         } else if (c.kind === 'block') {
             const blocks = normalizeBlocks(c.blocks);
             if (!blocks || !BLOCK_FNS.has(c.fn)) return { error: 'ADDED_BLOCK' };
@@ -267,6 +300,23 @@ function formulaOfSteps(steps, letterOf) {
         }
     });
     return `=${expr}`;
+}
+
+const EXPR_PREC = { add: 1, sub: 1, mul: 2, div: 2 };
+const EXPR_SIGN = { add: '+', sub: '-', mul: '*', div: '/' };
+const EXPR_FN_NAME = { pow: 'POTENCIA', min: 'MIN', max: 'MAX', logbase: 'LOG', round: 'REDONDEAR', sqrt: 'RAIZ', ln: 'LN', log10: 'LOG10', exp: 'EXP', abs: 'ABS' };
+// El árbol como fórmula de Excel (la misma forma que formulaOfSteps: letra + 2, funciones en español, argumentos con ;). Va entre paréntesis solo lo que lo necesita para no cambiar la cuenta.
+function formulaOfExpr(expr, letterOf) {
+    const text = (node, parentOp, side) => {
+        if (node.col !== undefined) { const l = letterOf(node.col); return l ? `${l}2` : '#REF!'; }
+        if (node.value !== undefined) return numText(node.value);
+        if (node.fn) return `${EXPR_FN_NAME[node.fn]}(${node.args.map((a) => text(a, null, null)).join(';')})`;
+        const out = `${text(node.l, node.op, 'l')}${EXPR_SIGN[node.op]}${text(node.r, node.op, 'r')}`;
+        if (!parentOp) return out;
+        const mine = EXPR_PREC[node.op]; const theirs = EXPR_PREC[parentOp];
+        return mine < theirs || (mine === theirs && side === 'r' && (parentOp === 'sub' || parentOp === 'div')) ? `(${out})` : out;
+    };
+    return `=${text(expr, null, null)}`;
 }
 
 const quote = (text) => `"${String(text).replace(/"/g, '""')}"`;
@@ -397,6 +447,45 @@ function runSteps(steps, get) {
     return round6(acc);
 }
 
+// Lo mismo que runSteps pero sobre el árbol: vacío si falta algún dato, si se divide entre cero o si el resultado no es un número (raíz de un negativo, logaritmo de cero…).
+function runExpr(expr, get) {
+    const go = (node) => {
+        if (node.col !== undefined) return toNumber(get(node.col));
+        if (node.value !== undefined) return node.value;
+        let out;
+        if (node.fn) {
+            const a = node.args.map(go);
+            if (a.some((x) => x === null)) return null;
+            const x = a[0]; const y = a[1];
+            switch (node.fn) {
+                case 'pow': out = Math.pow(x, y); break;
+                case 'min': out = Math.min(x, y); break;
+                case 'max': out = Math.max(x, y); break;
+                case 'logbase': if (!(x > 0) || !(y > 0) || y === 1) return null; out = Math.log(x) / Math.log(y); break;
+                case 'round': { if (!Number.isInteger(y) || y < 0 || y > 10) return null; const f = 10 ** y; out = Math.round(x * f) / f; break; }
+                case 'sqrt': if (x < 0) return null; out = Math.sqrt(x); break;
+                case 'ln': if (!(x > 0)) return null; out = Math.log(x); break;
+                case 'log10': if (!(x > 0)) return null; out = Math.log10(x); break;
+                case 'exp': if (x > 700) return null; out = Math.exp(x); break;
+                case 'abs': out = Math.abs(x); break;
+                default: return null;
+            }
+        } else {
+            const l = go(node.l); if (l === null) return null;
+            const r = go(node.r); if (r === null) return null;
+            switch (node.op) {
+                case 'add': out = l + r; break;
+                case 'sub': out = l - r; break;
+                case 'mul': out = l * r; break;
+                default: if (r === 0) return null; out = l / r;
+            }
+        }
+        return Number.isFinite(out) ? out : null;
+    };
+    const result = go(expr);
+    return result === null ? null : round6(result);
+}
+
 const isBlank = (v) => v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
 const foldText = (v) => String(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 function testCond(c, v) {
@@ -478,13 +567,13 @@ const runColumn = (c, get, ctx, limit) => {
     if (c.kind === 'comment') return null; // una columna de comentarios la llena el servidor con lo que se escribió
     if (c.kind === 'criterion') return runCriterion(c, get, ctx, limit);
     if (c.kind === 'block') return runBlock(c, get, ctx, limit);
-    return runSteps(c.steps, get);
+    return c.expr ? runExpr(c.expr, get) : runSteps(c.steps, get);
 };
 const formulaOfColumn = (c, letterOf, ctx, limit) => {
     if (c.kind === 'comment') return '';
     if (c.kind === 'criterion') return formulaOfCriterion(c, letterOf, ctx, limit);
     if (c.kind === 'block') return formulaOfBlock(c, ctx, limit);
-    return formulaOfSteps(c.steps, letterOf);
+    return c.expr ? formulaOfExpr(c.expr, letterOf) : formulaOfSteps(c.steps, letterOf);
 };
 
 const addedKey = (c) => `a_${c.id}`;
@@ -516,4 +605,4 @@ function applyAdded(added, baseColumns, rows) {
     });
 }
 
-module.exports = { MAX_ADDED, MAX_STEPS, MAX_RULES, MAX_BLOCKS, BLOCK_FNS, normalizeClassColor, normalizeAdded, columnLetter, formulaOfSteps, formulaOfCriterion, formulaOfBlock, runSteps, runCriterion, runBlock, makeContext, addedColumnDefs, applyAdded, addedKey };
+module.exports = { normalizeExpr, runExpr, formulaOfExpr, MAX_ADDED, MAX_STEPS, MAX_RULES, MAX_BLOCKS, BLOCK_FNS, normalizeClassColor, normalizeAdded, columnLetter, formulaOfSteps, formulaOfCriterion, formulaOfBlock, runSteps, runCriterion, runBlock, makeContext, addedColumnDefs, applyAdded, addedKey };

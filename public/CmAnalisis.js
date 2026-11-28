@@ -942,10 +942,24 @@ function parseFormula(text, letters) {
         if (OPS_VALUE_ONLY.has(n.op) && a.value === undefined) fail('VALUEONLY', n.name);
         return [...base, { op: n.op, arg: a }];
     };
+    // la fórmula libre: el mismo árbol en la forma que guarda el servidor (una columna por su llave; el operador ^ es la función POTENCIA)
+    const exprOf = (n) => {
+        if (n.t === 'col') return { col: n.key };
+        if (n.t === 'num') return { value: n.v };
+        if (n.t === 'bin') return n.op === 'pow' ? { fn: 'pow', args: [exprOf(n.l), exprOf(n.r)] } : { op: n.op, l: exprOf(n.l), r: exprOf(n.r) };
+        return { fn: n.op, args: n.args.map(exprOf) };
+    };
+    const sizeOf = (n, depth) => (n.col !== undefined || n.value !== undefined ? { nodes: 1, depth } : [n.l, n.r, ...(n.args || [])].filter(Boolean).map((c) => sizeOf(c, depth + 1)).reduce((a, b) => ({ nodes: a.nodes + b.nodes, depth: Math.max(a.depth, b.depth) }), { nodes: 1, depth }));
     try {
         const tree = expr();
         if (i < toks.length) fail('SYNTAX');
-        return { steps: stepsOf(tree) };
+        // cabe en pasos (de izquierda a derecha, una columna o un número en cada uno) → pasos, como siempre; si no (=H*(I+J), =H*I+J*K) → fórmula libre
+        let steps = null;
+        try { steps = stepsOf(tree); } catch (e) { if (!(e && (e.code === 'NOSTEPS' || e.code === 'VALUEONLY'))) throw e; }
+        if (steps && steps.length <= 20) return { steps };
+        const free = exprOf(tree); const size = sizeOf(free, 0);
+        if (size.nodes > 60 || size.depth > 12) fail('TOOBIG');
+        return { expr: free };
     } catch (e) {
         if (e && e.code) return { err: [e.code, e.x, e.n] };
         throw e;
@@ -967,8 +981,8 @@ function openAddedDialog(editId) {
         : { op: s.op, kind: 'value', col: '', value: '' });
     const first = pickable[0];
     const draft = editing
-        ? { name: editing.name, cls: editing.cls || '', decimals: editing.decimals, steps: editing.steps.map(toDraftStep) }
-        : { name: '', cls: '', decimals: 1, steps: [{ op: 'start', kind: 'col', col: first ? first.key : '', value: '' }] };
+        ? { name: editing.name, cls: editing.cls || '', decimals: editing.decimals, steps: editing.steps ? editing.steps.map(toDraftStep) : [], expr: editing.expr || null }
+        : { name: '', cls: '', decimals: 1, steps: [{ op: 'start', kind: 'col', col: first ? first.key : '', value: '' }], expr: null }; // expr: la fórmula libre (no cabe en pasos); si hay, manda sobre los pasos
     let touchedName = !!editing;
     const html = `<h3>${esc(t(editing ? 'main.anAddedEditTitle' : 'main.anAddedTitle'))}</h3>
         <div class="an-f2">
@@ -1024,17 +1038,31 @@ function openAddedDialog(editId) {
             }
             return `=${expr}`;
         };
+        // una fórmula libre como texto (el mismo que arma el servidor): paréntesis solo donde hacen falta
+        const exprFormula = (expr) => {
+            const sign = { add: '+', sub: '-', mul: '*', div: '/' }; const prec = { add: 1, sub: 1, mul: 2, div: 2 };
+            const text = (node, parentOp, side) => {
+                if (node.col !== undefined) { const l = keyLetters.get(node.col); return l ? `${l}2` : '#REF!'; }
+                if (node.value !== undefined) return String(node.value);
+                if (node.fn) return `${FX_NAME_OF[node.fn]}(${node.args.map((a) => text(a, null, null)).join(';')})`;
+                const out = `${text(node.l, node.op, 'l')}${sign[node.op]}${text(node.r, node.op, 'r')}`;
+                if (!parentOp) return out;
+                return prec[node.op] < prec[parentOp] || (prec[node.op] === prec[parentOp] && side === 'r' && (parentOp === 'sub' || parentOp === 'div')) ? `(${out})` : out;
+            };
+            return `=${text(expr, null, null)}`;
+        };
+        const currentFormula = () => (draft.expr ? exprFormula(draft.expr) : draftFormula(draft.steps));
         const fxErrorText = ([code, x, n]) => t(`main.anFxErr_${code}`, { x: x || '', n: n || '' });
         const applyFx = (text) => {
             const box = $('#an-ad-fx'); const msg = $('#an-ad-fx-err');
             const r = parseFormula(text, letterKeys);
             if (r.err) { fxError = fxErrorText(r.err); msg.textContent = fxError; box.classList.add('an-fx-bad'); box.setAttribute('aria-invalid', 'true'); return; }
             fxError = ''; msg.textContent = ''; box.classList.remove('an-fx-bad'); box.removeAttribute('aria-invalid');
-            draft.steps = r.steps.map(toDraftStep);
+            if (r.expr) draft.expr = r.expr; else { draft.expr = null; draft.steps = r.steps.map(toDraftStep); } // cabe en pasos → pasos de siempre; si no → fórmula libre
         };
         const setMode = (next) => {
             if (next === mode) return;
-            if (next === 'fx') { const box = $('#an-ad-fx'); box.value = draftFormula(draft.steps) || '='; mode = 'fx'; applyFx(box.value); } else { mode = 'steps'; fxError = ''; drawSteps(); }
+            if (next === 'fx') { const box = $('#an-ad-fx'); box.value = currentFormula() || '='; mode = 'fx'; applyFx(box.value); } else { mode = 'steps'; fxError = ''; drawSteps(); }
             $('#an-ad-pane-steps').hidden = mode !== 'steps'; $('#an-ad-pane-fx').hidden = mode !== 'fx';
             overlay.querySelectorAll('[data-an-adtab]').forEach((b) => { const on = b.dataset.anAdtab === mode; b.classList.toggle('reg-tab-on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
             preview();
@@ -1042,6 +1070,8 @@ function openAddedDialog(editId) {
         };
         const colSelect = (value, field, stepIndex, withValue) => `<select data-st="${stepIndex}" data-f="${field}">${pickable.map((c) => `<option value="${esc(c.key)}"${value === c.key ? ' selected' : ''}>${esc(c.letter)} · ${esc(c.title)}</option>`).join('')}${withValue ? `<option value="__value"${value === '__value' ? ' selected' : ''}>${esc(t('main.anArgValue'))}</option>` : ''}</select>`;
         const drawSteps = () => {
+            $('[data-an-addstep]').parentElement.hidden = !!draft.expr;
+            if (draft.expr) { $('#an-ad-steps').innerHTML = `<p class="an-fx-note">${esc(t('main.anFxNoStepsView'))}</p>`; return; }
             $('#an-ad-steps').innerHTML = draft.steps.map((s, i) => {
                 if (i === 0) {
                     return `<div class="an-step"><b>1</b><span>${esc(t('main.anStepStart'))}</span>${colSelect(s.kind === 'col' ? s.col : '__value', 'pick', 0, true)}${s.kind === 'value' ? `<input type="text" inputmode="decimal" data-st="0" data-f="value" value="${esc(s.value)}" placeholder="${esc(t('main.anArgValuePh'))}" aria-label="${esc(t('main.anArgValuePh'))}">` : ''}</div>`;
@@ -1058,6 +1088,7 @@ function openAddedDialog(editId) {
         const colorFor = (cls) => colorOfClass(cls, editing); // el mismo nombre de clasificación lleva el mismo color en las columnas consultadas y en las agregadas
         const toDef = () => {
             if (mode === 'fx' && fxError) return null; // la fórmula escrita no se entiende: no hay nada que calcular ni guardar
+            if (draft.expr) return { id: editing ? editing.id : undefined, kind: 'op', name: draft.name.trim(), cls: draft.cls.trim(), color: colorFor(draft.cls.trim()), decimals: draft.decimals, expr: draft.expr };
             const steps = [];
             for (const s of draft.steps) {
                 if (s.op === 'start') {
@@ -1087,6 +1118,7 @@ function openAddedDialog(editId) {
             }, 250);
         };
         drawSteps(); preview();
+        if (draft.expr) setMode('fx'); // una fórmula libre guardada se abre en «Fórmula»: no se ve en pasos
         overlay.addEventListener('input', (event) => {
             const el = event.target;
             if (el.id === 'an-ad-name') { draft.name = el.value; touchedName = true; return; }

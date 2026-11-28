@@ -5858,8 +5858,8 @@
     "anFxErr_FN": "I do not know the function {x}.",
     "anFxErr_ARGS": "The function {x} needs {n} value(s), separated with ;",
     "anFxErr_SYNTAX": "The formula is incomplete or has an extra parenthesis.",
-    "anFxErr_NOSTEPS": "That formula does not fit in steps: each step uses a single column or a number. =(H+J)*I fits; =H*(I+J) does not.",
-    "anFxErr_VALUEONLY": "In {x}, the second value is a number (for example 2).",
+    "anFxErr_TOOBIG": "The formula is too long or has too many nested parentheses.",
+    "anFxNoStepsView": "This formula cannot be shown step by step (it has parentheses or several columns mixed). It is saved as a formula: edit it in the “Formula” tab.",
     "anErr_ADDED_NAME": "Give the column a name.",
     "anErr_ADDED_STEPS": "Check the steps: each one needs its column or its value.",
     "anErr_ADDED_KIND": "That kind of column cannot be added yet.",
@@ -10775,7 +10775,7 @@
       "example": "Filter Sub inventory = FAR → in the Exist column I tap \"Sum\" and see the total stock of FAR."
     },
     "anFormulaTab": {
-      "what": "The operation is built in two ways that fill each other in: “Step by step” (you pick each step) or “Formula” (you write it like in Excel, with the column letters). The formula is turned into steps from left to right, each with a single column or a number; if it does not fit in steps, it tells you. Functions: REDONDEAR, RAIZ, ABS, MIN, MAX, POTENCIA, LN, LOG10, LOG, EXP, separating the values with ;",
+      "what": "The operation is built in two ways that fill each other in: “Step by step” (you pick each step) or “Formula” (you write it like in Excel, with the column letters). If the formula fits in steps from left to right (one column or a number in each), it is saved as steps; if it has parentheses or several columns mixed (=H*(I+J)), it is saved as a free formula and only shows in “Formula”. Functions: REDONDEAR, RAIZ, ABS, MIN, MAX, POTENCIA, LN, LOG10, LOG, EXP, separating the values with ;",
       "example": "=REDONDEAR(H*I;0) → cost × stock, no decimals."
     },
     "anTypeBand": {

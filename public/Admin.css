@@ -10922,6 +10922,7 @@ td.an-added, th.an-added{ background: color-mix(in srgb, var(--color-accent) 7%,
 .an-ad-tabs{ margin: 0.5rem 0 0.7rem; }
 .an-fx{ display: block; width: 100%; box-sizing: border-box; font-family: ui-monospace, Consolas, monospace; font-size: 0.95rem; padding: 0.5rem 0.7rem; border-radius: 0.6rem; border: 1px dashed color-mix(in srgb, var(--color-accent) 55%, transparent); background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface)); color: inherit; }
 .an-fx.an-fx-bad{ border-style: solid; border-color: #b3261e; }
+.an-fx-note{ margin: 0.2rem 0 0.5rem; padding: 0.5rem 0.7rem; border-radius: 0.6rem; font-size: 0.84rem; background: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface)); }
 .an-fx-err{ min-height: 1.2rem; margin: 0.3rem 0 0.4rem; font-size: 0.82rem; color: #b3261e; }
 body.dark-mode .an-fx-err{ color: #ff8a80; }
 body.dark-mode .an-fx.an-fx-bad{ border-color: #ff8a80; }

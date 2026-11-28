@@ -5857,8 +5857,8 @@
     "anFxErr_FN": "No conozco la función {x}.",
     "anFxErr_ARGS": "La función {x} necesita {n} dato(s), separados con ;",
     "anFxErr_SYNTAX": "La fórmula está incompleta o tiene un paréntesis de más.",
-    "anFxErr_NOSTEPS": "Esa fórmula no cabe en pasos: cada paso usa una sola columna o un número. =(H+J)*I sí cabe; =H*(I+J) no.",
-    "anFxErr_VALUEONLY": "En {x}, el segundo dato es un número (por ejemplo 2).",
+    "anFxErr_TOOBIG": "La fórmula es demasiado larga o tiene demasiados paréntesis anidados.",
+    "anFxNoStepsView": "Esta fórmula no se puede ver paso a paso (lleva paréntesis o varias columnas mezcladas). Está guardada como fórmula: edítala en la pestaña «Fórmula».",
     "anErr_ADDED_NAME": "Ponle un nombre a la columna.",
     "anErr_ADDED_STEPS": "Revisa los pasos: cada uno necesita su columna o su valor.",
     "anErr_ADDED_KIND": "Ese tipo de columna todavía no se puede agregar.",
@@ -10774,7 +10774,7 @@
       "example": "Filtro Sub inventario = FAR → en la columna Exist toco «Suma» y veo el total de existencias de FAR."
     },
     "anFormulaTab": {
-      "what": "La operación se arma de dos formas que se llenan una a la otra: «Paso a paso» (eliges cada paso) o «Fórmula» (la escribes como en Excel, con las letras de las columnas). La fórmula se convierte en pasos de izquierda a derecha, cada uno con una sola columna o un número; si no cabe en pasos, te lo dice. Funciones: REDONDEAR, RAIZ, ABS, MIN, MAX, POTENCIA, LN, LOG10, LOG, EXP, separando los datos con ;",
+      "what": "La operación se arma de dos formas que se llenan una a la otra: «Paso a paso» (eliges cada paso) o «Fórmula» (la escribes como en Excel, con las letras de las columnas). Si la fórmula cabe en pasos de izquierda a derecha (una columna o un número en cada uno), se guarda como pasos; si lleva paréntesis o varias columnas mezcladas (=H*(I+J)), se guarda como fórmula libre y solo se ve en «Fórmula». Funciones: REDONDEAR, RAIZ, ABS, MIN, MAX, POTENCIA, LN, LOG10, LOG, EXP, separando los datos con ;",
       "example": "=REDONDEAR(H*I;0) → costo × existencia, sin decimales."
     },
     "anTypeBand": {
