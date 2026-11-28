@@ -4,6 +4,7 @@
 const ExcelJS = require('exceljs');
 const flex = require('./flexRegistries');
 const flexExcel = require('./flexExcel');
+const downloadPresets = require('./downloadPresets');
 const SearchSyntax = require('./public/SearchSyntax.js');
 const db = require('./db');
 const analysisSources = require('./analysisSources');
@@ -24,7 +25,7 @@ const stampToDb = (iso) => {
 };
 
 module.exports = function createFlexApi(deps) {
-    const { regAbilities, regForbidden, hasCompleteCostCenter, changedByLabel, logTableChange, notifyButtonAction, buildContentDisposition, REG_TABLE, REG_LOADS_TABLE, regLoading, REG_MESSAGES } = deps;
+    const { regAbilities, regForbidden, hasCompleteCostCenter, changedByLabel, logTableChange, notifyButtonAction, buildContentDisposition, REG_TABLE, REG_LOADS_TABLE, regLoading, REG_MESSAGES, resolveDownloadPreset } = deps;
     const fail = (res, status, code) => res.status(status).json({ code, message: MESSAGES[code] || REG_MESSAGES[code] || REG_MESSAGES.IMPORT_FILE });
 
     // ---- lo que se ve: las columnas y los renglones de lo vigente ------------------------------------------------------------------------------------------------
@@ -174,7 +175,12 @@ module.exports = function createFlexApi(deps) {
         const only = asked.length && picked.length ? picked : null;
         // dec: los decimales que la persona ve en pantalla («Encabezados y celdas»): la descarga baja lo que se ve (Daniel, 2026-11-28)
         const decAsked = req.query.dec === undefined || req.query.dec === '' ? null : Number(req.query.dec);
-        const decOverride = Number.isInteger(decAsked) && decAsked >= 0 && decAsked <= 6 ? decAsked : null;
+        // Mi personalización de Descarga: la que se manda para esta descarga, la elegida o la del registro (sin ninguna, sale como siempre). Si fija los decimales manda sobre lo que se ve.
+        const chosenPreset = resolveDownloadPreset(req, { registryKey: registry.key }).preset;
+        const pickedNumbers = chosenPreset ? downloadPresets.numbersOf(chosenPreset) : null;
+        const decFromScreen = Number.isInteger(decAsked) && decAsked >= 0 && decAsked <= 6 ? decAsked : null;
+        const decOverride = pickedNumbers && pickedNumbers.dec !== null ? pickedNumbers.dec : decFromScreen;
+        const csvOpt = chosenPreset ? downloadPresets.csvOptions(chosenPreset) : { sep: ',', bom: true, title: false, titleText: '' };
         const headers = (only || ctx.columns.map((c, i) => i)).map((i) => ctx.columns[i].label);
         const exportRow = (get) => { const full = rowArray(ctx, get); const row = only ? only.map((i) => full[i]) : full; return format === 'csv' && decOverride !== null ? row.map((v) => (typeof v === 'number' ? v.toFixed(decOverride) : v)) : row; };
         res.set('Cache-Control', 'no-store');
@@ -188,12 +194,12 @@ module.exports = function createFlexApi(deps) {
             scan(ctx, (get) => { current.push(exportRow(get)); if (current.length >= PAGE) { batches.push(current); current = []; } return true; });
             if (current.length) batches.push(current);
             if (format === 'csv') {
-                const csv = (v) => { const text = String(v ?? ''); return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; };
+                const csv = (v) => { const text = String(v ?? ''); return text.includes(csvOpt.sep) || /["\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; };
                 const send = (chunk) => (res.write(chunk) ? Promise.resolve() : new Promise((resolve) => res.once('drain', resolve)));
-                await send(`﻿${headers.map(csv).join(',')}\r\n`);
+                await send(`${csvOpt.bom ? '\ufeff' : ''}${csvOpt.title ? `${csv(csvOpt.titleText || registry.name || registry.key)}\r\n` : ''}${headers.map(csv).join(csvOpt.sep)}\r\n`);
                 while (batches.length) {
                     if (res.destroyed) return;
-                    await send(`${batches.shift().map((r) => r.map(csv).join(',')).join('\r\n')}\r\n`);
+                    await send(`${batches.shift().map((r) => r.map(csv).join(csvOpt.sep)).join('\r\n')}\r\n`);
                     await yieldToOthers();
                 }
                 res.end();
@@ -203,7 +209,7 @@ module.exports = function createFlexApi(deps) {
                 const columnsOut = (only || ctx.columns.map((c, i) => i)).map((i) => ctx.columns[i]);
                 const lastLoad = ctx.loads.length ? ctx.loads[ctx.loads.length - 1] : null;
                 await flexExcel.writeWorkbook({
-                    stream: res, batches, columns: columnsOut, format: flexExcel.mergeFormat(saved && saved.format), decOverride,
+                    stream: res, batches, columns: columnsOut, format: downloadPresets.flexFormatFor(chosenPreset, saved && saved.format), decOverride,
                     meta: { lang: ctx.lang, tz: ctx.tz, registryName: registry.name || registry.key, by: changedByLabel(req), lastLoad: lastLoad ? { fileName: lastLoad.fileName, loadedBy: lastLoad.loadedBy, createdAt: lastLoad.createdAt } : null, searchText: String(req.query.text || '').trim().slice(0, 100), hasColumnFilters: !!req.query.cf, totalColumns: ctx.columns.length },
                 });
             }

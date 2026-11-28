@@ -6051,6 +6051,7 @@
     "regErr_REG_OBSOLETE": "Ese registro es obsoleto: ya no recibe cargas.",
     "regObsoleto": "Uso",
     "regFormatoDescarga": "Formato de la descarga",
+    "regPersonalizacionDescarga": "Personalización de la descarga",
     "regFormatoColumna": "Formato de columna",
     "fmtOpen": "Formato de la columna «{name}»",
     "fmtTitle": "Formato de «{name}»",

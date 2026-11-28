@@ -1290,6 +1290,35 @@ db.exec(`
     );
 `);
 
+// MI PERSONALIZACIÓN DE DESCARGA (Daniel, 2026-11-28): cada persona guarda con nombre cómo quiere que salgan sus descargas (Excel, CSV, PDF: título, encabezado, números, líneas…; ver downloadPresets.js). Son SOLO de quien las crea y valen
+// para todas las tablas. Una de ellas (is_active) es la que sale elegida al descargar; kind = 'factory' es la fila que se crea cuando la persona elige «Como siempre» (la de fábrica) a propósito: no se renombra ni se borra y su contenido se ignora.
+// manual_registry_presets: la personalización DEL REGISTRO (la que se aplica a quien no eligió la suya); la cambia quien puede cambiar el registro.
+db.exec(`
+    CREATE TABLE IF NOT EXISTS download_presets (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data INTEGER NOT NULL DEFAULT 0,
+        user_id      INTEGER NOT NULL,
+        name         TEXT NOT NULL,
+        name_key     TEXT NOT NULL,
+        kind         TEXT NOT NULL DEFAULT 'own',
+        preset_json  TEXT NOT NULL,
+        is_active    INTEGER NOT NULL DEFAULT 0,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (client_id, is_test_data, user_id, name_key)
+    );
+    CREATE TABLE IF NOT EXISTS manual_registry_presets (
+        client_id    INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        is_test_data INTEGER NOT NULL DEFAULT 0,
+        registry_key TEXT NOT NULL,
+        preset_json  TEXT NOT NULL,
+        updated_by   TEXT NOT NULL DEFAULT '',
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (client_id, is_test_data, registry_key)
+    );
+`);
+
 // Cargas Manuales › Análisis Registros Manuales (Daniel, 2026-11-25): un análisis junta uno o dos registros por unidad + código; «Extraer» saca un ARCHIVO propio (una versión con su fecha) que es una COPIA: no cambia aunque después cambie un registro.
 // Los análisis y las versiones nunca se borran: un análisis se desactiva y una versión se anula.
 db.exec(`
@@ -5638,6 +5667,76 @@ function setRegistryLayout(clientId, forTestAccount, key, layout, byLabel) {
     const lane = forTestAccount ? 1 : 0;
     if (layout) db.prepare("INSERT OR REPLACE INTO manual_registry_layouts (client_id, is_test_data, registry_key, layout_json, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))").run(clientId, lane, key, JSON.stringify(layout), byLabel || '');
     else db.prepare('DELETE FROM manual_registry_layouts WHERE client_id = ? AND is_test_data = ? AND registry_key = ?').run(clientId, lane, key);
+}
+// ---- Mi personalización de Descarga (ver downloadPresets.js) ----
+const FACTORY_KEY = '#factory'; // un name_key que ninguna persona puede escribir (los nombres quedan solo con letras, números y espacios)
+const mapDownloadPreset = (row) => {
+    let preset = null;
+    try { preset = JSON.parse(row.preset_json); } catch { preset = null; }
+    return { id: row.id, name: row.name, kind: row.kind, preset, active: row.is_active === 1, createdAt: row.created_at, updatedAt: row.updated_at };
+};
+// Las personalizaciones propias de una persona (la de fábrica no es una fila hasta que se elige) y cuál está elegida: { presets, active } con active = null | 'factory' | id.
+function listDownloadPresets(clientId, forTestAccount, userId) {
+    const rows = db.prepare("SELECT * FROM download_presets WHERE client_id = ? AND is_test_data = ? AND user_id = ? ORDER BY name_key").all(clientId, forTestAccount ? 1 : 0, userId);
+    const presets = rows.filter((r) => r.kind === 'own').map(mapDownloadPreset);
+    const chosen = rows.find((r) => r.is_active === 1);
+    return { presets, active: chosen ? (chosen.kind === 'factory' ? 'factory' : chosen.id) : null };
+}
+function getDownloadPreset(clientId, forTestAccount, userId, id) {
+    const row = db.prepare("SELECT * FROM download_presets WHERE id = ? AND client_id = ? AND is_test_data = ? AND user_id = ? AND kind = 'own'").get(id, clientId, forTestAccount ? 1 : 0, userId);
+    return row ? mapDownloadPreset(row) : null;
+}
+function countDownloadPresets(clientId, forTestAccount, userId) {
+    return db.prepare("SELECT COUNT(*) AS n FROM download_presets WHERE client_id = ? AND is_test_data = ? AND user_id = ? AND kind = 'own'").get(clientId, forTestAccount ? 1 : 0, userId).n;
+}
+// ¿ya hay otra con ese nombre? (sin mayúsculas ni acentos); exceptId = la que se está renombrando
+function downloadPresetNameTaken(clientId, forTestAccount, userId, nameKey, exceptId = 0) {
+    return !!db.prepare("SELECT 1 FROM download_presets WHERE client_id = ? AND is_test_data = ? AND user_id = ? AND name_key = ? AND id <> ? AND kind = 'own'").get(clientId, forTestAccount ? 1 : 0, userId, nameKey, exceptId);
+}
+function createDownloadPreset(clientId, forTestAccount, userId, name, nameKey, preset) {
+    return Number(db.prepare('INSERT INTO download_presets (client_id, is_test_data, user_id, name, name_key, preset_json) VALUES (?, ?, ?, ?, ?, ?)').run(clientId, forTestAccount ? 1 : 0, userId, name, nameKey, JSON.stringify(preset)).lastInsertRowid);
+}
+function updateDownloadPreset(clientId, forTestAccount, userId, id, { name, nameKey, preset }) {
+    const sets = ["updated_at = datetime('now')"]; const args = [];
+    if (name !== undefined) { sets.push('name = ?', 'name_key = ?'); args.push(name, nameKey); }
+    if (preset !== undefined) { sets.push('preset_json = ?'); args.push(JSON.stringify(preset)); }
+    return db.prepare(`UPDATE download_presets SET ${sets.join(', ')} WHERE id = ? AND client_id = ? AND is_test_data = ? AND user_id = ? AND kind = 'own'`).run(...args, id, clientId, forTestAccount ? 1 : 0, userId).changes > 0;
+}
+function deleteDownloadPreset(clientId, forTestAccount, userId, id) {
+    return db.prepare("DELETE FROM download_presets WHERE id = ? AND client_id = ? AND is_test_data = ? AND user_id = ? AND kind = 'own'").run(id, clientId, forTestAccount ? 1 : 0, userId).changes > 0;
+}
+// Elige cuál usa la persona al descargar: null = ninguna (sigue la del registro o la de fábrica), 'factory' = «Como siempre» a propósito, o el id de una suya. Devuelve false si esa no existe.
+function setActiveDownloadPreset(clientId, forTestAccount, userId, choice) {
+    const lane = forTestAccount ? 1 : 0;
+    return db.transaction(() => {
+        if (choice !== null && choice !== 'factory' && !getDownloadPreset(clientId, forTestAccount, userId, choice)) return false;
+        db.prepare('UPDATE download_presets SET is_active = 0 WHERE client_id = ? AND is_test_data = ? AND user_id = ? AND is_active = 1').run(clientId, lane, userId);
+        if (choice === 'factory') {
+            db.prepare("INSERT INTO download_presets (client_id, is_test_data, user_id, name, name_key, kind, preset_json, is_active) VALUES (?, ?, ?, '', ?, 'factory', '{}', 1) ON CONFLICT (client_id, is_test_data, user_id, name_key) DO UPDATE SET is_active = 1").run(clientId, lane, userId, FACTORY_KEY);
+        } else if (choice !== null) {
+            db.prepare('UPDATE download_presets SET is_active = 1 WHERE id = ?').run(choice);
+        }
+        return true;
+    })();
+}
+// La que la persona tiene elegida: null (ninguna), { kind: 'factory' } o { kind: 'own', id, name, preset }.
+function getActiveDownloadPreset(clientId, forTestAccount, userId) {
+    const row = db.prepare('SELECT * FROM download_presets WHERE client_id = ? AND is_test_data = ? AND user_id = ? AND is_active = 1').get(clientId, forTestAccount ? 1 : 0, userId);
+    if (!row) return null;
+    if (row.kind === 'factory') return { kind: 'factory' };
+    const mapped = mapDownloadPreset(row);
+    return { kind: 'own', id: mapped.id, name: mapped.name, preset: mapped.preset };
+}
+// La personalización del registro: null si no tiene; preset = null la quita.
+function getRegistryPreset(clientId, forTestAccount, key) {
+    const row = db.prepare('SELECT preset_json, updated_by, updated_at FROM manual_registry_presets WHERE client_id = ? AND is_test_data = ? AND registry_key = ?').get(clientId, forTestAccount ? 1 : 0, key);
+    if (!row) return null;
+    try { return { preset: JSON.parse(row.preset_json), updatedBy: row.updated_by, updatedAt: row.updated_at }; } catch { return null; }
+}
+function setRegistryPreset(clientId, forTestAccount, key, preset, byLabel) {
+    const lane = forTestAccount ? 1 : 0;
+    if (preset) db.prepare("INSERT OR REPLACE INTO manual_registry_presets (client_id, is_test_data, registry_key, preset_json, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, datetime('now'))").run(clientId, lane, key, JSON.stringify(preset), byLabel || '');
+    else db.prepare('DELETE FROM manual_registry_presets WHERE client_id = ? AND is_test_data = ? AND registry_key = ?').run(clientId, lane, key);
 }
 // ---- pasar un registro al tipo único (ver arriba) ----
 function mapRegistryMigration(row) {
@@ -23513,7 +23612,7 @@ module.exports = {
     insertPosSales,
     getPosSaleById,
     getPosSalesLastLoad,
-    listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete, getRegistryLayout, setRegistryLayout, getRegistryMigration, createRegistryMigration, updateRegistryMigration,
+    listRegistryDefs, createRegistryDef, updateRegistryDef, listRegistryObsolete, setRegistryObsolete, getRegistryLayout, setRegistryLayout, listDownloadPresets, getDownloadPreset, countDownloadPresets, downloadPresetNameTaken, createDownloadPreset, updateDownloadPreset, deleteDownloadPreset, setActiveDownloadPreset, getActiveDownloadPreset, getRegistryPreset, setRegistryPreset, getRegistryMigration, createRegistryMigration, updateRegistryMigration,
     analysisOrdersBySite,
     AN_SCREEN, analysisNameTaken, createAnalysis, getAnalysis, listAnalyses, updateAnalysis, listExtractions, getExtraction, createExtractionRecord, insertExtractionRows, finishExtraction, failExtraction, annulExtraction, listExtractionRows, registrySources, ANALYSIS_COMMENT_MAX, addAnalysisComment, listAnalysisComments, analysisCommentsMap, snapshotAnalysisComments, extractionCommentsMap, listExtractionComments,
     createRegistryLoad, finishRegistryLoad, failRegistryLoad, discardEmptyRegistryLoad, getRegistryLoad, listRegistryLoads, annulRegistryLoad, registryPeriods, registryLastLoad, registryStore, listRegistryData, registryDataBatches, registryColumnValues, flexStore, setFlexLoadInfo, reconsiderRegistryLoad, deleteFlexLoadData, flexConfigHistory, diskSpace, getRegistryFormat, setRegistryFormat, clearRegistryFormat, flexLastConfig, discardFlexLoadData, flexVigenteLoads, flexConfigLoads, updateFlexConfigs, listAnalysisDesigns, setAnalysisDesignRaw, registrySignature, flexBlock, flexCountRows, flexListRows, flexValuesFor, flexColumnMap, flexBlockCount, MR_SCREEN,

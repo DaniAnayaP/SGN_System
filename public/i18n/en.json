@@ -6052,6 +6052,7 @@
     "regErr_REG_OBSOLETE": "That record is obsolete: it no longer receives loads.",
     "regObsoleto": "Use",
     "regFormatoDescarga": "Download format",
+    "regPersonalizacionDescarga": "Download personalization",
     "regFormatoColumna": "Column format",
     "fmtOpen": "Format of column {name}",
     "fmtTitle": "Format of {name}",

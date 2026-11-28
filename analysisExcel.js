@@ -47,7 +47,8 @@ const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
 // Excel guarda 1,048,576 renglones por hoja (uno es el encabezado): si el análisis trae más, sigue en otra hoja («Análisis», «Análisis 2»…), cada una con su encabezado, su filtro y su formato.
 const MAX_SHEET_ROWS = 1048575;
 // Escribe el libro en `stream` (la respuesta). columns: [{ label, ff?, fmt?, style?, decimals? }]; rows: [[valor]] (números como números, textos, null). sheetRows: renglones de datos por hoja (solo para probar).
-async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHEET_ROWS, dec = null }) {
+// preset (opcional): lo que dice la personalización de descarga de quien baja el Excel ({ header: { fill, ink, bold, filter }, numbers: { dec, miles, neg }, freezeHeader }, ver downloadPresets.analysisOptionsFor)
+async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHEET_ROWS, dec = null, preset = null }) {
     const wb = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
     wb.creator = 'SGN';
     const name = String(title || 'Análisis').replace(/[\\/*?:[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 31) || 'Análisis';
@@ -59,9 +60,23 @@ async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHE
             if (isDateFormat(f)) return;
             let seen = 0; let numbers = 0;
             for (let r = 0; r < rows.length && r < 200; r += 1) { const v = rows[r][i]; if (v === null || v === undefined || v === '') continue; seen += 1; if (typeof v === 'number') numbers += 1; }
-            if (seen > 0 && numbers / seen >= 0.9) { f.dec = decAsked; if (!f.nf) { f.nf = 'numero'; f.miles = true; } }
+            if (seen > 0 && numbers / seen >= 0.9) { f.dec = decAsked; if (!f.nf) { f.nf = 'numero'; f.miles = preset && preset.numbers && preset.numbers.miles !== null ? preset.numbers.miles : true; } }
         });
     }
+    // la coma de miles y los negativos de la personalización valen para las columnas con números que no traen su propio formato (las que sí lo traen mandan)
+    const nm = preset && preset.numbers ? preset.numbers : null;
+    if (nm && (nm.miles || nm.neg !== 'normal')) {
+        fmts.forEach((f, i) => {
+            if (isDateFormat(f)) return;
+            let seen = 0; let numbers = 0; let maxDec = 0;
+            for (let r = 0; r < rows.length && r < 200; r += 1) { const v = rows[r][i]; if (v === null || v === undefined || v === '') continue; seen += 1; if (typeof v === 'number') { numbers += 1; const d = String(v).includes('e') ? 0 : (String(v).split('.')[1] || '').length; if (d > maxDec) maxDec = d; } }
+            if (!(seen > 0 && numbers / seen >= 0.9)) return;
+            if (!f.nf) { f.nf = 'numero'; f.dec = Number.isInteger(f.dec) ? f.dec : Math.min(maxDec, 4); }
+            if (f.nf === 'numero' && nm.miles && f.miles !== true) f.miles = true;
+            if ((f.nf === 'numero' || f.nf === 'moneda') && nm.neg !== 'normal' && !f.neg) f.neg = nm.neg;
+        });
+    }
+    const head0 = preset && preset.header ? preset.header : null; // el encabezado de la personalización (sin ella, el de siempre)
     const dateAt = fmts.map(isDateFormat);
     const sheetColumns = columns.map((c, i) => {
         let max = String(c.label).length + 3;
@@ -71,20 +86,21 @@ async function writeWorkbook(stream, { columns, rows, title, sheetRows = MAX_SHE
     const parts = Math.max(1, Math.ceil(rows.length / sheetRows));
     for (let p = 0; p < parts; p += 1) {
         const suffix = p === 0 ? '' : ` ${p + 1}`;
-        const sheet = wb.addWorksheet(`${name.slice(0, 31 - suffix.length)}${suffix}`, { views: [{ state: 'frozen', ySplit: 1 }] });
+        const sheet = wb.addWorksheet(`${name.slice(0, 31 - suffix.length)}${suffix}`, { views: [{ state: 'frozen', ySplit: preset && preset.freezeHeader === false ? 0 : 1 }] });
         sheet.columns = sheetColumns.map((c) => ({ ...c }));
         // el encabezado de cada columna: el de siempre del sistema y, encima, el que la persona le puso a esa columna
         const head = sheet.addRow(columns.map((c) => String(c.label)));
         columns.forEach((c, i) => {
             const f = fmts[i];
+            const fill = f.hfill || (head0 ? head0.fill : HEADER.fill);
             head.getCell(i + 1).style = {
-                font: { bold: f.hb !== false, color: { argb: argb(f.hink || HEADER.ink) } },
-                fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(f.hfill || HEADER.fill) } },
+                font: { bold: f.hb === true || (head0 ? head0.bold : true), color: { argb: argb(f.hink || (head0 ? head0.ink : HEADER.ink)) } },
+                ...(fill ? { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(fill) } } } : {}),
                 alignment: flexExcel.headerAlignment(f),
             };
         });
         head.commit();
-        if (columns.length) sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
+        if (columns.length && (!head0 || head0.filter)) sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
         const from = p * sheetRows;
         const to = Math.min(rows.length, from + sheetRows);
         for (let n = from; n < to; n += 1) {

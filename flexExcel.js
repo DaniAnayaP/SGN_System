@@ -35,6 +35,7 @@ const DEFAULTS = {
     columns: {},
 };
 
+const flexExcel_DEFAULT_FILL = DEFAULTS.header.fill;
 const pickColor = (v) => (typeof v === 'string' && HEX.test(v) ? v.toLowerCase() : null);
 
 // El formato de UNA columna: solo lo que se permite, con su tipo.
@@ -123,7 +124,12 @@ function numFmtOf(f) {
     const dec = Number.isInteger(f.dec) ? f.dec : null;
     const sym = CURRENCIES[f.cur || 'MXN'];
     switch (f.nf) {
-        case 'numero': return (f.miles ? '#,##0' : '0') + zeros(dec === null ? 2 : dec);
+        case 'numero': {
+            const base = (f.miles ? '#,##0' : '0') + zeros(dec === null ? 2 : dec);
+            if (f.neg === 'rojo') return `${base};[Red]-${base}`;
+            if (f.neg === 'par') return `${base}_);(${base})`;
+            return base;
+        }
         case 'moneda': {
             const base = `"${sym}"#,##0${zeros(dec === null ? 2 : dec)}`;
             if (f.neg === 'rojo') return `${base};[Red]-${base}`;
@@ -198,7 +204,7 @@ const MONEY_NAME = /(costo|cost|precio|price|importe|monto|amount|valor total)/;
 
 // El formato que de verdad se aplica a cada columna del libro: lo de siempre (llave en lila, montos como Moneda, fechas como Fecha corta, meses a la derecha) y, encima, lo que la persona dejó guardado.
 // decOverride (0 a 6): los decimales que la persona eligió en pantalla (`Encabezados y celdas` › Celdas): valen para toda columna con números (también las que traen su formato propio); null = los de cada columna.
-function effectiveColumns(columns, format, sampleRows, decOverride = null) {
+function effectiveColumns(columns, format, sampleRows, decOverride = null, numbers = null) {
     return columns.map((c, i) => {
         const base = {};
         if (format.keyFill && c.group === 'key') base.fill = format.keyFill;
@@ -219,6 +225,16 @@ function effectiveColumns(columns, format, sampleRows, decOverride = null) {
             for (const r of sampleRows) { const v = r[i]; if (v === null || v === undefined || v === '') continue; seen += 1; if (typeof v === 'number') numbers += 1; }
             if (c.group === 'value' || (seen > 0 && numbers / seen >= 0.9)) { f.dec = decOverride; if (!f.nf) f.nf = 'numero'; }
         }
+        // Mi personalización de Descarga: la coma de miles y los negativos valen para las columnas con números que no traen su propio formato (las que sí lo traen mandan)
+        if (numbers && (numbers.miles || numbers.neg !== 'normal') && !(isDate && c.group !== 'value')) {
+            let seen = 0; let nums = 0; let maxDec = 0;
+            for (const r of sampleRows) { const v = r[i]; if (v === null || v === undefined || v === '') continue; seen += 1; if (typeof v === 'number') { nums += 1; const d = String(v).includes('e') ? 0 : (String(v).split('.')[1] || '').length; if (d > maxDec) maxDec = d; } }
+            if (c.group === 'value' || (seen > 0 && nums / seen >= 0.9)) {
+                if (!f.nf) { f.nf = 'numero'; f.dec = Number.isInteger(f.dec) ? f.dec : Math.min(maxDec, 4); }
+                if (f.nf === 'numero' && numbers.miles && f.miles !== true) f.miles = true;
+                if ((f.nf === 'numero' || f.nf === 'moneda') && numbers.neg !== 'normal' && !f.neg) f.neg = numbers.neg;
+            }
+        }
         return { f, isDate: isDate && c.group !== 'value' };
     });
 }
@@ -226,12 +242,15 @@ function effectiveColumns(columns, format, sampleRows, decOverride = null) {
 // Arma el libro y lo escribe en `stream`. batches = lotes de renglones ya filtrados y con SOLO las columnas que se bajan, en su orden.
 //   columns: [{ key, label, name, group ('key'|'data'|'value'|'load'), kind }]   meta: { lang, tz, registryName, by, lastLoad: { fileName, loadedBy, createdAt }|null, filtersText, totalColumns }
 async function writeWorkbook({ stream, batches, columns, format, meta, decOverride = null }) {
+    // decOverride también puede venir en la personalización (format.numbers.dec); lo que la persona ve en pantalla manda sobre ella
     const lang = meta.lang === 'en' ? 'en' : 'es';
     const tt = T[lang];
     const fmt = format || mergeFormat(null);
     const sample = [];
     for (const b of batches) { for (const r of b) { sample.push(r); if (sample.length >= 500) break; } if (sample.length >= 500) break; }
-    const eff = effectiveColumns(columns, fmt, sample, decOverride);
+    const numbers = fmt.numbers || null;
+    if (decOverride === null && numbers && Number.isInteger(numbers.dec)) decOverride = numbers.dec;
+    const eff = effectiveColumns(columns, fmt, sample, decOverride, numbers);
 
     // lo que sale en la portada y en la fila de apoyo, de un solo recorrido
     let rowCount = 0;
@@ -296,7 +315,7 @@ async function writeWorkbook({ stream, batches, columns, format, meta, decOverri
     const head = sheet.addRow(columns.map((c) => c.label));
     columns.forEach((c, i) => {
         const mine = eff[i].f; // el encabezado de esta columna (si la persona le puso uno) manda sobre el de todo el registro
-        head.getCell(i + 1).style = { font: { bold: mine.hb === true || fmt.header.bold, color: { argb: argb(mine.hink || fmt.header.ink) } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(mine.hfill || fmt.header.fill) } }, alignment: headerAlignment(mine, c.group === 'value' ? 'center' : 'left') };
+        head.getCell(i + 1).style = { font: { bold: mine.hb === true || fmt.header.bold, color: { argb: argb(mine.hink || fmt.header.ink) } }, ...((mine.hfill || fmt.header.fill) ? { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(mine.hfill || fmt.header.fill) } } } : {}), alignment: headerAlignment(mine, c.group === 'value' ? 'center' : 'left') };
     });
     head.commit();
     if (fmt.header.filter) sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: headerRow, column: columns.length } };
@@ -312,17 +331,17 @@ async function writeWorkbook({ stream, batches, columns, format, meta, decOverri
     if (fmt.cover.on) {
         const cover = wb.addWorksheet(tt.summary, { views: [{ showGridLines: false }] });
         cover.columns = [{ width: 14 }, { width: 14 }, { width: 18 }, { width: 18 }, { width: 14 }, { width: 14 }, { width: 18 }, { width: 18 }];
-        const purple = argb(fmt.header.fill);
+        const purple = argb(fmt.header.fill || flexExcel_DEFAULT_FILL);
         // las celdas se combinan ANTES de cerrar el renglón (después Excel en flujo ya no las deja tocar)
         const put = (rowNo, fn, merges = []) => { const row = cover.getRow(rowNo); fn(row); merges.forEach((m) => cover.mergeCells(m)); row.commit(); };
         const lab = { font: { bold: true, color: { argb: 'FF555555' } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAF6FA' } }, alignment: { vertical: 'middle' } };
         const thin = { style: 'thin', color: { argb: 'FFD4D4D4' } };
         const box = { top: thin, left: thin, bottom: thin, right: thin };
         put(1, () => {});
-        put(2, (row) => { row.height = 30; row.getCell(1).value = meta.registryName; row.getCell(1).style = { font: { size: 20, bold: true, color: { argb: 'FF3A1B3D' } }, alignment: { vertical: 'middle' } }; }, ['A2:H2']);
-        put(3, (row) => { row.getCell(1).value = `${tt.downloadedOn} ${whenText(new Date(), meta.tz, lang)} ${tt.by} ${meta.by}`; row.getCell(1).style = { font: { color: { argb: 'FF666666' } } }; }, ['A3:H3']);
+        put(2, (row) => { row.height = 30; row.getCell(1).value = fmt.cover.title || meta.registryName; row.getCell(1).style = { font: { size: 20, bold: true, color: { argb: 'FF3A1B3D' } }, alignment: { vertical: 'middle' } }; }, ['A2:H2']);
+        put(3, (row) => { if (fmt.cover.date === false) return; row.getCell(1).value = `${tt.downloadedOn} ${whenText(new Date(), meta.tz, lang)} ${tt.by} ${meta.by}`; row.getCell(1).style = { font: { color: { argb: 'FF666666' } } }; }, fmt.cover.date === false ? [] : ['A3:H3']);
         put(4, (row) => { for (let c = 1; c <= 8; c += 1) row.getCell(c).border = { bottom: { style: 'thick', color: { argb: purple } } }; row.height = 6; });
-        put(6, (row) => { row.getCell(1).value = tt.general; row.getCell(1).style = { font: { bold: true, color: { argb: argb(fmt.header.ink) } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: purple } } }; }, ['A6:H6']);
+        if (fmt.cover.general !== false) put(6, (row) => { row.getCell(1).value = tt.general; row.getCell(1).style = { font: { bold: true, color: { argb: argb(fmt.header.ink) } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: purple } } }; }, ['A6:H6']);
         const ll = meta.lastLoad;
         const pairs = [
             [[tt.registry, meta.registryName], [tt.lastLoad, ll ? whenText(ll.createdAt, meta.tz, lang) : '—']],
@@ -330,7 +349,7 @@ async function writeWorkbook({ stream, batches, columns, format, meta, decOverri
             [[tt.filters, [meta.searchText ? `${tt.search}: «${meta.searchText}»` : '', meta.hasColumnFilters ? tt.colFilters : ''].filter(Boolean).join(' · ') || tt.none], [tt.downloadedBy, meta.by]],
             [[tt.rows, rowCount], [tt.columns, `${columns.length} ${tt.of} ${meta.totalColumns} ${tt.visible}`]],
         ];
-        pairs.forEach(([a, b], k) => {
+        (fmt.cover.general === false ? [] : pairs).forEach(([a, b], k) => {
             const n = 7 + k;
             put(n, (row) => {
                 row.getCell(1).value = a[0]; row.getCell(1).style = { ...lab, border: box };

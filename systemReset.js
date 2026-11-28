@@ -55,6 +55,8 @@ const TABLES = {
     manual_registry_obsolete: { action: WIPE, group: 'captures' },
     manual_registry_layouts: { action: WIPE, group: 'captures' },
     manual_registry_formats: { action: WIPE, group: 'captures' },
+    manual_registry_presets: { action: WIPE, group: 'captures' }, // la personalización de descarga del registro (Mi personalización de Descarga, 2026-11-28)
+    download_presets: { action: WIPE, group: 'clientSettings' }, // las personalizaciones de descarga de cada persona (Excel, CSV, PDF)
     manual_registry_migrations: { action: WIPE, group: 'captures' },
     manual_analyses: { action: WIPE, group: 'captures' },
     manual_analysis_extractions: { action: WIPE, group: 'captures' },

@@ -7276,7 +7276,10 @@ function regRegistry(req, res, { needActive = false } = {}) {
 }
 function regForbidden(res) { res.status(403).json({ code: 'REG_FORBIDDEN', message: 'No tienes permiso para cargar registros.' }); }
 // Los registros de TABLA LIBRE (kind 'tabla': cada carga lleva su propia elección de columnas) tienen su propia lógica en flexRegistryApi.js; sus rutas son las mismas de abajo.
-const flexApi = require('./flexRegistryApi')({ regAbilities, regForbidden, hasCompleteCostCenter, changedByLabel, logTableChange, notifyButtonAction, buildContentDisposition, REG_TABLE, REG_LOADS_TABLE, regLoading, REG_MESSAGES });
+// Mi personalización de Descarga (Daniel, 2026-11-28): las personalizaciones de cada persona y la del registro; `resolve` dice cuál se aplica a una descarga (ver downloadPresetsApi.js).
+const dlApi = require('./downloadPresetsApi')({ regAbilities, regForbidden, regRegistry, changedByLabel, logTableChange, REG_TABLE });
+const downloadPresets = require('./downloadPresets');
+const flexApi = require('./flexRegistryApi')({ regAbilities, regForbidden, hasCompleteCostCenter, changedByLabel, logTableChange, notifyButtonAction, buildContentDisposition, REG_TABLE, REG_LOADS_TABLE, regLoading, REG_MESSAGES, resolveDownloadPreset: dlApi.resolve });
 app.get('/api/business/manual-registries', requireAuth, (req, res) => {
     if (!req.user.clientId) return res.status(404).json({ message: 'No client for this account.' });
     const { clientId, isTestAccount } = req.user;
@@ -7562,26 +7565,45 @@ app.get('/api/business/manual-registries/:key/export', requireAuth, async (req, 
     res.setHeader('Content-Disposition', buildContentDisposition(`${base}.${format}`));
     // dec: los decimales que la persona ve en pantalla («Encabezados y celdas»): la descarga baja lo que se ve (Daniel, 2026-11-28)
     const decAsked = req.query.dec === undefined || req.query.dec === '' ? null : Number(req.query.dec);
-    const decOverride = Number.isInteger(decAsked) && decAsked >= 0 && decAsked <= 6 ? decAsked : null;
+    // Mi personalización de Descarga: la elegida (o la del registro) manda sobre lo que se ve cuando fija los decimales
+    const picked = dlApi.resolve(req, { registryKey: registry.key }).preset;
+    const pickedNumbers = picked ? downloadPresets.numbersOf(picked) : null;
+    const decFromScreen = Number.isInteger(decAsked) && decAsked >= 0 && decAsked <= 6 ? decAsked : null;
+    const decOverride = pickedNumbers && pickedNumbers.dec !== null ? pickedNumbers.dec : decFromScreen;
+    const csvOpt = picked ? downloadPresets.csvOptions(picked) : { sep: ',', bom: true, title: false, titleText: '' };
     const cells = (row) => [row.unidad, row.unidadNombre, row.codigo, row.descripcion, row.categoria, row.udm, ...periods.map((p) => { const v = row.values[p]; if (v === undefined) return ''; return decOverride !== null && format === 'csv' && typeof v === 'number' ? v.toFixed(decOverride) : v; })];
     const yieldToOthers = () => new Promise((resolve) => setImmediate(resolve));
     try {
         if (format === 'csv') {
             const csv = (v) => { const text = String(v ?? ''); return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; };
             const send = (chunk) => (res.write(chunk) ? Promise.resolve() : new Promise((resolve) => res.once('drain', resolve)));
-            await send('\ufeff' + headers.map(csv).join(',') + '\r\n'); // con BOM: Excel adivina mal los acentos sin él
+            const join = (list) => list.map((v) => { const t = String(v ?? ''); return t.includes(csvOpt.sep) || /["\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; }).join(csvOpt.sep);
+            await send((csvOpt.bom ? '\ufeff' : '') + (csvOpt.title ? csv(csvOpt.titleText || registry.name || registry.key) + '\r\n' : '') + join(headers) + '\r\n'); // con BOM: Excel adivina mal los acentos sin él
             for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters, 2000, parsedCf.filter)) {
                 if (res.destroyed) return;
-                await send(batch.map((row) => cells(row).map(csv).join(',')).join('\r\n') + '\r\n');
+                await send(batch.map((row) => join(cells(row))).join('\r\n') + '\r\n');
                 await yieldToOthers();
             }
             res.end();
         } else {
-            const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: decOverride !== null, useSharedStrings: false });
-            const sheet = workbook.addWorksheet(String(registry.name || 'Datos').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Datos', { views: [{ state: 'frozen', ySplit: 1 }] });
+            const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream: res, useStyles: decOverride !== null || !!picked, useSharedStrings: false });
+            const sheet = workbook.addWorksheet(String(registry.name || 'Datos').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || 'Datos', { views: [{ state: 'frozen', ySplit: picked && !picked.frozenHeader ? 0 : 1 }] });
             // con decimales elegidos, las columnas de periodos llevan su formato de número (0, 0.0, 0.00…): se ven igual que en pantalla y el dato sigue completo
-            if (decOverride !== null) sheet.columns = headers.map((h, i) => ({ key: `c${i}`, ...(i >= 6 ? { style: { numFmt: decOverride ? `#,##0.${'0'.repeat(decOverride)}` : '#,##0' } } : {}) }));
-            sheet.addRow(headers).commit();
+            // (con una personalización: su coma de miles y sus negativos; sin ella, con coma como siempre)
+            if (decOverride !== null) {
+                const base = `${pickedNumbers && pickedNumbers.miles === false ? '0' : '#,##0'}${decOverride ? `.${'0'.repeat(decOverride)}` : ''}`;
+                const numFmt = pickedNumbers && pickedNumbers.neg === 'rojo' ? `${base};[Red]-${base}` : pickedNumbers && pickedNumbers.neg === 'par' ? `${base}_);(${base})` : base;
+                sheet.columns = headers.map((h, i) => ({ key: `c${i}`, ...(i >= 6 ? { style: { numFmt } } : {}) }));
+            }
+            const headRow = sheet.addRow(headers);
+            if (picked) {
+                headRow.eachCell((cell) => {
+                    cell.font = { bold: picked.bold, color: { argb: `FF${picked.ink.slice(1).toUpperCase()}` } };
+                    if (picked.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${picked.fill.slice(1).toUpperCase()}` } };
+                });
+                if (picked.filter) sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
+            }
+            headRow.commit();
             for (const batch of registryDataBatches(clientId, isTestAccount, registry.key, filters, 2000, parsedCf.filter)) {
                 if (res.destroyed) return;
                 batch.forEach((row) => sheet.addRow(cells(row)).commit());
@@ -7627,6 +7649,15 @@ app.get('/api/business/manual-registries/:key/template', requireAuth, async (req
         if (registry.kind !== 'tabla') return res.status(400).json({ code: 'FORMAT_NOT_FREE', message: 'El formato de la descarga es de los registros de tabla libre.' });
         return flexApi.formatRoute(req, res, registry);
     });
+});
+// Mi personalización de Descarga: las mías (listar, crear, cambiar, borrar, elegir cuál uso) y la del registro.
+app.get('/api/business/download-presets', requireAuth, dlApi.listRoute);
+app.post('/api/business/download-presets', requireAuth, dlApi.createRoute);
+app.put('/api/business/download-presets/active', requireAuth, dlApi.activeRoute);
+app.put('/api/business/download-presets/:id', requireAuth, dlApi.updateRoute);
+app.delete('/api/business/download-presets/:id', requireAuth, dlApi.deleteRoute);
+['get', 'put', 'delete'].forEach((method) => {
+    app[method]('/api/business/manual-registries/:key/download-preset', requireAuth, dlApi.registryRoute);
 });
 // El formato de UNA columna de un registro de tabla libre (el menú ⋮ del encabezado): se guarda con el formato del registro y vale para el Excel también.
 ['put', 'delete'].forEach((method) => {
@@ -8309,7 +8340,10 @@ app.post('/api/business/manual-analyses/:id/export-xlsx', requireAuth, async (re
         res.set('Cache-Control', 'no-store');
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', buildContentDisposition(`${String(title).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim() || 'Analisis'}.xlsx`));
-        await analysisExcel.writeWorkbook(res, { ...payload, title, dec: body.dec });
+        // Mi personalización de Descarga: la que se manda para esta descarga o la que la persona tiene elegida (sin ninguna, sale como siempre); si fija los decimales manda sobre lo que se ve
+        const chosen = dlApi.resolve(req).preset;
+        const chosenOpts = downloadPresets.analysisOptionsFor(chosen);
+        await analysisExcel.writeWorkbook(res, { ...payload, title, dec: chosenOpts && chosenOpts.numbers.dec !== null ? chosenOpts.numbers.dec : body.dec, preset: chosenOpts });
         if (!res.writableEnded) res.end();
     } catch (err) {
         console.error('Análisis: la descarga en Excel falló:', err);
